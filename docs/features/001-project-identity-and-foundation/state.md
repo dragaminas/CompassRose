@@ -30,11 +30,11 @@ The repository already has the core roots this feature depends on, including `do
 
 ## Next Recommended Action
 
-Verify and, if needed, align the repository foundation with the documented project identity before moving to the next feature.
+Implement the first generated task in `docs/features/001-project-identity-and-foundation/tasks/001-project-state-document.md`, then continue through the task set in order.
 
 ## Notes
 
 - This feature is documentation-only at the moment.
-- No implementation tasks have been created.
+- Implementation tasks have been generated in `docs/features/001-project-identity-and-foundation/tasks/`.
+- Implementation has not started.
 - The request has been formalized into the standard CompassRose feature document set.
-
