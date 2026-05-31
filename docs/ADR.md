@@ -383,3 +383,111 @@ Accepted
 CompassRose shall use CompassRose principles to organize its own development.
 
 Its roadmap, features, architecture, state and planning artifacts shall be managed using CompassRose conventions whenever practical.
+
+## ADR-0023
+
+### Title
+
+Project-Scoped Configuration
+
+### Status
+
+Accepted
+
+### Decision
+
+CompassRose shall support repository-local configuration.
+
+Project configuration is versioned with the repository.
+
+User configuration remains external.
+
+## ADR-0024
+
+### Title
+
+Configurable Development Policy
+
+### Status
+
+Accepted
+
+### Decision
+
+CompassRose shall not mandate TDD.
+
+Development policy is configurable per project and may be overridden per feature.
+
+## ADR-0024
+
+### Title
+
+Configurable Development Policy
+
+### Status
+
+Accepted
+
+### Decision
+
+CompassRose shall not mandate TDD.
+
+Development policy is configurable per project and may be overridden per feature.
+
+## ADR-0025
+
+### Title
+
+Non-Invasive Tool Integration
+
+### Status
+
+Accepted
+
+### Decision
+
+CompassRose shall not modify global configuration of external tools.
+
+External tools must be invoked through explicit project-local configuration, isolated profiles, or user-approved commands.
+
+## ADR-0026
+
+### Title
+
+Hierarchical Configuration
+
+### Status
+
+Accepted
+
+### Decision
+
+CompassRose configuration is hierarchical.
+
+More specific scopes override less specific scopes.
+
+Precedence order:
+
+Task
+> Feature
+> Project
+> User
+> CompassRose Defaults
+
+## ADR-0027
+
+### Title
+
+Feature-Owned Configuration
+
+### Status
+
+Accepted
+
+### Decision
+
+Features may define local configuration.
+
+Feature configuration affects only the owning feature.
+
+Feature configuration must not modify project-wide behavior.
