@@ -1,0 +1,831 @@
+# CompassRose Documentation Model Specification
+
+## Purpose
+
+This document defines the documentation model used by CompassRose.
+
+CompassRose treats documentation as the primary user interface.
+
+The documentation model defines:
+
+- Which documents exist
+- What each document is responsible for
+- Who owns each document
+- Which documents are human-editable
+- Which documents are generated or updated by CompassRose
+- How roadmap, features, tasks, configuration, and project state relate to each other
+
+---
+
+## Core Principle
+
+Documentation is not a secondary output artifact.
+
+Documentation is the control surface of CompassRose.
+
+The user controls CompassRose by reading, editing, approving, and maintaining project documentation.
+
+---
+
+## Documentation Layers
+
+CompassRose documentation is organized into four layers:
+
+```text
+Project Layer
+Feature Layer
+Execution Layer
+Configuration Layer
+```
+
+---
+
+# 1. Project Layer
+
+The Project Layer describes the whole project.
+
+Suggested structure:
+
+```text
+docs/
+├── README.md
+├── ROADMAP.md
+├── SAD.md
+├── UX.md
+├── ADR.md
+└── DMS.md
+```
+
+## 1.1 README.md
+
+### Responsibility
+
+Explains what the project is.
+
+### Ownership
+
+Human-owned.
+
+### Editable by User
+
+Yes.
+
+### Updated by CompassRose
+
+Only with explicit user approval.
+
+---
+
+## 1.2 ROADMAP.md
+
+### Responsibility
+
+Defines project direction.
+
+The roadmap describes outcomes, not implementation tasks.
+
+### Ownership
+
+Human-owned, CompassRose-assisted.
+
+### Editable by User
+
+Yes.
+
+### Updated by CompassRose
+
+Only with explicit user approval.
+
+### Contains
+
+- Vision
+- Features
+- Milestones
+- Status
+- High-level goals
+- Success criteria
+
+### Does Not Contain
+
+- Implementation tasks
+- File-level instructions
+- Temporary subtasks
+- Detailed technical plans
+
+---
+
+## 1.3 SAD.md
+
+### Responsibility
+
+Defines the software architecture of the project.
+
+### Ownership
+
+Human-owned, CompassRose-assisted.
+
+### Editable by User
+
+Yes.
+
+### Updated by CompassRose
+
+Only with explicit user approval.
+
+### Contains
+
+- Architectural principles
+- System context
+- Major components
+- Integration model
+- Constraints
+- Risks
+- Non-goals
+
+---
+
+## 1.4 UX.md
+
+### Responsibility
+
+Defines how users interact with CompassRose.
+
+### Ownership
+
+Human-owned.
+
+### Editable by User
+
+Yes.
+
+### Updated by CompassRose
+
+Only with explicit user approval.
+
+---
+
+## 1.5 ADR.md
+
+### Responsibility
+
+Records accepted architectural decisions.
+
+### Ownership
+
+Human-owned.
+
+### Editable by User
+
+Yes.
+
+### Updated by CompassRose
+
+Only with explicit user approval.
+
+### Rule
+
+ADR entries are short, decisive, and non-argumentative.
+
+---
+
+## 1.6 DMS.md
+
+### Responsibility
+
+Defines the documentation model.
+
+### Ownership
+
+Human-owned.
+
+### Editable by User
+
+Yes.
+
+### Updated by CompassRose
+
+Only with explicit user approval.
+
+---
+
+# 2. Feature Layer
+
+The Feature Layer organizes project knowledge by feature.
+
+Feature-centric documentation is required to reduce context size and avoid project-wide noise.
+
+Suggested structure:
+
+```text
+docs/
+└── features/
+    └── <feature-name>/
+        ├── feature.md
+        ├── architecture.md
+        ├── state.md
+        └── config.md
+```
+
+`config.md` is optional.
+
+---
+
+## 2.1 feature.md
+
+### Responsibility
+
+Defines feature intent.
+
+### Ownership
+
+Human-owned, CompassRose-assisted.
+
+### Editable by User
+
+Yes.
+
+### Updated by CompassRose
+
+Only with explicit user approval.
+
+### Contains
+
+- Purpose
+- Scope
+- Out of scope
+- User value
+- Goals
+- Acceptance criteria
+
+### Does Not Contain
+
+- Generated implementation tasks
+- Detailed code instructions
+- Temporary review comments
+
+---
+
+## 2.2 architecture.md
+
+### Responsibility
+
+Defines architecture relevant to the feature.
+
+### Ownership
+
+Shared.
+
+### Editable by User
+
+Yes.
+
+### Updated by CompassRose
+
+Only with explicit user approval.
+
+### Contains
+
+- Relevant modules
+- Boundaries
+- Interfaces
+- Dependencies
+- Constraints
+- Feature-level architectural decisions
+
+---
+
+## 2.3 state.md
+
+### Responsibility
+
+Describes the current reality of the feature.
+
+### Ownership
+
+CompassRose-owned, human-reviewable.
+
+### Editable by User
+
+Yes, but with care.
+
+### Updated by CompassRose
+
+Yes, after approved changes.
+
+### Contains
+
+- Current status
+- Implemented capabilities
+- Pending capabilities
+- Known gaps
+- Blockers
+- Last approved change
+- Next planning hint
+
+### Rule
+
+`state.md` must reflect the repository as it exists now.
+
+It must not describe an imagined future.
+
+---
+
+## 2.4 config.md
+
+### Responsibility
+
+Defines feature-local configuration overrides.
+
+### Ownership
+
+Human-owned.
+
+### Editable by User
+
+Yes.
+
+### Updated by CompassRose
+
+No, unless explicitly approved.
+
+### Contains
+
+- Development policy override
+- Quality gate override
+- Role override
+- Task size limits
+- Allowed paths
+- Review policy
+
+### Rule
+
+Feature configuration affects only the owning feature.
+
+---
+
+# 3. Execution Layer
+
+The Execution Layer contains temporary artifacts created during planning, implementation, and review.
+
+Suggested structure:
+
+```text
+docs/
+└── compassrose/
+    └── runs/
+        └── <run-id>/
+            ├── task.md
+            ├── implementation.md
+            ├── review.md
+            └── result.md
+```
+
+Execution artifacts are auditable, but they are not the primary planning source.
+
+Future planning is based on current project state, not old task history.
+
+---
+
+## 3.1 task.md
+
+### Responsibility
+
+Defines the current task.
+
+### Ownership
+
+CompassRose-generated, human-reviewable.
+
+### Editable by User
+
+Yes, before execution.
+
+### Updated by CompassRose
+
+Yes.
+
+### Contains
+
+- Task ID
+- Related feature
+- Objective
+- Context
+- Constraints
+- Allowed paths
+- Acceptance criteria
+- Quality gates
+- Development policy
+
+---
+
+## 3.2 implementation.md
+
+### Responsibility
+
+Records implementation output.
+
+### Ownership
+
+CompassRose-generated.
+
+### Editable by User
+
+Normally no.
+
+### Updated by CompassRose
+
+Yes.
+
+### Contains
+
+- Implementer used
+- Model used
+- Files changed
+- Git diff reference
+- Implementation notes
+- Command output summary
+
+---
+
+## 3.3 review.md
+
+### Responsibility
+
+Records review output.
+
+### Ownership
+
+CompassRose-generated.
+
+### Editable by User
+
+Normally no.
+
+### Updated by CompassRose
+
+Yes.
+
+### Contains
+
+- Reviewer used
+- Review status
+- Findings
+- Required corrections
+- Optional correction task
+
+---
+
+## 3.4 result.md
+
+### Responsibility
+
+Records final task outcome.
+
+### Ownership
+
+CompassRose-generated.
+
+### Editable by User
+
+Normally no.
+
+### Updated by CompassRose
+
+Yes.
+
+### Contains
+
+- Final status
+- Commit reference
+- Merge status
+- Project state update summary
+- Follow-up notes
+
+---
+
+# 4. Configuration Layer
+
+The Configuration Layer defines how CompassRose operates for a project.
+
+Suggested structure:
+
+```text
+docs/
+└── compassrose/
+    ├── CONFIG.md
+    └── PROJECT_STATE.md
+```
+
+---
+
+## 4.1 CONFIG.md
+
+### Responsibility
+
+Defines project-level CompassRose behavior.
+
+### Ownership
+
+Human-owned.
+
+### Editable by User
+
+Yes.
+
+### Updated by CompassRose
+
+Only with explicit user approval.
+
+### Contains
+
+- Execution mode
+- Role configuration
+- Adapter configuration
+- Development policy
+- Quality gates
+- Command configuration
+- Git policy
+- Limits
+
+### Format
+
+Markdown with parseable YAML blocks.
+
+Example:
+
+````markdown
+# CompassRose Configuration
+
+## Execution Mode
+
+```yaml
+mode: assisted
+```
+
+## Development Policy
+
+```yaml
+development_policy:
+  default: test_guided
+  allowed:
+    - test_guided
+    - implementation_first
+    - documentation_first
+```
+
+## Quality Gates
+
+```yaml
+quality_gates:
+  before_review:
+    - typecheck
+    - test
+
+commands:
+  typecheck: npm run typecheck
+  test: npm test
+```
+````
+
+---
+
+## 4.2 PROJECT_STATE.md
+
+### Responsibility
+
+Describes the current project-wide state.
+
+### Ownership
+
+CompassRose-owned, human-reviewable.
+
+### Editable by User
+
+Yes, but with care.
+
+### Updated by CompassRose
+
+Yes, after approved changes.
+
+### Contains
+
+- Current roadmap progress
+- Known features
+- Implemented capabilities
+- Pending capabilities
+- Known architecture reality
+- Current limitations
+- Last approved change
+
+### Rule
+
+`PROJECT_STATE.md` must describe reality, not intention.
+
+---
+
+# Ownership Model
+
+CompassRose documents use one of three ownership models.
+
+## Human-Owned
+
+The user controls the document.
+
+CompassRose may suggest changes but must not modify it without approval.
+
+Examples:
+
+- ROADMAP.md
+- SAD.md
+- ADR.md
+- UX.md
+- CONFIG.md
+- feature.md
+
+---
+
+## CompassRose-Owned
+
+CompassRose controls the document.
+
+The user may inspect and occasionally correct it.
+
+Examples:
+
+- PROJECT_STATE.md
+- feature state.md
+- run result.md
+
+---
+
+## Shared
+
+Both the user and CompassRose may contribute.
+
+CompassRose must avoid silent changes.
+
+Examples:
+
+- feature architecture.md
+- generated roadmap drafts
+- generated feature drafts
+
+---
+
+# Configuration Precedence
+
+CompassRose configuration is hierarchical.
+
+More specific scopes override less specific scopes.
+
+Precedence:
+
+```text
+Task
+> Feature
+> Project
+> User
+> CompassRose Defaults
+```
+
+Examples:
+
+- A task may override the development policy.
+- A feature may override the reviewer model.
+- A project may define default quality gates.
+- A user may define default provider credentials.
+- CompassRose provides fallback defaults.
+
+---
+
+# Markdown and YAML Policy
+
+CompassRose is Markdown-first.
+
+Markdown is used for human-facing documentation.
+
+YAML is used only inside Markdown blocks when strict structured configuration is required.
+
+Rule:
+
+```text
+.md = human-facing project knowledge
+yaml blocks = parseable configuration or contracts
+```
+
+CompassRose should avoid forcing users to author standalone YAML files for project intent.
+
+---
+
+# Task Model
+
+Tasks are temporary execution artifacts.
+
+Tasks are generated on demand.
+
+Tasks are not the long-term planning source.
+
+A task must be traceable to:
+
+```text
+Roadmap Objective
+    ↓
+Feature
+    ↓
+Current Feature State
+    ↓
+Task
+```
+
+---
+
+# State Model
+
+State documents describe reality.
+
+They must not become wish lists.
+
+State updates occur after approved changes.
+
+State is used by the planner to avoid obsolete assumptions.
+
+---
+
+# Roadmap to Feature Relationship
+
+The roadmap provides direction.
+
+Features provide scoped intent.
+
+Feature state provides current reality.
+
+Tasks are generated from the gap between intent and reality.
+
+```text
+ROADMAP.md
+    ↓
+features/<feature>/feature.md
+    ↓
+features/<feature>/state.md
+    ↓
+task.md
+```
+
+---
+
+# Human Review Points
+
+The user may review CompassRose output at different levels.
+
+## Roadmap Review
+
+Before major work begins.
+
+## Feature Review
+
+Before a feature is executed or marked complete.
+
+## Task Review
+
+Before a specific task is implemented.
+
+## Result Review
+
+Before approved changes are merged or accepted.
+
+---
+
+# Minimum Documentation Set
+
+A minimal CompassRose-compatible repository should contain:
+
+```text
+docs/
+├── ROADMAP.md
+├── SAD.md
+├── ADR.md
+├── UX.md
+├── DMS.md
+├── compassrose/
+│   ├── CONFIG.md
+│   └── PROJECT_STATE.md
+└── features/
+    └── <feature-name>/
+        ├── feature.md
+        ├── architecture.md
+        └── state.md
+```
+
+---
+
+# Success Criteria
+
+The documentation model is successful if:
+
+1. A technical user can understand project direction by reading `ROADMAP.md`.
+2. A technical user can understand feature intent by reading `feature.md`.
+3. A technical user can understand feature reality by reading `state.md`.
+4. CompassRose can generate tasks without reading the whole repository every time.
+5. CompassRose can update project state after approved changes.
+6. The repository remains understandable without running CompassRose.
+7. CompassRose itself can use this documentation model to develop CompassRose.

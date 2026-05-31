@@ -491,3 +491,55 @@ Features may define local configuration.
 Feature configuration affects only the owning feature.
 
 Feature configuration must not modify project-wide behavior.
+
+## ADR-0028
+
+### Title
+
+Contract-First Development
+
+### Status
+
+Accepted
+
+### Decision
+
+Internal system contracts shall be defined before their implementation.
+
+Type definitions and code structures shall derive from documented contracts.
+
+## ADR-0029
+
+### Title
+
+Configurable Review Policy
+
+### Status
+
+Accepted
+
+### Decision
+
+CompassRose shall support required, optional and disabled review modes.
+
+Skipped reviews must be explicitly recorded.
+
+Quality gates are independent from AI review.
+
+## ADR-0030
+
+### Title
+
+Quality Gates Before Acceptance
+
+### Status
+
+Accepted
+
+### Decision
+
+CompassRose shall support non-AI quality gates before accepting implementation output.
+
+AI review may be disabled.
+
+Quality gates remain independently configurable.
