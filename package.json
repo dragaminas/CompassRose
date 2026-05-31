@@ -1,8 +1,8 @@
 {
   "name": "compassrose",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "CompassRose is a CLI-first TypeScript application for deterministic AI-assisted software development orchestration.",
+  "main": "./dist/cli/main.js",
   "directories": {
     "doc": "docs"
   },

@@ -14,27 +14,35 @@ Complete
 
 ## Implementation Status
 
-Not started
+In review
 
 ## Review Status
 
-Not reviewed
+Task 002 implementation is in review after correction task 002.1 was created and applied.
 
 ## Quality Gate Status
 
-Not run
+Passed:
+
+- `npm test`
+- `npm run typecheck`
+- `npm run build`
+- `git diff --check --cached`
 
 ## Current Reality
 
-The repository already has the core roots this feature depends on, including `docs/`, `src/`, `src/contracts/`, `package.json`, and `tsconfig.json`.
+The recovery bundle is no longer documentation-only; it includes the package metadata update and the initial `tests/package-metadata.test.js` baseline alongside the staged documentation updates.
 
 ## Next Recommended Action
 
-Implement the first generated task in `docs/features/001-project-identity-and-foundation/tasks/001-project-state-document.md`, then continue through the task set in order.
+Obtain reviewer approval, then commit the recovery bundle.
 
 ## Notes
 
-- This feature is documentation-only at the moment.
+- This feature is no longer documentation-only; package metadata and a test baseline were added.
 - Implementation tasks have been generated in `docs/features/001-project-identity-and-foundation/tasks/`.
-- Implementation has not started.
+- Implementation task 002 is in review.
+- Correction task 002.1 was created and applied to re-scope task 002.
+- The staged bundle's quality gates were run and passed.
 - The request has been formalized into the standard CompassRose feature document set.
+- Task 002 was rejected because the task contract was under-scoped relative to the repository's required quality gates.

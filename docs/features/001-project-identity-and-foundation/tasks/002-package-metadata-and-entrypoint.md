@@ -22,6 +22,7 @@ Align `package.json` with the CLI-first TypeScript identity of CompassRose and r
 ## Scope
 Allowed:
 - `package.json`
+- `tests/package-metadata.test.js`
 
 Forbidden:
 - `src/`
@@ -42,6 +43,7 @@ Forbidden:
 - Keep the CLI entrypoint consistent with `bin`.
 - Do not introduce provider-specific or OS-specific configuration.
 - Do not change runtime behavior.
+- If required to satisfy the configured quality gates, add only the minimal package-metadata smoke test baseline.
 
 ## Development Policy
 - `implementation_first`
@@ -61,15 +63,21 @@ Forbidden:
 
 ## Files Likely Affected
 - `package.json`
+- `tests/package-metadata.test.js`
 
 ## Quality Gates to Run
 ```bash
-node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));if(!p.description||!p.description.trim())process.exit(1);if(p.main&&p.main!=='./dist/cli/main.js'&&p.main!=='dist/cli/main.js')process.exit(1);if(!p.bin||p.bin.compassrose!=='./dist/cli/main.js')process.exit(1)"
+npm test
+npm run typecheck
+npm run build
 git diff --check
 ```
 
 ## Review Notes
 - The reviewer should verify that the change updates metadata only and does not introduce unrelated package churn.
+
+## Implementation Note
+- The initial test baseline is required because Vitest fails when no test files exist.
 
 ## Completion Criteria
 - The package metadata and CLI entrypoint are consistent with the repository's CLI-first identity.
