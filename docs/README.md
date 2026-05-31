@@ -271,6 +271,21 @@ This prevents planning from drifting away from the actual codebase.
 
 ---
 
+## Creating a new feature
+
+Create a numbered folder under `docs/features/`.
+
+Write only `request.md` first. For example:
+
+```text
+docs/features/001-doctor-command/request.md
+```
+
+CompassRose will later formalize the request into the standard feature documentation set.
+The numeric prefix defines the recommended implementation order.
+
+---
+
 ## Documentation Model
 
 ### Roadmap

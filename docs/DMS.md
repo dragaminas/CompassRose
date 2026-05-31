@@ -83,6 +83,7 @@ Only with explicit user approval.
 Defines project direction.
 
 The roadmap describes outcomes, not implementation tasks.
+The actionable order is represented by numbered feature folders under `docs/features/`.
 
 ### Ownership
 
@@ -208,18 +209,47 @@ Only with explicit user approval.
 
 ---
 
+## Feature Intake Model
+
+A feature does not need to start as a fully structured CompassRose feature.
+
+A feature may start as:
+
+```text
+docs/features/001-doctor-command/request.md
+```
+
+`request.md` is human-authored plain-text or Markdown input.
+
+If a feature folder contains `request.md` but does not yet contain `feature.md`, `architecture.md`, and `state.md`, it is a pending feature request.
+
+CompassRose formalizes that request into the standard feature documentation set:
+
+```text
+request.md
+feature.md
+architecture.md
+state.md
+```
+
+The generated files are CompassRose-structured documentation.
+
+The numeric prefix defines the recommended implementation order.
+
 # 2. Feature Layer
 
 The Feature Layer organizes project knowledge by feature.
 
 Feature-centric documentation is required to reduce context size and avoid project-wide noise.
+Feature folders are numbered. The numeric prefix defines the recommended implementation order.
 
 Suggested structure:
 
 ```text
 docs/
 └── features/
-    └── <feature-name>/
+    └── <number>-<kebab-case-name>/
+        ├── request.md
         ├── feature.md
         ├── architecture.md
         ├── state.md
@@ -640,6 +670,7 @@ Examples:
 - ADR.md
 - UX.md
 - CONFIG.md
+- request.md
 - feature.md
 
 ---
@@ -755,6 +786,12 @@ State is used by the planner to avoid obsolete assumptions.
 
 The roadmap provides direction.
 
+The actionable roadmap is represented by numbered feature folders under `docs/features/`.
+
+The numeric prefix defines the recommended implementation order.
+
+`ROADMAP.md` remains a high-level vision document, not the operational source of truth.
+
 Features provide scoped intent.
 
 Feature state provides current reality.
@@ -762,11 +799,11 @@ Feature state provides current reality.
 Tasks are generated from the gap between intent and reality.
 
 ```text
-ROADMAP.md
+docs/features/<number>-<kebab-case-name>/request.md
     ↓
-features/<feature>/feature.md
+feature.md
     ↓
-features/<feature>/state.md
+state.md
     ↓
 task.md
 ```
@@ -810,7 +847,8 @@ docs/
 │   ├── CONFIG.md
 │   └── PROJECT_STATE.md
 └── features/
-    └── <feature-name>/
+    └── <number>-<kebab-case-name>/
+        ├── request.md
         ├── feature.md
         ├── architecture.md
         └── state.md
@@ -823,9 +861,11 @@ docs/
 The documentation model is successful if:
 
 1. A technical user can understand project direction by reading `ROADMAP.md`.
-2. A technical user can understand feature intent by reading `feature.md`.
-3. A technical user can understand feature reality by reading `state.md`.
-4. CompassRose can generate tasks without reading the whole repository every time.
-5. CompassRose can update project state after approved changes.
-6. The repository remains understandable without running CompassRose.
-7. CompassRose itself can use this documentation model to develop CompassRose.
+2. A technical user can create a pending feature request by writing `request.md` in a numbered feature folder.
+3. A technical user can understand feature intent by reading `feature.md`.
+4. A technical user can understand feature reality by reading `state.md`.
+5. CompassRose can formalize a pending feature request into structured feature documentation.
+6. CompassRose can generate tasks without reading the whole repository every time.
+7. CompassRose can update project state after approved changes.
+8. The repository remains understandable without running CompassRose.
+9. CompassRose itself can use this documentation model to develop CompassRose.

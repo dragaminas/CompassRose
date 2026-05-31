@@ -6,6 +6,16 @@ Create a deterministic software development orchestration system capable of tran
 
 CompassRose must be capable of developing CompassRose.
 
+## Operational Note
+
+The actionable roadmap is represented by numbered feature folders under `docs/features/`.
+
+The numeric prefix defines the recommended implementation order.
+
+Each feature may start as `request.md`.
+
+`ROADMAP.md` remains a high-level vision document, not the operational source of truth.
+
 ---
 
 # Foundation
