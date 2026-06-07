@@ -11,6 +11,16 @@ architecture.md
 state.md
 ```
 
+`feature.md` defines purpose, scope, deliverables, completion criteria, and the high-level implementation outline.
+
+`architecture.md` defines the feature-level boundaries and architectural constraints.
+
+`state.md` records repository reality, progress against deliverables, and the next planning hint.
+
+After formalization, CompassRose should plan and execute one task at a time.
+The feature may contain a high-level implementation outline, but the active execution contract is always the current task, not a long-lived task backlog.
+Feature-local `tasks/` folders may exist for archived or approved task documents, but they are not the canonical source for future planning.
+
 The numeric prefix defines the recommended implementation order.
 Earlier features create the infrastructure required by later features.
 

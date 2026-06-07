@@ -43,3 +43,13 @@ This feature must not affect:
 
 - <Decision 1>
 - <Decision 2>
+
+## Design Notes
+
+- <Important design note 1>
+- <Important design note 2>
+
+## Risks And Open Questions
+
+- <Risk or open question 1>
+- <Risk or open question 2>

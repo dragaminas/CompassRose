@@ -6,6 +6,8 @@ Defines a correction task generated after a review finds issues.
 
 A correction task is a task with a narrower scope.
 
+This shape may appear as a standalone task artifact or inline inside reviewer output.
+
 ---
 
 ## Responsibility

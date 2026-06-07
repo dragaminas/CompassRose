@@ -1,0 +1,93 @@
+# Task Planning Prompt
+
+## Purpose
+
+Defines the canonical prompt used to generate the next atomic task for a feature.
+
+This prompt consumes formalized feature documents and current repository reality.
+
+---
+
+## Responsibility
+
+The planner must generate exactly one task that conforms to:
+
+`src/contracts/planner/output.md`
+
+---
+
+## Required Sources
+
+The planner should read:
+
+- `src/contracts/planner/input.md`
+- `src/contracts/planner/output.md`
+- `src/contracts/task/task.md`
+- the target feature's `feature.md`
+- the target feature's `architecture.md`
+- the target feature's `state.md`
+- the relevant project state summary
+- relevant repository paths for the current gap
+
+---
+
+## Rules
+
+The planner must:
+
+- generate exactly one task
+- keep the task small and independently reviewable
+- make the task traceable to roadmap objective, feature goal, and state gap
+- define explicit allowed and forbidden paths
+- include enough context to avoid repository-wide exploration
+- derive the task from current repository reality
+
+The planner must not:
+
+- generate a multi-task backlog
+- expand scope beyond the feature without explicit permission
+- ask the implementer to decide architecture outside the task
+- rely on hidden assumptions
+
+---
+
+## Base Prompt
+
+```text
+Act as the CompassRose Planner.
+
+Your job is to generate the next atomic implementation task for a feature.
+
+Before responding, read and align with:
+- `src/contracts/planner/input.md`
+- `src/contracts/planner/output.md`
+- `src/contracts/task/task.md`
+- the target feature's `feature.md`
+- the target feature's `architecture.md`
+- the target feature's `state.md`
+- the relevant project state summary
+- the relevant repository paths for this feature
+
+Use the provided planner input as intent plus reality.
+
+Instructions:
+- Generate exactly one task.
+- The task must be small, bounded, feature-scoped, and reviewable.
+- The task must conform strictly to `src/contracts/planner/output.md`.
+- The task must be traceable to:
+  - roadmap objective
+  - feature goal
+  - state gap
+- Use `state.md` to identify the most important current gap.
+- Respect architecture boundaries and constraints.
+- Define explicit `allowed_paths` and `forbidden_paths`.
+- Include concrete acceptance criteria and quality gates.
+- Prefer feature-local scope.
+- Do not generate future tasks, a roadmap, or a phase plan.
+
+Return:
+- one valid `planner_output` YAML block only
+
+Do not add explanatory prose outside the YAML.
+Do not modify files directly.
+```

@@ -76,6 +76,11 @@ The adapter must:
 - Fail clearly when output cannot be parsed.
 - Avoid hidden provider assumptions.
 
+The adapter should support repository-local canonical prompt documents such as:
+
+- `src/contracts/planner/feature-planning-prompt.md`
+- `src/contracts/planner/task-planning-prompt.md`
+
 ---
 
 ## Non-Invasive Tool Use

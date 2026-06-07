@@ -87,6 +87,9 @@ CompassRose should prefer small, atomic, independently reviewable tasks.
 
 Large tasks increase cost, context size, risk, and review complexity.
 
+Feature-level planning may define deliverables and a high-level implementation outline.
+Operational planning still generates only the next task.
+
 ### 2.7 Cross-Platform Operation
 
 CompassRose must run on Linux and Windows.
@@ -306,6 +309,7 @@ The Planner Adapter generates the next atomic task.
 
 Input:
 
+- Formalized feature documents
 - Roadmap
 - Project state
 - Architecture model
@@ -315,29 +319,57 @@ Input:
 Output:
 
 ```yaml
-task_id: TASK-0001
-title: Create initial authentication service
-objective: Add the minimal authentication service required by the current milestone.
-
-context:
-  milestone_id: M1
-  relevant_modules:
-    - authentication
-    - api
-
-constraints:
-  - Keep the task small.
-  - Do not modify unrelated modules.
-
-acceptance_criteria:
-  - Authentication service exists.
-  - Service exposes login and logout methods.
-  - Tests compile and pass.
+planner_output:
+  task:
+    task_id: TASK-0001
+    feature_id: 023-authentication
+    title: Create initial authentication service
+    objective: Add the minimal authentication service required by the current milestone.
+    trace:
+      roadmap_objective: Deliver the first authentication milestone.
+      feature_goal: Establish the minimal authentication service.
+      state_gap: No authentication service exists yet.
+    context:
+      summary: The repository needs the first service layer for authentication behavior.
+      relevant_paths:
+        - src/auth/
+        - tests/auth/
+      relevant_modules:
+        - authentication
+        - api
+    scope:
+      allowed_paths:
+        - src/auth/
+        - tests/auth/
+      forbidden_paths:
+        - docs/
+        - src/cli/
+    constraints:
+      - Keep the task small.
+      - Do not modify unrelated modules.
+    development_policy:
+      mode: test_guided
+    quality_gates:
+      before_review:
+        - npm test
+        - npm run typecheck
+    acceptance_criteria:
+      - Authentication service exists.
+      - The service exposes login and logout methods.
+      - Tests compile and pass.
+    expected_deliverables:
+      - code
+      - tests
 ```
 
 The planner must not generate a long-term task list by default.
 
 It generates the next task only.
+
+Feature planning and task planning are distinct activities:
+
+- feature planning formalizes a user request into feature, architecture, and state documents
+- task planning derives the next atomic task from those documents and repository reality
 
 ---
 
@@ -382,29 +414,72 @@ Input:
 Output:
 
 ```yaml
-task_id: TASK-0001
-status: approved
-
-findings: []
-
-correction_task: null
+reviewer_output:
+  task_id: TASK-0001
+  status: approved
+  summary: The implementation satisfies the task and all mandatory checks passed.
+  acceptance:
+    criteria:
+      - criterion: Authentication service exists.
+        status: passed
+        notes: The service was added in the expected module.
+  findings: []
+  scope_check:
+    status: passed
+    unrelated_changes: []
+  quality_gate_check:
+    status: passed
+    failed_gates: []
+  correction_task: null
+  project_state_update_hint: Authentication foundation is now present.
 ```
 
 or:
 
 ```yaml
-task_id: TASK-0001
-status: changes_required
-
-findings:
-  - The implementation does not handle invalid credentials.
-
-correction_task:
-  title: Handle invalid credentials in authentication service
-  objective: Add explicit invalid credential handling without changing unrelated code.
-  acceptance_criteria:
-    - Invalid credentials return the expected error.
-    - Existing tests still pass.
+reviewer_output:
+  task_id: TASK-0001
+  status: changes_required
+  summary: The core implementation is present, but error handling is incomplete.
+  acceptance:
+    criteria:
+      - criterion: Invalid credentials return the expected error.
+        status: failed
+        notes: Invalid credentials currently fall through to an unhandled path.
+  findings:
+    - severity: error
+      message: The implementation does not handle invalid credentials.
+      path: src/auth/service.ts
+      related_acceptance_criterion: Invalid credentials return the expected error.
+  scope_check:
+    status: passed
+    unrelated_changes: []
+  quality_gate_check:
+    status: passed
+    failed_gates: []
+  correction_task:
+    parent_task_id: TASK-0001
+    correction_task_id: TASK-0001-C1
+    feature_id: 023-authentication
+    title: Handle invalid credentials in authentication service
+    objective: Add explicit invalid credential handling without changing unrelated code.
+    review_findings:
+      - Invalid credential handling is missing.
+    scope:
+      allowed_paths:
+        - src/auth/
+      forbidden_paths:
+        - docs/
+        - src/cli/
+    constraints:
+      - Preserve existing success-path behavior.
+    acceptance_criteria:
+      - Invalid credentials return the expected error.
+      - Existing tests still pass.
+    quality_gates:
+      before_review:
+        - npm test
+  project_state_update_hint: null
 ```
 
 The reviewer may produce a correction task, but the orchestrator decides whether and how to execute it.

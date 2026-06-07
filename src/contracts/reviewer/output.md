@@ -50,15 +50,38 @@ reviewer_output:
     failed_gates:
       - string
 
-  correction_task:
-    parent_task_id: string
-    title: string
-    objective: string
-    acceptance_criteria:
-      - string
+  correction_task: null | object
+  project_state_update_hint: string | null
+```
+
+When `correction_task` is not `null`, it must conform to:
+
+```yaml
+correction_task:
+  parent_task_id: string
+  correction_task_id: string
+  feature_id: string
+  title: string
+  objective: string
+
+  review_findings:
+    - string
+
+  scope:
     allowed_paths:
       - string
-  project_state_update_hint: string | null
+    forbidden_paths:
+      - string
+
+  constraints:
+    - string
+
+  acceptance_criteria:
+    - string
+
+  quality_gates:
+    before_review:
+      - string
 ```
 
 ---
@@ -98,6 +121,7 @@ If status is `changes_required`:
 - Findings must explain what failed.
 - `correction_task` must be present.
 - The correction task must be narrower than the original task.
+- The correction task must conform to `src/contracts/task/correction-task.md`.
 
 If status is `blocked`:
 

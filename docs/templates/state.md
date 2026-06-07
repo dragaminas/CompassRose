@@ -4,22 +4,47 @@
 
 Planned
 
+## Source Request
+
+`request.md`
+
+## Formalization Status
+
+Not started
+
+## Implementation Status
+
+Not started
+
+## Review Status
+
+Not started
+
 ## Current Reality
 
 <Describe what currently exists in the repository for this feature.>
 
-## Implemented
+## Implemented Deliverables
 
-- <Implemented item 1>
+- <Implemented deliverable 1>
 
-## Pending
+## Remaining Deliverables
 
-- <Pending item 1>
-- <Pending item 2>
+- <Remaining deliverable 1>
+- <Remaining deliverable 2>
+
+## Outline Progress
+
+- <Implementation outline step 1>: not started | in progress | complete
+- <Implementation outline step 2>: not started | in progress | complete
 
 ## Blocked
 
 - <Blocked item 1>
+
+## Quality Gate Status
+
+Unknown
 
 ## Last Approved Change
 
@@ -28,6 +53,10 @@ None
 ## Known Gaps
 
 - <Gap 1>
+
+## Feature Completion Assessment
+
+Not started
 
 ## Next Planning Hint
 

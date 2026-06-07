@@ -264,6 +264,51 @@ Accepted
 
 ### Decision
 
+CompassRose may increase automation over time, but approval gates remain explicit and auditable.
+
+---
+
+## ADR-0016
+
+### Title
+
+Feature-Level Outline With One Active Task
+
+### Status
+
+Accepted
+
+### Decision
+
+A feature may define implementation deliverables and a high-level implementation outline.
+
+CompassRose still generates one active task at a time.
+
+The outline provides continuity.
+The task contract provides the execution boundary.
+
+---
+
+## ADR-0017
+
+### Title
+
+Reviewer Returns Structured Correction Tasks
+
+### Status
+
+Accepted
+
+### Decision
+
+Reviewer output shall include a structured status and, when changes are required, a correction task that conforms to the canonical correction-task contract.
+
+### Status
+
+Accepted
+
+### Decision
+
 CompassRose supports Manual, Assisted and Autonomous execution modes.
 
 ---

@@ -63,6 +63,12 @@ planner_input:
       - string
     acceptance_criteria:
       - string
+    implementation_deliverables:
+      - string
+    completion_criteria:
+      - string
+    implementation_outline:
+      - string
 
   architecture:
     source: string
@@ -83,10 +89,13 @@ planner_input:
       - string
     pending:
       - string
+    outline_progress:
+      - string
     known_gaps:
       - string
     blockers:
       - string
+    feature_completion_assessment: string
 
   project_state:
     source: string
@@ -123,6 +132,7 @@ The Planner must:
 - Respect allowed and forbidden boundaries.
 - Use project state as reality.
 - Treat roadmap and feature definitions as intent.
+- Use feature deliverables, completion criteria, and outline progress to choose the next meaningful gap.
 - Produce a task traceable to a roadmap objective and feature.
 
 The Planner must not:

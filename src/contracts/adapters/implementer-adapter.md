@@ -82,6 +82,10 @@ The adapter must:
 - Fail clearly if no diff is produced.
 - Remain provider-agnostic.
 
+The adapter should support the repository-local canonical prompt document:
+
+- `src/contracts/implementer/task-execution-prompt.md`
+
 ---
 
 ## External Tools

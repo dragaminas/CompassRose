@@ -234,6 +234,11 @@ state.md
 
 The generated files are CompassRose-structured documentation.
 
+Formalization is not the same as task generation.
+
+Feature formalization creates the canonical feature documents.
+Task planning uses those documents plus current repository reality to produce the next task only.
+
 The numeric prefix defines the recommended implementation order.
 
 # 2. Feature Layer
@@ -253,10 +258,12 @@ docs/
         ├── feature.md
         ├── architecture.md
         ├── state.md
+        ├── tasks/
         └── config.md
 ```
 
 `config.md` is optional.
+`tasks/` is optional and may contain archived or approved task documents, but it is not the canonical source for future planning.
 
 ---
 
@@ -286,10 +293,14 @@ Only with explicit user approval.
 - User value
 - Goals
 - Acceptance criteria
+- Implementation deliverables
+- Completion criteria
+- High-level implementation outline
 
 ### Does Not Contain
 
-- Generated implementation tasks
+- The active task contract
+- A long-lived generated backlog
 - Detailed code instructions
 - Temporary review comments
 
@@ -345,11 +356,14 @@ Yes, after approved changes.
 ### Contains
 
 - Current status
-- Implemented capabilities
-- Pending capabilities
+- Implemented deliverables
+- Remaining deliverables
+- Progress against the implementation outline
 - Known gaps
 - Blockers
 - Last approved change
+- Quality gate status, when known
+- Feature completion assessment
 - Next planning hint
 
 ### Rule
@@ -357,6 +371,10 @@ Yes, after approved changes.
 `state.md` must reflect the repository as it exists now.
 
 It must not describe an imagined future.
+
+`state.md` is updated after approved work.
+`architecture.md` is updated only when feature-level structural truth changes.
+`SAD.md` is updated only when the accepted change affects project-wide architecture.
 
 ---
 
@@ -413,6 +431,9 @@ docs/
 Execution artifacts are auditable, but they are not the primary planning source.
 
 Future planning is based on current project state, not old task history.
+
+Execution artifacts consume canonical contracts from `src/contracts/`.
+They do not redefine task, review, or correction-task structure.
 
 ---
 
@@ -503,6 +524,8 @@ Yes.
 - Required corrections
 - Optional correction task
 
+The optional correction task must conform to `src/contracts/task/correction-task.md`.
+
 ---
 
 ## 3.4 result.md
@@ -530,6 +553,36 @@ Yes.
 - Merge status
 - Project state update summary
 - Follow-up notes
+
+---
+
+## 3.5 Canonical Role Prompts
+
+Structured role prompts are repository-local source-of-truth documents.
+
+Suggested structure:
+
+```text
+src/contracts/
+├── planner/
+│   ├── feature-planning-prompt.md
+│   └── task-planning-prompt.md
+├── implementer/
+│   └── task-execution-prompt.md
+└── reviewer/
+    ├── review-prompt.md
+    └── correction-task-prompt.md
+```
+
+These documents define how CompassRose asks external tools to:
+
+- formalize a feature from a user request
+- generate the next task from feature documents and repository reality
+- execute a task
+- review implementation results
+- produce a correction task when review fails
+
+The prompt documents must align with the structured contracts under `src/contracts/`.
 
 ---
 

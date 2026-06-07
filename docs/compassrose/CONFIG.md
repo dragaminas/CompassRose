@@ -129,6 +129,12 @@ documentation:
     - feature.md
     - architecture.md
     - state.md
+  role_prompt_files:
+    feature_planning: src/contracts/planner/feature-planning-prompt.md
+    task_planning: src/contracts/planner/task-planning-prompt.md
+    task_execution: src/contracts/implementer/task-execution-prompt.md
+    review: src/contracts/reviewer/review-prompt.md
+    correction_task: src/contracts/reviewer/correction-task-prompt.md
   templates_root: docs/templates
   contracts_root: src/contracts
 ```
@@ -223,6 +229,7 @@ Allowed behavior:
 
 ```text
 - read project-local CompassRose configuration
+- read project-local CompassRose prompt contracts
 - generate project-local task files
 - generate project-local review files
 - call external tools using configured commands

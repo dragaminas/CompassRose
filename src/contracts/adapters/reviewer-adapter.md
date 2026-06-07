@@ -76,6 +76,11 @@ The adapter must:
 - Fail clearly when output is invalid.
 - Preserve provider independence.
 
+The adapter should support repository-local canonical prompt documents such as:
+
+- `src/contracts/reviewer/review-prompt.md`
+- `src/contracts/reviewer/correction-task-prompt.md`
+
 ---
 
 ## Review Result
