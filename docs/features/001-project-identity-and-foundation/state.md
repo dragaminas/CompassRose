@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+completed
 
 ## Source Request
 
@@ -19,9 +19,9 @@ formalized
 
 ## Current Reality
 
-The repository has an accepted package-metadata recovery bundle with a corrected task contract, a coherent CLI entrypoint in `package.json`, and the minimal `tests/package-metadata.test.js` smoke-test baseline required by the configured quality gates.
+The repository now presents CompassRose consistently as a CLI-first TypeScript project with stable `docs/`, `src/`, and `src/contracts/` roots, a repository-local project state artifact in `docs/compassrose/PROJECT_STATE.md`, and explicit Linux/Windows foundation expectations.
 
-The feature remains incomplete because `tsconfig.json` still advertises `jsx: react-jsx`, and the top-level foundation docs still need a concise alignment pass in `docs/README.md` and `docs/ROADMAP.md`.
+`package.json`, `tsconfig.json`, `docs/README.md`, and `docs/ROADMAP.md` now agree on the accepted foundation reality, so the feature no longer has an unfinished foundation gap.
 
 ## Implemented Deliverables
 
@@ -29,19 +29,19 @@ The feature remains incomplete because `tsconfig.json` still advertises `jsx: re
 - the package metadata recovery bundle is accepted and covered by the required quality gates
 - task 002 now explicitly allows the minimal test baseline and required quality gates needed by that recovery bundle
 - the project-local CompassRose state/configuration documents exist under `docs/compassrose/`
+- `tsconfig.json` reflects a Node CLI foundation without React or JSX assumptions
+- `docs/README.md` and `docs/ROADMAP.md` now present the CLI-first foundation, repository roots, project-state artifact, and Linux/Windows support as one coherent summary
 
 ## Remaining Deliverables
 
-- remove the JSX-specific compiler assumption from `tsconfig.json`
-- align `docs/README.md` and `docs/ROADMAP.md` with the CLI-first foundation and root layout
-- continue recording approved repository reality as the remaining foundation tasks land
+- None
 
 ## Outline Progress
 
 - Formalize the project identity and repository foundation in feature documents: complete
-- Align package metadata and TypeScript configuration with the documented foundation: in progress
-- Verify the repository roots and baseline documentation are consistent: not started
-- Capture approved repository reality in feature and project state: in progress
+- Align package metadata and TypeScript configuration with the documented foundation: complete
+- Verify the repository roots and baseline documentation are consistent: complete
+- Capture approved repository reality in feature and project state: complete
 
 ## Blocked By
 
@@ -49,13 +49,12 @@ The feature remains incomplete because `tsconfig.json` still advertises `jsx: re
 
 ## Last Approved Change
 
-Correction task 002.1 was accepted, and task 002 now matches the approved package-metadata recovery bundle and its quality gates.
+Task 004 was approved, accepting the top-level foundation documentation alignment in `docs/README.md` and `docs/ROADMAP.md` after the repository quality gates passed.
 
 ## Known Gaps
 
-- `tsconfig.json` still includes `jsx: react-jsx`, which does not match the CLI-first foundation
-- `docs/README.md` and `docs/ROADMAP.md` do not yet present the repository foundation as one concise top-level summary
+- None
 
 ## Next Planning Hint
 
-Plan the next pending foundation task by addressing `tsconfig.json` first, then align the top-level docs with the accepted repository roots and CLI-first identity.
+Feature `001-project-identity-and-foundation` is complete. Select `002-configuration-model` next because it is now the earliest numbered feature that is still pending formalization.
