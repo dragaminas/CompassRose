@@ -2,13 +2,21 @@
 
 ## Overview
 
-CompassRose is a deterministic software development orchestrator that advances a project toward a roadmap through iterative planning, implementation, and review cycles.
+CompassRose is a CLI-first TypeScript application and deterministic software development orchestrator that advances a project toward a roadmap through iterative planning, implementation, and review cycles.
 
 Unlike agent-based systems that attempt to plan and execute entire projects upfront, CompassRose continuously recalculates the next best step from the current state of the repository.
 
 The roadmap provides direction.
 The repository provides reality.
 CompassRose continuously reconciles the two.
+
+## Foundation Snapshot
+
+- Documentation lives under `docs/`.
+- Runtime source code lives under `src/`.
+- Shared workflow contracts live under `src/contracts/`.
+- Repository-local CompassRose operational state lives in `docs/compassrose/PROJECT_STATE.md`.
+- The foundation targets Linux and Windows.
 
 ---
 
