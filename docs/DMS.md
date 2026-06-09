@@ -355,15 +355,14 @@ Yes, after approved changes.
 
 ### Contains
 
-- Current status
+- Lifecycle state
+- Runtime-oriented operational status
 - Implemented deliverables
 - Remaining deliverables
 - Progress against the implementation outline
 - Known gaps
 - Blockers
 - Last approved change
-- Quality gate status, when known
-- Feature completion assessment
 - Next planning hint
 
 ### Rule
@@ -372,9 +371,18 @@ Yes, after approved changes.
 
 It must not describe an imagined future.
 
+`state.md` must expose one operational lifecycle state that the runtime can read deterministically.
+Narrative sections provide supporting context, but they must not replace the lifecycle state as the transition key.
+
 `state.md` is updated after approved work.
 `architecture.md` is updated only when feature-level structural truth changes.
 `SAD.md` is updated only when the accepted change affects project-wide architecture.
+
+The canonical operational contract for feature state is:
+
+```text
+src/contracts/state/feature-state.md
+```
 
 ---
 
@@ -583,6 +591,29 @@ These documents define how CompassRose asks external tools to:
 - produce a correction task when review fails
 
 The prompt documents must align with the structured contracts under `src/contracts/`.
+
+---
+
+## 3.6 Operational Contracts
+
+CompassRose also relies on repository-local operational contracts that are not role prompts.
+
+Suggested structure:
+
+```text
+src/contracts/
+├── runtime/
+│   └── operation-loop.md
+└── state/
+    └── feature-state.md
+```
+
+These documents define:
+
+- the canonical feature lifecycle state model
+- the deterministic runtime loop order
+- the allowed lifecycle transitions
+- the stop and recovery rules that the runtime must follow
 
 ---
 
@@ -848,7 +879,7 @@ The numeric prefix defines the recommended implementation order.
 Features provide scoped intent.
 
 Feature state provides current reality.
-
+Feature lifecycle state provides the runtime transition key.
 Tasks are generated from the gap between intent and reality.
 
 ```text

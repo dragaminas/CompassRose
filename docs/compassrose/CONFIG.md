@@ -54,6 +54,8 @@ execution:
   repository_is_source_of_truth: true
   planner_uses_repository_state: true
   orchestrator_uses_ai: false
+  runtime_contract: src/contracts/runtime/operation-loop.md
+  feature_state_contract: src/contracts/state/feature-state.md
 
 roles:
   planner:
@@ -137,6 +139,8 @@ documentation:
     correction_task: src/contracts/reviewer/correction-task-prompt.md
   templates_root: docs/templates
   contracts_root: src/contracts
+  state_contract: src/contracts/state/feature-state.md
+  runtime_operation: src/contracts/runtime/operation-loop.md
 ```
 
 ---
@@ -176,6 +180,8 @@ git_policy.commit_after_task:
 adapters.external_cli.type:
   - external_cli
 ```
+
+The runtime contract and feature state contract constrain how `execution.mode`, `review_policy`, `quality_gates`, and `limits` are applied during orchestration.
 
 ---
 

@@ -28,6 +28,7 @@ The planner should read:
 - `docs/templates/feature.md`
 - `docs/templates/architecture.md`
 - `docs/templates/state.md`
+- `src/contracts/state/feature-state.md`
 - relevant project documentation such as `docs/ROADMAP.md`, `docs/SAD.md`, `docs/ADR.md`, and `docs/DMS.md`
 - relevant repository paths for the feature scope
 
@@ -52,6 +53,7 @@ The planner must:
 - define feature deliverables and completion criteria
 - define a high-level implementation outline
 - describe current repository reality in `state.md`
+- assign a valid `lifecycle_state` and operational status in `state.md`
 - record known gaps and the next planning hint
 - keep architecture grounded in real modules, paths, and constraints
 
@@ -77,6 +79,7 @@ Before responding, read and align with:
 - `docs/templates/feature.md`
 - `docs/templates/architecture.md`
 - `docs/templates/state.md`
+- `src/contracts/state/feature-state.md`
 - relevant sections of `docs/ROADMAP.md`, `docs/SAD.md`, `docs/ADR.md`, and `docs/DMS.md`
 - relevant repository paths needed to ground the feature in current reality
 
@@ -91,7 +94,7 @@ Instructions:
 - Use the repository as the source of truth for current reality.
 - Keep `feature.md` focused on purpose, scope, goals, acceptance criteria, deliverables, completion criteria, and implementation outline.
 - Keep `architecture.md` focused on modules, boundaries, interfaces, dependencies, constraints, design notes, and risks or open questions.
-- Keep `state.md` focused on current reality, implemented deliverables, remaining deliverables, outline progress, known gaps, blockers, and the next planning hint.
+- Keep `state.md` focused on lifecycle state, operational status, current reality, implemented deliverables, remaining deliverables, outline progress, known gaps, blockers, and the next planning hint.
 - Do not generate a task backlog.
 - Do not invent implementation details that are not supported by the repository or architecture.
 - If information is missing, make the uncertainty explicit.

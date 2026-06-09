@@ -1,24 +1,21 @@
 # State: <Feature Name>
 
-## Status
+## Lifecycle State
 
-Planned
+formalized
 
 ## Source Request
 
 `request.md`
 
-## Formalization Status
+## Operational Status
 
-Not started
-
-## Implementation Status
-
-Not started
-
-## Review Status
-
-Not started
+- formalization: complete
+- active_task: none
+- active_correction_task: none
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
 
 ## Current Reality
 
@@ -38,13 +35,9 @@ Not started
 - <Implementation outline step 1>: not started | in progress | complete
 - <Implementation outline step 2>: not started | in progress | complete
 
-## Blocked
+## Blocked By
 
-- <Blocked item 1>
-
-## Quality Gate Status
-
-Unknown
+- None
 
 ## Last Approved Change
 
@@ -53,10 +46,6 @@ None
 ## Known Gaps
 
 - <Gap 1>
-
-## Feature Completion Assessment
-
-Not started
 
 ## Next Planning Hint
 

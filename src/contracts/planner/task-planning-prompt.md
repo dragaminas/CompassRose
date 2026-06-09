@@ -23,6 +23,7 @@ The planner should read:
 - `src/contracts/planner/input.md`
 - `src/contracts/planner/output.md`
 - `src/contracts/task/task.md`
+- `src/contracts/state/feature-state.md`
 - the target feature's `feature.md`
 - the target feature's `architecture.md`
 - the target feature's `state.md`
@@ -41,6 +42,7 @@ The planner must:
 - define explicit allowed and forbidden paths
 - include enough context to avoid repository-wide exploration
 - derive the task from current repository reality
+- treat `lifecycle_state` as the primary operational decision input
 
 The planner must not:
 
@@ -62,6 +64,7 @@ Before responding, read and align with:
 - `src/contracts/planner/input.md`
 - `src/contracts/planner/output.md`
 - `src/contracts/task/task.md`
+- `src/contracts/state/feature-state.md`
 - the target feature's `feature.md`
 - the target feature's `architecture.md`
 - the target feature's `state.md`
@@ -78,7 +81,7 @@ Instructions:
   - roadmap objective
   - feature goal
   - state gap
-- Use `state.md` to identify the most important current gap.
+- Use `state.md` and its `lifecycle_state` to identify the most important current gap.
 - Respect architecture boundaries and constraints.
 - Define explicit `allowed_paths` and `forbidden_paths`.
 - Include concrete acceptance criteria and quality gates.

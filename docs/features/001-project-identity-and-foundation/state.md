@@ -1,33 +1,21 @@
 # State: Project Identity and Foundation
 
-## Status
+## Lifecycle State
 
-Formalized
+review_pending
 
 ## Source Request
 
 `request.md`
 
-## Formalization Status
+## Operational Status
 
-Complete
-
-## Implementation Status
-
-In review
-
-## Review Status
-
-Task 002 implementation is in review after correction task 002.1 was created and applied.
-
-## Quality Gate Status
-
-Passed:
-
-- `npm test`
-- `npm run typecheck`
-- `npm run build`
-- `git diff --check --cached`
+- formalization: complete
+- active_task: 002
+- active_correction_task: 002.1
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: changes_required
 
 ## Current Reality
 
@@ -51,20 +39,19 @@ The recovery bundle is no longer documentation-only; it includes the package met
 - Verify the repository roots and baseline documentation are consistent: in review
 - Capture approved repository reality in feature and project state: in progress
 
-## Next Recommended Action
+## Blocked By
 
-Obtain reviewer approval, then commit the recovery bundle.
+- None
 
-## Notes
+## Last Approved Change
 
-- This feature is no longer documentation-only; package metadata and a test baseline were added.
-- Implementation tasks have been generated in `docs/features/001-project-identity-and-foundation/tasks/`.
-- Implementation task 002 is in review.
-- Correction task 002.1 was created and applied to re-scope task 002.
-- The staged bundle's quality gates were run and passed.
-- The request has been formalized into the standard CompassRose feature document set.
-- Task 002 was rejected because the task contract was under-scoped relative to the repository's required quality gates.
+None
 
-## Feature Completion Assessment
+## Known Gaps
 
-In review
+- reviewer approval of the staged recovery bundle is still pending
+- the accepted repository state has not yet been recorded after the current review cycle
+
+## Next Planning Hint
+
+Obtain reviewer approval for task 002, then update feature and project state to reflect the accepted repository reality.

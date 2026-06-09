@@ -651,24 +651,43 @@ The ideal MVP should support at least:
 
 ## 9. Workflow States
 
-Suggested task lifecycle:
+CompassRose uses explicit repository-local contracts for workflow state and runtime behavior:
 
 ```text
-PENDING
-PLANNING
-IMPLEMENTING
-VALIDATING
-REVIEWING
-CHANGES_REQUIRED
-APPROVED
-MERGED
-FAILED
-BLOCKED
+src/contracts/state/feature-state.md
+src/contracts/runtime/operation-loop.md
+```
+
+The MVP needs both:
+
+- a feature lifecycle state machine that can be read deterministically from `state.md`
+- a runtime loop contract that maps lifecycle state to the next valid action
+
+Suggested feature lifecycle:
+
+```text
+request_pending
+formalization_pending
+formalized
+task_planning_pending
+task_ready
+implementation_running
+implementation_failed
+quality_gates_pending
+quality_failed
+review_pending
+review_failed
+correction_pending
+blocked
+completed
 ```
 
 The orchestrator owns state transitions.
 
 AI tools may propose results, but they do not directly mutate workflow state.
+
+The runtime must use one lifecycle state as the primary transition key.
+Narrative status text is supporting context only.
 
 ---
 
