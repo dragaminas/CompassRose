@@ -34,6 +34,7 @@ Required inputs:
 - Relevant repository summary
 - Planning rules
 - Current execution mode
+- Feature state normalized through `src/contracts/state/feature-state.md`
 
 Optional inputs:
 
@@ -84,10 +85,17 @@ planner_input:
 
   state:
     source: string
-    status: string
-    implemented:
+    lifecycle_state: formalization_pending | formalized | task_planning_pending | task_ready | implementation_running | implementation_failed | quality_gates_pending | quality_failed | review_pending | review_failed | correction_pending | blocked | completed
+    operational_status:
+      formalization: complete | not_started
+      active_task: string | none
+      active_correction_task: string | none
+      last_implementation_result: not_run | passed | failed
+      last_quality_gate_result: unknown | passed | failed | skipped
+      last_review_result: not_run | approved | changes_required | blocked | failed | skipped
+    implemented_deliverables:
       - string
-    pending:
+    remaining_deliverables:
       - string
     outline_progress:
       - string
@@ -95,14 +103,14 @@ planner_input:
       - string
     blockers:
       - string
-    feature_completion_assessment: string
+    next_planning_hint: string | null
 
   project_state:
     source: string
     summary: string
 
   configuration:
-    execution_mode: manual | assisted | autonomous
+    execution_mode: interactive | semi_automatic | automatic
     development_policy: test_guided | implementation_first | documentation_first | strict_tdd
     quality_gates:
       before_review:
@@ -132,7 +140,7 @@ The Planner must:
 - Respect allowed and forbidden boundaries.
 - Use project state as reality.
 - Treat roadmap and feature definitions as intent.
-- Use feature deliverables, completion criteria, and outline progress to choose the next meaningful gap.
+- Use lifecycle state plus feature deliverables, remaining deliverables, and outline progress to choose the next meaningful gap.
 - Produce a task traceable to a roadmap objective and feature.
 
 The Planner must not:

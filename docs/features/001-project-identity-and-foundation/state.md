@@ -1,70 +1,60 @@
 # State: Project Identity and Foundation
 
-## Status
+## Lifecycle State
 
-Formalized
+completed
 
 ## Source Request
 
 `request.md`
 
-## Formalization Status
+## Operational Status
 
-Complete
-
-## Implementation Status
-
-In review
-
-## Review Status
-
-Task 002 implementation is in review after correction task 002.1 was created and applied.
-
-## Quality Gate Status
-
-Passed:
-
-- `npm test`
-- `npm run typecheck`
-- `npm run build`
-- `git diff --check --cached`
+- formalization: complete
+- active_task: none
+- active_correction_task: none
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: approved
 
 ## Current Reality
 
-The recovery bundle is no longer documentation-only; it includes the package metadata update and the initial `tests/package-metadata.test.js` baseline alongside the staged documentation updates.
+The repository now presents CompassRose consistently as a CLI-first TypeScript project with stable `docs/`, `src/`, and `src/contracts/` roots, a repository-local project state artifact in `docs/compassrose/PROJECT_STATE.md`, and explicit Linux/Windows foundation expectations.
+
+`package.json`, `tsconfig.json`, `docs/README.md`, and `docs/ROADMAP.md` now agree on the accepted foundation reality, so the feature no longer has an unfinished foundation gap.
 
 ## Implemented Deliverables
 
-- repository documentation defines CompassRose as a CLI-first TypeScript application
-- the foundation roots for documentation, source, and contracts are formalized
-- package metadata and TypeScript configuration updates are present in the staged recovery bundle
+- the feature documents formalize the repository foundation and its expected roots
+- the package metadata recovery bundle is accepted and covered by the required quality gates
+- task 002 now explicitly allows the minimal test baseline and required quality gates needed by that recovery bundle
+- the project-local CompassRose state/configuration documents exist under `docs/compassrose/`
+- `tsconfig.json` reflects a Node CLI foundation without React or JSX assumptions
+- `docs/README.md` and `docs/ROADMAP.md` now present the CLI-first foundation, repository roots, project-state artifact, and Linux/Windows support as one coherent summary
 
 ## Remaining Deliverables
 
-- reviewer approval of the staged recovery bundle
-- committed approved state for the foundation changes
+- None
 
 ## Outline Progress
 
 - Formalize the project identity and repository foundation in feature documents: complete
 - Align package metadata and TypeScript configuration with the documented foundation: complete
-- Verify the repository roots and baseline documentation are consistent: in review
-- Capture approved repository reality in feature and project state: in progress
+- Verify the repository roots and baseline documentation are consistent: complete
+- Capture approved repository reality in feature and project state: complete
 
-## Next Recommended Action
+## Blocked By
 
-Obtain reviewer approval, then commit the recovery bundle.
+- None
 
-## Notes
+## Last Approved Change
 
-- This feature is no longer documentation-only; package metadata and a test baseline were added.
-- Implementation tasks have been generated in `docs/features/001-project-identity-and-foundation/tasks/`.
-- Implementation task 002 is in review.
-- Correction task 002.1 was created and applied to re-scope task 002.
-- The staged bundle's quality gates were run and passed.
-- The request has been formalized into the standard CompassRose feature document set.
-- Task 002 was rejected because the task contract was under-scoped relative to the repository's required quality gates.
+Task 004 was approved, accepting the top-level foundation documentation alignment in `docs/README.md` and `docs/ROADMAP.md` after the repository quality gates passed.
 
-## Feature Completion Assessment
+## Known Gaps
 
-In review
+- None
+
+## Next Planning Hint
+
+Feature `001-project-identity-and-foundation` is complete. Select `002-configuration-model` next because it is now the earliest numbered feature that is still pending formalization.

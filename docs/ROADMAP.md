@@ -5,6 +5,7 @@
 Create a deterministic software development orchestration system capable of transforming human intent into reviewed software through iterative planning, implementation and validation.
 
 CompassRose must be capable of developing CompassRose.
+CompassRose is established first as a CLI-first TypeScript application with stable `docs/`, `src/`, and `src/contracts/` roots.
 
 ## Operational Note
 
@@ -38,6 +39,8 @@ Success Criteria:
 * UX specification exists
 * Documentation model exists
 * Initial roadmap exists
+* `docs/compassrose/PROJECT_STATE.md` exists as the repository-local project state artifact
+* Linux and Windows support expectations are documented at the foundation level
 
 ---
 

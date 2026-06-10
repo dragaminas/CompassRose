@@ -17,3 +17,18 @@ The loop should follow a clear order:
 CompassRose should stop on failures instead of continuing blindly.
 
 The orchestrator itself should not use AI directly. It delegates AI work to configured roles.
+
+For the MVP, this should be formalized as a canonical repository-local contract that defines:
+
+- required runtime inputs
+- feature selection order
+- action by lifecycle state
+- stop conditions
+- recovery after interruption
+- the relationship between execution mode and pause points
+
+Proposed contract location:
+
+```text
+src/contracts/runtime/operation-loop.md
+```
