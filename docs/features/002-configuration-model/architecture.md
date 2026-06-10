@@ -87,9 +87,10 @@ This feature must not affect:
 - The repository already contains a rich draft configuration document, so near-term work should align implementation to that contract instead of inventing a second source of truth.
 - The hierarchy is architectural now, but only the project scope needs concrete runtime support for the MVP.
 - Doctor is the first concrete consumer of this feature because it can validate file presence, structure, paths, platform support, and command availability before broader orchestration exists.
+- The MVP Doctor contract is intentionally narrower than the full draft configuration: implementation should require only the documented project, adapters, commands, and documentation sections plus their explicit required fields.
+- For the MVP command contract, missing command keys are invalid, while present empty strings mean intentionally unconfigured commands.
 
 ## Risks and Open Questions
 
 - The exact runtime representation of future task-, feature-, and user-level overrides is not implemented yet.
 - Some configuration fields in `docs/compassrose/CONFIG.md` describe future features, so implementation order must avoid pretending unsupported behavior already exists.
-- The project will need a stable rule for intentionally empty command fields versus missing required commands during validation.

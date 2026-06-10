@@ -32,6 +32,8 @@ CompassRose delegates provider and model selection to the external tool configur
 
 CompassRose must not modify global configuration from tools such as Codex CLI, OpenCode, Aider, Ollama, OpenAI, Anthropic, Gemini, or similar systems.
 
+For the MVP, the only configuration scope that must be accepted at runtime is the project-level contract documented in this file.
+
 ---
 
 ## Configuration
@@ -185,6 +187,63 @@ The runtime contract and feature state contract constrain how `execution.mode`, 
 
 ---
 
+## Doctor MVP configuration contract
+
+The YAML block above remains the canonical project-level configuration example, but the first implementation of `compassrose doctor` must validate only the minimum project contract listed below.
+
+Required top-level sections for the MVP:
+
+```text
+- project
+- adapters
+- commands
+- documentation
+```
+
+Required fields inside that MVP contract:
+
+```text
+- project.name
+- project.supported_platforms
+- project.documentation_root
+- adapters.external_cli.type
+- commands.typecheck
+- commands.tests
+- commands.lint
+- commands.build
+- documentation.roadmap
+- documentation.project_state
+- documentation.config
+- documentation.contracts_root
+```
+
+MVP-specific interpretation rules:
+
+```text
+- Only the project-level contract in this file is validated by the MVP.
+- Task, Feature, and User overrides remain documented architecture, but are not read or validated yet.
+- Future-facing sections outside the required subset may stay documented here, but Doctor must not require them for the first implementation.
+- `adapters.external_cli.type` must be `external_cli`.
+- `project.supported_platforms` must list the current platform.
+- The paths named by `project.documentation_root`, `documentation.roadmap`, `documentation.project_state`, `documentation.config`, and `documentation.contracts_root` must exist inside the repository.
+```
+
+### Command presence semantics
+
+For the MVP, `commands.typecheck`, `commands.tests`, `commands.lint`, and `commands.build` are always required keys in the contract.
+
+The distinction between missing and intentionally empty commands is:
+
+```text
+- missing key: invalid configuration for Doctor
+- present with empty string: valid, intentionally not configured for this project
+- present with non-empty string: valid, configured command
+```
+
+The MVP Doctor check only validates that these keys are present and that each value is either an empty string or a non-empty shell command string. It does not execute the commands and does not infer provider-specific behavior from them.
+
+---
+
 ## Review skip record
 
 When `review_policy.mode` is `optional`, skipped reviews must be recorded explicitly.
@@ -266,11 +325,11 @@ For the MVP, `compassrose doctor` must validate:
 ```text
 - CONFIG.md exists
 - the YAML configuration block can be parsed
-- required sections exist
-- required documentation paths exist
+- the MVP-required sections and fields listed above exist
+- the required documentation paths exist
 - the current platform is supported
 - the current directory is inside a git repository
-- configured commands exist or are intentionally empty
+- the required command keys are present and each command value is either intentionally empty or a non-empty string
 ```
 
 Expected successful output:
