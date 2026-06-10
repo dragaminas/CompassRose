@@ -21,11 +21,11 @@ formalized
 
 The repository already contains `docs/compassrose/CONFIG.md` as a project-local CompassRose configuration document with a YAML configuration block, allowed values, override records, isolation rules, and a stabilized MVP Doctor contract.
 
-CompassRose can now load that project-local configuration, validate the MVP doctor contract, and report the repository readiness checks through `compassrose doctor`.
+CompassRose can now load that project-local configuration, validate the MVP doctor contract, and report the repository readiness checks through `compassrose doctor`, including a distinct preflight for the configured project-state document.
 
 The accepted architecture documentation already supports repository-local state, hierarchical configuration precedence, non-invasive external tool integration, configurable review policy, and quality-gate configuration. The MVP contract for Doctor is now explicit: only the project-level scope in `docs/compassrose/CONFIG.md` is in scope, the minimum required sections and fields are fixed, and command semantics distinguish missing keys from intentionally empty values.
 
-This feature is now formalized under `docs/features/002-configuration-model/`, and the first implementation task has now been completed against the configuration target defined in `docs/compassrose/CONFIG.md`.
+This feature is now formalized under `docs/features/002-configuration-model/`, and the first implementation tasks have now been completed against the configuration target defined in `docs/compassrose/CONFIG.md`.
 
 ## Implemented Deliverables
 
@@ -34,6 +34,7 @@ This feature is now formalized under `docs/features/002-configuration-model/`, a
 - canonical feature documents now exist for feature `002-configuration-model`
 - the repository already documents the configuration hierarchy and non-invasive tool expectations in project-wide architecture docs
 - the runtime can now load `docs/compassrose/CONFIG.md`, validate the MVP doctor contract, and report readiness through `compassrose doctor`
+- `compassrose doctor` now validates `docs/compassrose/PROJECT_STATE.md` as a distinct preflight step
 
 ## Remaining Deliverables
 
@@ -53,7 +54,7 @@ This feature is now formalized under `docs/features/002-configuration-model/`, a
 
 ## Last Approved Change
 
-Added the first working runtime consumer for the project-local configuration contract and validated the MVP doctor path (`F002-T02`).
+Added the distinct project-state preflight to `compassrose doctor` and validated repository-local project-state inspection (`F002-T03`).
 
 ## Known Gaps
 

@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { loadAndValidateProjectState } from './projectState.js';
 import { readProjectConfiguration } from '../config/configReader.js';
 import type { ConfigurationIssue } from '../config/configTypes.js';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
@@ -116,6 +117,20 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
 
   const pathChecks = validateRepositoryPaths(repositoryRoot, configurationResult.value);
   checks.push(...pathChecks);
+
+  const projectStatePath = resolveRepositoryRelativePath(
+    repositoryRoot,
+    configurationResult.value.documentation.project_state,
+  );
+
+  if (projectStatePath) {
+    const psResult = loadAndValidateProjectState(projectStatePath);
+    checks.push({
+      name: 'project-state',
+      status: psResult.ok ? 'pass' : 'fail',
+      details: psResult.ok ? [`Project state validated: ${psResult.value.status}`] : [psResult.error.message],
+    });
+  }
 
   return buildDoctorReport({
     repositoryRoot,
