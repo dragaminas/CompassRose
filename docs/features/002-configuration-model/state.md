@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+task_ready
 
 ## Source Request
 
@@ -11,7 +11,7 @@ formalized
 ## Operational Status
 
 - formalization: complete
-- active_task: none
+- active_task: F002-T02
 - active_correction_task: none
 - last_implementation_result: not_run
 - last_quality_gate_result: unknown
@@ -23,7 +23,7 @@ The repository already contains `docs/compassrose/CONFIG.md` as a project-local 
 
 The accepted architecture documentation already supports repository-local state, hierarchical configuration precedence, non-invasive external tool integration, configurable review policy, and quality-gate configuration. The MVP contract for Doctor is now explicit: only the project-level scope in `docs/compassrose/CONFIG.md` is in scope, the minimum required sections and fields are fixed, and command semantics distinguish missing keys from intentionally empty values.
 
-This feature is now formalized under `docs/features/002-configuration-model/`, and its first documentation task has stabilized the configuration target that implementation should read and validate next.
+This feature is now formalized under `docs/features/002-configuration-model/`, and the first implementation task is now ready to read and validate the configuration target defined in `docs/compassrose/CONFIG.md`.
 
 ## Implemented Deliverables
 
