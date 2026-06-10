@@ -25,6 +25,9 @@ planner_output:
     feature_id: string
     title: string
     objective: string
+    first_executable_step: string
+    minimum_progress_evidence:
+      - string
 
     trace:
       roadmap_objective: string
@@ -73,6 +76,8 @@ Every task must include:
 - `feature_id`
 - `title`
 - `objective`
+- `first_executable_step`
+- `minimum_progress_evidence`
 - `trace`
 - `scope.allowed_paths`
 - `acceptance_criteria`
@@ -89,6 +94,8 @@ The task must:
 - Define clear acceptance criteria.
 - Define allowed and forbidden paths.
 - Include enough context to avoid repository-wide exploration.
+- Include a concrete first executable step that can begin the task without interpretation.
+- Include minimum progress evidence that proves the implementation moved beyond reading.
 
 The task must not:
 
@@ -97,6 +104,7 @@ The task must not:
 - Require large-scale refactoring unless explicitly requested.
 - Depend on unstated assumptions.
 - Ask the implementer to decide architecture outside the task scope.
+- Assume why a previous implementer stopped without producing code.
 
 ---
 

@@ -33,6 +33,7 @@ Required inputs:
 Optional inputs:
 
 - Implementation notes
+- Implementation diagnostics
 - Previous review result
 - User review instructions
 
@@ -48,6 +49,9 @@ reviewer_input:
     feature_id: string
     title: string
     objective: string
+    first_executable_step: string
+    minimum_progress_evidence:
+      - string
     acceptance_criteria:
       - string
     scope:
@@ -63,6 +67,16 @@ reviewer_input:
       - string
     git_diff: string
     notes: string | null
+    diagnostics:
+      classification: context_overflow | provider_failure | permission_prompt | tool_refusal | model_passivity | ui_cli_behavior | unknown
+      evidence:
+        - string
+      first_executable_step_status: attempted | not_attempted | unknown
+      minimum_progress_evidence_status: present | absent | unknown
+      exit_code: number | null
+      signal: string | null
+      timed_out: boolean
+      command_invoked: string | null
 
   validation:
     quality_gates:
@@ -91,6 +105,8 @@ The Reviewer must:
 - Check acceptance criteria.
 - Check scope boundaries.
 - Check quality gate results.
+- Consider implementation diagnostics when the diff is empty or incomplete.
+- Consider minimum progress evidence before treating an implementation attempt as reviewable.
 - Identify unrelated changes.
 - Identify architectural violations.
 - Return a structured result.

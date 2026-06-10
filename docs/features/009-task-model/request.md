@@ -9,6 +9,8 @@ The task should include:
 - task id
 - related feature id
 - goal
+- first executable step
+- minimum progress evidence that cannot be satisfied by reading alone
 - context
 - constraints
 - expected files or areas affected
@@ -20,3 +22,5 @@ The task should include:
 Tasks should be generated on demand.
 
 Task files should be project-local and suitable for passing to an external CLI implementer.
+
+A task should not allow a read-only context pass to count as implementation progress.

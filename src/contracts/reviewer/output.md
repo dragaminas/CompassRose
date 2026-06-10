@@ -63,6 +63,9 @@ correction_task:
   feature_id: string
   title: string
   objective: string
+  first_executable_step: string
+  minimum_progress_evidence:
+    - string
 
   review_findings:
     - string

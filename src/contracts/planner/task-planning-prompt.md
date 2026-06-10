@@ -40,6 +40,8 @@ The planner must:
 - keep the task small and independently reviewable
 - make the task traceable to roadmap objective, feature goal, and state gap
 - define explicit allowed and forbidden paths
+- define the first executable step the implementer should take
+- define minimum progress evidence that cannot be satisfied by reading alone
 - include enough context to avoid repository-wide exploration
 - derive the task from current repository reality
 - treat `lifecycle_state` as the primary operational decision input
@@ -50,6 +52,7 @@ The planner must not:
 - expand scope beyond the feature without explicit permission
 - ask the implementer to decide architecture outside the task
 - rely on hidden assumptions
+- assume why a previous implementer stopped without producing code
 
 ---
 
@@ -84,6 +87,8 @@ Instructions:
 - Use `state.md` and its `lifecycle_state` to identify the most important current gap.
 - Respect architecture boundaries and constraints.
 - Define explicit `allowed_paths` and `forbidden_paths`.
+- Define `first_executable_step` as one concrete command, file read, file edit, or test action.
+- Define `minimum_progress_evidence` as observable repository progress inside the allowed scope.
 - Include concrete acceptance criteria and quality gates.
 - Prefer feature-local scope.
 - Do not generate future tasks, a roadmap, or a phase plan.

@@ -28,6 +28,8 @@ The implementer should read:
 
 The implementer must:
 
+- start with the task's `first_executable_step`
+- produce at least one item of `minimum_progress_evidence`
 - stay within allowed paths
 - respect forbidden paths
 - satisfy the acceptance criteria
@@ -41,6 +43,8 @@ The implementer must not:
 - widen scope without explicit instruction
 - approve its own work
 - silently ignore failing quality gates
+- assume why any previous implementer stopped without producing code
+- stop after reading context unless blocked by an explicit error
 
 ---
 
@@ -58,6 +62,8 @@ Read and follow:
 - any feature documents included with the task
 
 Instructions:
+- Start with `first_executable_step`.
+- Do not stop after reading context; continue until there is repository evidence matching `minimum_progress_evidence` or an explicit blocker.
 - Stay within `scope.allowed_paths`.
 - Do not modify `scope.forbidden_paths`.
 - Satisfy the task objective and acceptance criteria.
@@ -69,6 +75,7 @@ Instructions:
 
 Output expectations:
 - produce the code, tests, and documentation changes required by the task
+- identify the minimum progress evidence produced, when implementation notes are available
 - provide concise implementation notes when useful for review
 
 Do not claim approval.

@@ -325,6 +325,10 @@ planner_output:
     feature_id: 023-authentication
     title: Create initial authentication service
     objective: Add the minimal authentication service required by the current milestone.
+    first_executable_step: Read the existing service layout under `src/` and add the first authentication test file under `tests/auth/`.
+    minimum_progress_evidence:
+      - `tests/auth/` contains a new or updated authentication test.
+      - `src/auth/` contains implementation code for the tested behavior.
     trace:
       roadmap_objective: Deliver the first authentication milestone.
       feature_goal: Establish the minimal authentication service.

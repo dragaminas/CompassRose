@@ -25,6 +25,9 @@ correction_task:
   feature_id: string
   title: string
   objective: string
+  first_executable_step: string
+  minimum_progress_evidence:
+    - string
 
   review_findings:
     - string
@@ -57,6 +60,8 @@ A correction task must:
 - Be smaller than the original task.
 - Avoid introducing new scope.
 - Preserve original intent.
+- Include a concrete `first_executable_step`.
+- Include `minimum_progress_evidence` that cannot be satisfied by reading alone.
 
 A correction task must not:
 
@@ -64,6 +69,7 @@ A correction task must not:
 - Redesign the feature.
 - Expand the roadmap.
 - Replace the original task with a broader task.
+- Assume why a previous implementer stopped without producing code.
 
 ---
 

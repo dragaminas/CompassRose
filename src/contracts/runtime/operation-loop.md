@@ -243,12 +243,29 @@ If a correction task is active, the runtime must prefer it over generating a new
 When executing implementation:
 
 - use the configured implementer role
+- pass the active task's `first_executable_step` to the implementer
+- pass the active task's `minimum_progress_evidence` to the implementer
 - respect allowed and forbidden paths from the active task
 - capture raw output
 - capture changed files
 - capture Git diff
+- capture normalized implementation diagnostics
 
 The implementation step must not decide task approval.
+
+If implementation produces no diff, the runtime must preserve the adapter diagnostics and must not assume why the implementer stopped.
+
+If implementation produces no `minimum_progress_evidence`, the runtime must treat the implementation as failed even when the external tool exits successfully.
+
+The runtime must keep enough evidence to distinguish at least:
+
+- context overflow
+- provider failure
+- permission prompts
+- tool refusal
+- model passivity
+- UI or CLI behavior
+- unknown causes
 
 ---
 
@@ -332,6 +349,7 @@ The runtime must not silently discard:
 - a correction task
 - a failed quality gate result
 - a recorded blocker
+- implementation diagnostics from an interrupted or empty attempt
 
 ---
 

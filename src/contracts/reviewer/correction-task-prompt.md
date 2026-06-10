@@ -34,6 +34,8 @@ The correction task must:
 - be narrower than the original task
 - preserve the original intent
 - define explicit allowed and forbidden paths
+- define the first executable step the implementer should take
+- define minimum progress evidence that cannot be satisfied by reading alone
 - include concrete acceptance criteria
 
 The correction task must not:
@@ -41,6 +43,7 @@ The correction task must not:
 - redesign the feature
 - introduce unrelated improvements
 - reopen the full original scope
+- assume why a previous implementer stopped without producing code
 
 ---
 
@@ -62,6 +65,8 @@ Instructions:
 - Address only the failed or incomplete parts identified by review.
 - Keep the correction task smaller than the original task.
 - Define explicit `allowed_paths` and `forbidden_paths`.
+- Define `first_executable_step` as one concrete command, file read, file edit, or test action.
+- Define `minimum_progress_evidence` as observable repository progress inside the allowed scope.
 - Include concrete acceptance criteria and required quality gates.
 - Do not introduce new feature scope.
 
