@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -43,6 +43,7 @@ function main(): number {
   }
 
   syncPrototypeRuntime(repoRoot, cloneRoot);
+  syncFeatureStateDocs(repoRoot, cloneRoot);
 
   const codexMock = join(tempRoot, 'codex-mock.cjs');
   const opencodeMock = join(tempRoot, 'opencode-mock.cjs');
@@ -120,6 +121,22 @@ function syncPrototypeRuntime(repoRoot: string, cloneRoot: string): void {
   const sourcePath = join(repoRoot, 'proto', 'protoCompassRose.ts');
   const targetPath = join(cloneRoot, 'proto', 'protoCompassRose.ts');
   writeFileSync(targetPath, readFileSync(sourcePath, 'utf8'), 'utf8');
+}
+
+function syncFeatureStateDocs(repoRoot: string, cloneRoot: string): void {
+  const sourceRoot = join(repoRoot, 'docs', 'features');
+  const targetRoot = join(cloneRoot, 'docs', 'features');
+
+  for (const entry of readdirSync(sourceRoot)) {
+    const sourceState = join(sourceRoot, entry, 'state.md');
+    if (!existsSync(sourceState) || !statSync(sourceState).isFile()) {
+      continue;
+    }
+
+    const targetState = join(targetRoot, entry, 'state.md');
+    mkdirSync(dirname(targetState), { recursive: true });
+    writeFileSync(targetState, readFileSync(sourceState, 'utf8'), 'utf8');
+  }
 }
 
 function normalizeClonedWorktree(cloneRoot: string): void {
