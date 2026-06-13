@@ -12,7 +12,7 @@ In progress
 ## Current Reality
 
 - `docs/compassrose/PROJECT_STATE.md` exists as the repository-local project state document, and `docs/compassrose/CONFIG.md` already points at this path.
-- Feature `002-configuration-model` now has a planned next task, `F002-T05`, ready to execute.
+- Feature `002-configuration-model` now has `F002-T05` in implementation recovery after a partial committed implementation.
 
 - Feature `001-project-identity-and-foundation` is now complete: the package metadata, TypeScript configuration, and top-level docs all align with the accepted CLI-first foundation and required repository roots.
 - `package.json` points both `main` and `bin.compassrose` at `./dist/cli/main.js`, `tsconfig.json` preserves the Node CLI source/output layout without JSX assumptions, and the top-level docs expose `docs/`, `src/`, `src/contracts/`, and `docs/compassrose/PROJECT_STATE.md` in one pass.
@@ -31,9 +31,7 @@ In progress
 
 ## Pending
 
-- Execute `F002-T05` for the active feature.
-- Continue updating this file with approved repository facts as feature work lands.
-
+- Recover or finish `F002-T05` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -47,8 +45,8 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 ## Known Gaps
 
 - Feature `002-configuration-model` now has validated runtime-precondition policy data in the config loader, but the broader runtime loop still needs to consume that data in a concrete orchestration entrypoint.
+- The active task has a partial committed implementation, so recovery must resume from the current repository state instead of assuming a fresh task start.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute `F002-T05`.
-
+The active feature is `002-configuration-model`, and its next valid action is to recover or finish `F002-T05`.

@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-task_ready
+implementation_running
 
 
 ## Source Request
@@ -15,16 +15,16 @@ task_ready
 - active_task: F002-T05
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: approved
+- last_implementation_result: failed
+- last_quality_gate_result: unknown
+- last_review_result: not_run
 - last_unblock_result: not_run
 
 ## Current Reality
 
 The repository already contains `docs/compassrose/CONFIG.md` as a project-local CompassRose configuration document with a YAML configuration block, allowed values, override records, isolation rules, and a stabilized MVP Doctor contract.
 
-Task `F002-T05` is now planned and ready to execute. Add configuration-backed runtime preflight to the default CLI entrypoint.
+Task `F002-T05` is now in implementation recovery after a partial committed implementation. The next proto run should continue from the current repository state and finish the runtime-preflight coverage before review.
 
 
 CompassRose can now load that project-local configuration, validate the MVP doctor contract, and report the repository readiness checks through `compassrose doctor`, including a distinct preflight for the configured project-state document.
@@ -55,7 +55,7 @@ Task `F002-T04` has now been approved. The typed configuration loader validates 
 - Formalize the configuration model in canonical feature documents: complete
 - Stabilize the project-local configuration contract and any gaps in `docs/compassrose/CONFIG.md`: complete
 - Implement configuration loading and validation for the documented MVP scope: complete
-- Connect configuration validation to the doctor/runtime flow and update state based on approved behavior: complete
+- Connect configuration validation to the doctor/runtime flow and update state based on approved behavior: in progress
 
 ## Blocked By
 
@@ -75,8 +75,8 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 ## Known Gaps
 
 - The project-local configuration flow still needs a runtime consumer that uses the validated `execution`, `roles`, and `git_policy` data during orchestration.
-- The next task should build on the validated loader and doctor checks rather than redefining the schema.
+- The active task has a partial implementation commit, so recovery must resume from the current repository state instead of assuming a fresh task start.
 
 ## Next Planning Hint
 
-Execute `F002-T05` when the current execution mode allows it.
+Recover or finish `F002-T05` before allowing review or new planning.
