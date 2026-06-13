@@ -21,10 +21,12 @@ npm run proto -- run
 - `run`: execute one prototype pass.
 - `run-once`: same as `run`.
 - `--loop`: keep running additional passes until the prototype stops.
-- `--no-commit`: do not create git commits after planning or approved review.
+- `--no-commit`: do not create git commits after planning, recovery checkpoints, or approved review.
 - `--cwd <path>`: start from a different working directory inside the repo.
 
 When review returns `changes_required`, `proto:loop` now records a recovery lesson and continues into the generated correction task instead of forcing a manual restart.
+
+Planning-style recovery steps such as `correct_state` checkpoint their state/task documents in the default commit mode, and implementation/correction retries can continue from a partial diff when that diff is the active task's own recovery context.
 
 ## Typecheck
 

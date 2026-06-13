@@ -10,6 +10,7 @@ function main(): number {
   const cloneRoot = join(tempRoot, 'repo');
   const tsxBinary = join(repoRoot, 'node_modules', '.bin', 'tsx');
   const scenario = process.env.PROTO_E2E_SCENARIO ?? 'standard';
+  const commitEnabled = process.env.PROTO_E2E_COMMIT === '1';
 
   if (!existsSync(tsxBinary)) {
     process.stderr.write(`Unable to find local tsx binary at ${tsxBinary}.\n`);
@@ -60,7 +61,7 @@ function main(): number {
 
   const runResult = spawnSync(
     tsxBinary,
-    ['proto/protoCompassRose.ts', 'run', '--loop', '--no-commit'],
+    ['proto/protoCompassRose.ts', 'run', '--loop', ...(commitEnabled ? [] : ['--no-commit'])],
     {
       cwd: cloneRoot,
       env: {
@@ -99,6 +100,8 @@ function main(): number {
   };
   const markerPath = join(cloneRoot, 'proto', markerFileNameForScenario(scenario));
   const markerExists = existsSync(markerPath);
+  const featureTasksDirectory = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'tasks');
+  const protoTasksDirectory = join(cloneRoot, '.git', 'proto-compassrose', 'tasks');
   const blockerProfilePath = join(
     cloneRoot,
     '.git',
@@ -127,9 +130,26 @@ function main(): number {
     '005.1-repair-feature-state-for-f002-t05.md',
   );
   const malformedFeatureStatePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+  const worktreeStatus = spawnSync('git', ['status', '--porcelain'], {
+    cwd: cloneRoot,
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  if (worktreeStatus.status !== 0) {
+    process.stderr.write(`git status failed:\n${worktreeStatus.stderr || worktreeStatus.stdout}\n`);
+    return 1;
+  }
+  const ignoredWorktreePaths = new Set(['proto/protoCompassRose.ts']);
+  const worktreeDirtyLines = (worktreeStatus.stdout || '')
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0)
+    .filter((line) => !ignoredWorktreePaths.has(line.slice(3).trim()));
+  const worktreeClean = worktreeDirtyLines.length === 0;
 
   const checks = buildScenarioChecks({
     scenario,
+    commitEnabled,
     codexCalls,
     opencodeCalls,
     runSummary,
@@ -142,7 +162,10 @@ function main(): number {
     implementationAttemptHistoryPath,
     stateCorrectionTaskPath,
     stateCorrectionDocPath,
+    featureTasksDirectory,
+    protoTasksDirectory,
     malformedFeatureStatePath,
+    worktreeClean,
   });
 
   for (const check of checks) {
@@ -162,6 +185,7 @@ function main(): number {
 
 function buildScenarioChecks(input: {
   scenario: string;
+  commitEnabled: boolean;
   codexCalls: number;
   opencodeCalls: number;
   runSummary: { status?: string; exit_code?: number; steps?: Array<{ decision?: { kind?: string }; summary?: string; continue_loop?: boolean; exit_code?: number }>; run_id?: string };
@@ -174,10 +198,14 @@ function buildScenarioChecks(input: {
   implementationAttemptHistoryPath: string;
   stateCorrectionTaskPath: string;
   stateCorrectionDocPath: string;
+  featureTasksDirectory: string;
+  protoTasksDirectory: string;
   malformedFeatureStatePath: string;
+  worktreeClean: boolean;
 }): Array<{ name: string; ok: boolean }> {
   const {
     scenario,
+    commitEnabled,
     codexCalls,
     opencodeCalls,
     runSummary,
@@ -190,7 +218,10 @@ function buildScenarioChecks(input: {
     implementationAttemptHistoryPath,
     stateCorrectionTaskPath,
     stateCorrectionDocPath,
+    featureTasksDirectory,
+    protoTasksDirectory,
     malformedFeatureStatePath,
+    worktreeClean,
   } = input;
 
   if (scenario === 'recoverable-review-blocked') {
@@ -241,6 +272,7 @@ function buildScenarioChecks(input: {
       { name: 'the correction task was executed after review requested changes', ok: correctedTaskExecuted },
       { name: 'correction task was created', ok: existsSync(correctionTaskPath) },
       { name: 'opencode touched the repo', ok: markerExists },
+      ...(commitEnabled ? [{ name: 'committed recovery steps left a clean worktree', ok: worktreeClean }] : []),
     ];
   }
 
@@ -265,20 +297,27 @@ function buildScenarioChecks(input: {
 
   if (scenario === 'state-correction-missing-active-task') {
     const malformedFeatureState = existsSync(malformedFeatureStatePath) ? readFileSync(malformedFeatureStatePath, 'utf8') : '';
+    const stateCorrectionArtifactExists = readdirSync(protoTasksDirectory).some(
+      (entry) => /^F002-T05-C\d+\.json$/.test(entry),
+    );
+    const stateCorrectionDocumentExists = readdirSync(featureTasksDirectory).some(
+      (entry) => /^005\.\d+-repair-feature-state-for-f002-t05\.md$/.test(entry),
+    );
 
     return [
       { name: 'codex was called enough times to repair malformed state', ok: codexCalls >= 2 },
       { name: 'opencode was not called', ok: opencodeCalls === 0 },
       { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
-      { name: 'state correction task was recorded', ok: existsSync(stateCorrectionTaskPath) },
-      { name: 'state correction document was written', ok: existsSync(stateCorrectionDocPath) },
+      { name: 'state correction task was recorded', ok: stateCorrectionArtifactExists },
+      { name: 'state correction document was written', ok: stateCorrectionDocumentExists },
       {
         name: 'feature state now records correction pending',
         ok:
           malformedFeatureState.includes('## Lifecycle State\n\ncorrection_pending') &&
           malformedFeatureState.includes('- active_task: F002-T05') &&
-          malformedFeatureState.includes('- active_correction_task: F002-T05-C1'),
+          /- active_correction_task: `?F002-T05-C\d+`?/.test(malformedFeatureState),
       },
+      ...(commitEnabled ? [{ name: 'committed recovery steps left a clean worktree', ok: worktreeClean }] : []),
     ];
   }
 

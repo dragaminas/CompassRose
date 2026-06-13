@@ -719,19 +719,15 @@ class PrototypeCompassRose {
         this.planTask(requireString(decision.feature_id, 'feature_id'));
         return { exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${requireString(decision.feature_id, 'feature_id')}.` };
       case 'correct_state':
-        this.ensureCleanWorktreeIfRequired();
         this.correctState(requireString(decision.feature_id, 'feature_id'), decision.reason);
         return { exitCode: 0, continueLoop: true, summary: `State correction task created for feature ${requireString(decision.feature_id, 'feature_id')}.` };
       case 'unblock_task':
-        this.ensureCleanWorktreeIfRequired();
         this.planUnblockTask(requireString(decision.feature_id, 'feature_id'), decision.reason);
         return { exitCode: 0, continueLoop: true, summary: `Unblock task planned for feature ${requireString(decision.feature_id, 'feature_id')}.` };
       case 'implement_task':
-        this.ensureCleanWorktreeIfRequired();
         this.implementTask(requireString(decision.task_id, 'task_id'));
         return { exitCode: 0, continueLoop: true, summary: `Implementation completed for ${requireString(decision.task_id, 'task_id')}.` };
       case 'correct_task':
-        this.ensureCleanWorktreeIfRequired();
         this.correctTask(requireString(decision.correction_task_id, 'correction_task_id'));
         return { exitCode: 0, continueLoop: true, summary: `Correction implementation completed for ${requireString(decision.correction_task_id, 'correction_task_id')}.` };
       case 'review_task':
@@ -1081,6 +1077,17 @@ class PrototypeCompassRose {
       const updatedProjectState = this.updateProjectStateForCorrection(task.featureId, correction.correction_task_id);
       writeText(feature.statePath, updatedFeatureState);
       writeText(this.projectStatePath, updatedProjectState);
+
+      if (this.options.commit) {
+        this.git.commit(
+          [
+            relativePath(this.repositoryRoot, correctionPath),
+            relativePath(this.repositoryRoot, feature.statePath),
+            relativePath(this.repositoryRoot, this.projectStatePath),
+          ],
+          `proto: request correction ${correction.correction_task_id}`,
+        );
+      }
       console.log(`Review requested correction task ${correction.correction_task_id} at ${relativePath(this.repositoryRoot, correctionPath)}.`);
       return {
         exitCode: 0,
@@ -1097,6 +1104,16 @@ class PrototypeCompassRose {
       const blockedSummary = continueLoop
         ? `Recoverable blocker ${blocker.signature} recorded; the loop can continue to unblock planning.`
         : `Terminal blocker ${blocker.signature} recorded; the run will stop.`;
+
+      if (this.options.commit) {
+        this.git.commit(
+          [
+            relativePath(this.repositoryRoot, feature.statePath),
+            relativePath(this.repositoryRoot, this.projectStatePath),
+          ],
+          `proto: record blocked review for ${task.taskId}`,
+        );
+      }
 
       if (continueLoop) {
         console.log(blockedSummary);
@@ -1421,6 +1438,17 @@ class PrototypeCompassRose {
     const updatedProjectState = this.updateProjectStateForCorrection(featureId, stateCorrection.task_id);
     writeText(feature.statePath, updatedFeatureState);
     writeText(this.projectStatePath, updatedProjectState);
+
+    if (this.options.commit) {
+      this.git.commit(
+        [
+          relativePath(this.repositoryRoot, path),
+          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+        ],
+        `proto: repair state for ${featureId}`,
+      );
+    }
     console.error(`State correction task ${stateCorrection.task_id} created at ${relativePath(this.repositoryRoot, path)}.`);
   }
 
