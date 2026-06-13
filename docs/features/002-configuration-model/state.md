@@ -14,9 +14,6 @@ task_ready
 - formalization: complete
 - active_task: F002-T05
 - active_correction_task: none
-
-- active_task: none
-- active_correction_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
 - last_review_result: approved
@@ -74,4 +71,3 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 ## Next Planning Hint
 
 Execute `F002-T05` when the current execution mode allows it.
-
