@@ -45,6 +45,6 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "benchmark-prompts/gema/range.ts"],
   "exclude": ["dist", "tests", "docs", "node_modules"]
 }
