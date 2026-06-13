@@ -15,7 +15,9 @@
     "proto": "tsx proto/protoCompassRose.ts",
     "proto:run": "tsx proto/protoCompassRose.ts run --no-commit",
     "proto:loop": "tsx proto/protoCompassRose.ts run --loop",
-    "proto:typecheck": "tsc -p proto/tsconfig.json"
+    "proto:typecheck": "tsc -p proto/tsconfig.json",
+    "proto:e2e": "tsx proto/protoCompassRose.e2e.ts",
+    "proto:smoke": "tsx proto/protoCompassRose.smoke.e2e.ts"
   },
   "repository": {
     "type": "git",

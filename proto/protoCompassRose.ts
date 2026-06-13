@@ -372,8 +372,7 @@ class CodexCli {
       this.repositoryRoot,
       '-s',
       'read-only',
-      '--ask-for-approval',
-      'never',
+      '--dangerously-bypass-approvals-and-sandbox',
       '--output-schema',
       schemaPath,
       '-o',
@@ -446,6 +445,7 @@ class PrototypeCompassRose {
   private readonly artifacts: ArtifactStore;
   private readonly codex: CodexCli;
   private readonly opencode: OpenCodeCli;
+  private readonly skipCleanWorktreeCheck: boolean;
   private readonly configurationPath: string;
   private readonly projectStatePath: string;
   private readonly featuresRoot: string;
@@ -464,6 +464,7 @@ class PrototypeCompassRose {
     this.artifacts = new ArtifactStore(repositoryRoot);
     this.codex = new CodexCli(repositoryRoot, process.env.PROTO_COMPASSROSE_CODEX_COMMAND ?? 'codex');
     this.opencode = new OpenCodeCli(repositoryRoot, process.env.PROTO_COMPASSROSE_OPENCODE_COMMAND ?? 'opencode');
+    this.skipCleanWorktreeCheck = process.env.PROTO_COMPASSROSE_SKIP_CLEAN_CHECK === '1';
 
     const configurationPath = join(repositoryRoot, 'docs', 'compassrose', 'CONFIG.md');
     const configuration = readProjectConfiguration(configurationPath);
@@ -563,19 +564,19 @@ class PrototypeCompassRose {
   private executeStep(decision: StepDecision): StepExecutionResult {
     switch (decision.kind) {
       case 'plan_feature':
-        this.git.ensureCleanWorktree();
+        this.ensureCleanWorktreeIfRequired();
         this.planFeature(requireString(decision.feature_id, 'feature_id'));
         return { exitCode: 0, continueLoop: true, summary: `Feature ${requireString(decision.feature_id, 'feature_id')} formalized.` };
       case 'plan_task':
-        this.git.ensureCleanWorktree();
+        this.ensureCleanWorktreeIfRequired();
         this.planTask(requireString(decision.feature_id, 'feature_id'));
         return { exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${requireString(decision.feature_id, 'feature_id')}.` };
       case 'implement_task':
-        this.git.ensureCleanWorktree();
+        this.ensureCleanWorktreeIfRequired();
         this.implementTask(requireString(decision.task_id, 'task_id'));
         return { exitCode: 0, continueLoop: true, summary: `Implementation completed for ${requireString(decision.task_id, 'task_id')}.` };
       case 'correct_task':
-        this.git.ensureCleanWorktree();
+        this.ensureCleanWorktreeIfRequired();
         this.correctTask(requireString(decision.correction_task_id, 'correction_task_id'));
         return { exitCode: 0, continueLoop: true, summary: `Correction implementation completed for ${requireString(decision.correction_task_id, 'correction_task_id')}.` };
       case 'review_task':
@@ -589,6 +590,14 @@ class PrototypeCompassRose {
       default:
         return assertNever(decision.kind);
     }
+  }
+
+  private ensureCleanWorktreeIfRequired(): void {
+    if (this.skipCleanWorktreeCheck) {
+      return;
+    }
+
+    this.git.ensureCleanWorktree();
   }
 
   private planFeature(featureId: string): void {

@@ -30,6 +30,22 @@ npm run proto -- run
 npm run proto:typecheck
 ```
 
+## E2E Smoke Test
+
+```bash
+npm run proto:e2e
+```
+
+This runs the prototype against fake `codex` and `opencode` binaries in a temporary clone so you can verify the orchestration path without touching the real tools.
+
+For a smaller control-flow check that only verifies the `codex -> opencode -> codex` sequence, use:
+
+```bash
+npm run proto:smoke
+```
+
+The smoke harness sets `PROTO_COMPASSROSE_SKIP_CLEAN_CHECK=1` so the prototype can exercise the control flow inside a temporary test workspace.
+
 ## Diagnostics
 
 Prototype artifacts are written under `.git/proto-compassrose/`:
