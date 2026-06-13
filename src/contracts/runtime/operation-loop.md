@@ -169,6 +169,9 @@ Next state:
 Action:
 
 - wait for implementation completion or recover the interrupted implementation state
+- if the implementer collapses after producing partial repository changes, retry the same active task once from the current worktree instead of discarding the progress
+- if the implementer collapses without producing repository progress, transition explicitly to `implementation_failed` or `blocked` according to the observed diagnostics
+- never replan the feature while an implementation retry is still available
 
 Next state:
 
@@ -276,6 +279,8 @@ When executing implementation:
 
 The implementation step must not decide task approval.
 
+If the implementer collapses but leaves partial repository changes, the runtime must preserve that worktree state, keep the feature in `implementation_running`, and retry the same task once before declaring failure.
+
 If implementation produces no diff, the runtime must preserve the adapter diagnostics and must not assume why the implementer stopped.
 
 If implementation produces no `minimum_progress_evidence`, the runtime must treat the implementation as failed even when the external tool exits successfully.
@@ -378,6 +383,15 @@ The runtime must not silently discard:
 
 - an active task
 - a correction task
+- partial implementation progress captured in the worktree or diff
+
+Implementation recovery rules:
+
+- `implementation_running`: inspect the latest implementation artifacts first
+- if the latest attempt left partial repository changes, retry the same active task once from the current worktree
+- if the retry succeeds, continue to quality gates
+- if the retry also fails or no recoverable progress exists, transition explicitly to `implementation_failed` or `blocked`
+- preserve raw output, diff, and diagnostics for both the failed attempt and the retry so the operator can distinguish a transient collapse from a terminal stop
 - a failed quality gate result
 - a recorded blocker
 - implementation diagnostics from an interrupted or empty attempt

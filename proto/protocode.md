@@ -28,6 +28,13 @@ It is intentionally outside `src/` because it is a proving ground for orchestrat
 11. If the selected feature's state is malformed but repairable, create a state correction task, update state, and continue.
 12. If the step is `correct_task`, ask `opencode run` to execute the correction task using TDD.
 
+Implementation recovery:
+
+- If `opencode run` collapses but leaves partial repository changes, keep the feature in `implementation_running` and call the implementer again once from the current worktree.
+- If the retry succeeds, continue with quality gates and review as usual.
+- If the retry also fails, or the implementer produced no repository progress at all, mark the implementation as failed and stop the loop.
+- Do not replan the feature while an implementation retry is still available.
+
 ## Stop Conditions
 
 The prototype stops when any of these is true:
@@ -35,7 +42,7 @@ The prototype stops when any of these is true:
 - there is no non-completed feature left to implement
 - the selected feature is blocked and no unblock task can repair it
 - the selected feature is malformed and no state correction task can repair it
-- implementation fails
+- implementation fails after the retry budget is exhausted or no recoverable progress exists
 - a required quality gate fails
 - review cannot proceed because there is no Git diff
 - review returns `changes_required`

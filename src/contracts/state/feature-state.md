@@ -175,6 +175,8 @@ A task already exists and may be executed when the current execution mode allows
 ### implementation_running
 
 An implementation attempt is in progress or must be explicitly recovered after interruption.
+If the last attempt left partial repository changes, the runtime should retry the same active task once from the current worktree before declaring failure.
+The feature remains in `implementation_running` while that retry budget is still available.
 
 ### implementation_failed
 
@@ -302,6 +304,7 @@ On restart, CompassRose must inspect `## Lifecycle State` first.
 Recovery rules:
 
 - `implementation_running`: inspect execution artifacts and either resume the implementation step or transition explicitly to `implementation_failed` or `blocked`
+- `implementation_running`: inspect execution artifacts first; if the latest attempt left partial repository changes, retry the same active task once before deciding whether to stop
 - `quality_gates_pending`: re-run or resume quality gates instead of planning a new task
 - `review_pending`: re-run or resume review instead of planning a new task
 - `correction_pending`: continue with the recorded correction task instead of generating a broader replacement task
