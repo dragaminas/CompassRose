@@ -381,11 +381,18 @@ interface RefinementFeedback {
 class GitClient {
   constructor(private readonly repositoryRoot: string) {}
 
-  ensureCleanWorktree(): void {
-    const status = this.execGit(['status', '--porcelain']);
-    if (status.trim().length > 0) {
-      throw new Error('Prototype run requires a clean worktree before mutating steps.');
+  ensureCleanWorktree(allowedDirtyPrefixes: readonly string[] = []): void {
+    const dirtyPaths = this.dirtyPaths();
+    const disallowedPaths = dirtyPaths.filter((path) => !isPathAllowedByPrefix(path, allowedDirtyPrefixes));
+    if (disallowedPaths.length > 0) {
+      throw new Error(
+        `Prototype run requires a clean worktree before mutating steps. Disallowed dirty paths: ${disallowedPaths.join(', ')}.`,
+      );
     }
+  }
+
+  dirtyPaths(): string[] {
+    return parseGitStatusPaths(this.execGit(['status', '--porcelain']));
   }
 
   diffNameOnly(excludedPaths: readonly string[] = []): string[] {
@@ -472,6 +479,25 @@ class ArtifactStore {
       return JSON.parse(readFileSync(targetPath, 'utf8')) as T;
     } catch {
       return null;
+    }
+  }
+
+  listFiles(relativePath: string): readonly { name: string; fullPath: string; mtimeMs: number }[] {
+    const targetDir = join(this.root, relativePath);
+    try {
+      return readdirSync(targetDir)
+        .map((name) => {
+          const fullPath = join(targetDir, name);
+          const stat = statSync(fullPath);
+          return {
+            name,
+            fullPath,
+            mtimeMs: stat.mtimeMs,
+          };
+        })
+        .filter((entry) => entry.fullPath.length > 0);
+    } catch {
+      return [];
     }
   }
 
@@ -764,11 +790,9 @@ class PrototypeCompassRose {
   private executeStep(decision: StepDecision): StepExecutionResult {
     switch (decision.kind) {
       case 'plan_feature':
-        this.ensureCleanWorktreeIfRequired();
         this.planFeature(requireString(decision.feature_id, 'feature_id'));
         return { exitCode: 0, continueLoop: true, summary: `Feature ${requireString(decision.feature_id, 'feature_id')} formalized.` };
       case 'plan_task':
-        this.ensureCleanWorktreeIfRequired();
         this.planTask(requireString(decision.feature_id, 'feature_id'));
         return { exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${requireString(decision.feature_id, 'feature_id')}.` };
       case 'correct_state':
@@ -797,15 +821,19 @@ class PrototypeCompassRose {
     }
   }
 
-  private ensureCleanWorktreeIfRequired(): void {
+  private ensureCleanWorktreeIfRequired(featureId: string): void {
     if (this.skipCleanWorktreeCheck) {
       return;
     }
 
-    this.git.ensureCleanWorktree();
+    this.git.ensureCleanWorktree([
+      'docs/compassrose/PROJECT_STATE.md',
+      `docs/features/${featureId}/`,
+    ]);
   }
 
   private planFeature(featureId: string): void {
+    this.ensureCleanWorktreeIfRequired(featureId);
     const feature = this.loadFeature(featureId);
     const prompt = [
       'Act as the CompassRose Planner.',
@@ -853,6 +881,7 @@ class PrototypeCompassRose {
   }
 
   private planTask(featureId: string): void {
+    this.ensureCleanWorktreeIfRequired(featureId);
     const feature = this.loadFeature(featureId);
     const prompt = [
       'Act as the CompassRose Planner.',
@@ -1523,9 +1552,77 @@ class PrototypeCompassRose {
       }
     }
 
+    const artifactTaskId = this.resolveStateCorrectionActiveTaskFromArtifacts(feature.id);
+    if (artifactTaskId) {
+      return artifactTaskId;
+    }
+
     throw new Error(
-      `Cannot create a state correction task for ${feature.id} because no active task is recorded and no recoverable task hint could be derived from project state.`,
+      `Cannot create a state correction task for ${feature.id} because no active task is recorded and no recoverable task hint could be derived from project state or recorded task artifacts.`,
     );
+  }
+
+  private resolveStateCorrectionActiveTaskFromArtifacts(featureId: string): string | null {
+    const taskArtifactTaskId = this.findLatestTaskArtifactTaskId(featureId);
+    if (taskArtifactTaskId) {
+      return taskArtifactTaskId;
+    }
+
+    const implementationAttemptTaskId = this.findLatestImplementationAttemptTaskId(featureId);
+    if (implementationAttemptTaskId) {
+      return implementationAttemptTaskId;
+    }
+
+    return null;
+  }
+
+  private findLatestTaskArtifactTaskId(featureId: string): string | null {
+    const artifacts = [...this.artifacts.listFiles('tasks')].sort((left, right) => right.mtimeMs - left.mtimeMs);
+
+    for (const artifact of artifacts) {
+      if (!artifact.name.endsWith('.json')) {
+        continue;
+      }
+
+      const stored = this.artifacts.readJson<StoredTaskArtifact>(join('tasks', artifact.name));
+      const task = stored?.task;
+      if (!task || task.feature_id !== featureId) {
+        continue;
+      }
+
+      if (typeof task.task_id !== 'string' || task.task_id.trim().length === 0) {
+        continue;
+      }
+
+      return task.task_id;
+    }
+
+    return null;
+  }
+
+  private findLatestImplementationAttemptTaskId(featureId: string): string | null {
+    const artifacts = [...this.artifacts.listFiles('implementation-attempts')].sort((left, right) => right.mtimeMs - left.mtimeMs);
+
+    for (const artifact of artifacts) {
+      if (!artifact.name.endsWith('.json') || artifact.name.includes('.attempt-')) {
+        continue;
+      }
+
+      const history = this.artifacts.readJson<ImplementationAttemptHistory>(join('implementation-attempts', artifact.name));
+      const taskId = history?.task_id;
+      if (typeof taskId !== 'string' || taskId.trim().length === 0) {
+        continue;
+      }
+
+      const stored = this.artifacts.readJson<StoredTaskArtifact>(join('tasks', `${taskId}.json`));
+      if (stored?.task?.feature_id !== featureId) {
+        continue;
+      }
+
+      return taskId;
+    }
+
+    return null;
   }
 
   private buildStateCorrectionTask(
@@ -3701,6 +3798,23 @@ function replaceOperationalStatus(markdown: string, overrides: Partial<Record<st
     }
   }
 
+  const defaults: Record<string, string> = {
+    formalization: 'complete',
+    active_task: 'none',
+    active_correction_task: 'none',
+    active_unblock_task: 'none',
+    last_implementation_result: 'not_run',
+    last_quality_gate_result: 'unknown',
+    last_review_result: 'not_run',
+    last_unblock_result: 'not_run',
+  };
+
+  for (const [key, value] of Object.entries(defaults)) {
+    if (!(key in values)) {
+      values[key] = value;
+    }
+  }
+
   return replaceSection(markdown, 'Operational Status', Object.entries(values).map(([key, value]) => `- ${key}: ${value}`).join('\n'));
 }
 
@@ -4045,6 +4159,27 @@ function parseGitPathList(output: string): string[] {
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
+}
+
+function parseGitStatusPaths(output: string): string[] {
+  return output
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0)
+    .map((line) => {
+      if (line.startsWith('?? ')) {
+        return line.slice(3).trim();
+      }
+
+      const pathSpec = line.slice(3).trim();
+      const renameSeparator = pathSpec.indexOf(' -> ');
+      return renameSeparator === -1 ? pathSpec : pathSpec.slice(renameSeparator + 4).trim();
+    })
+    .filter((path) => path.length > 0);
+}
+
+function isPathAllowedByPrefix(path: string, allowedPrefixes: readonly string[]): boolean {
+  return allowedPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
 function uniqueStrings(values: readonly string[]): string[] {

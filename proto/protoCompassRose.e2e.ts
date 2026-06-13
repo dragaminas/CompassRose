@@ -56,6 +56,7 @@ function main(): number {
   }
   if (scenario === 'state-correction-missing-active-task') {
     seedMalformedFeatureState(cloneRoot);
+    seedStateCorrectionFallbackTaskArtifact(cloneRoot);
   }
   writeExecutableScript(codexMock, CODEX_MOCK_SCRIPT);
   writeExecutableScript(opencodeMock, OPENCODE_MOCK_SCRIPT);
@@ -320,7 +321,8 @@ function buildScenarioChecks(input: {
         ok:
           malformedFeatureState.includes('## Lifecycle State\n\ncorrection_pending') &&
           malformedFeatureState.includes('- active_task: F002-T05') &&
-          /- active_correction_task: `?F002-T05-C\d+`?/.test(malformedFeatureState),
+          /- active_correction_task: `?F002-T05-C\d+`?/.test(malformedFeatureState) &&
+          malformedFeatureState.includes('- last_unblock_result: not_run'),
       },
       ...(commitEnabled ? [{ name: 'committed recovery steps left a clean worktree', ok: worktreeClean }] : []),
     ];
@@ -488,6 +490,22 @@ function seedBlockedFeatureState(cloneRoot: string): void {
 function seedMalformedFeatureState(cloneRoot: string): void {
   const statePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
   writeFileSync(statePath, MALFORMED_STATE_MISSING_ACTIVE_TASK_SEED, 'utf8');
+}
+
+function seedStateCorrectionFallbackTaskArtifact(cloneRoot: string): void {
+  const artifactsRoot = join(cloneRoot, '.git', 'proto-compassrose', 'tasks');
+  mkdirSync(artifactsRoot, { recursive: true });
+  writeFileSync(
+    join(artifactsRoot, 'F002-T05.json'),
+    `${JSON.stringify({
+      ...SEEDED_TASK,
+      task: {
+        ...SEEDED_TASK.task,
+        task_id: 'F002-T05',
+      },
+    }, null, 2)}\n`,
+    'utf8',
+  );
 }
 
 const CODEX_MOCK_SCRIPT = `#!/usr/bin/env node
@@ -1434,7 +1452,7 @@ task_ready
 
 The repository already contains \`docs/compassrose/CONFIG.md\` as a project-local CompassRose configuration document with a YAML configuration block, allowed values, override records, isolation rules, and a stabilized MVP Doctor contract.
 
-Task \`F002-T05\` is now planned and ready to execute. Add configuration-backed runtime preflight to the default CLI entrypoint.
+The current work target is planned and ready to execute. Add configuration-backed runtime preflight to the default CLI entrypoint.
 
 CompassRose can now load that project-local configuration, validate the MVP doctor contract, and report the repository readiness checks through \`compassrose doctor\`, including a distinct preflight for the configured project-state document.
 
@@ -1442,7 +1460,7 @@ The accepted architecture documentation already supports repository-local state,
 
 This feature is now formalized under \`docs/features/002-configuration-model/\`, and the first implementation tasks have now been completed against the configuration target defined in \`docs/compassrose/CONFIG.md\`.
 
-Task \`F002-T04\` has now been approved. The typed configuration loader validates and exposes \`execution\`, \`roles\`, and \`git_policy\` data needed for the first broader orchestration handoff without expanding into feature selection or task execution.
+The typed configuration loader has now been approved. It validates and exposes \`execution\`, \`roles\`, and \`git_policy\` data needed for the first broader orchestration handoff without expanding into feature selection or task execution.
 
 ## Implemented Deliverables
 
@@ -1479,7 +1497,7 @@ Task \`F002-T04\` has now been approved. The typed configuration loader validate
 
 ## Last Approved Change
 
-Task \`F002-T04\` was approved, extending the typed config loader and its tests to validate the first runtime-precondition policy fields from \`docs/compassrose/CONFIG.md\`.
+The typed config loader was approved, extending its tests to validate the first runtime-precondition policy fields from \`docs/compassrose/CONFIG.md\`.
 
 ## Known Gaps
 
@@ -1488,7 +1506,7 @@ Task \`F002-T04\` was approved, extending the typed config loader and its tests 
 
 ## Next Planning Hint
 
-Execute \`F002-T05\` when the current execution mode allows it.
+Execute the current work target when the current execution mode allows it.
 `;
 
 const exitCode = main();

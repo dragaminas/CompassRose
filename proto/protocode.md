@@ -25,7 +25,7 @@ It is intentionally outside `src/` because it is a proving ground for orchestrat
 8. If the step is `review_task`, ask `codex exec` to review the current Git diff plus quality-gate and implementation artifacts.
 9. If the review is `approved`, update feature and project state and commit.
 10. If the review is `changes_required`, create a correction task, update state, return rejected, and stop.
-11. If the selected feature's state is malformed but repairable, create a state correction task, update state, and continue.
+11. If the selected feature's state is malformed but repairable, create a state correction task from project/feature hints or recorded task artifacts, update state, and continue.
 12. If the step is `correct_task`, ask the configured implementer CLI to execute the correction task using TDD.
 
 Implementation recovery:
@@ -34,6 +34,7 @@ Implementation recovery:
 - If the retry succeeds, continue with quality gates and review as usual.
 - If the retry also fails, or the implementer produced no repository progress at all, mark the implementation as failed and stop the loop.
 - Do not replan the feature while an implementation retry is still available.
+- Recovery-style mutating steps should not be rejected just because the worktree is dirty when the dirty paths belong to the active feature's own state or task documents.
 
 ## Stop Conditions
 
