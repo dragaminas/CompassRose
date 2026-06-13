@@ -11,7 +11,11 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "dev": "tsx src/cli/main.ts",
-    "doctor": "tsx src/cli/main.ts doctor"
+    "doctor": "tsx src/cli/main.ts doctor",
+    "proto": "tsx proto/protoCompassRose.ts",
+    "proto:run": "tsx proto/protoCompassRose.ts run --no-commit",
+    "proto:loop": "tsx proto/protoCompassRose.ts run --loop",
+    "proto:typecheck": "tsc -p proto/tsconfig.json"
   },
   "repository": {
     "type": "git",

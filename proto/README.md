@@ -5,14 +5,15 @@ Minimal launcher for the prototype runtime loop.
 ## Run
 
 ```bash
-tsx proto/protoCompassRose.ts run --no-commit
+npm run proto -- run --no-commit
 ```
 
 Useful variants:
 
 ```bash
-tsx proto/protoCompassRose.ts run
-tsx proto/protoCompassRose.ts run --loop
+npm run proto:run
+npm run proto:loop
+npm run proto -- run
 ```
 
 ## CLI
@@ -26,7 +27,7 @@ tsx proto/protoCompassRose.ts run --loop
 ## Typecheck
 
 ```bash
-npx tsc -p proto/tsconfig.json
+npm run proto:typecheck
 ```
 
 ## Diagnostics
