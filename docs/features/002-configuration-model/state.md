@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-task_ready
+formalized
 
 ## Source Request
 
@@ -11,7 +11,7 @@ task_ready
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T04
+- active_task: none
 - active_correction_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
@@ -27,7 +27,7 @@ The accepted architecture documentation already supports repository-local state,
 
 This feature is now formalized under `docs/features/002-configuration-model/`, and the first implementation tasks have now been completed against the configuration target defined in `docs/compassrose/CONFIG.md`.
 
-Task `F002-T04` is now planned and ready to execute. It extends the typed configuration loader to validate and expose the first runtime-precondition policy fields needed by the broader orchestration loop.
+Task `F002-T04` has now been approved. The typed configuration loader validates and exposes `execution`, `roles`, and `git_policy` data needed for the first broader orchestration handoff without expanding into feature selection or task execution.
 
 ## Implemented Deliverables
 
@@ -37,6 +37,7 @@ Task `F002-T04` is now planned and ready to execute. It extends the typed config
 - the repository already documents the configuration hierarchy and non-invasive tool expectations in project-wide architecture docs
 - the runtime can now load `docs/compassrose/CONFIG.md`, validate the MVP doctor contract, and report readiness through `compassrose doctor`
 - `compassrose doctor` now validates `docs/compassrose/PROJECT_STATE.md` as a distinct preflight step
+- `readProjectConfiguration()` now validates and exposes typed `execution`, `roles`, and `git_policy` policy data from the canonical project config
 
 ## Remaining Deliverables
 
@@ -56,13 +57,13 @@ Task `F002-T04` is now planned and ready to execute. It extends the typed config
 
 ## Last Approved Change
 
-Added the distinct project-state preflight to `compassrose doctor` and validated repository-local project-state inspection (`F002-T03`).
+Task `F002-T04` was approved, extending the typed config loader and its tests to validate the first runtime-precondition policy fields from `docs/compassrose/CONFIG.md`.
 
 ## Known Gaps
 
-- The project-local configuration flow still needs to be connected to the broader runtime orchestration loop.
-- The active task should build on the validated configuration loader and doctor checks rather than redefining the schema.
+- The project-local configuration flow still needs a runtime consumer that uses the validated `execution`, `roles`, and `git_policy` data during orchestration.
+- The next task should build on the validated loader and doctor checks rather than redefining the schema.
 
 ## Next Planning Hint
 
-Execute `F002-T04` when the current execution mode allows it.
+Plan the next task that consumes the validated runtime-precondition policy fields in a broader runtime entrypoint.
