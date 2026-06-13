@@ -372,7 +372,7 @@ class CodexCli {
       this.repositoryRoot,
       '-s',
       'read-only',
-      '-a',
+      '--ask-for-approval',
       'never',
       '--output-schema',
       schemaPath,
