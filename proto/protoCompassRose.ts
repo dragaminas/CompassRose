@@ -164,6 +164,24 @@ interface ReviewerOutput {
   readonly project_state_update_hint: string | null;
 }
 
+interface TaskInterfaceAnalysis {
+  readonly task_id: string;
+  readonly review_status: ReviewerStatus;
+  readonly summary: string;
+  readonly recommended_action: 'tighten_task_interface' | 'document_implementer_limitation' | 'both' | 'none';
+  readonly perfectible: boolean;
+  readonly implementer_limitations: readonly string[];
+  readonly task_interface_adjustments: {
+    readonly first_executable_step: string | null;
+    readonly minimum_progress_evidence: readonly string[];
+    readonly context_additions: readonly string[];
+    readonly scope_adjustments: readonly string[];
+    readonly acceptance_criteria_adjustments: readonly string[];
+    readonly quality_gate_adjustments: readonly string[];
+  };
+  readonly notes_for_documentation: readonly string[];
+}
+
 interface ParsedTaskDocument {
   readonly taskId: string;
   readonly featureId: string;
@@ -203,6 +221,41 @@ interface ProtoOptions {
   readonly loop: boolean;
   readonly commit: boolean;
   readonly cwd: string;
+}
+
+interface StepExecutionResult {
+  readonly exitCode: number;
+  readonly continueLoop: boolean;
+  readonly summary: string;
+}
+
+interface StepRunRecord {
+  readonly decided_at: string;
+  readonly decision: StepDecision;
+  readonly exit_code: number;
+  readonly continue_loop: boolean;
+  readonly summary: string;
+}
+
+interface RunSummary {
+  readonly run_id: string;
+  readonly started_at: string;
+  readonly finished_at: string;
+  readonly status: 'completed' | 'stopped' | 'failed';
+  readonly exit_code: number;
+  readonly options: ProtoOptions;
+  readonly steps: readonly StepRunRecord[];
+  readonly error: string | null;
+}
+
+interface RefinementFeedback {
+  readonly run_id: string;
+  readonly created_at: string;
+  readonly trigger: string;
+  readonly selected_step: StepDecision | null;
+  readonly likely_sources: readonly string[];
+  readonly observations: readonly string[];
+  readonly next_questions: readonly string[];
 }
 
 class GitClient {
@@ -396,6 +449,9 @@ class PrototypeCompassRose {
   private readonly configurationPath: string;
   private readonly projectStatePath: string;
   private readonly featuresRoot: string;
+  private readonly runId: string;
+  private readonly startedAt: string;
+  private readonly stepRecords: StepRunRecord[] = [];
 
   constructor(private readonly options: ProtoOptions) {
     const repositoryRoot = findGitRepositoryRoot(options.cwd);
@@ -429,27 +485,49 @@ class PrototypeCompassRose {
 
     this.projectStatePath = projectStatePath;
     this.featuresRoot = featuresRoot;
+    this.runId = createRunId();
+    this.startedAt = new Date().toISOString();
   }
 
   run(): number {
     let keepRunning = true;
+    let lastDecision: StepDecision | null = null;
 
-    while (keepRunning) {
-      const decision = this.determineNextStep();
-      console.log(`Next step: ${decision.kind}${decision.feature_id ? ` (${decision.feature_id})` : ''}`);
-      console.log(decision.reason);
+    try {
+      while (keepRunning) {
+        const decision = this.determineNextStep();
+        lastDecision = decision;
+        console.log(`Next step: ${decision.kind}${decision.feature_id ? ` (${decision.feature_id})` : ''}`);
+        console.log(decision.reason);
 
-      const result = this.executeStep(decision);
-      if (!this.options.loop || !result.continueLoop) {
-        keepRunning = false;
+        const result = this.executeStep(decision);
+        this.stepRecords.push({
+          decided_at: new Date().toISOString(),
+          decision,
+          exit_code: result.exitCode,
+          continue_loop: result.continueLoop,
+          summary: result.summary,
+        });
+
+        if (result.exitCode !== 0) {
+          this.writeRefinementFeedback(result.summary, lastDecision);
+          this.writeRunSummary('stopped', result.exitCode, null);
+          return result.exitCode;
+        }
+
+        if (!this.options.loop || !result.continueLoop) {
+          keepRunning = false;
+        }
       }
 
-      if (result.exitCode !== 0) {
-        return result.exitCode;
-      }
+      this.writeRunSummary('completed', 0, null);
+      return 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.writeRefinementFeedback(message, lastDecision);
+      this.writeRunSummary('failed', 1, message);
+      throw error;
     }
-
-    return 0;
   }
 
   private determineNextStep(): StepDecision {
@@ -482,32 +560,32 @@ class PrototypeCompassRose {
     return this.codex.runStructured<StepDecision>(prompt, STEP_SCHEMA);
   }
 
-  private executeStep(decision: StepDecision): { exitCode: number; continueLoop: boolean } {
+  private executeStep(decision: StepDecision): StepExecutionResult {
     switch (decision.kind) {
       case 'plan_feature':
         this.git.ensureCleanWorktree();
         this.planFeature(requireString(decision.feature_id, 'feature_id'));
-        return { exitCode: 0, continueLoop: true };
+        return { exitCode: 0, continueLoop: true, summary: `Feature ${requireString(decision.feature_id, 'feature_id')} formalized.` };
       case 'plan_task':
         this.git.ensureCleanWorktree();
         this.planTask(requireString(decision.feature_id, 'feature_id'));
-        return { exitCode: 0, continueLoop: true };
+        return { exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${requireString(decision.feature_id, 'feature_id')}.` };
       case 'implement_task':
         this.git.ensureCleanWorktree();
         this.implementTask(requireString(decision.task_id, 'task_id'));
-        return { exitCode: 0, continueLoop: true };
+        return { exitCode: 0, continueLoop: true, summary: `Implementation completed for ${requireString(decision.task_id, 'task_id')}.` };
       case 'correct_task':
         this.git.ensureCleanWorktree();
         this.correctTask(requireString(decision.correction_task_id, 'correction_task_id'));
-        return { exitCode: 0, continueLoop: true };
+        return { exitCode: 0, continueLoop: true, summary: `Correction implementation completed for ${requireString(decision.correction_task_id, 'correction_task_id')}.` };
       case 'review_task':
         return this.reviewTask(requireString(decision.task_id, 'task_id'));
       case 'blocked':
         console.error(`Blocked: ${decision.reason}`);
-        return { exitCode: 2, continueLoop: false };
+        return { exitCode: 2, continueLoop: false, summary: decision.reason };
       case 'stop':
         console.log('No selectable feature remains.');
-        return { exitCode: 0, continueLoop: false };
+        return { exitCode: 0, continueLoop: false, summary: 'No selectable feature remains.' };
       default:
         return assertNever(decision.kind);
     }
@@ -632,7 +710,7 @@ class PrototypeCompassRose {
     this.executeImplementation(task, true);
   }
 
-  private reviewTask(taskId: string): { exitCode: number; continueLoop: boolean } {
+  private reviewTask(taskId: string): StepExecutionResult {
     const diff = this.git.diffPatch();
     if (diff.trim().length === 0) {
       throw new Error(`Review for ${taskId} cannot proceed because git diff is empty.`);
@@ -680,6 +758,9 @@ class PrototypeCompassRose {
 
     const review = this.codex.runStructured<ReviewerOutput>(prompt, REVIEWER_OUTPUT_SCHEMA, [tempDir]);
     this.artifacts.writeJson(join('reviews', `${taskId}.json`), review);
+    const taskInterfaceAnalysis = this.shouldAnalyzeTaskInterface(review)
+      ? this.analyzeTaskInterface(task, feature, review, implementation, qualityResults, tempDir)
+      : null;
 
     if (review.status === 'approved') {
       const updatedFeatureState = this.updateFeatureStateAfterApprovedReview(feature.statePath, task);
@@ -692,7 +773,13 @@ class PrototypeCompassRose {
         this.git.commit(changedFiles, `proto: approve task ${task.taskId}`);
       }
 
-      return { exitCode: 0, continueLoop: true };
+      return {
+        exitCode: 0,
+        continueLoop: true,
+        summary: taskInterfaceAnalysis
+          ? `Review approved ${task.taskId}; task-interface analysis also captured implementer feedback.`
+          : `Review approved ${task.taskId}.`,
+      };
     }
 
     if (review.status === 'changes_required') {
@@ -711,16 +798,90 @@ class PrototypeCompassRose {
       writeText(feature.statePath, updatedFeatureState);
       writeText(this.projectStatePath, updatedProjectState);
       console.error(`Review requested correction task ${correction.correction_task_id} at ${relativePath(this.repositoryRoot, correctionPath)}.`);
-      return { exitCode: 2, continueLoop: false };
+      return {
+        exitCode: 2,
+        continueLoop: false,
+        summary: taskInterfaceAnalysis
+          ? `Review requested correction task ${correction.correction_task_id} for ${task.taskId}; task-interface analysis was recorded.`
+          : `Review requested correction task ${correction.correction_task_id} for ${task.taskId}.`,
+      };
     }
 
     if (review.status === 'blocked') {
       console.error(review.summary);
-      return { exitCode: 2, continueLoop: false };
+      return {
+        exitCode: 2,
+        continueLoop: false,
+        summary: taskInterfaceAnalysis ? `${review.summary} Task-interface analysis was recorded.` : review.summary,
+      };
     }
 
     console.error(review.summary);
-    return { exitCode: 1, continueLoop: false };
+    return {
+      exitCode: 1,
+      continueLoop: false,
+      summary: taskInterfaceAnalysis ? `${review.summary} Task-interface analysis was recorded.` : review.summary,
+    };
+  }
+
+  private shouldAnalyzeTaskInterface(review: ReviewerOutput): boolean {
+    return review.status !== 'approved' || review.findings.length > 0;
+  }
+
+  private analyzeTaskInterface(
+    task: ParsedTaskDocument,
+    feature: FeatureRecord,
+    review: ReviewerOutput,
+    implementation: ImplementationAttempt,
+    qualityResults: readonly QualityGateResult[],
+    tempDir: string,
+  ): TaskInterfaceAnalysis {
+    const reviewPath = join(tempDir, 'review.json');
+    writeFileSync(reviewPath, `${JSON.stringify(review, null, 2)}\n`, 'utf8');
+
+    const prompt = [
+      'Act as the CompassRose task-interface analyst.',
+      '',
+      `Analyze task \`${task.taskId}\` after a problematic or diagnostic review outcome.`,
+      '',
+      'Read only:',
+      '- `src/contracts/task/task.md`',
+      '- `src/contracts/implementer/task-execution-prompt.md`',
+      '- `src/contracts/adapters/implementer-adapter.md`',
+      '- `src/contracts/reviewer/review-prompt.md`',
+      '- `src/contracts/reviewer/output.md`',
+      `- \`${relativePath(this.repositoryRoot, task.path)}\``,
+      `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
+      '- `docs/compassrose/CONFIG.md`',
+      `- \`${join(tempDir, 'implementation.json')}\``,
+      `- \`${join(tempDir, 'quality-gates.json')}\``,
+      `- \`${reviewPath}\``,
+      '',
+      'Goal:',
+      '- Decide whether the implementation problems are at least partly perfectible by tightening the task interface.',
+      '- If yes, propose concrete adjustments to task fields so future implementers perform better.',
+      '- If not fully perfectible, document implementer limitations that should be recognized by future task design.',
+      '',
+      'Rules:',
+      '- Focus on the task interface, not on fixing the code.',
+      '- Prefer concrete changes to `first_executable_step`, `minimum_progress_evidence`, context, scope, acceptance criteria, or quality gates.',
+      '- When the implementer appears limited rather than under-specified, say so explicitly.',
+      '- Return JSON only.',
+    ].join('\n');
+
+    const analysis = this.codex.runStructured<TaskInterfaceAnalysis>(
+      prompt,
+      TASK_INTERFACE_ANALYSIS_SCHEMA,
+      [tempDir],
+    );
+    this.artifacts.writeJson(join('task-interface-analysis', `${task.taskId}.json`), analysis);
+    this.artifacts.writeText(
+      join('task-interface-analysis', `${task.taskId}.md`),
+      renderTaskInterfaceAnalysisMarkdown(analysis, task, review, implementation, qualityResults),
+    );
+    return analysis;
   }
 
   private executeImplementation(task: ParsedTaskDocument, correction: boolean): void {
@@ -1107,6 +1268,40 @@ class PrototypeCompassRose {
     markdown = replaceSection(markdown, 'Next Planning Hint', `Execute correction task \`${correctionTaskId}\` next.`);
     return markdown;
   }
+
+  private writeRunSummary(status: 'completed' | 'stopped' | 'failed', exitCode: number, error: string | null): void {
+    const summary: RunSummary = {
+      run_id: this.runId,
+      started_at: this.startedAt,
+      finished_at: new Date().toISOString(),
+      status,
+      exit_code: exitCode,
+      options: this.options,
+      steps: this.stepRecords,
+      error,
+    };
+
+    this.artifacts.writeJson(join('runs', `${this.runId}.json`), summary);
+    this.artifacts.writeJson('latest-run.json', summary);
+  }
+
+  private writeRefinementFeedback(trigger: string, selectedStep: StepDecision | null): void {
+    const feedback: RefinementFeedback = {
+      run_id: this.runId,
+      created_at: new Date().toISOString(),
+      trigger,
+      selected_step: selectedStep,
+      likely_sources: inferLikelySources(trigger, selectedStep),
+      observations: buildObservations(trigger, selectedStep),
+      next_questions: buildNextQuestions(trigger, selectedStep),
+    };
+
+    const markdown = renderRefinementFeedback(feedback);
+    this.artifacts.writeText(join('refinement', `${this.runId}.md`), markdown);
+    this.artifacts.writeJson(join('refinement', `${this.runId}.json`), feedback);
+    this.artifacts.writeText('latest-refinement.md', markdown);
+    this.artifacts.writeJson('latest-refinement.json', feedback);
+  }
 }
 
 const STEP_SCHEMA = {
@@ -1357,6 +1552,53 @@ const REVIEWER_OUTPUT_SCHEMA = {
       ],
     },
     project_state_update_hint: { type: ['string', 'null'] },
+  },
+} as const;
+
+const TASK_INTERFACE_ANALYSIS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: [
+    'task_id',
+    'review_status',
+    'summary',
+    'recommended_action',
+    'perfectible',
+    'implementer_limitations',
+    'task_interface_adjustments',
+    'notes_for_documentation',
+  ],
+  properties: {
+    task_id: { type: 'string' },
+    review_status: { type: 'string', enum: ['approved', 'changes_required', 'blocked', 'failed'] },
+    summary: { type: 'string' },
+    recommended_action: {
+      type: 'string',
+      enum: ['tighten_task_interface', 'document_implementer_limitation', 'both', 'none'],
+    },
+    perfectible: { type: 'boolean' },
+    implementer_limitations: { type: 'array', items: { type: 'string' } },
+    task_interface_adjustments: {
+      type: 'object',
+      additionalProperties: false,
+      required: [
+        'first_executable_step',
+        'minimum_progress_evidence',
+        'context_additions',
+        'scope_adjustments',
+        'acceptance_criteria_adjustments',
+        'quality_gate_adjustments',
+      ],
+      properties: {
+        first_executable_step: { type: ['string', 'null'] },
+        minimum_progress_evidence: { type: 'array', items: { type: 'string' } },
+        context_additions: { type: 'array', items: { type: 'string' } },
+        scope_adjustments: { type: 'array', items: { type: 'string' } },
+        acceptance_criteria_adjustments: { type: 'array', items: { type: 'string' } },
+        quality_gate_adjustments: { type: 'array', items: { type: 'string' } },
+      },
+    },
+    notes_for_documentation: { type: 'array', items: { type: 'string' } },
   },
 } as const;
 
@@ -1640,6 +1882,223 @@ function buildImplementationErrorMessage(
   }
 
   return `Implementation for ${taskId} failed (${diagnostics.classification}).`;
+}
+
+function inferLikelySources(trigger: string, selectedStep: StepDecision | null): string[] {
+  const sources = new Set<string>();
+  const normalized = trigger.toLowerCase();
+
+  sources.add('src/contracts/runtime/operation-loop.md');
+
+  if (selectedStep?.kind === 'plan_feature') {
+    sources.add('src/contracts/planner/feature-planning-prompt.md');
+    sources.add('docs/features/README.md');
+  }
+
+  if (selectedStep?.kind === 'plan_task') {
+    sources.add('src/contracts/planner/task-planning-prompt.md');
+    sources.add('src/contracts/planner/output.md');
+    sources.add('src/contracts/task/task.md');
+  }
+
+  if (selectedStep?.kind === 'implement_task' || selectedStep?.kind === 'correct_task') {
+    sources.add('src/contracts/implementer/task-execution-prompt.md');
+    sources.add('src/contracts/adapters/implementer-adapter.md');
+    sources.add('src/contracts/task/task.md');
+  }
+
+  if (selectedStep?.kind === 'review_task') {
+    sources.add('src/contracts/reviewer/review-prompt.md');
+    sources.add('src/contracts/reviewer/output.md');
+    sources.add('src/contracts/task/correction-task.md');
+  }
+
+  if (normalized.includes('project configuration') || normalized.includes('configuration paths')) {
+    sources.add('docs/compassrose/CONFIG.md');
+    sources.add('src/config/configReader.ts');
+  }
+
+  if (normalized.includes('git diff is empty') || normalized.includes('produced no git diff')) {
+    sources.add('src/contracts/adapters/implementer-adapter.md');
+    sources.add('src/contracts/reviewer/input.md');
+  }
+
+  if (normalized.includes('section "##')) {
+    sources.add('src/contracts/state/feature-state.md');
+    sources.add('docs/features/README.md');
+  }
+
+  if (normalized.includes('test_guided')) {
+    sources.add('src/contracts/planner/output.md');
+    sources.add('src/contracts/implementer/task-execution-prompt.md');
+    sources.add('src/contracts/reviewer/review-prompt.md');
+  }
+
+  if (normalized.includes('quality gates failed')) {
+    sources.add('src/contracts/task/task.md');
+    sources.add('src/contracts/reviewer/input.md');
+  }
+
+  if (normalized.includes('task document')) {
+    sources.add('docs/DMS.md');
+    sources.add('src/contracts/task/task.md');
+  }
+
+  return [...sources];
+}
+
+function buildObservations(trigger: string, selectedStep: StepDecision | null): string[] {
+  const observations = [
+    `Trigger: ${trigger}`,
+    selectedStep
+      ? `Selected step: ${selectedStep.kind}${selectedStep.task_id ? ` (${selectedStep.task_id})` : selectedStep.feature_id ? ` (${selectedStep.feature_id})` : ''}`
+      : 'Selected step: unknown',
+  ];
+
+  if (selectedStep?.reason) {
+    observations.push(`Selector reason: ${selectedStep.reason}`);
+  }
+
+  if (/git diff is empty|produced no git diff/i.test(trigger)) {
+    observations.push('The prototype reached a point where repository evidence was missing or not reviewable.');
+  }
+
+  if (/section "##/i.test(trigger)) {
+    observations.push('A Markdown contract was not structured the way the prototype expected.');
+  }
+
+  if (/test_guided/i.test(trigger)) {
+    observations.push('The execution contract and the planned task diverged on TDD policy.');
+  }
+
+  return observations;
+}
+
+function buildNextQuestions(trigger: string, selectedStep: StepDecision | null): string[] {
+  const questions = [
+    'Is the failure caused by a weak contract, stale documentation, or an implementation bug in the prototype?',
+    'Should this condition be represented more explicitly in project or feature state?',
+  ];
+
+  if (/section "##/i.test(trigger)) {
+    questions.push('Should this Markdown document gain a stricter canonical template or a machine-readable projection?');
+  }
+
+  if (/git diff is empty|produced no git diff/i.test(trigger)) {
+    questions.push('Should the implementer adapter preserve stronger minimum-progress evidence before review is attempted?');
+  }
+
+  if (/quality gates failed/i.test(trigger)) {
+    questions.push('Should quality-gate failure transition rules be documented more explicitly in the runtime contract?');
+  }
+
+  if (selectedStep?.kind === 'plan_task') {
+    questions.push('Did the planner receive enough repository-local context to produce a bounded task?');
+  }
+
+  if (selectedStep?.kind === 'review_task') {
+    questions.push('Did the reviewer receive enough structured implementation evidence beyond the raw diff?');
+  }
+
+  return questions;
+}
+
+function renderRefinementFeedback(feedback: RefinementFeedback): string {
+  return [
+    `# Refinement Feedback: ${feedback.run_id}`,
+    '',
+    '## Trigger',
+    feedback.trigger,
+    '',
+    '## Selected Step',
+    feedback.selected_step
+      ? `- kind: ${feedback.selected_step.kind}
+- feature_id: ${feedback.selected_step.feature_id ?? 'null'}
+- task_id: ${feedback.selected_step.task_id ?? 'null'}
+- correction_task_id: ${feedback.selected_step.correction_task_id ?? 'null'}
+- reason: ${feedback.selected_step.reason}`
+      : 'No step was selected before the run stopped.',
+    '',
+    '## Likely Sources To Revisit',
+    ...feedback.likely_sources.map((item) => `- \`${item}\``),
+    '',
+    '## Observations',
+    ...feedback.observations.map((item) => `- ${item}`),
+    '',
+    '## Next Questions',
+    ...feedback.next_questions.map((item) => `- ${item}`),
+    '',
+  ].join('\n');
+}
+
+function renderTaskInterfaceAnalysisMarkdown(
+  analysis: TaskInterfaceAnalysis,
+  task: ParsedTaskDocument,
+  review: ReviewerOutput,
+  implementation: ImplementationAttempt,
+  qualityResults: readonly QualityGateResult[],
+): string {
+  return [
+    `# Task Interface Analysis: ${analysis.task_id}`,
+    '',
+    '## Review Status',
+    review.status,
+    '',
+    '## Summary',
+    analysis.summary,
+    '',
+    '## Recommended Action',
+    `- ${analysis.recommended_action}`,
+    `- perfectible: ${analysis.perfectible ? 'yes' : 'no'}`,
+    '',
+    '## Implementer Limitations',
+    ...(analysis.implementer_limitations.length > 0
+      ? analysis.implementer_limitations.map((item) => `- ${item}`)
+      : ['- None identified.']),
+    '',
+    '## Task Interface Adjustments',
+    `- first_executable_step: ${analysis.task_interface_adjustments.first_executable_step ?? 'no change'}`,
+    ...(analysis.task_interface_adjustments.minimum_progress_evidence.length > 0
+      ? analysis.task_interface_adjustments.minimum_progress_evidence.map((item) => `- minimum_progress_evidence: ${item}`)
+      : ['- minimum_progress_evidence: no change']),
+    ...(analysis.task_interface_adjustments.context_additions.length > 0
+      ? analysis.task_interface_adjustments.context_additions.map((item) => `- context_addition: ${item}`)
+      : ['- context_addition: no change']),
+    ...(analysis.task_interface_adjustments.scope_adjustments.length > 0
+      ? analysis.task_interface_adjustments.scope_adjustments.map((item) => `- scope_adjustment: ${item}`)
+      : ['- scope_adjustment: no change']),
+    ...(analysis.task_interface_adjustments.acceptance_criteria_adjustments.length > 0
+      ? analysis.task_interface_adjustments.acceptance_criteria_adjustments.map((item) => `- acceptance_criteria_adjustment: ${item}`)
+      : ['- acceptance_criteria_adjustment: no change']),
+    ...(analysis.task_interface_adjustments.quality_gate_adjustments.length > 0
+      ? analysis.task_interface_adjustments.quality_gate_adjustments.map((item) => `- quality_gate_adjustment: ${item}`)
+      : ['- quality_gate_adjustment: no change']),
+    '',
+    '## Documentation Notes',
+    ...(analysis.notes_for_documentation.length > 0
+      ? analysis.notes_for_documentation.map((item) => `- ${item}`)
+      : ['- None.']),
+    '',
+    '## Review Findings Snapshot',
+    ...(review.findings.length > 0
+      ? review.findings.map((item) => `- [${item.severity}] ${item.message}`)
+      : ['- No structured findings recorded.']),
+    '',
+    '## Implementation Diagnostics Snapshot',
+    `- classification: ${implementation.diagnostics.classification}`,
+    `- first_executable_step_status: ${implementation.diagnostics.first_executable_step_status}`,
+    `- minimum_progress_evidence_status: ${implementation.diagnostics.minimum_progress_evidence_status}`,
+    '',
+    '## Quality Gates Snapshot',
+    ...(qualityResults.length > 0
+      ? qualityResults.map((item) => `- ${item.command}: ${item.status}`)
+      : ['- No quality gates recorded.']),
+    '',
+    '## Current Task Baseline',
+    `- first_executable_step: ${task.firstExecutableStep}`,
+    ...task.minimumProgressEvidence.map((item) => `- minimum_progress_evidence: ${item}`),
+    '',
+  ].join('\n');
 }
 
 function parseTaskDocument(taskPath: string, markdown: string): ParsedTaskDocument {
@@ -1927,6 +2386,10 @@ function uniqueStrings(values: readonly string[]): string[] {
 function readRecordString(record: Record<string, unknown>, key: string): string | null {
   const value = record[key];
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function createRunId(): string {
+  return `run-${new Date().toISOString().replace(/[:.]/g, '-').replace('T', '--').replace('Z', '')}`;
 }
 
 function statSafeIsDirectory(path: string): boolean {

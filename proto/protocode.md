@@ -55,6 +55,16 @@ Run artifacts are written under `.git/proto-compassrose/` so they do not dirty t
 - `raw-output/`
 - `quality-gates/`
 - `reviews/`
+- `task-interface-analysis/`
+- `runs/`
+- `refinement/`
+
+When a run stops because of a blocker or failure, the prototype also writes a refinement note that points back to the contracts or docs most likely needing improvement.
+
+When a review diagnoses implementation problems, the prototype also writes a task-interface analysis artifact that distinguishes:
+
+- what could be improved by tightening the task contract
+- what should be documented as an implementer limitation
 
 ## State Updates
 
@@ -103,3 +113,11 @@ This prototype already surfaced design pressure that should feed the main projec
 - runtime state transitions are easier to automate when state has a machine-readable projection
 - implementation adapters need raw output plus normalized diagnostics, not just a diff
 - untracked files must be included in review evidence, not only tracked diffs
+
+The prototype now encodes that philosophy directly:
+
+- each run writes a structured run summary
+- each failed or blocked run writes a refinement artifact
+- each problematic review writes a task-interface analysis artifact
+- refinement artifacts connect concrete execution friction back to canonical contracts and docs
+- task-interface analysis artifacts connect reviewer findings back to future task design and implementer limits
