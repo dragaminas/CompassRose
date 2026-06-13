@@ -44,11 +44,19 @@ For a smaller control-flow check that only verifies the `codex -> opencode -> co
 npm run proto:smoke
 ```
 
+To exercise the unblock path specifically, run:
+
+```bash
+npm run proto:e2e:unblock
+```
+
 The smoke harness sets `PROTO_COMPASSROSE_SKIP_CLEAN_CHECK=1` so the prototype can exercise the control flow inside a temporary test workspace.
 
 `proto:loop` now prints agent start/end markers plus captured `stdout` and `stderr`, which makes it easier to tell active agent work from a stalled loop.
 
 When the selector finds malformed but repairable feature state, the prototype now creates a state correction task instead of ending the run as a terminal blocker.
+
+When the selector finds a recoverable blocker, the prototype now creates a blocker profile plus an unblock task, then restores the suspended lifecycle state after the unblock task is approved.
 
 ## Diagnostics
 
@@ -58,6 +66,7 @@ Prototype artifacts are written under `.git/proto-compassrose/`:
 - `latest-refinement.md`
 - `latest-refinement.json`
 - `task-interface-analysis/`
+- `blockers/`
 - `runs/`
 - `refinement/`
 

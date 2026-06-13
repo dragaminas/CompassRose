@@ -11,6 +11,7 @@ type StepKind =
   | 'plan_feature'
   | 'plan_task'
   | 'correct_state'
+  | 'unblock_task'
   | 'implement_task'
   | 'review_task'
   | 'correct_task'
@@ -32,6 +33,16 @@ type DiagnosticClassification =
   | 'model_passivity'
   | 'ui_cli_behavior'
   | 'unknown';
+
+type BlockerKind =
+  | 'state_corruption'
+  | 'task_interface_gap'
+  | 'cli_mismatch'
+  | 'environment'
+  | 'review_failure'
+  | 'unknown';
+
+type BlockerRecoverability = 'auto' | 'agent' | 'human' | 'terminal';
 
 interface CommandExecution {
   readonly ok: boolean;
@@ -177,9 +188,30 @@ interface StateCorrectionTask {
   readonly expected_deliverables: readonly ('documentation')[];
 }
 
+interface RestorationTarget {
+  readonly lifecycle_state: string;
+  readonly active_task: string;
+  readonly active_correction_task: string;
+  readonly active_unblock_task: string;
+}
+
+interface BlockerProfile {
+  readonly kind: BlockerKind;
+  readonly signature: string;
+  readonly evidence: readonly string[];
+  readonly recoverability: BlockerRecoverability;
+  readonly observed_state: string;
+}
+
+interface UnblockTaskMetadata {
+  readonly blocker: BlockerProfile;
+  readonly restoration_target: RestorationTarget;
+}
+
 interface StoredTaskArtifact {
   readonly task: PlannedTask;
   readonly state_correction?: StateCorrectionTask;
+  readonly unblock?: UnblockTaskMetadata;
 }
 
 interface ReviewerOutput {
@@ -255,6 +287,15 @@ interface FeatureRecord {
   readonly architecturePath: string;
   readonly statePath: string;
   readonly tasksDirectory: string;
+}
+
+interface FeatureStateSnapshot {
+  readonly lifecycleState: string;
+  readonly activeTask: string;
+  readonly activeCorrectionTask: string;
+  readonly activeUnblockTask: string;
+  readonly blockedBy: readonly string[];
+  readonly blockedFrom: RestorationTarget | null;
 }
 
 interface QualityGateResult {
@@ -395,7 +436,7 @@ class ArtifactStore {
   writeText(relativePath: string, value: string): string {
     const targetPath = join(this.root, relativePath);
     mkdirSync(dirname(targetPath), { recursive: true });
-    writeFileSync(targetPath, value, 'utf8');
+    writeFileSync(targetPath, normalizeTextForWrite(value), 'utf8');
     return targetPath;
   }
 }
@@ -618,10 +659,11 @@ class PrototypeCompassRose {
       '- Return `plan_feature` when the selected feature still has only `request.md` and must be formalized.',
       '- Return `plan_task` when the selected feature is ready for exactly one next task to be planned.',
       '- Return `correct_state` when the selected feature state is malformed but repairable by a bounded state correction task.',
-      '- Return `implement_task` when the selected feature has `task_ready` and no active correction task.',
+      '- Return `unblock_task` when the selected feature is blocked for a recoverable reason and a bounded unblock task can restore progress.',
+      '- Return `implement_task` when the selected feature has `task_ready`, `unblock_pending`, or `implementation_running` and the corresponding active task or unblock task is ready to execute.',
       '- Return `review_task` when the selected feature is waiting for review.',
       '- Return `correct_task` when the selected feature has an active correction task ready to execute.',
-      '- Return `blocked` when the selected feature is blocked or a failed state prevents progress.',
+      '- Return `blocked` when the selected feature is blocked for an unrecoverable reason or a failed state prevents progress.',
       '- Return `stop` when there is no non-completed feature left to implement.',
       '- Respect numeric feature order and do not skip an earlier non-completed feature.',
       '',
@@ -645,6 +687,10 @@ class PrototypeCompassRose {
         this.ensureCleanWorktreeIfRequired();
         this.correctState(requireString(decision.feature_id, 'feature_id'), decision.reason);
         return { exitCode: 0, continueLoop: true, summary: `State correction task created for feature ${requireString(decision.feature_id, 'feature_id')}.` };
+      case 'unblock_task':
+        this.ensureCleanWorktreeIfRequired();
+        this.planUnblockTask(requireString(decision.feature_id, 'feature_id'), decision.reason);
+        return { exitCode: 0, continueLoop: true, summary: `Unblock task planned for feature ${requireString(decision.feature_id, 'feature_id')}.` };
       case 'implement_task':
         this.ensureCleanWorktreeIfRequired();
         this.implementTask(requireString(decision.task_id, 'task_id'));
@@ -657,6 +703,7 @@ class PrototypeCompassRose {
         return this.reviewTask(requireString(decision.task_id, 'task_id'));
       case 'blocked':
         console.error(`Blocked: ${decision.reason}`);
+        this.recordBlockedFeature(requireString(decision.feature_id, 'feature_id'), decision.reason);
         return { exitCode: 2, continueLoop: false, summary: decision.reason };
       case 'stop':
         console.log('No selectable feature remains.');
@@ -783,6 +830,100 @@ class PrototypeCompassRose {
     }
   }
 
+  private planUnblockTask(featureId: string, reason: string): void {
+    const feature = this.loadFeature(featureId);
+    const snapshot = this.readFeatureStateSnapshot(feature);
+    const blocker = this.buildBlockerProfile(snapshot, reason);
+    const restorationTarget = snapshot.blockedFrom ?? {
+      lifecycle_state: snapshot.lifecycleState,
+      active_task: snapshot.activeTask,
+      active_correction_task: snapshot.activeCorrectionTask,
+      active_unblock_task: snapshot.activeUnblockTask,
+    };
+    const prompt = [
+      'Act as the CompassRose Planner.',
+      '',
+      `Plan the next unblock task for feature \`${featureId}\`.`,
+      '',
+      'Read only:',
+      '- `src/contracts/planner/unblock-task-planning-prompt.md`',
+      '- `src/contracts/planner/input.md`',
+      '- `src/contracts/planner/output.md`',
+      '- `src/contracts/state/feature-state.md`',
+      '- `src/contracts/task/unblock-task.md`',
+      '- `src/contracts/task/state-correction-task.md`',
+      `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
+      '- `docs/compassrose/PROJECT_STATE.md`',
+      '- `docs/compassrose/CONFIG.md`',
+      '- `src/contracts/runtime/operation-loop.md`',
+      '',
+      'Blocker context:',
+      `- kind: ${blocker.kind}`,
+      `- signature: ${blocker.signature}`,
+      `- recoverability: ${blocker.recoverability}`,
+      `- observed_state: ${blocker.observed_state}`,
+      ...blocker.evidence.map((item) => `- evidence: ${item}`),
+      '',
+      'Restoration target:',
+      `- lifecycle_state: ${restorationTarget.lifecycle_state}`,
+      `- active_task: ${restorationTarget.active_task}`,
+      `- active_correction_task: ${restorationTarget.active_correction_task}`,
+      `- active_unblock_task: ${restorationTarget.active_unblock_task}`,
+      '',
+      'Rules:',
+      '- Generate exactly one unblock task.',
+      '- Keep the task narrowly focused on removing the blocker or tightening the interface that caused it.',
+      '- Restore the captured lifecycle state after approval.',
+      '- Use `test_guided` for implementation tasks that produce code.',
+      '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
+      '- Return JSON only and do not modify files.',
+    ].join('\n');
+
+    const planned = this.codex.runStructured<PlannerOutput>(prompt, PLANNER_OUTPUT_SCHEMA, [], `unblock-plan:${featureId}`);
+    const task = planned.task;
+    if (task.expected_deliverables.includes('code') && task.development_policy.mode !== 'test_guided') {
+      throw new Error(`Planned unblock task ${task.task_id} must use \`test_guided\` when it delivers code.`);
+    }
+
+    const unblockMetadata: UnblockTaskMetadata = {
+      blocker,
+      restoration_target: {
+        lifecycle_state: restorationTarget.lifecycle_state,
+        active_task: restorationTarget.active_task,
+        active_correction_task: restorationTarget.active_correction_task,
+        active_unblock_task: 'none',
+      },
+    };
+
+    const taskPath = join(feature.tasksDirectory, buildTaskFileName(task.task_id, task.title));
+    const taskMarkdown = renderUnblockTaskMarkdown(task, unblockMetadata);
+
+    writeText(taskPath, taskMarkdown);
+    this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), {
+      ...planned,
+      unblock: unblockMetadata,
+    });
+    this.writeBlockerProfile(featureId, task.task_id, blocker, unblockMetadata.restoration_target, reason);
+
+    const updatedFeatureState = this.updateFeatureStateForUnblock(feature.statePath, task.task_id, restorationTarget);
+    const updatedProjectState = this.updateProjectStateForUnblock(featureId, task.task_id, restorationTarget.lifecycle_state);
+    writeText(feature.statePath, updatedFeatureState);
+    writeText(this.projectStatePath, updatedProjectState);
+
+    if (this.options.commit) {
+      this.git.commit(
+        [
+          relativePath(this.repositoryRoot, taskPath),
+          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+        ],
+        `proto: unblock feature ${featureId}`,
+      );
+    }
+  }
+
   private implementTask(taskId: string): void {
     const task = this.loadTask(taskId);
     this.executeImplementation(task, false, null);
@@ -803,6 +944,7 @@ class PrototypeCompassRose {
     const task = this.loadTask(taskId);
     const artifact = this.loadTaskArtifact(taskId);
     const stateCorrection = artifact?.state_correction ?? null;
+    const unblock = artifact?.unblock ?? null;
     const feature = this.loadFeature(task.featureId);
     const qualityResults = this.ensureQualityGateResults(task);
     const implementation = this.ensureImplementationAttempt(task);
@@ -824,6 +966,7 @@ class PrototypeCompassRose {
       '- `src/contracts/reviewer/input.md`',
       '- `src/contracts/reviewer/output.md`',
       stateCorrection ? '- `src/contracts/task/state-correction-task.md`' : '- `src/contracts/task/correction-task.md`',
+      unblock ? '- `src/contracts/task/unblock-task.md`' : null,
       `- \`${relativePath(this.repositoryRoot, task.path)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
@@ -842,6 +985,7 @@ class PrototypeCompassRose {
       stateCorrection
         ? '- If status is `changes_required`, keep the correction task state-only and preserve the restored task pointer.'
         : '- For `test_guided` tasks, confirm that the diff includes meaningful test changes for the claimed behavior.',
+      unblock ? '- If this is an unblock task, verify that the blocker signature is resolved and the feature can resume from the captured lifecycle state.' : null,
       '- Return JSON only.',
       '- If status is `changes_required`, include a correction task narrower than the original task.',
       '- Do not modify files.',
@@ -850,16 +994,20 @@ class PrototypeCompassRose {
     const review = this.codex.runStructured<ReviewerOutput>(prompt, REVIEWER_OUTPUT_SCHEMA, [tempDir], `review:${taskId}`);
     this.artifacts.writeJson(join('reviews', `${taskId}.json`), review);
     const taskInterfaceAnalysis = this.shouldAnalyzeTaskInterface(review)
-      ? this.analyzeTaskInterface(task, feature, review, implementation, qualityResults, tempDir, stateCorrection)
+      ? this.analyzeTaskInterface(task, feature, review, implementation, qualityResults, tempDir, stateCorrection, unblock)
       : null;
 
     if (review.status === 'approved') {
       const updatedFeatureState = stateCorrection
         ? this.updateFeatureStateAfterStateCorrection(feature.statePath, task, stateCorrection)
-        : this.updateFeatureStateAfterApprovedReview(feature.statePath, task);
+        : unblock
+          ? this.updateFeatureStateAfterUnblock(feature.statePath, task, unblock)
+          : this.updateFeatureStateAfterApprovedReview(feature.statePath, task);
       const updatedProjectState = stateCorrection
         ? this.updateProjectStateAfterStateCorrection(task.featureId, stateCorrection)
-        : this.updateProjectStateAfterApprovedReview(task.featureId, task.taskId);
+        : unblock
+          ? this.updateProjectStateAfterUnblock(task.featureId, task.taskId, unblock.restoration_target)
+          : this.updateProjectStateAfterApprovedReview(task.featureId, task.taskId);
       writeText(feature.statePath, updatedFeatureState);
       writeText(this.projectStatePath, updatedProjectState);
 
@@ -903,11 +1051,24 @@ class PrototypeCompassRose {
     }
 
     if (review.status === 'blocked') {
-      console.error(review.summary);
+      const blocker = this.recordBlockedReview(task, review, implementation, qualityResults);
+      const continueLoop = blocker.recoverability === 'agent' || blocker.recoverability === 'auto';
+      const blockedSummary = continueLoop
+        ? `Recoverable blocker ${blocker.signature} recorded; the loop can continue to unblock planning.`
+        : `Terminal blocker ${blocker.signature} recorded; the run will stop.`;
+
+      if (continueLoop) {
+        console.log(blockedSummary);
+      } else {
+        console.error(blockedSummary);
+      }
+
       return {
-        exitCode: 2,
-        continueLoop: false,
-        summary: taskInterfaceAnalysis ? `${review.summary} Task-interface analysis was recorded.` : review.summary,
+        exitCode: continueLoop ? 0 : 2,
+        continueLoop,
+        summary: taskInterfaceAnalysis
+          ? `${review.summary} ${blockedSummary} Task-interface analysis was recorded.`
+          : `${review.summary} ${blockedSummary}`,
       };
     }
 
@@ -931,6 +1092,7 @@ class PrototypeCompassRose {
     qualityResults: readonly QualityGateResult[],
     tempDir: string,
     stateCorrection: StateCorrectionTask | null,
+    unblock: UnblockTaskMetadata | null,
   ): TaskInterfaceAnalysis {
     const reviewPath = join(tempDir, 'review.json');
     writeFileSync(reviewPath, `${JSON.stringify(review, null, 2)}\n`, 'utf8');
@@ -943,6 +1105,8 @@ class PrototypeCompassRose {
       'Read only:',
       '- `src/contracts/task/task.md`',
       ...(stateCorrection ? ['- `src/contracts/task/state-correction-task.md`'] : []),
+      ...(unblock ? ['- `src/contracts/task/unblock-task.md`'] : []),
+      ...(unblock ? ['- `src/contracts/planner/unblock-task-planning-prompt.md`'] : []),
       '- `src/contracts/implementer/task-execution-prompt.md`',
       '- `src/contracts/adapters/implementer-adapter.md`',
       '- `src/contracts/reviewer/review-prompt.md`',
@@ -962,6 +1126,8 @@ class PrototypeCompassRose {
       '- If not fully perfectible, document implementer limitations that should be recognized by future task design.',
       stateCorrection
         ? '- If this is a state repair task, focus on `state_target`, restored lifecycle fields, and scope around canonicalizing state.'
+        : unblock
+          ? '- If this is an unblock task, focus on the blocker signature, restoration target, and whether the blocker should become a tighter task interface or a documented limitation.'
         : '- If this is a code task, focus on the minimal fields that improve code implementation behavior.',
       '',
       'Rules:',
@@ -1236,6 +1402,273 @@ class PrototypeCompassRose {
     return path;
   }
 
+  private readFeatureStateSnapshot(feature: FeatureRecord): FeatureStateSnapshot {
+    const markdown = readFileSync(feature.statePath, 'utf8');
+    const operationalStatus = requireSection(markdown, 'Operational Status');
+    const blockedBySection = optionalSection(markdown, 'Blocked By');
+    const blockedFromSection = optionalSection(markdown, 'Blocked From');
+    const blockedFrom = blockedFromSection
+      ? {
+          lifecycle_state: stripTicks(parsePreferredStatusValue(blockedFromSection, 'lifecycle_state') ?? 'none'),
+          active_task: stripTicks(parsePreferredStatusValue(blockedFromSection, 'active_task') ?? 'none'),
+          active_correction_task: stripTicks(parsePreferredStatusValue(blockedFromSection, 'active_correction_task') ?? 'none'),
+          active_unblock_task: stripTicks(parsePreferredStatusValue(blockedFromSection, 'active_unblock_task') ?? 'none'),
+        }
+      : null;
+
+    return {
+      lifecycleState: stripTicks(requireSection(markdown, 'Lifecycle State').trim()),
+      activeTask: stripTicks(parsePreferredStatusValue(operationalStatus, 'active_task') ?? 'none'),
+      activeCorrectionTask: stripTicks(parsePreferredStatusValue(operationalStatus, 'active_correction_task') ?? 'none'),
+      activeUnblockTask: stripTicks(parsePreferredStatusValue(operationalStatus, 'active_unblock_task') ?? 'none'),
+      blockedBy: parseBulletSection(blockedBySection) ?? [],
+      blockedFrom,
+    };
+  }
+
+  private buildBlockerProfile(snapshot: FeatureStateSnapshot, reason: string): BlockerProfile {
+    const blockerKind = classifyBlockerKind(reason, snapshot.blockedBy, snapshot.lifecycleState);
+    return {
+      kind: blockerKind.kind,
+      signature: blockerKind.signature,
+      evidence: blockerKind.evidence,
+      recoverability: blockerKind.recoverability,
+      observed_state: `lifecycle=${snapshot.lifecycleState}; active_task=${snapshot.activeTask}; active_correction_task=${snapshot.activeCorrectionTask}; active_unblock_task=${snapshot.activeUnblockTask}`,
+    };
+  }
+
+  private writeBlockerProfile(
+    featureId: string,
+    taskId: string,
+    blocker: BlockerProfile,
+    restorationTarget: RestorationTarget,
+    reason: string,
+  ): void {
+    const profile = {
+      run_id: this.runId,
+      feature_id: featureId,
+      task_id: taskId,
+      reason,
+      blocker,
+      restoration_target: restorationTarget,
+    };
+
+    this.artifacts.writeJson(join('blockers', `${this.runId}-${taskId}.json`), profile);
+    this.artifacts.writeText(join('blockers', `${this.runId}-${taskId}.md`), renderBlockerProfileMarkdown(profile));
+  }
+
+  private recordBlockedFeature(featureId: string, reason: string, taskId: string | null = null): BlockerProfile {
+    const feature = this.loadFeature(featureId);
+    const snapshot = this.readFeatureStateSnapshot(feature);
+    const blocker = this.buildBlockerProfile(snapshot, reason);
+    const restorationTarget = snapshot.blockedFrom ?? {
+      lifecycle_state: snapshot.lifecycleState,
+      active_task: snapshot.activeTask,
+      active_correction_task: snapshot.activeCorrectionTask,
+      active_unblock_task: snapshot.activeUnblockTask,
+    };
+    this.persistBlockedFeature(featureId, taskId ?? (snapshot.activeTask === 'none' ? null : snapshot.activeTask), reason, blocker, restorationTarget, feature);
+    return blocker;
+  }
+
+  private recordBlockedReview(
+    task: ParsedTaskDocument,
+    review: ReviewerOutput,
+    implementation: ImplementationAttempt,
+    qualityResults: readonly QualityGateResult[],
+  ): BlockerProfile {
+    const feature = this.loadFeature(task.featureId);
+    const snapshot = this.readFeatureStateSnapshot(feature);
+    const blocker = this.buildReviewBlockerProfile(review, implementation, qualityResults, snapshot);
+    const restorationTarget = snapshot.blockedFrom ?? {
+      lifecycle_state: snapshot.lifecycleState,
+      active_task: snapshot.activeTask,
+      active_correction_task: snapshot.activeCorrectionTask,
+      active_unblock_task: snapshot.activeUnblockTask,
+    };
+    const reason = this.buildReviewBlockerReason(review, implementation, qualityResults);
+
+    this.persistBlockedFeature(task.featureId, task.taskId, reason, blocker, restorationTarget, feature);
+    return blocker;
+  }
+
+  private persistBlockedFeature(
+    featureId: string,
+    taskId: string | null,
+    reason: string,
+    blocker: BlockerProfile,
+    restorationTarget: RestorationTarget,
+    feature: FeatureRecord,
+  ): void {
+    const blockedByLines = this.buildBlockedByLines(blocker, reason);
+    const updatedFeatureState = this.updateFeatureStateForBlocked(
+      feature.statePath,
+      blocker,
+      restorationTarget,
+      blockedByLines,
+      this.blockedNextPlanningHint(blocker, restorationTarget),
+    );
+    const updatedProjectState = this.updateProjectStateForBlocked(
+      featureId,
+      taskId,
+      blocker,
+      restorationTarget,
+      this.blockedProjectPendingLines(blocker, restorationTarget, taskId),
+      this.blockedNextPlanningHint(blocker, restorationTarget),
+    );
+
+    writeText(feature.statePath, updatedFeatureState);
+    writeText(this.projectStatePath, updatedProjectState);
+
+    const profile = {
+      run_id: this.runId,
+      feature_id: featureId,
+      task_id: taskId,
+      reason,
+      blocker,
+      restoration_target: restorationTarget,
+    };
+
+    const artifactKey = taskId ?? featureId;
+    this.artifacts.writeJson(join('blockers', `${this.runId}-${artifactKey}-blocked.json`), profile);
+    this.artifacts.writeText(join('blockers', `${this.runId}-${artifactKey}-blocked.md`), renderBlockerProfileMarkdown(profile));
+  }
+
+  private buildBlockedByLines(blocker: BlockerProfile, reason: string): string[] {
+    const reasonSummary = reason
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .join(' | ');
+
+    return [
+      `- kind: ${blocker.kind}`,
+      `- signature: ${blocker.signature}`,
+      `- recoverability: ${blocker.recoverability}`,
+      `- observed_state: ${blocker.observed_state}`,
+      ...blocker.evidence.map((item) => `- evidence: ${item}`),
+      `- reason: ${reasonSummary || blocker.signature}`,
+    ];
+  }
+
+  private buildReviewBlockerReason(
+    review: ReviewerOutput,
+    implementation: ImplementationAttempt,
+    qualityResults: readonly QualityGateResult[],
+  ): string {
+    const findings = review.findings.map((finding) => finding.message);
+    const failedGates = qualityResults
+      .filter((result) => result.status === 'failed')
+      .map((result) => `${result.name}: ${result.output_summary}`);
+
+    return [
+      review.summary,
+      ...findings,
+      implementation.error ? `implementation: ${implementation.error}` : null,
+      implementation.diagnostics.classification !== 'unknown' ? `implementation_classification: ${implementation.diagnostics.classification}` : null,
+      ...failedGates,
+    ]
+      .filter((item): item is string => Boolean(item && item.trim().length > 0))
+      .join('\n');
+  }
+
+  private buildReviewBlockerProfile(
+    review: ReviewerOutput,
+    implementation: ImplementationAttempt,
+    qualityResults: readonly QualityGateResult[],
+    snapshot: FeatureStateSnapshot,
+  ): BlockerProfile {
+    const reason = this.buildReviewBlockerReason(review, implementation, qualityResults);
+    return classifyBlockerKind(reason, [
+      review.summary,
+      ...review.findings.map((finding) => finding.message),
+      implementation.error ?? '',
+      implementation.diagnostics.classification,
+      ...qualityResults.map((result) => `${result.name}: ${result.status}`),
+    ].filter((item) => item.trim().length > 0), snapshot.lifecycleState);
+  }
+
+  private blockedNextPlanningHint(blocker: BlockerProfile, restorationTarget: RestorationTarget): string {
+    if (blocker.recoverability === 'terminal') {
+      return `The active feature is blocked by a terminal blocker (${blocker.signature}); stop and document the limitation.`;
+    }
+
+    if (blocker.recoverability === 'human') {
+      return `The active feature is blocked by a blocker that requires human intervention (${blocker.signature}); stop and document the limitation.`;
+    }
+
+    return `Plan an unblock task for blocker \`${blocker.signature}\` and then restore \`${restorationTarget.lifecycle_state}\`.`;
+  }
+
+  private blockedProjectPendingLines(
+    blocker: BlockerProfile,
+    restorationTarget: RestorationTarget,
+    taskId: string | null,
+  ): string[] {
+    if (blocker.recoverability === 'terminal' || blocker.recoverability === 'human') {
+      return [
+        `The active feature is blocked by \`${blocker.signature}\`.`,
+        'Stop and document the limitation before resuming work.',
+        'Continue updating this file with approved repository facts as feature work lands.',
+      ];
+    }
+
+    return [
+      'Plan an unblock task for the active feature.',
+      `Restore the captured \`${restorationTarget.lifecycle_state}\` state after the blocker is resolved.`,
+      'Continue updating this file with approved repository facts as feature work lands.',
+    ];
+  }
+
+  private updateFeatureStateForBlocked(
+    featureStatePath: string,
+    blocker: BlockerProfile,
+    restorationTarget: RestorationTarget,
+    blockedByLines: readonly string[],
+    nextPlanningHint: string,
+  ): string {
+    let markdown = readFileSync(featureStatePath, 'utf8');
+    markdown = replaceSection(markdown, 'Lifecycle State', 'blocked');
+    markdown = replaceOperationalStatus(markdown, {
+      active_task: restorationTarget.active_task,
+      active_correction_task: restorationTarget.active_correction_task,
+      active_unblock_task: 'none',
+      last_review_result: 'blocked',
+      last_unblock_result: 'not_run',
+    });
+    markdown = replaceSection(markdown, 'Blocked By', bulletList(blockedByLines));
+    markdown = replaceSection(markdown, 'Blocked From', [
+      `- lifecycle_state: \`${restorationTarget.lifecycle_state}\``,
+      `- active_task: \`${restorationTarget.active_task}\``,
+      `- active_correction_task: \`${restorationTarget.active_correction_task}\``,
+      `- active_unblock_task: \`${restorationTarget.active_unblock_task}\``,
+      `- recoverability: ${blocker.recoverability}`,
+    ].join('\n'));
+    markdown = replaceSection(markdown, 'Next Planning Hint', nextPlanningHint);
+    return markdown;
+  }
+
+  private updateProjectStateForBlocked(
+    featureId: string,
+    taskId: string | null,
+    blocker: BlockerProfile,
+    restorationTarget: RestorationTarget,
+    pendingLines: readonly string[],
+    nextPlanningHint: string,
+  ): string {
+    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
+    markdown = replaceSection(markdown, 'Pending', bulletList(pendingLines));
+    markdown = replaceSection(markdown, 'Current Reality', [
+      `- Feature \`${featureId}\` is blocked by \`${blocker.signature}\`.`,
+      `- Blocker recoverability: ${blocker.recoverability}.`,
+      `- Feature \`${featureId}\` was suspended from \`${restorationTarget.lifecycle_state}\`; the active task pointer remains \`${restorationTarget.active_task}\`.`,
+      taskId ? `- Blocking task context: \`${taskId}\`` : '- Blocking task context: none',
+    ].join('\n'));
+    markdown = replaceSection(markdown, 'Next Planning Hint', nextPlanningHint);
+    return markdown;
+  }
+
   private loadTaskArtifact(taskId: string): StoredTaskArtifact | null {
     return this.artifacts.readJson<StoredTaskArtifact>(join('tasks', `${taskId}.json`));
   }
@@ -1413,7 +1846,14 @@ class PrototypeCompassRose {
     markdown = replaceOperationalStatus(markdown, {
       active_task: taskId,
       active_correction_task: 'none',
+      active_unblock_task: 'none',
     });
+    markdown = replaceSection(markdown, 'Blocked From', [
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+    ].join('\n'));
     markdown = upsertParagraphInSection(
       markdown,
       'Current Reality',
@@ -1437,7 +1877,15 @@ class PrototypeCompassRose {
       last_implementation_result: 'passed',
       last_quality_gate_result: qualityResult,
       last_review_result: 'not_run',
+      active_correction_task: 'none',
+      active_unblock_task: 'none',
     });
+    markdown = replaceSection(markdown, 'Blocked From', [
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+    ].join('\n'));
     markdown = replaceSection(
       markdown,
       'Next Planning Hint',
@@ -1456,7 +1904,15 @@ class PrototypeCompassRose {
       last_implementation_result: 'failed',
       last_quality_gate_result: 'unknown',
       last_review_result: 'not_run',
+      active_correction_task: 'none',
+      active_unblock_task: 'none',
     });
+    markdown = replaceSection(markdown, 'Blocked From', [
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+    ].join('\n'));
     markdown = replaceSection(
       markdown,
       'Next Planning Hint',
@@ -1471,10 +1927,17 @@ class PrototypeCompassRose {
     markdown = replaceOperationalStatus(markdown, {
       active_task: 'none',
       active_correction_task: 'none',
+      active_unblock_task: 'none',
       last_implementation_result: 'passed',
       last_quality_gate_result: 'passed',
       last_review_result: 'approved',
     });
+    markdown = replaceSection(markdown, 'Blocked From', [
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+    ].join('\n'));
     markdown = replaceSection(markdown, 'Last Approved Change', `Task \`${task.taskId}\` was approved by the prototype orchestrator.`);
     markdown = replaceSection(markdown, 'Next Planning Hint', 'Plan the next task that advances this feature from the remaining gap.');
     return markdown;
@@ -1490,8 +1953,15 @@ class PrototypeCompassRose {
     markdown = replaceOperationalStatus(markdown, {
       active_task: taskId,
       active_correction_task: correctionTaskId,
+      active_unblock_task: 'none',
       last_review_result: 'changes_required',
     });
+    markdown = replaceSection(markdown, 'Blocked From', [
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+    ].join('\n'));
     markdown = replaceSection(markdown, 'Next Planning Hint', `Execute correction task \`${correctionTaskId}\` next.`);
     return markdown;
   }
@@ -1506,8 +1976,38 @@ class PrototypeCompassRose {
     markdown = replaceOperationalStatus(markdown, {
       active_task: taskId,
       active_correction_task: correctionTaskId,
+      active_unblock_task: 'none',
     });
+    markdown = replaceSection(markdown, 'Blocked From', [
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+    ].join('\n'));
     markdown = replaceSection(markdown, 'Next Planning Hint', `Execute correction task \`${correctionTaskId}\` next.`);
+    return markdown;
+  }
+
+  private updateFeatureStateForUnblock(
+    featureStatePath: string,
+    taskId: string,
+    restorationTarget: RestorationTarget,
+  ): string {
+    let markdown = readFileSync(featureStatePath, 'utf8');
+    markdown = replaceSection(markdown, 'Lifecycle State', 'unblock_pending');
+    markdown = replaceOperationalStatus(markdown, {
+      active_correction_task: 'none',
+      active_unblock_task: taskId,
+      last_review_result: 'blocked',
+      last_unblock_result: 'not_run',
+    });
+    markdown = replaceSection(markdown, 'Blocked From', [
+      `- lifecycle_state: \`${restorationTarget.lifecycle_state}\``,
+      `- active_task: \`${restorationTarget.active_task}\``,
+      `- active_correction_task: \`${restorationTarget.active_correction_task}\``,
+      `- active_unblock_task: \`${restorationTarget.active_unblock_task}\``,
+    ].join('\n'));
+    markdown = replaceSection(markdown, 'Next Planning Hint', `Execute unblock task \`${taskId}\` next.`);
     return markdown;
   }
 
@@ -1521,12 +2021,47 @@ class PrototypeCompassRose {
     markdown = replaceOperationalStatus(markdown, {
       active_task: stateCorrection.state_target.restored_active_task,
       active_correction_task: stateCorrection.state_target.restored_active_correction_task,
+      active_unblock_task: 'none',
       last_implementation_result: 'passed',
       last_quality_gate_result: 'passed',
       last_review_result: 'approved',
     });
+    markdown = replaceSection(markdown, 'Blocked From', [
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+    ].join('\n'));
     markdown = replaceSection(markdown, 'Last Approved Change', `State correction task \`${task.taskId}\` was approved by the prototype orchestrator.`);
     markdown = replaceSection(markdown, 'Next Planning Hint', stateCorrectionNextPlanningHint(stateCorrection));
+    return markdown;
+  }
+
+  private updateFeatureStateAfterUnblock(
+    featureStatePath: string,
+    task: ParsedTaskDocument,
+    unblock: UnblockTaskMetadata,
+  ): string {
+    let markdown = readFileSync(featureStatePath, 'utf8');
+    markdown = replaceSection(markdown, 'Lifecycle State', unblock.restoration_target.lifecycle_state);
+    markdown = replaceOperationalStatus(markdown, {
+      active_task: unblock.restoration_target.active_task,
+      active_correction_task: unblock.restoration_target.active_correction_task,
+      active_unblock_task: unblock.restoration_target.active_unblock_task,
+      last_implementation_result: 'passed',
+      last_quality_gate_result: 'passed',
+      last_review_result: 'approved',
+      last_unblock_result: 'passed',
+    });
+    markdown = replaceSection(markdown, 'Blocked By', '- None');
+    markdown = replaceSection(markdown, 'Blocked From', [
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+    ].join('\n'));
+    markdown = replaceSection(markdown, 'Last Approved Change', `Unblock task \`${task.taskId}\` was approved by the prototype orchestrator.`);
+    markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(unblock.restoration_target, unblock.restoration_target.active_task, 'unblock'));
     return markdown;
   }
 
@@ -1541,6 +2076,38 @@ class PrototypeCompassRose {
       'Current Reality',
       `- Feature \`${featureId}\` now has a planned next task`,
       `- Feature \`${featureId}\` state was canonicalized; the active task pointer remains \`${stateCorrection.state_target.restored_active_task}\`.`,
+    );
+    return markdown;
+  }
+
+  private updateProjectStateForUnblock(featureId: string, taskId: string, lifecycleState: string): string {
+    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
+    markdown = replaceSection(markdown, 'Pending', bulletList([
+      `Execute unblock task \`${taskId}\` for the active feature.`,
+      'Continue updating this file with approved repository facts as feature work lands.',
+    ]));
+    markdown = replaceSection(markdown, 'Next Planning Hint', `The active feature is \`${featureId}\`, and its next valid action is to execute unblock task \`${taskId}\` from the captured \`${lifecycleState}\` state.`);
+    markdown = upsertBulletInSection(
+      markdown,
+      'Current Reality',
+      `- Feature \`${featureId}\` now has a planned unblock task`,
+      `- Feature \`${featureId}\` now has a planned unblock task, \`${taskId}\`, to resolve a recoverable blocker and restore \`${lifecycleState}\`.`,
+    );
+    return markdown;
+  }
+
+  private updateProjectStateAfterUnblock(featureId: string, taskId: string, restorationTarget: RestorationTarget): string {
+    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
+    markdown = replaceSection(markdown, 'Pending', bulletList(restorationTargetProjectPendingLines(restorationTarget, taskId, 'unblock')));
+    markdown = replaceSection(markdown, 'Last Approved Change', `Unblock task \`${taskId}\` was approved by the prototype orchestrator.`);
+    markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(restorationTarget, restorationTarget.active_task, 'unblock'));
+    markdown = upsertBulletInSection(
+      markdown,
+      'Current Reality',
+      `- Feature \`${featureId}\` now has a planned unblock task`,
+      `- Feature \`${featureId}\` recovered from a blocker through unblock task \`${taskId}\`; the active task pointer was restored to \`${restorationTarget.active_task}\`.`,
     );
     return markdown;
   }
@@ -1587,7 +2154,7 @@ const STEP_SCHEMA = {
   properties: {
     kind: {
       type: 'string',
-      enum: ['plan_feature', 'plan_task', 'correct_state', 'implement_task', 'review_task', 'correct_task', 'stop', 'blocked'],
+      enum: ['plan_feature', 'plan_task', 'correct_state', 'unblock_task', 'implement_task', 'review_task', 'correct_task', 'stop', 'blocked'],
     },
     feature_id: { type: ['string', 'null'] },
     task_id: { type: ['string', 'null'] },
@@ -2042,6 +2609,59 @@ function renderStateCorrectionTaskMarkdown(stateCorrection: StateCorrectionTask)
   ].join('\n');
 }
 
+function renderUnblockTaskMarkdown(task: PlannedTask, unblock: UnblockTaskMetadata): string {
+  return [
+    renderTaskMarkdown(task).trimEnd(),
+    '',
+    '## Blocker Context',
+    '',
+    `- kind: ${unblock.blocker.kind}`,
+    `- signature: ${unblock.blocker.signature}`,
+    `- recoverability: ${unblock.blocker.recoverability}`,
+    `- observed_state: ${unblock.blocker.observed_state}`,
+    ...(unblock.blocker.evidence.length > 0 ? unblock.blocker.evidence.map((item) => `- evidence: ${item}`) : ['- evidence: none']),
+    '',
+    '## Restoration Target',
+    '',
+    `- lifecycle_state: ${unblock.restoration_target.lifecycle_state}`,
+    `- active_task: \`${unblock.restoration_target.active_task}\``,
+    `- active_correction_task: \`${unblock.restoration_target.active_correction_task}\``,
+    `- active_unblock_task: \`${unblock.restoration_target.active_unblock_task}\``,
+    '',
+  ].join('\n');
+}
+
+function renderBlockerProfileMarkdown(profile: {
+  readonly run_id: string;
+  readonly feature_id: string;
+  readonly task_id: string | null;
+  readonly reason: string;
+  readonly blocker: BlockerProfile;
+  readonly restoration_target: RestorationTarget;
+}): string {
+  return [
+    `# Blocker Profile: ${profile.feature_id}`,
+    '',
+    `- run_id: \`${profile.run_id}\``,
+    `- task_id: \`${profile.task_id ?? 'none'}\``,
+    `- reason: ${profile.reason}`,
+    '',
+    '## Blocker',
+    `- kind: ${profile.blocker.kind}`,
+    `- signature: ${profile.blocker.signature}`,
+    `- recoverability: ${profile.blocker.recoverability}`,
+    `- observed_state: ${profile.blocker.observed_state}`,
+    ...(profile.blocker.evidence.length > 0 ? profile.blocker.evidence.map((item) => `- evidence: ${item}`) : ['- evidence: none']),
+    '',
+    '## Restoration Target',
+    `- lifecycle_state: ${profile.restoration_target.lifecycle_state}`,
+    `- active_task: \`${profile.restoration_target.active_task}\``,
+    `- active_correction_task: \`${profile.restoration_target.active_correction_task}\``,
+    `- active_unblock_task: \`${profile.restoration_target.active_unblock_task}\``,
+    '',
+  ].join('\n');
+}
+
 function correctionTaskToTask(correction: CorrectionTask): PlannedTask {
   return {
     task_id: correction.correction_task_id,
@@ -2093,8 +2713,20 @@ function stateCorrectionTaskToTask(stateCorrection: StateCorrectionTask): Planne
 }
 
 function stateCorrectionNextPlanningHint(stateCorrection: StateCorrectionTask): string {
-  const activeTaskId = stateCorrection.state_target.restored_active_task;
-  switch (stateCorrection.state_target.restored_lifecycle_state) {
+  return restorationTargetNextPlanningHint({
+    lifecycle_state: stateCorrection.state_target.restored_lifecycle_state,
+    active_task: stateCorrection.state_target.restored_active_task,
+    active_correction_task: stateCorrection.state_target.restored_active_correction_task,
+    active_unblock_task: 'none',
+  }, stateCorrection.task_id, 'state_correction');
+}
+
+function restorationTargetNextPlanningHint(
+  restorationTarget: RestorationTarget,
+  activeTaskId: string,
+  activeTaskLabel: 'state_correction' | 'unblock' | 'task' = 'task',
+): string {
+  switch (restorationTarget.lifecycle_state) {
     case 'task_ready':
       return `Execute \`${activeTaskId}\` when the current execution mode allows it.`;
     case 'review_pending':
@@ -2104,15 +2736,31 @@ function stateCorrectionNextPlanningHint(stateCorrection: StateCorrectionTask): 
     case 'formalized':
       return 'Plan the next task that advances this feature from the remaining gap.';
     case 'correction_pending':
-      return `Execute correction task \`${stateCorrection.task_id}\` next.`;
+      return activeTaskLabel === 'unblock'
+        ? `Execute unblock task \`${activeTaskId}\` next.`
+        : `Execute correction task \`${activeTaskId}\` next.`;
+    case 'unblock_pending':
+      return `Execute unblock task \`${activeTaskId}\` next.`;
     default:
-      return `Continue from the repaired \`${stateCorrection.state_target.restored_lifecycle_state}\` state for \`${activeTaskId}\`.`;
+      return `Continue from the repaired \`${restorationTarget.lifecycle_state}\` state for \`${activeTaskId}\`.`;
   }
 }
 
 function stateCorrectionProjectPendingLines(stateCorrection: StateCorrectionTask): string[] {
-  const activeTaskId = stateCorrection.state_target.restored_active_task;
-  switch (stateCorrection.state_target.restored_lifecycle_state) {
+  return restorationTargetProjectPendingLines({
+    lifecycle_state: stateCorrection.state_target.restored_lifecycle_state,
+    active_task: stateCorrection.state_target.restored_active_task,
+    active_correction_task: stateCorrection.state_target.restored_active_correction_task,
+    active_unblock_task: 'none',
+  }, stateCorrection.task_id, 'state_correction');
+}
+
+function restorationTargetProjectPendingLines(
+  restorationTarget: RestorationTarget,
+  activeTaskId: string,
+  activeTaskLabel: 'state_correction' | 'unblock' | 'task' = 'task',
+): string[] {
+  switch (restorationTarget.lifecycle_state) {
     case 'task_ready':
       return [
         `Execute \`${activeTaskId}\` for the active feature.`,
@@ -2134,16 +2782,82 @@ function stateCorrectionProjectPendingLines(stateCorrection: StateCorrectionTask
         'Continue updating this file with approved repository facts as feature work lands.',
       ];
     case 'correction_pending':
+      return activeTaskLabel === 'unblock'
+        ? [
+            `Execute unblock task \`${activeTaskId}\` for the active feature.`,
+            'Continue updating this file with approved repository facts as feature work lands.',
+          ]
+        : [
+            `Execute correction task \`${activeTaskId}\` for the active feature.`,
+            'Continue updating this file with approved repository facts as feature work lands.',
+          ];
+    case 'unblock_pending':
       return [
-        `Execute correction task \`${stateCorrection.task_id}\` for the active feature.`,
+        `Execute unblock task \`${activeTaskId}\` for the active feature.`,
         'Continue updating this file with approved repository facts as feature work lands.',
       ];
     default:
       return [
-        `Continue from the repaired \`${stateCorrection.state_target.restored_lifecycle_state}\` state for the active feature.`,
+        `Continue from the repaired \`${restorationTarget.lifecycle_state}\` state for the active feature.`,
         'Continue updating this file with approved repository facts as feature work lands.',
       ];
   }
+}
+
+export function classifyBlockerKind(
+  reason: string,
+  blockedBy: readonly string[],
+  lifecycleState: string,
+): BlockerProfile {
+  const normalized = [reason, ...blockedBy, lifecycleState].join('\n').toLowerCase();
+  let kind: BlockerKind = 'unknown';
+  let recoverability: BlockerRecoverability = 'agent';
+
+  if (/state|markdown|section|lifecycle|operational status|active_task|active correction/i.test(normalized)) {
+    kind = 'state_corruption';
+  } else if (/review|diff|acceptance|correction task/i.test(normalized)) {
+    kind = 'review_failure';
+  } else if (/task interface|first executable step|minimum progress evidence|scope|prompt/i.test(normalized)) {
+    kind = 'task_interface_gap';
+  } else if (/permission|approval|allow access|denied|ask-for-approval/i.test(normalized)) {
+    kind = 'cli_mismatch';
+  } else if (/binary|command|environment|missing|not found|path|install/i.test(normalized)) {
+    kind = 'environment';
+  }
+
+  if (/terminal|unrecoverable|cannot recover|no unblock|no state correction/i.test(normalized)) {
+    recoverability = 'terminal';
+  } else if (kind === 'environment') {
+    recoverability = 'human';
+  }
+
+  const evidence = uniqueStrings([
+    reason.trim(),
+    ...blockedBy.slice(0, 3),
+    `lifecycle=${lifecycleState}`,
+  ].filter((item) => item.length > 0));
+
+  return {
+    kind,
+    signature: buildBlockerSignature(kind, lifecycleState, reason, blockedBy),
+    evidence,
+    recoverability,
+    observed_state: `lifecycle=${lifecycleState}`,
+  };
+}
+
+export function buildBlockerSignature(
+  kind: BlockerKind,
+  lifecycleState: string,
+  reason: string,
+  blockedBy: readonly string[],
+): string {
+  const seed = [kind, lifecycleState, reason, ...blockedBy].join(' ');
+  return seed
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 96) || `${kind}-${lifecycleState}`.toLowerCase();
 }
 
 function buildImplementerPrompt(
@@ -2281,6 +2995,12 @@ function inferLikelySources(trigger: string, selectedStep: StepDecision | null):
     sources.add('src/contracts/task/task.md');
   }
 
+  if (selectedStep?.kind === 'unblock_task') {
+    sources.add('src/contracts/planner/unblock-task-planning-prompt.md');
+    sources.add('src/contracts/task/unblock-task.md');
+    sources.add('src/contracts/state/feature-state.md');
+  }
+
   if (selectedStep?.kind === 'implement_task' || selectedStep?.kind === 'correct_task') {
     sources.add('src/contracts/implementer/task-execution-prompt.md');
     sources.add('src/contracts/adapters/implementer-adapter.md');
@@ -2303,6 +3023,11 @@ function inferLikelySources(trigger: string, selectedStep: StepDecision | null):
     sources.add('src/contracts/reviewer/input.md');
   }
 
+  if (normalized.includes('blocked') || normalized.includes('blocker')) {
+    sources.add('src/contracts/task/unblock-task.md');
+    sources.add('src/contracts/runtime/operation-loop.md');
+  }
+
   if (normalized.includes('section "##')) {
     sources.add('src/contracts/state/feature-state.md');
     sources.add('docs/features/README.md');
@@ -2317,6 +3042,11 @@ function inferLikelySources(trigger: string, selectedStep: StepDecision | null):
   if (normalized.includes('quality gates failed')) {
     sources.add('src/contracts/task/task.md');
     sources.add('src/contracts/reviewer/input.md');
+  }
+
+  if (normalized.includes('unblock task') || normalized.includes('unblock_pending')) {
+    sources.add('src/contracts/task/unblock-task.md');
+    sources.add('src/contracts/state/feature-state.md');
   }
 
   if (normalized.includes('task document')) {
@@ -2351,6 +3081,10 @@ function buildObservations(trigger: string, selectedStep: StepDecision | null): 
     observations.push('The execution contract and the planned task diverged on TDD policy.');
   }
 
+  if (/blocked|blocker/i.test(trigger)) {
+    observations.push('The runtime needs a blocker-specific recovery path instead of a generic stop.');
+  }
+
   return observations;
 }
 
@@ -2372,12 +3106,20 @@ function buildNextQuestions(trigger: string, selectedStep: StepDecision | null):
     questions.push('Should quality-gate failure transition rules be documented more explicitly in the runtime contract?');
   }
 
+  if (/blocked|blocker/i.test(trigger)) {
+    questions.push('Should the blocker be classified into a reusable unblock profile before the run stops?');
+  }
+
   if (selectedStep?.kind === 'plan_task') {
     questions.push('Did the planner receive enough repository-local context to produce a bounded task?');
   }
 
   if (selectedStep?.kind === 'review_task') {
     questions.push('Did the reviewer receive enough structured implementation evidence beyond the raw diff?');
+  }
+
+  if (selectedStep?.kind === 'unblock_task') {
+    questions.push('Did the unblock prompt expose enough blocker context and restoration target detail for the planner?');
   }
 
   return questions;
@@ -2735,6 +3477,13 @@ function buildStateCorrectionTaskId(tasksDirectory: string, activeTaskId: string
 }
 
 function humanTaskNumber(taskId: string): string {
+  const unblockMatch = taskId.match(/-T(\d+)-U(\d+)$/);
+  const unblockTaskNumber = unblockMatch?.[1];
+  const unblockSequence = unblockMatch?.[2];
+  if (unblockTaskNumber && unblockSequence) {
+    return `${String(Number.parseInt(unblockTaskNumber, 10)).padStart(3, '0')}.U${Number.parseInt(unblockSequence, 10)}`;
+  }
+
   const match = taskId.match(/-T(\d+)$/);
   const taskNumber = match?.[1];
   return taskNumber ? String(Number.parseInt(taskNumber, 10)).padStart(3, '0') : taskId;
@@ -2870,7 +3619,11 @@ function statSafeIsDirectory(path: string): boolean {
 
 function writeText(path: string, contents: string): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, ensureTrailingNewline(contents), 'utf8');
+  writeFileSync(path, normalizeTextForWrite(contents), 'utf8');
+}
+
+export function normalizeTextForWrite(text: string): string {
+  return `${text.trimEnd()}\n`;
 }
 
 function requireString(value: string | null, field: string): string {
