@@ -30,7 +30,7 @@ In progress
 
 ## Pending
 
-- Execute correction task `F002-T05-C2` for the active feature.
+- Execute correction task `F002-T05-C3` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -48,4 +48,4 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute correction task `F002-T05-C2`.
+The active feature is `002-configuration-model`, and its next valid action is to execute correction task `F002-T05-C3`.

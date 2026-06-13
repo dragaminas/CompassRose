@@ -12,7 +12,7 @@ correction_pending
 
 - formalization: complete
 - active_task: F002-T05
-- active_correction_task: F002-T05-C2
+- active_correction_task: F002-T05-C3
 - active_unblock_task: none
 
 ## Current Reality
@@ -74,4 +74,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Execute correction task `F002-T05-C2` next.
+Execute correction task `F002-T05-C3` next.
