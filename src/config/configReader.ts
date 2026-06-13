@@ -1,6 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { err, ok, type Result } from '../shared/result.js';
-import type { ConfigurationIssue, ProjectConfiguration, ProjectConfigurationLoadResult } from './configTypes.js';
+import type {
+  ConfigurationIssue,
+  ExecutionMode,
+  GitBranchPerTask,
+  GitCommitAfterTask,
+  GitPolicySection,
+  GitReviewTarget,
+  ProjectConfiguration,
+  ProjectConfigurationLoadResult,
+  RolesSection,
+} from './configTypes.js';
 import { isSupportedPlatformName, type SupportedPlatform } from '../platform/platformInfo.js';
 
 interface YamlLine {
@@ -480,6 +490,33 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
     return err(issues);
   }
 
+  const executionSection = requireObjectSection(parsedConfiguration, 'execution', 'execution', issues);
+  const executionMode = validateExecutionMode(executionSection, issues);
+  const taskGeneration = requireNonEmptyString(executionSection, 'task_generation', 'execution.task_generation', issues);
+  const repositoryIsSourceOfTruth = requireBooleanValue(executionSection, 'repository_is_source_of_truth', 'execution.repository_is_source_of_truth', issues);
+  const plannerUsesRepositoryState = requireBooleanValue(executionSection, 'planner_uses_repository_state', 'execution.planner_uses_repository_state', issues);
+  const orchestratorUsesAi = requireBooleanValue(executionSection, 'orchestrator_uses_ai', 'execution.orchestrator_uses_ai', issues);
+  const runtimeContract = requireNonEmptyString(executionSection, 'runtime_contract', 'execution.runtime_contract', issues);
+  const featureStateContract = requireNonEmptyString(executionSection, 'feature_state_contract', 'execution.feature_state_contract', issues);
+
+  if (issues.length > 0) {
+    return err(issues);
+  }
+
+  const rolesSection = requireObjectSection(parsedConfiguration, 'roles', 'roles', issues);
+  const roles = validateRolesSection(rolesSection, issues);
+
+  if (issues.length > 0) {
+    return err(issues);
+  }
+
+  const gitPolicySection = requireObjectSection(parsedConfiguration, 'git_policy', 'git_policy', issues);
+  const gitPolicy = validateGitPolicySection(gitPolicySection, issues);
+
+  if (issues.length > 0) {
+    return err(issues);
+  }
+
   return ok({
     ...parsedConfiguration,
     project: {
@@ -508,6 +545,17 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
       ...documentationSection,
       ...documentation,
     },
+    execution: {
+      mode: executionMode,
+      task_generation: taskGeneration,
+      repository_is_source_of_truth: repositoryIsSourceOfTruth,
+      planner_uses_repository_state: plannerUsesRepositoryState,
+      orchestrator_uses_ai: orchestratorUsesAi,
+      runtime_contract: runtimeContract,
+      feature_state_contract: featureStateContract,
+    },
+    roles,
+    git_policy: gitPolicy,
   });
 }
 
@@ -687,6 +735,104 @@ function requireSupportedPlatforms(
   }
 
   return supportedPlatforms;
+}
+
+const VALID_EXECUTION_MODES = new Set<ExecutionMode>(['interactive', 'semi_automatic', 'automatic']);
+const VALID_GIT_REVIEW_TARGETS = new Set<GitReviewTarget>(['git_diff']);
+const VALID_GIT_BRANCH_PER_TASK = new Set<GitBranchPerTask>(['required', 'optional', 'disabled']);
+const VALID_GIT_COMMIT_AFTER_TASK = new Set<GitCommitAfterTask>(['automatic', 'manual', 'disabled']);
+const REQUIRED_ROLE_KEYS = ['planner', 'implementer', 'reviewer'] as const;
+
+function validateExecutionMode(section: Record<string, unknown>, issues: ConfigurationIssue[]): ExecutionMode {
+  const value = section['mode'];
+  if (typeof value !== 'string' || !VALID_EXECUTION_MODES.has(value as ExecutionMode)) {
+    issues.push({
+      field: 'execution.mode',
+      message: `Unsupported execution mode: ${typeof value === 'string' ? value : String(value)}. Must be one of: interactive, semi_automatic, automatic.`,
+    });
+    return 'interactive';
+  }
+  return value as ExecutionMode;
+}
+
+function validateRolesSection(section: Record<string, unknown>, issues: ConfigurationIssue[]): RolesSection {
+  const roles: Record<string, unknown> = {};
+
+  for (const roleKey of REQUIRED_ROLE_KEYS) {
+    const roleValue = section[roleKey];
+    const rolePath = `roles.${roleKey}`;
+
+    if (!isRecord(roleValue)) {
+      issues.push({
+        field: rolePath,
+        message: `Missing required role entry: ${rolePath}.`,
+      });
+      roles[roleKey] = { enabled: false, adapter: '' };
+      continue;
+    }
+
+    const enabled = requireBooleanValue(roleValue, 'enabled', `${rolePath}.enabled`, issues);
+    const adapter = requireRequiredString(roleValue, 'adapter', `${rolePath}.adapter`, issues);
+
+    roles[roleKey] = { enabled, adapter };
+  }
+
+  if (issues.length > 0) {
+    return {
+      planner: { enabled: false, adapter: '' },
+      implementer: { enabled: false, adapter: '' },
+      reviewer: { enabled: false, adapter: '' },
+    };
+  }
+
+  return {
+    planner: roles.planner as { enabled: boolean; adapter: string },
+    implementer: roles.implementer as { enabled: boolean; adapter: string },
+    reviewer: roles.reviewer as { enabled: boolean; adapter: string },
+  } as RolesSection;
+}
+
+function validateGitPolicySection(section: Record<string, unknown>, issues: ConfigurationIssue[]): GitPolicySection {
+  const requireCleanWorktree = requireBooleanValue(section, 'require_clean_worktree_before_task', 'git_policy.require_clean_worktree_before_task', issues);
+  const allowDirtyWorktree = requireBooleanValue(section, 'allow_dirty_worktree', 'git_policy.allow_dirty_worktree', issues);
+
+  const reviewTarget = validateGitEnum(section['review_target'], 'git_policy.review_target', VALID_GIT_REVIEW_TARGETS, issues);
+  const branchPerTask = validateGitEnum(section['branch_per_task'], 'git_policy.branch_per_task', VALID_GIT_BRANCH_PER_TASK, issues);
+  const commitAfterTask = validateGitEnum(section['commit_after_task'], 'git_policy.commit_after_task', VALID_GIT_COMMIT_AFTER_TASK, issues);
+
+  if (issues.length > 0) {
+    return {
+      require_clean_worktree_before_task: false,
+      review_target: 'git_diff',
+      allow_dirty_worktree: false,
+      branch_per_task: 'disabled',
+      commit_after_task: 'disabled',
+    };
+  }
+
+  return {
+    require_clean_worktree_before_task: requireCleanWorktree,
+    review_target: reviewTarget,
+    allow_dirty_worktree: allowDirtyWorktree,
+    branch_per_task: branchPerTask,
+    commit_after_task: commitAfterTask,
+  };
+}
+
+function validateGitEnum<T extends string>(
+  value: unknown,
+  fieldPath: string,
+  validValues: Set<T>,
+  issues: ConfigurationIssue[]
+): T {
+  if (typeof value !== 'string' || !validValues.has(value as T)) {
+    issues.push({
+      field: fieldPath,
+      message: `Invalid ${fieldPath} value: ${typeof value === 'string' ? value : String(value)}.`,
+    });
+    return Array.from(validValues)[0] as T;
+  }
+  return value as T;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
