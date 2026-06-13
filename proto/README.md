@@ -46,6 +46,8 @@ npm run proto:smoke
 
 The smoke harness sets `PROTO_COMPASSROSE_SKIP_CLEAN_CHECK=1` so the prototype can exercise the control flow inside a temporary test workspace.
 
+`proto:loop` now prints agent start/end markers plus captured `stdout` and `stderr`, which makes it easier to tell active agent work from a stalled loop.
+
 ## Diagnostics
 
 Prototype artifacts are written under `.git/proto-compassrose/`:

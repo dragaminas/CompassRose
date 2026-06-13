@@ -359,7 +359,12 @@ class CodexCli {
     private readonly command: string,
   ) {}
 
-  runStructured<T>(prompt: string, schema: unknown, extraReadableDirs: readonly string[] = []): T {
+  runStructured<T>(
+    prompt: string,
+    schema: unknown,
+    extraReadableDirs: readonly string[] = [],
+    label = 'step-selector',
+  ): T {
     const tempDir = mkdtempSync(join(tmpdir(), 'proto-compassrose-codex-'));
     const schemaPath = join(tempDir, 'schema.json');
     const outputPath = join(tempDir, 'output.json');
@@ -390,12 +395,19 @@ class CodexCli {
 
     args.push('-');
 
+    logAgentStart('codex', label, this.command);
+    const startedAt = Date.now();
     const result = spawnSync(this.command, args, {
       cwd: this.repositoryRoot,
       input: prompt,
       encoding: 'utf8',
       maxBuffer: 10 * 1024 * 1024,
     });
+    const elapsedMs = Date.now() - startedAt;
+
+    logAgentStream('codex', label, 'stdout', result.stdout ?? '');
+    logAgentStream('codex', label, 'stderr', result.stderr ?? '');
+    logAgentEnd('codex', label, elapsedMs, result.status, result.error?.message ?? null);
 
     if (result.status !== 0) {
       throw new Error(`codex exec failed:\n${result.stderr || result.stdout}`);
@@ -411,7 +423,7 @@ class OpenCodeCli {
     private readonly command: string,
   ) {}
 
-  run(prompt: string): CommandExecution {
+  run(prompt: string, label = 'implementer'): CommandExecution {
     const args = ['run', '--dir', this.repositoryRoot, '--dangerously-skip-permissions'];
     const model = process.env.PROTO_COMPASSROSE_OPENCODE_MODEL;
     if (model) {
@@ -420,17 +432,26 @@ class OpenCodeCli {
 
     args.push(prompt);
 
+    logAgentStart('opencode', label, this.command);
+    const startedAt = Date.now();
     const result = spawnSync(this.command, args, {
       cwd: this.repositoryRoot,
       encoding: 'utf8',
       maxBuffer: 20 * 1024 * 1024,
     });
+    const elapsedMs = Date.now() - startedAt;
 
     const errorText = result.error ? `\n${result.error.message}` : '';
+    const stdout = result.stdout ?? '';
+    const stderr = `${result.stderr ?? ''}${errorText}`;
+    logAgentStream('opencode', label, 'stdout', stdout);
+    logAgentStream('opencode', label, 'stderr', stderr);
+    logAgentEnd('opencode', label, elapsedMs, result.status, result.error?.message ?? null);
+
     return {
       ok: result.status === 0 && !result.error,
-      stdout: result.stdout ?? '',
-      stderr: `${result.stderr ?? ''}${errorText}`,
+      stdout,
+      stderr,
       exitCode: result.status,
       signal: result.signal ?? null,
       timedOut: false,
@@ -558,7 +579,7 @@ class PrototypeCompassRose {
       'Return JSON only.',
     ].join('\n');
 
-    return this.codex.runStructured<StepDecision>(prompt, STEP_SCHEMA);
+    return this.codex.runStructured<StepDecision>(prompt, STEP_SCHEMA, [], 'step-selector');
   }
 
   private executeStep(decision: StepDecision): StepExecutionResult {
@@ -626,7 +647,7 @@ class PrototypeCompassRose {
       'Do not modify files.',
     ].join('\n');
 
-    const planned = this.codex.runStructured<PlannedFeatureDocs>(prompt, FEATURE_PLAN_SCHEMA);
+    const planned = this.codex.runStructured<PlannedFeatureDocs>(prompt, FEATURE_PLAN_SCHEMA, [], `feature-plan:${featureId}`);
     writeText(feature.featurePath, ensureTrailingNewline(planned.feature_md));
     writeText(feature.architecturePath, ensureTrailingNewline(planned.architecture_md));
     writeText(feature.statePath, ensureTrailingNewline(planned.state_md));
@@ -679,7 +700,7 @@ class PrototypeCompassRose {
       '- Return JSON only and do not modify files.',
     ].join('\n');
 
-    const planned = this.codex.runStructured<PlannerOutput>(prompt, PLANNER_OUTPUT_SCHEMA);
+    const planned = this.codex.runStructured<PlannerOutput>(prompt, PLANNER_OUTPUT_SCHEMA, [], `task-plan:${featureId}`);
     const task = planned.task;
     if (task.expected_deliverables.includes('code') && task.development_policy.mode !== 'test_guided') {
       throw new Error(`Planned task ${task.task_id} must use \`test_guided\` when it delivers code.`);
@@ -765,7 +786,7 @@ class PrototypeCompassRose {
       '- Do not modify files.',
     ].join('\n');
 
-    const review = this.codex.runStructured<ReviewerOutput>(prompt, REVIEWER_OUTPUT_SCHEMA, [tempDir]);
+    const review = this.codex.runStructured<ReviewerOutput>(prompt, REVIEWER_OUTPUT_SCHEMA, [tempDir], `review:${taskId}`);
     this.artifacts.writeJson(join('reviews', `${taskId}.json`), review);
     const taskInterfaceAnalysis = this.shouldAnalyzeTaskInterface(review)
       ? this.analyzeTaskInterface(task, feature, review, implementation, qualityResults, tempDir)
@@ -884,6 +905,7 @@ class PrototypeCompassRose {
       prompt,
       TASK_INTERFACE_ANALYSIS_SCHEMA,
       [tempDir],
+      `task-interface:${task.taskId}`,
     );
     this.artifacts.writeJson(join('task-interface-analysis', `${task.taskId}.json`), analysis);
     this.artifacts.writeText(
@@ -895,7 +917,7 @@ class PrototypeCompassRose {
 
   private executeImplementation(task: ParsedTaskDocument, correction: boolean): void {
     const prompt = buildImplementerPrompt(task, correction);
-    const commandResult = this.opencode.run(prompt);
+    const commandResult = this.opencode.run(prompt, correction ? `correction:${task.taskId}` : `implement:${task.taskId}`);
     const attempt = this.captureImplementationAttempt(task, commandResult);
     this.artifacts.writeJson(join('implementations', `${task.taskId}.json`), attempt);
     this.artifacts.writeText(join('raw-output', `${task.taskId}.log`), ensureTrailingNewline(attempt.raw_output || 'No output.\n'));
@@ -2356,6 +2378,42 @@ function compareFeatureIds(left: string, right: string): number {
   const leftNumber = Number.parseInt(left.split('-')[0] ?? '0', 10);
   const rightNumber = Number.parseInt(right.split('-')[0] ?? '0', 10);
   return leftNumber - rightNumber;
+}
+
+function logAgentStart(agent: 'codex' | 'opencode', label: string, command: string): void {
+  console.log(`[${agent}:${label}] start ${command}`);
+}
+
+function logAgentStream(agent: 'codex' | 'opencode', label: string, stream: 'stdout' | 'stderr', text: string): void {
+  const trimmed = text.trimEnd();
+  if (trimmed.length === 0) {
+    return;
+  }
+
+  const prefix = `[${agent}:${label}] ${stream} | `;
+  const rendered = trimmed
+    .split('\n')
+    .map((line) => `${prefix}${line}`)
+    .join('\n');
+
+  if (stream === 'stderr') {
+    process.stderr.write(`${rendered}\n`);
+    return;
+  }
+
+  process.stdout.write(`${rendered}\n`);
+}
+
+function logAgentEnd(
+  agent: 'codex' | 'opencode',
+  label: string,
+  elapsedMs: number,
+  exitCode: number | null,
+  errorMessage: string | null,
+): void {
+  const status = exitCode === 0 ? 'ok' : `exit ${exitCode ?? 'null'}`;
+  const errorSuffix = errorMessage ? `, error: ${errorMessage}` : '';
+  console.log(`[${agent}:${label}] done (${status}${errorSuffix}) in ${elapsedMs}ms`);
 }
 
 function summarizeCommandOutput(stdout: string, stderr: string): string {
