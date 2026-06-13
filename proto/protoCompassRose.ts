@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative as relativePath, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -41,6 +41,7 @@ type BlockerKind =
   | 'task_interface_gap'
   | 'cli_mismatch'
   | 'environment'
+  | 'implementation_failure'
   | 'review_failure'
   | 'unknown';
 
@@ -755,6 +756,11 @@ class PrototypeCompassRose {
   }
 
   private determineNextStep(): StepDecision {
+    const deterministicRecovery = this.selectDeterministicRecoveryStep();
+    if (deterministicRecovery) {
+      return deterministicRecovery;
+    }
+
     const prompt = [
       'Act as the CompassRose deterministic step selector.',
       '',
@@ -787,6 +793,54 @@ class PrototypeCompassRose {
     return this.codex.runStructured<StepDecision>(prompt, STEP_SCHEMA, [], 'step-selector');
   }
 
+  private selectDeterministicRecoveryStep(): StepDecision | null {
+    for (const feature of this.listFeatures()) {
+      if (!existsSync(feature.statePath)) {
+        return null;
+      }
+
+      let snapshot: FeatureStateSnapshot;
+      try {
+        snapshot = this.readFeatureStateSnapshot(feature);
+      } catch {
+        return null;
+      }
+
+      if (snapshot.lifecycleState === 'completed') {
+        continue;
+      }
+
+      if (snapshot.lifecycleState !== 'implementation_failed') {
+        return null;
+      }
+
+      const activeTask = this.resolveImplementationFailureActiveTask(feature, snapshot);
+      if (!activeTask) {
+        const decision: StepDecision = {
+          kind: 'correct_state',
+          feature_id: feature.id,
+          task_id: null,
+          correction_task_id: null,
+          reason: `Feature ${feature.id} is in implementation_failed but no active task anchor could be recovered, so the runtime must repair the state before resuming.`,
+        };
+        this.writeRefinementFeedback(decision.reason, decision);
+        return decision;
+      }
+
+      const decision: StepDecision = {
+        kind: 'unblock_task',
+        feature_id: feature.id,
+        task_id: null,
+        correction_task_id: null,
+        reason: `Feature ${feature.id} is in implementation_failed; plan a bounded recovery unblock task that restores task readiness for ${activeTask}.`,
+      };
+      this.writeRefinementFeedback(decision.reason, decision);
+      return decision;
+    }
+
+    return null;
+  }
+
   private executeStep(decision: StepDecision): StepExecutionResult {
     switch (decision.kind) {
       case 'plan_feature':
@@ -802,11 +856,9 @@ class PrototypeCompassRose {
         this.planUnblockTask(requireString(decision.feature_id, 'feature_id'), decision.reason);
         return { exitCode: 0, continueLoop: true, summary: `Unblock task planned for feature ${requireString(decision.feature_id, 'feature_id')}.` };
       case 'implement_task':
-        this.implementTask(requireString(decision.task_id, 'task_id'));
-        return { exitCode: 0, continueLoop: true, summary: `Implementation completed for ${requireString(decision.task_id, 'task_id')}.` };
+        return this.implementTask(requireString(decision.task_id, 'task_id'));
       case 'correct_task':
-        this.correctTask(requireString(decision.correction_task_id, 'correction_task_id'));
-        return { exitCode: 0, continueLoop: true, summary: `Correction implementation completed for ${requireString(decision.correction_task_id, 'correction_task_id')}.` };
+        return this.correctTask(requireString(decision.correction_task_id, 'correction_task_id'));
       case 'review_task':
         return this.reviewTask(requireString(decision.task_id, 'task_id'));
       case 'blocked':
@@ -947,13 +999,18 @@ class PrototypeCompassRose {
   private planUnblockTask(featureId: string, reason: string): void {
     const feature = this.loadFeature(featureId);
     const snapshot = this.readFeatureStateSnapshot(feature);
+    const recoveryActiveTask = snapshot.lifecycleState === 'implementation_failed'
+      ? this.resolveImplementationFailureActiveTask(feature, snapshot)
+      : null;
     const blocker = this.buildBlockerProfile(snapshot, reason);
-    const restorationTarget = snapshot.blockedFrom ?? {
-      lifecycle_state: snapshot.lifecycleState,
-      active_task: snapshot.activeTask,
-      active_correction_task: snapshot.activeCorrectionTask,
-      active_unblock_task: snapshot.activeUnblockTask,
-    };
+    const restorationTarget = snapshot.lifecycleState === 'implementation_failed'
+      ? this.buildImplementationFailureRestorationTarget(feature, snapshot)
+      : snapshot.blockedFrom ?? {
+          lifecycle_state: snapshot.lifecycleState,
+          active_task: snapshot.activeTask,
+          active_correction_task: snapshot.activeCorrectionTask,
+          active_unblock_task: snapshot.activeUnblockTask,
+        };
     const prompt = [
       'Act as the CompassRose Planner.',
       '',
@@ -969,6 +1026,7 @@ class PrototypeCompassRose {
       `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
+      ...(recoveryActiveTask ? [`- \`.git/proto-compassrose/implementation-attempts/${recoveryActiveTask}.json\``] : []),
       '- `docs/compassrose/PROJECT_STATE.md`',
       '- `docs/compassrose/CONFIG.md`',
       '- `src/contracts/runtime/operation-loop.md`',
@@ -1039,15 +1097,51 @@ class PrototypeCompassRose {
     }
   }
 
-  private implementTask(taskId: string): void {
-    const task = this.loadTask(taskId);
-    this.executeImplementation(task, false, null);
+  private buildImplementationFailureRestorationTarget(feature: FeatureRecord, snapshot: FeatureStateSnapshot): RestorationTarget {
+    const activeTask = this.resolveImplementationFailureActiveTask(feature, snapshot);
+    if (!activeTask) {
+      throw new Error(`Cannot build an implementation-failure recovery target for ${feature.id} because no active task anchor could be recovered.`);
+    }
+
+    return {
+      lifecycle_state: 'task_ready',
+      active_task: activeTask,
+      active_correction_task: 'none',
+      active_unblock_task: 'none',
+    };
   }
 
-  private correctTask(correctionTaskId: string): void {
+  private implementTask(taskId: string): StepExecutionResult {
+    const task = this.loadTask(taskId);
+    const failed = this.executeImplementation(task, false, null);
+    return failed
+      ? {
+          exitCode: 0,
+          continueLoop: true,
+          summary: `Implementation for ${taskId} failed; recovery unblock planning will continue.`,
+        }
+      : {
+          exitCode: 0,
+          continueLoop: true,
+          summary: `Implementation completed for ${taskId}.`,
+        };
+  }
+
+  private correctTask(correctionTaskId: string): StepExecutionResult {
     const task = this.loadTask(correctionTaskId);
     const artifact = this.loadTaskArtifact(correctionTaskId);
-    this.executeImplementation(task, true, artifact?.state_correction ?? null);
+    const failed = this.executeImplementation(task, true, artifact?.state_correction ?? null);
+    return failed
+      ? {
+          exitCode: 0,
+          continueLoop: true,
+          summary: `Correction implementation for ${correctionTaskId} failed; recovery unblock planning will continue.`,
+        }
+      : {
+          exitCode: 0,
+          continueLoop: true,
+          summary: `Correction implementation completed for ${correctionTaskId}.`,
+        };
   }
 
   private reviewTask(taskId: string): StepExecutionResult {
@@ -1291,7 +1385,7 @@ class PrototypeCompassRose {
     return analysis;
   }
 
-  private executeImplementation(task: ParsedTaskDocument, correction: boolean, stateCorrection: StateCorrectionTask | null): void {
+  private executeImplementation(task: ParsedTaskDocument, correction: boolean, stateCorrection: StateCorrectionTask | null): boolean {
     const recoveryLessonLines = this.buildRecoveryLessonPromptLines(task.featureId);
     const prompt = buildImplementerPrompt(task, correction, stateCorrection, recoveryLessonLines);
     const feature = this.loadFeature(task.featureId);
@@ -1350,9 +1444,18 @@ class PrototypeCompassRose {
     }
 
     if (finalAttempt.status !== 'success') {
-      writeText(feature.statePath, this.updateFeatureStateAfterImplementationFailure(feature.statePath, task.taskId));
-      writeText(this.projectStatePath, this.updateProjectStateAfterImplementationFailure(task.featureId, task.taskId));
-      throw new Error(finalAttempt.error ?? `Implementation for ${task.taskId} failed.`);
+      const failureReason = finalAttempt.error ?? `Implementation for ${task.taskId} failed (${finalAttempt.diagnostics.classification}).`;
+      writeText(feature.statePath, this.updateFeatureStateAfterImplementationFailure(feature.statePath, task.taskId, failureReason));
+      writeText(this.projectStatePath, this.updateProjectStateAfterImplementationFailure(task.featureId, task.taskId, failureReason));
+      this.writeRefinementFeedback(failureReason, {
+        kind: correction ? 'correct_task' : 'implement_task',
+        feature_id: task.featureId,
+        task_id: task.taskId,
+        correction_task_id: correction ? task.taskId : null,
+        reason: failureReason,
+      });
+      console.error(`Implementation for ${task.taskId} failed; recovery will continue through unblock planning.`);
+      return true;
     }
 
     const qualityResults = this.runQualityGates(task);
@@ -1372,6 +1475,8 @@ class PrototypeCompassRose {
     if (!passed) {
       throw new Error(`Quality gates failed after implementing ${task.taskId}.`);
     }
+
+    return false;
   }
 
   private persistImplementationAttemptArtifacts(
@@ -1574,6 +1679,18 @@ class PrototypeCompassRose {
     }
 
     return null;
+  }
+
+  private resolveImplementationFailureActiveTask(feature: FeatureRecord, snapshot: FeatureStateSnapshot): string | null {
+    if (snapshot.activeTask !== 'none') {
+      return snapshot.activeTask;
+    }
+
+    if (snapshot.blockedFrom?.active_task && snapshot.blockedFrom.active_task !== 'none') {
+      return snapshot.blockedFrom.active_task;
+    }
+
+    return this.resolveStateCorrectionActiveTaskFromArtifacts(feature.id);
   }
 
   private findLatestTaskArtifactTaskId(featureId: string): string | null {
@@ -2122,7 +2239,7 @@ class PrototypeCompassRose {
     return markdown;
   }
 
-  private updateProjectStateAfterImplementationFailure(featureId: string, taskId: string): string {
+  private updateProjectStateAfterImplementationFailure(featureId: string, taskId: string, reason: string): string {
     let markdown = readFileSync(this.projectStatePath, 'utf8');
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList([
@@ -2132,7 +2249,13 @@ class PrototypeCompassRose {
     markdown = replaceSection(
       markdown,
       'Next Planning Hint',
-      `The active feature is \`${featureId}\`, but implementation of \`${taskId}\` failed and the run should stop.`,
+      `The active feature is \`${featureId}\`, but implementation of \`${taskId}\` failed; plan a bounded recovery unblock task before continuing.`,
+    );
+    markdown = upsertBulletInSection(
+      markdown,
+      'Current Reality',
+      `- Feature \`${featureId}\` is in implementation_failed for \`${taskId}\`.`,
+      `- Implementation failure evidence: ${reason}`,
     );
     return markdown;
   }
@@ -2237,7 +2360,7 @@ class PrototypeCompassRose {
     return markdown;
   }
 
-  private updateFeatureStateAfterImplementationFailure(featureStatePath: string, taskId: string): string {
+  private updateFeatureStateAfterImplementationFailure(featureStatePath: string, taskId: string, reason: string): string {
     let markdown = readFileSync(featureStatePath, 'utf8');
     markdown = replaceSection(markdown, 'Lifecycle State', 'implementation_failed');
     markdown = replaceOperationalStatus(markdown, {
@@ -2248,16 +2371,24 @@ class PrototypeCompassRose {
       active_correction_task: 'none',
       active_unblock_task: 'none',
     });
+    markdown = replaceSection(markdown, 'Blocked By', bulletList([
+      '- kind: implementation_failure',
+      `- signature: implementation-failure-${taskId}`,
+      '- recoverability: agent',
+      `- observed_state: lifecycle=implementation_failed; active_task=${taskId}; active_correction_task=none; active_unblock_task=none`,
+      `- evidence: ${reason}`,
+    ]));
     markdown = replaceSection(markdown, 'Blocked From', [
-      '- lifecycle_state: none',
-      '- active_task: none',
-      '- active_correction_task: none',
-      '- active_unblock_task: none',
+      '- lifecycle_state: `task_ready`',
+      `- active_task: \`${taskId}\``,
+      '- active_correction_task: `none`',
+      '- active_unblock_task: `none`',
+      '- recoverability: agent',
     ].join('\n'));
     markdown = replaceSection(
       markdown,
       'Next Planning Hint',
-      `Recover or rerun \`${taskId}\` before allowing further planning or review.`,
+      `Plan a bounded unblock task for the failed implementation of \`${taskId}\` and restore task readiness before continuing.`,
     );
     return markdown;
   }
@@ -2530,10 +2661,43 @@ class PrototypeCompassRose {
     return lesson;
   }
 
+  private loadLatestRefinement(featureId: string): RefinementFeedback | null {
+    const feedback = this.artifacts.readJson<RefinementFeedback>('latest-refinement.json');
+    if (!feedback || feedback.selected_step?.feature_id !== featureId) {
+      return null;
+    }
+
+    return feedback;
+  }
+
   private buildRecoveryLessonPromptLines(featureId: string): string[] {
     const lesson = this.loadLatestRecoveryLesson(featureId);
     if (!lesson) {
-      return [];
+      const refinement = this.loadLatestRefinement(featureId);
+      if (!refinement) {
+        return [];
+      }
+
+      const lines = [
+        '',
+        'Recent implementation failure refinement:',
+        `- trigger: ${refinement.trigger}`,
+      ];
+
+      if (refinement.selected_step) {
+        lines.push(
+          `- selected_step: ${refinement.selected_step.kind}`,
+          `- selected_feature: ${refinement.selected_step.feature_id ?? 'null'}`,
+          `- selected_task: ${refinement.selected_step.task_id ?? 'null'}`,
+          `- selected_reason: ${refinement.selected_step.reason}`,
+        );
+      }
+
+      lines.push(
+        ...refinement.observations.map((item) => `- observation: ${item}`),
+        ...refinement.next_questions.map((item) => `- next_question: ${item}`),
+      );
+      return lines;
     }
 
     const lines = [
@@ -3343,6 +3507,8 @@ export function classifyBlockerKind(
     kind = 'state_corruption';
   } else if (/review|diff|acceptance|correction task/i.test(normalized)) {
     kind = 'review_failure';
+  } else if (/implementation failed|implementation_failure|failed implementation|model passivity|no git diff|no progress/i.test(normalized)) {
+    kind = 'implementation_failure';
   } else if (/task interface|first executable step|minimum progress evidence|scope|prompt/i.test(normalized)) {
     kind = 'task_interface_gap';
   } else if (/permission|approval|allow access|denied|ask-for-approval/i.test(normalized)) {
@@ -3556,6 +3722,12 @@ function inferLikelySources(trigger: string, selectedStep: StepDecision | null):
     sources.add('src/contracts/runtime/operation-loop.md');
   }
 
+  if (normalized.includes('implementation failed') || normalized.includes('implementation_failure')) {
+    sources.add('src/contracts/task/unblock-task.md');
+    sources.add('src/contracts/state/feature-state.md');
+    sources.add('src/contracts/runtime/operation-loop.md');
+  }
+
   if (normalized.includes('section "##')) {
     sources.add('src/contracts/state/feature-state.md');
     sources.add('docs/features/README.md');
@@ -3613,6 +3785,10 @@ function buildObservations(trigger: string, selectedStep: StepDecision | null): 
     observations.push('The runtime needs a blocker-specific recovery path instead of a generic stop.');
   }
 
+  if (/implementation failed|implementation_failure/i.test(trigger)) {
+    observations.push('The runtime should continue into a bounded recovery unblock task instead of stopping on the failed implementation state.');
+  }
+
   return observations;
 }
 
@@ -3636,6 +3812,10 @@ function buildNextQuestions(trigger: string, selectedStep: StepDecision | null):
 
   if (/blocked|blocker/i.test(trigger)) {
     questions.push('Should the blocker be classified into a reusable unblock profile before the run stops?');
+  }
+
+  if (/implementation failed|implementation_failure/i.test(trigger)) {
+    questions.push('Should implementation failure automatically open a bounded unblock task that restores the active task target?');
   }
 
   if (selectedStep?.kind === 'plan_task') {

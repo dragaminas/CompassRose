@@ -54,6 +54,9 @@ function main(): number {
   if (scenario === 'unblock') {
     seedBlockedFeatureState(cloneRoot);
   }
+  if (scenario === 'implementation-failed-recovery') {
+    seedImplementationFailedFeatureState(cloneRoot);
+  }
   if (scenario === 'state-correction-missing-active-task') {
     seedMalformedFeatureState(cloneRoot);
     seedStateCorrectionFallbackTaskArtifact(cloneRoot);
@@ -116,6 +119,7 @@ function main(): number {
   const correctionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-C1.json');
   const taskInterfaceAnalysisPath = join(cloneRoot, '.git', 'proto-compassrose', 'task-interface-analysis', 'F002-T04.json');
   const recoveryLessonPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-recovery-lesson.json');
+  const refinementPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-refinement.json');
   const stateCorrectionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T05-C1.json');
   const implementationAttemptHistoryPath = join(
     cloneRoot,
@@ -162,6 +166,7 @@ function main(): number {
     correctionTaskPath,
     taskInterfaceAnalysisPath,
     recoveryLessonPath,
+    refinementPath,
     implementationAttemptHistoryPath,
     stateCorrectionTaskPath,
     stateCorrectionDocPath,
@@ -192,13 +197,24 @@ function buildScenarioChecks(input: {
   commitEnabled: boolean;
   codexCalls: number;
   opencodeCalls: number;
-  runSummary: { status?: string; exit_code?: number; steps?: Array<{ decision?: { kind?: string }; summary?: string; continue_loop?: boolean; exit_code?: number }>; run_id?: string };
+  runSummary: {
+    status?: string;
+    exit_code?: number;
+    steps?: Array<{
+      decision?: { kind?: string; task_id?: string | null; feature_id?: string | null; correction_task_id?: string | null };
+      summary?: string;
+      continue_loop?: boolean;
+      exit_code?: number;
+    }>;
+    run_id?: string;
+  };
   markerExists: boolean;
   blockerProfilePath: string;
   unblockTaskPath: string;
   correctionTaskPath: string;
   taskInterfaceAnalysisPath: string;
   recoveryLessonPath: string;
+  refinementPath: string;
   implementationAttemptHistoryPath: string;
   stateCorrectionTaskPath: string;
   stateCorrectionDocPath: string;
@@ -220,6 +236,7 @@ function buildScenarioChecks(input: {
     correctionTaskPath,
     taskInterfaceAnalysisPath,
     recoveryLessonPath,
+    refinementPath,
     implementationAttemptHistoryPath,
     stateCorrectionTaskPath,
     stateCorrectionDocPath,
@@ -248,6 +265,23 @@ function buildScenarioChecks(input: {
       { name: 'run stopped with a blocked status', ok: runSummary.status === 'stopped' && runSummary.exit_code === 2 },
       { name: 'terminal blocker recorded a blocker profile', ok: existsSync(blockerProfilePath) },
       { name: 'no unblock task was created', ok: !existsSync(unblockTaskPath) },
+      { name: 'opencode touched the repo', ok: markerExists },
+    ];
+  }
+
+  if (scenario === 'implementation-failed-recovery') {
+    const refinement = readJsonIfExists(refinementPath);
+    const implementationFailedUnblockTaskPath = join(protoTasksDirectory, 'F002-T05-U1.json');
+    const unblockSelected = runSummary.steps?.some((step) => step.decision?.kind === 'unblock_task') === true;
+    const resumedImplementation = runSummary.steps?.some((step) => step.decision?.kind === 'implement_task' && step.decision?.task_id === 'F002-T04') === true;
+
+    return [
+      { name: 'codex was called enough times to recover from implementation_failed and resume the task', ok: codexCalls >= 8 },
+      { name: 'opencode was called twice for the recovery unblock and resumed implementation', ok: opencodeCalls === 2 },
+      { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
+      { name: 'implementation_failed recovery created an unblock task', ok: existsSync(implementationFailedUnblockTaskPath) && unblockSelected },
+      { name: 'implementation_failed recovery recorded a refinement artifact', ok: refinement !== null },
+      { name: 'the original implementation task was resumed after recovery', ok: resumedImplementation },
       { name: 'opencode touched the repo', ok: markerExists },
     ];
   }
@@ -380,6 +414,8 @@ function markerFileNameForScenario(scenario: string): string {
       return 'terminal-review-blocked.txt';
     case 'interface-gap':
       return 'interface-gap.txt';
+    case 'implementation-failed-recovery':
+      return 'implementation-failed-recovery.txt';
     case 'state-correction-missing-active-task':
       return 'state-correction-missing-active-task.txt';
     case 'implementation-retry':
@@ -485,6 +521,11 @@ function seedTaskArtifacts(cloneRoot: string): void {
 function seedBlockedFeatureState(cloneRoot: string): void {
   const statePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
   writeFileSync(statePath, BLOCKED_STATE_SEED, 'utf8');
+}
+
+function seedImplementationFailedFeatureState(cloneRoot: string): void {
+  const statePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+  writeFileSync(statePath, IMPLEMENTATION_FAILED_STATE_SEED, 'utf8');
 }
 
 function seedMalformedFeatureState(cloneRoot: string): void {
@@ -847,6 +888,156 @@ if (scenario === 'unblock') {
       reason: 'e2e mock: stop after unblock planning',
     };
   }
+} else if (scenario === 'implementation-failed-recovery') {
+  if (count === 1) {
+    payload = {
+      task: {
+        task_id: 'F002-T05-U1',
+        feature_id: '002-configuration-model',
+        title: 'Recover the failed implementation for the configuration loader',
+        objective: 'Create a bounded unblock task that restores task readiness after the failed implementation of F002-T04.',
+        first_executable_step: 'Open docs/features/002-configuration-model/state.md and confirm the failed implementation anchor that must be recovered.',
+        minimum_progress_evidence: [
+          'docs/features/002-configuration-model/state.md records implementation_failed for F002-T04.',
+          'The unblock task restores the feature to task_ready for F002-T04.',
+        ],
+        trace: {
+          roadmap_objective: 'Deterministic Orchestration',
+          feature_goal: 'Recover a failed implementation without widening the feature scope.',
+          state_gap: 'The feature state needs a bounded recovery path after implementation_failed.',
+        },
+        context: {
+          summary: 'The active task failed during implementation, but the task anchor remains recoverable.',
+          relevant_paths: [
+            'docs/features/002-configuration-model/state.md',
+            'docs/compassrose/PROJECT_STATE.md',
+            'src/contracts/runtime/operation-loop.md',
+            'src/contracts/state/feature-state.md',
+          ],
+          relevant_modules: ['Feature state', 'Project state', 'Runtime operation loop'],
+        },
+        scope: {
+          allowed_paths: [
+            'docs/features/002-configuration-model/state.md',
+            'docs/compassrose/PROJECT_STATE.md',
+            'proto/implementation-failed-recovery.txt',
+          ],
+          forbidden_paths: [
+            'src/cli/main.ts',
+            'src/config/configReader.ts',
+            'src/doctor/projectState.ts',
+          ],
+        },
+        constraints: [
+          'Keep the unblock task narrowly focused on restoring progress after implementation_failed.',
+          'Do not broaden the feature scope.',
+        ],
+        development_policy: {
+          mode: 'documentation_first',
+        },
+        quality_gates: {
+          before_review: ['git diff --check'],
+        },
+        acceptance_criteria: [
+          'The failed implementation anchor is explicit and usable for restoration.',
+          'The unblock task keeps the feature narrow and reviewable.',
+        ],
+        expected_deliverables: ['documentation'],
+      },
+    };
+  } else if (count === 2) {
+    payload = {
+      kind: 'implement_task',
+      feature_id: null,
+      task_id: 'F002-T05-U1',
+      correction_task_id: null,
+      reason: 'e2e mock: implement recovery unblock task',
+    };
+  } else if (count === 3) {
+    payload = {
+      kind: 'review_task',
+      feature_id: null,
+      task_id: 'F002-T05-U1',
+      correction_task_id: null,
+      reason: 'e2e mock: review recovery unblock task',
+    };
+  } else if (count === 4) {
+    payload = {
+      task_id: 'F002-T05-U1',
+      status: 'approved',
+      summary: 'e2e mock review approved the recovery unblock task',
+      acceptance: {
+        criteria: [
+          {
+            criterion: 'prototype can recover from implementation_failed via unblock tasks',
+            status: 'passed',
+            notes: 'observed through mock invocations',
+          },
+        ],
+      },
+      findings: [],
+      scope_check: {
+        status: 'passed',
+        unrelated_changes: [],
+      },
+      quality_gate_check: {
+        status: 'passed',
+        failed_gates: [],
+      },
+      correction_task: null,
+      project_state_update_hint: null,
+    };
+  } else if (count === 5) {
+    payload = {
+      kind: 'implement_task',
+      feature_id: null,
+      task_id: 'F002-T04',
+      correction_task_id: null,
+      reason: 'e2e mock: resume original implementation after recovery',
+    };
+  } else if (count === 6) {
+    payload = {
+      kind: 'review_task',
+      feature_id: null,
+      task_id: 'F002-T04',
+      correction_task_id: null,
+      reason: 'e2e mock: review resumed original implementation',
+    };
+  } else if (count === 7) {
+    payload = {
+      task_id: 'F002-T04',
+      status: 'approved',
+      summary: 'e2e mock review approved the resumed implementation',
+      acceptance: {
+        criteria: [
+          {
+            criterion: 'prototype resumes the original task after implementation_failed recovery',
+            status: 'passed',
+            notes: 'observed through mock invocations',
+          },
+        ],
+      },
+      findings: [],
+      scope_check: {
+        status: 'passed',
+        unrelated_changes: [],
+      },
+      quality_gate_check: {
+        status: 'passed',
+        failed_gates: [],
+      },
+      correction_task: null,
+      project_state_update_hint: null,
+    };
+  } else {
+    payload = {
+      kind: 'stop',
+      feature_id: null,
+      task_id: null,
+      correction_task_id: null,
+      reason: 'e2e mock: stop after implementation_failed recovery',
+    };
+  }
 } else if (scenario === 'state-correction-missing-active-task') {
   if (count === 1) {
     payload = {
@@ -1207,6 +1398,8 @@ function markerFileNameForScenario(scenario) {
       return 'terminal-review-blocked.txt';
     case 'interface-gap':
       return 'interface-gap.txt';
+    case 'implementation-failed-recovery':
+      return 'implementation-failed-recovery.txt';
     case 'state-correction-missing-active-task':
       return 'state-correction-missing-active-task.txt';
     case 'implementation-retry':
@@ -1219,6 +1412,10 @@ function markerFileNameForScenario(scenario) {
 function detectPromptKind(prompt) {
   if (prompt.includes('Act as the CompassRose deterministic step selector.')) {
     return 'selector';
+  }
+
+  if (prompt.includes('Act as the CompassRose Planner.')) {
+    return 'planner';
   }
 
   if (prompt.includes('Act as the CompassRose Reviewer.')) {
@@ -1268,6 +1465,8 @@ function markerFileNameForScenario(scenario) {
       return 'terminal-review-blocked.txt';
     case 'interface-gap':
       return 'interface-gap.txt';
+    case 'implementation-failed-recovery':
+      return 'implementation-failed-recovery.txt';
     case 'state-correction-missing-active-task':
       return 'state-correction-missing-active-task.txt';
     case 'implementation-retry':
@@ -1428,6 +1627,61 @@ Task \`F002-T05\` was approved before the blocker was introduced in the e2e scen
 ## Next Planning Hint
 
 Execute an unblock task to restore the feature to task readiness.
+`;
+
+const IMPLEMENTATION_FAILED_STATE_SEED = `# State: Configuration Model
+
+## Lifecycle State
+
+implementation_failed
+
+## Source Request
+
+\`request.md\`
+
+## Operational Status
+
+- formalization: complete
+- active_task: F002-T04
+- active_correction_task: none
+- active_unblock_task: none
+- last_implementation_result: failed
+- last_quality_gate_result: unknown
+- last_review_result: not_run
+- last_unblock_result: not_run
+
+## Current Reality
+
+The feature reached implementation_failed after an implementation attempt did not produce a recoverable finish. The next proto run should plan a bounded unblock task and restore task readiness before the original task is retried.
+
+## Blocked By
+
+- kind: implementation_failure
+- signature: implementation-failed-f002-t04
+- recoverability: agent
+- observed_state: lifecycle=implementation_failed; active_task=F002-T04; active_correction_task=none; active_unblock_task=none
+- evidence: The implementation attempt for F002-T04 failed and needs bounded recovery.
+- reason: The implementation attempt for F002-T04 failed and needs bounded recovery.
+
+## Blocked From
+
+- lifecycle_state: task_ready
+- active_task: F002-T04
+- active_correction_task: none
+- active_unblock_task: none
+- recoverability: agent
+
+## Last Approved Change
+
+Task \`F002-T04\` was approved before the implementation failure was recorded in the e2e scenario.
+
+## Known Gaps
+
+- The failed implementation should be recovered through a bounded unblock task before the task is retried.
+
+## Next Planning Hint
+
+Plan a bounded unblock task for the failed implementation of \`F002-T04\` and restore task readiness before continuing.
 `;
 
 const MALFORMED_STATE_MISSING_ACTIVE_TASK_SEED = `# State: Configuration Model

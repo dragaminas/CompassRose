@@ -30,6 +30,7 @@ The Planner should read:
 - recent recovery lessons for the active feature, when present
 - the blocker evidence and runtime diagnostics provided by the orchestrator
 - relevant repository paths for the blocker
+- the latest implementation attempt artifacts when the blocker is an implementation failure
 
 ---
 
@@ -47,6 +48,7 @@ The Planner must:
 - include enough blocker context to avoid repository-wide exploration
 - use planner-grade reasoning to tighten the unblock interface when needed
 - reuse recent recovery lessons to make the unblock task narrower when the blocker has already been observed and partially diagnosed
+- when the blocker is an implementation failure, keep the active task anchor visible and prefer a bounded recovery task that restores task readiness before reattempting implementation
 
 The Planner must not:
 

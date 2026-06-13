@@ -49,6 +49,17 @@ describe('proto blocker flows', () => {
     expect(result.stderr).not.toContain('FAIL:');
   });
 
+  test('recovers from implementation_failed through unblock planning and resumes the original task', () => {
+    const result = runProtoScenario('implementation-failed-recovery');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('PASS: implementation_failed recovery created an unblock task');
+    expect(result.stdout).toContain('PASS: implementation_failed recovery recorded a refinement artifact');
+    expect(result.stdout).toContain('PASS: the original implementation task was resumed after recovery');
+    expect(result.stdout).toContain('PASS: run completed successfully');
+    expect(result.stderr).not.toContain('FAIL:');
+  });
+
   test('records task-interface analysis when the review requests a narrower interface', () => {
     const result = runProtoScenario('interface-gap');
 

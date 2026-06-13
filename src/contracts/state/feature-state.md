@@ -180,7 +180,7 @@ The feature remains in `implementation_running` while that retry budget is still
 
 ### implementation_failed
 
-The last implementation attempt failed and the runtime must stop or require explicit recovery.
+The last implementation attempt failed and the runtime must either plan a bounded unblock task that restores the recorded active task or require explicit recovery before continuing.
 
 ### quality_gates_pending
 
@@ -263,6 +263,7 @@ unblock_pending
 implementation_failed
 quality_failed
 review_failed
+    -> unblock_pending
     -> blocked
     -> task_planning_pending
     -> correction_pending
@@ -305,6 +306,7 @@ Recovery rules:
 
 - `implementation_running`: inspect execution artifacts and either resume the implementation step or transition explicitly to `implementation_failed` or `blocked`
 - `implementation_running`: inspect execution artifacts first; if the latest attempt left partial repository changes, retry the same active task once before deciding whether to stop
+- `implementation_failed`: inspect execution artifacts first; if the failed task can be recovered, plan a bounded unblock task and transition to `unblock_pending`
 - `quality_gates_pending`: re-run or resume quality gates instead of planning a new task
 - `review_pending`: re-run or resume review instead of planning a new task
 - `correction_pending`: continue with the recorded correction task instead of generating a broader replacement task

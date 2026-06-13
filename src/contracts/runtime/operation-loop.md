@@ -223,7 +223,8 @@ Next state:
 
 Action:
 
-- stop the run unless an explicit recovery policy transitions the feature back into a valid pending state
+- if the failed implementation is recoverable, generate a bounded unblock task with the planner-grade role and transition the feature to `unblock_pending`
+- otherwise stop the run unless an explicit recovery policy transitions the feature back into a valid pending state
 
 ### blocked
 
@@ -401,6 +402,7 @@ Implementation recovery rules:
 - if the retry succeeds, continue to quality gates
 - if the retry also fails or no recoverable progress exists, transition explicitly to `implementation_failed` or `blocked`
 - preserve raw output, diff, and diagnostics for both the failed attempt and the retry so the operator can distinguish a transient collapse from a terminal stop
+- `implementation_failed`: inspect the latest implementation artifacts first and, when the active task anchor is still recoverable, plan a bounded unblock task that restores task readiness before retrying implementation
 - a failed quality gate result
 - a recorded blocker
 - implementation diagnostics from an interrupted or empty attempt

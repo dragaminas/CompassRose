@@ -4,7 +4,7 @@
 
 Defines a bounded task generated when a feature is blocked but the blocker is recoverable.
 
-An unblock task removes a known blocker, tightens the task interface, or restores the surrounding execution conditions so deterministic orchestration can resume.
+An unblock task removes a known blocker, tightens the task interface, recovers a failed implementation attempt, or restores the surrounding execution conditions so deterministic orchestration can resume.
 
 This shape is distinct from `src/contracts/task/correction-task.md` because it targets blocker recovery, not review findings.
 
@@ -38,7 +38,7 @@ unblock_task:
     state_gap: string
 
   blocker:
-    kind: state_corruption | task_interface_gap | cli_mismatch | environment | review_failure | unknown
+    kind: state_corruption | task_interface_gap | cli_mismatch | environment | review_failure | implementation_failure | unknown
     signature: string
     evidence:
       - string
@@ -95,6 +95,7 @@ An unblock task must:
 - Stay within bounded scope.
 - Include a concrete `first_executable_step`.
 - Include `minimum_progress_evidence` that cannot be satisfied by reading alone.
+- When the blocker is an `implementation_failure`, preserve the active task anchor and make the recovery path explicit instead of reopening the whole feature backlog.
 
 An unblock task must not:
 
