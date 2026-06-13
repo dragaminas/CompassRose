@@ -27,6 +27,7 @@ The Planner should read:
 - the target feature's `architecture.md`
 - the target feature's `state.md`
 - the relevant project state summary
+- recent recovery lessons for the active feature, when present
 - the blocker evidence and runtime diagnostics provided by the orchestrator
 - relevant repository paths for the blocker
 
@@ -45,6 +46,7 @@ The Planner must:
 - define minimum progress evidence that cannot be satisfied by reading alone
 - include enough blocker context to avoid repository-wide exploration
 - use planner-grade reasoning to tighten the unblock interface when needed
+- reuse recent recovery lessons to make the unblock task narrower when the blocker has already been observed and partially diagnosed
 
 The Planner must not:
 

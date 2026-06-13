@@ -8,7 +8,6 @@ In progress
 
 `002-configuration-model`
 
-
 ## Current Reality
 
 - `docs/compassrose/PROJECT_STATE.md` exists as the repository-local project state document, and `docs/compassrose/CONFIG.md` already points at this path.
@@ -31,7 +30,7 @@ In progress
 
 ## Pending
 
-- Recover or finish `F002-T05` for the active feature.
+- Execute correction task `F002-T05-C01` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -49,4 +48,4 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to recover or finish `F002-T05`.
+The active feature is `002-configuration-model`, and its next valid action is to execute correction task `F002-T05-C01`.

@@ -109,6 +109,7 @@ function main(): number {
   const unblockTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-U1.json');
   const correctionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-C1.json');
   const taskInterfaceAnalysisPath = join(cloneRoot, '.git', 'proto-compassrose', 'task-interface-analysis', 'F002-T04.json');
+  const recoveryLessonPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-recovery-lesson.json');
   const stateCorrectionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T05-C1.json');
   const implementationAttemptHistoryPath = join(
     cloneRoot,
@@ -137,6 +138,7 @@ function main(): number {
     unblockTaskPath,
     correctionTaskPath,
     taskInterfaceAnalysisPath,
+    recoveryLessonPath,
     implementationAttemptHistoryPath,
     stateCorrectionTaskPath,
     stateCorrectionDocPath,
@@ -168,6 +170,7 @@ function buildScenarioChecks(input: {
   unblockTaskPath: string;
   correctionTaskPath: string;
   taskInterfaceAnalysisPath: string;
+  recoveryLessonPath: string;
   implementationAttemptHistoryPath: string;
   stateCorrectionTaskPath: string;
   stateCorrectionDocPath: string;
@@ -183,6 +186,7 @@ function buildScenarioChecks(input: {
     unblockTaskPath,
     correctionTaskPath,
     taskInterfaceAnalysisPath,
+    recoveryLessonPath,
     implementationAttemptHistoryPath,
     stateCorrectionTaskPath,
     stateCorrectionDocPath,
@@ -218,17 +222,23 @@ function buildScenarioChecks(input: {
     const adjustmentCount = Array.isArray(analysis?.task_interface_adjustments?.context_additions)
       ? analysis.task_interface_adjustments.context_additions.length
       : 0;
+    const recoveryLesson = readJsonIfExists(recoveryLessonPath);
+    const recoveryLessonScopeCount = Array.isArray(recoveryLesson?.scope_isolation_notes) ? recoveryLesson.scope_isolation_notes.length : 0;
+    const correctedTaskExecuted = runSummary.steps?.some((step) => step.decision?.kind === 'correct_task') === true;
 
     return [
-      { name: 'codex was called enough times for review analysis', ok: codexCalls >= 3 },
-      { name: 'opencode was called exactly once', ok: opencodeCalls === 1 },
-      { name: 'run stopped after requesting changes', ok: runSummary.status === 'stopped' && runSummary.exit_code === 2 },
+      { name: 'codex was called enough times for review analysis and correction recovery', ok: codexCalls >= 8 },
+      { name: 'opencode was called twice for the original task and the correction task', ok: opencodeCalls === 2 },
+      { name: 'run completed successfully after the correction recovery loop', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
       { name: 'task-interface analysis was recorded', ok: analysis !== null },
       {
         name: 'task-interface analysis captured a limitation-oriented recommendation',
         ok: recommendedAction === 'tighten_task_interface' || recommendedAction === 'document_implementer_limitation' || recommendedAction === 'both',
       },
       { name: 'task-interface analysis recorded at least one limitation or adjustment', ok: limitationCount > 0 || adjustmentCount > 0 },
+      { name: 'recovery lesson was recorded', ok: recoveryLesson !== null },
+      { name: 'recovery lesson recorded scope isolation guidance', ok: recoveryLessonScopeCount > 0 },
+      { name: 'the correction task was executed after review requested changes', ok: correctedTaskExecuted },
       { name: 'correction task was created', ok: existsSync(correctionTaskPath) },
       { name: 'opencode touched the repo', ok: markerExists },
     ];
@@ -298,7 +308,7 @@ function readJsonIfExists(path: string): any | null {
 }
 
 function expectedProtoExitCodesForScenario(scenario: string): readonly number[] {
-  if (scenario === 'terminal-review-blocked' || scenario === 'interface-gap') {
+  if (scenario === 'terminal-review-blocked') {
     return [2];
   }
 
@@ -875,27 +885,30 @@ if (scenario === 'unblock') {
     payload = {
       task_id: 'F002-T04',
       status: 'changes_required',
-      summary: 'The task interface is too weak for the implementer to complete this cleanly.',
+      summary: 'The submission mixed the task patch with orchestration state docs, so the reviewable diff needs a narrower recovery boundary.',
       acceptance: {
         criteria: [
           {
-            criterion: 'prototype records interface adjustments or model limitations',
+            criterion: 'prototype records interface adjustments, model limitations, or scope-isolation lessons',
             status: 'failed',
-            notes: 'The current task leaves the implementer with an avoidable ambiguity.',
+            notes: 'The current submission leaks runtime state into the reviewable diff and still leaves the implementer with avoidable ambiguity.',
           },
         ],
       },
       findings: [
         {
           severity: 'warning',
-          message: 'The first executable step does not narrow the implementer enough.',
+          message: 'The reviewable diff includes docs/compassrose/PROJECT_STATE.md and docs/features/002-configuration-model/state.md, so the recovery boundary needs to exclude orchestration state.',
           path: null,
-          related_acceptance_criterion: 'prototype records interface adjustments or model limitations',
+          related_acceptance_criterion: 'prototype records interface adjustments, model limitations, or scope-isolation lessons',
         },
       ],
       scope_check: {
-        status: 'passed',
-        unrelated_changes: [],
+        status: 'failed',
+        unrelated_changes: [
+          'docs/compassrose/PROJECT_STATE.md',
+          'docs/features/002-configuration-model/state.md',
+        ],
       },
       quality_gate_check: {
         status: 'passed',
@@ -933,7 +946,7 @@ if (scenario === 'unblock') {
           before_review: ['node -e "process.exit(0)"'],
         },
       },
-      project_state_update_hint: 'Task interface narrowed to reduce ambiguity for the implementer.',
+      project_state_update_hint: 'Task interface and scope isolation were tightened to recover from the mixed submission.',
     };
   } else if (count === 4) {
     payload = {
@@ -965,7 +978,50 @@ if (scenario === 'unblock') {
       },
       notes_for_documentation: [
         'The project should remember that task interfaces may need to encode model limitations explicitly.',
+        'Recovery lessons should also preserve scope-isolation guidance when reviewable diffs leak orchestration state.',
       ],
+    };
+  } else if (count === 5) {
+    payload = {
+      kind: 'correct_task',
+      feature_id: null,
+      task_id: null,
+      correction_task_id: 'F002-T04-C1',
+      reason: 'e2e mock: execute correction task after recovery lesson',
+    };
+  } else if (count === 6) {
+    payload = {
+      kind: 'review_task',
+      feature_id: null,
+      task_id: 'F002-T04-C1',
+      correction_task_id: null,
+      reason: 'e2e mock: review correction task after recovery lesson',
+    };
+  } else if (count === 7) {
+    payload = {
+      task_id: 'F002-T04-C1',
+      status: 'approved',
+      summary: 'e2e mock review approved the correction task and preserved the recovery lesson',
+      acceptance: {
+        criteria: [
+          {
+            criterion: 'prototype recovers from a blocked review and completes the correction',
+            status: 'passed',
+            notes: 'observed through mock invocations',
+          },
+        ],
+      },
+      findings: [],
+      scope_check: {
+        status: 'passed',
+        unrelated_changes: [],
+      },
+      quality_gate_check: {
+        status: 'passed',
+        failed_gates: [],
+      },
+      correction_task: null,
+      project_state_update_hint: null,
     };
   } else {
     payload = {

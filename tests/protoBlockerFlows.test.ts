@@ -51,6 +51,10 @@ describe('proto blocker flows', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('PASS: task-interface analysis was recorded');
     expect(result.stdout).toContain('PASS: task-interface analysis captured a limitation-oriented recommendation');
+    expect(result.stdout).toContain('PASS: recovery lesson was recorded');
+    expect(result.stdout).toContain('PASS: recovery lesson recorded scope isolation guidance');
+    expect(result.stdout).toContain('PASS: the correction task was executed after review requested changes');
+    expect(result.stdout).toContain('PASS: run completed successfully after the correction recovery loop');
     expect(result.stdout).toContain('PASS: correction task was created');
     expect(result.stderr).not.toContain('FAIL:');
   });

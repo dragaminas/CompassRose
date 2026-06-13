@@ -268,6 +268,24 @@ interface TaskInterfaceAnalysis {
   readonly notes_for_documentation: readonly string[];
 }
 
+interface RecoveryLesson {
+  readonly run_id: string;
+  readonly created_at: string;
+  readonly feature_id: string;
+  readonly task_id: string;
+  readonly correction_task_id: string | null;
+  readonly review_status: ReviewerStatus;
+  readonly summary: string;
+  readonly review_findings: readonly string[];
+  readonly quality_gate_failures: readonly string[];
+  readonly recommended_action: TaskInterfaceAnalysis['recommended_action'];
+  readonly perfectible: boolean;
+  readonly scope_isolation_notes: readonly string[];
+  readonly implementer_limitations: readonly string[];
+  readonly task_interface_adjustments: TaskInterfaceAnalysis['task_interface_adjustments'];
+  readonly notes_for_documentation: readonly string[];
+}
+
 interface ParsedTaskDocument {
   readonly taskId: string;
   readonly featureId: string;
@@ -808,6 +826,7 @@ class PrototypeCompassRose {
       '- `src/doctor/`',
       '- `src/cli/main.ts`',
       '- `tests/`',
+      ...this.buildRecoveryLessonPromptLines(featureId),
       '',
       'Rules:',
       '- Generate exactly one atomic task.',
@@ -875,6 +894,7 @@ class PrototypeCompassRose {
       '- `docs/compassrose/PROJECT_STATE.md`',
       '- `docs/compassrose/CONFIG.md`',
       '- `src/contracts/runtime/operation-loop.md`',
+      ...this.buildRecoveryLessonPromptLines(featureId),
       '',
       'Blocker context:',
       `- kind: ${blocker.kind}`,
@@ -1014,6 +1034,10 @@ class PrototypeCompassRose {
       ? this.analyzeTaskInterface(task, feature, review, implementation, qualityResults, tempDir, stateCorrection, unblock)
       : null;
 
+    if (taskInterfaceAnalysis && review.status !== 'approved') {
+      this.recordRecoveryLesson(task, review, implementation, qualityResults, taskInterfaceAnalysis, review.correction_task?.correction_task_id ?? null);
+    }
+
     if (review.status === 'approved') {
       const updatedFeatureState = stateCorrection
         ? this.updateFeatureStateAfterStateCorrection(feature.statePath, task, stateCorrection)
@@ -1057,13 +1081,13 @@ class PrototypeCompassRose {
       const updatedProjectState = this.updateProjectStateForCorrection(task.featureId, correction.correction_task_id);
       writeText(feature.statePath, updatedFeatureState);
       writeText(this.projectStatePath, updatedProjectState);
-      console.error(`Review requested correction task ${correction.correction_task_id} at ${relativePath(this.repositoryRoot, correctionPath)}.`);
+      console.log(`Review requested correction task ${correction.correction_task_id} at ${relativePath(this.repositoryRoot, correctionPath)}.`);
       return {
-        exitCode: 2,
-        continueLoop: false,
+        exitCode: 0,
+        continueLoop: true,
         summary: taskInterfaceAnalysis
-          ? `Review requested correction task ${correction.correction_task_id} for ${task.taskId}; task-interface analysis was recorded.`
-          : `Review requested correction task ${correction.correction_task_id} for ${task.taskId}.`,
+          ? `Review requested correction task ${correction.correction_task_id} for ${task.taskId}; task-interface analysis and a recovery lesson were recorded.`
+          : `Review requested correction task ${correction.correction_task_id} for ${task.taskId}; a recovery lesson was recorded.`,
       };
     }
 
@@ -1084,7 +1108,7 @@ class PrototypeCompassRose {
         exitCode: continueLoop ? 0 : 2,
         continueLoop,
         summary: taskInterfaceAnalysis
-          ? `${review.summary} ${blockedSummary} Task-interface analysis was recorded.`
+          ? `${review.summary} ${blockedSummary} Task-interface analysis and a recovery lesson were recorded.`
           : `${review.summary} ${blockedSummary}`,
       };
     }
@@ -1169,7 +1193,8 @@ class PrototypeCompassRose {
   }
 
   private executeImplementation(task: ParsedTaskDocument, correction: boolean, stateCorrection: StateCorrectionTask | null): void {
-    const prompt = buildImplementerPrompt(task, correction, stateCorrection);
+    const recoveryLessonLines = this.buildRecoveryLessonPromptLines(task.featureId);
+    const prompt = buildImplementerPrompt(task, correction, stateCorrection, recoveryLessonLines);
     const feature = this.loadFeature(task.featureId);
     const implementationStatePaths = [
       relativePath(this.repositoryRoot, feature.statePath),
@@ -2261,6 +2286,168 @@ class PrototypeCompassRose {
     return markdown;
   }
 
+  private recordRecoveryLesson(
+    task: ParsedTaskDocument,
+    review: ReviewerOutput,
+    implementation: ImplementationAttempt,
+    qualityResults: readonly QualityGateResult[],
+    analysis: TaskInterfaceAnalysis,
+    correctionTaskId: string | null,
+  ): RecoveryLesson {
+    const lesson = this.buildRecoveryLesson(task, review, implementation, qualityResults, analysis, correctionTaskId);
+    this.artifacts.writeJson(join('recovery-lessons', `${task.taskId}.json`), lesson);
+    this.artifacts.writeJson('latest-recovery-lesson.json', lesson);
+    this.artifacts.writeText(join('recovery-lessons', `${task.taskId}.md`), this.renderRecoveryLessonMarkdown(lesson));
+    this.artifacts.writeText('latest-recovery-lesson.md', this.renderRecoveryLessonMarkdown(lesson));
+    return lesson;
+  }
+
+  private buildRecoveryLesson(
+    task: ParsedTaskDocument,
+    review: ReviewerOutput,
+    implementation: ImplementationAttempt,
+    qualityResults: readonly QualityGateResult[],
+    analysis: TaskInterfaceAnalysis,
+    correctionTaskId: string | null,
+  ): RecoveryLesson {
+    const scopeIsolationNotes = uniqueStrings([
+      ...(review.scope_check.status === 'failed' ? review.scope_check.unrelated_changes : []),
+      ...(review.scope_check.unrelated_changes.length > 0
+        ? [
+            `Reviewable diff included out-of-scope paths: ${review.scope_check.unrelated_changes.join(', ')}.`,
+            'Future recoveries should keep runtime state transitions separate from the reviewable task diff or explicitly exclude them from the submission.',
+          ]
+        : []),
+    ]);
+
+    const qualityGateFailures = qualityResults
+      .filter((result) => result.status === 'failed')
+      .map((result) => `${result.name}: ${result.output_summary}`);
+
+    return {
+      run_id: this.runId,
+      created_at: new Date().toISOString(),
+      feature_id: task.featureId,
+      task_id: task.taskId,
+      correction_task_id: correctionTaskId,
+      review_status: review.status,
+      summary: review.summary,
+      review_findings: review.findings.map((finding) => `[${finding.severity}] ${finding.message}`),
+      quality_gate_failures: qualityGateFailures,
+      recommended_action: analysis.recommended_action,
+      perfectible: analysis.perfectible,
+      scope_isolation_notes: scopeIsolationNotes,
+      implementer_limitations: analysis.implementer_limitations,
+      task_interface_adjustments: analysis.task_interface_adjustments,
+      notes_for_documentation: analysis.notes_for_documentation,
+    };
+  }
+
+  private loadLatestRecoveryLesson(featureId: string): RecoveryLesson | null {
+    const lesson = this.artifacts.readJson<RecoveryLesson>('latest-recovery-lesson.json');
+    if (!lesson || lesson.feature_id !== featureId) {
+      return null;
+    }
+
+    return lesson;
+  }
+
+  private buildRecoveryLessonPromptLines(featureId: string): string[] {
+    const lesson = this.loadLatestRecoveryLesson(featureId);
+    if (!lesson) {
+      return [];
+    }
+
+    const lines = [
+      '',
+      'Recent recovery lesson:',
+      `- task_id: ${lesson.task_id}`,
+      `- review_status: ${lesson.review_status}`,
+      `- summary: ${lesson.summary}`,
+      ...lesson.scope_isolation_notes.map((item) => `- scope_isolation: ${item}`),
+      ...lesson.review_findings.map((item) => `- review_finding: ${item}`),
+      ...lesson.quality_gate_failures.map((item) => `- quality_gate_failure: ${item}`),
+      `- recommended_action: ${lesson.recommended_action}`,
+      `- perfectible: ${lesson.perfectible ? 'yes' : 'no'}`,
+      ...lesson.implementer_limitations.map((item) => `- implementer_limitation: ${item}`),
+    ];
+
+    if (lesson.task_interface_adjustments.first_executable_step) {
+      lines.push(`- first_executable_step: ${lesson.task_interface_adjustments.first_executable_step}`);
+    }
+
+    for (const item of lesson.task_interface_adjustments.minimum_progress_evidence) {
+      lines.push(`- minimum_progress_evidence: ${item}`);
+    }
+
+    for (const item of lesson.task_interface_adjustments.context_additions) {
+      lines.push(`- context_addition: ${item}`);
+    }
+
+    for (const item of lesson.task_interface_adjustments.scope_adjustments) {
+      lines.push(`- scope_adjustment: ${item}`);
+    }
+
+    for (const item of lesson.task_interface_adjustments.acceptance_criteria_adjustments) {
+      lines.push(`- acceptance_criteria_adjustment: ${item}`);
+    }
+
+    for (const item of lesson.task_interface_adjustments.quality_gate_adjustments) {
+      lines.push(`- quality_gate_adjustment: ${item}`);
+    }
+
+    for (const item of lesson.notes_for_documentation) {
+      lines.push(`- documentation_note: ${item}`);
+    }
+
+    return lines;
+  }
+
+  private renderRecoveryLessonMarkdown(lesson: RecoveryLesson): string {
+    return [
+      `# Recovery Lesson: ${lesson.feature_id}/${lesson.task_id}`,
+      '',
+      `- run_id: \`${lesson.run_id}\``,
+      `- correction_task_id: \`${lesson.correction_task_id ?? 'none'}\``,
+      `- review_status: ${lesson.review_status}`,
+      `- summary: ${lesson.summary}`,
+      '',
+      '## Scope Isolation',
+      ...(lesson.scope_isolation_notes.length > 0 ? lesson.scope_isolation_notes.map((item) => `- ${item}`) : ['- None recorded.']),
+      '',
+      '## Review Findings',
+      ...(lesson.review_findings.length > 0 ? lesson.review_findings.map((item) => `- ${item}`) : ['- None recorded.']),
+      '',
+      '## Quality Gate Failures',
+      ...(lesson.quality_gate_failures.length > 0 ? lesson.quality_gate_failures.map((item) => `- ${item}`) : ['- None recorded.']),
+      '',
+      '## Implementer Limitations',
+      ...(lesson.implementer_limitations.length > 0 ? lesson.implementer_limitations.map((item) => `- ${item}`) : ['- None recorded.']),
+      '',
+      '## Task Interface Adjustments',
+      `- first_executable_step: ${lesson.task_interface_adjustments.first_executable_step ?? 'no change'}`,
+      ...(lesson.task_interface_adjustments.minimum_progress_evidence.length > 0
+        ? lesson.task_interface_adjustments.minimum_progress_evidence.map((item) => `- minimum_progress_evidence: ${item}`)
+        : ['- minimum_progress_evidence: no change']),
+      ...(lesson.task_interface_adjustments.context_additions.length > 0
+        ? lesson.task_interface_adjustments.context_additions.map((item) => `- context_addition: ${item}`)
+        : ['- context_addition: no change']),
+      ...(lesson.task_interface_adjustments.scope_adjustments.length > 0
+        ? lesson.task_interface_adjustments.scope_adjustments.map((item) => `- scope_adjustment: ${item}`)
+        : ['- scope_adjustment: no change']),
+      ...(lesson.task_interface_adjustments.acceptance_criteria_adjustments.length > 0
+        ? lesson.task_interface_adjustments.acceptance_criteria_adjustments.map((item) => `- acceptance_criteria_adjustment: ${item}`)
+        : ['- acceptance_criteria_adjustment: no change']),
+      ...(lesson.task_interface_adjustments.quality_gate_adjustments.length > 0
+        ? lesson.task_interface_adjustments.quality_gate_adjustments.map((item) => `- quality_gate_adjustment: ${item}`)
+        : ['- quality_gate_adjustment: no change']),
+      '',
+      '## Documentation Notes',
+      ...(lesson.notes_for_documentation.length > 0 ? lesson.notes_for_documentation.map((item) => `- ${item}`) : ['- None recorded.']),
+      '',
+    ].join('\n');
+  }
+
   private writeRunSummary(status: 'completed' | 'stopped' | 'failed', exitCode: number, error: string | null): void {
     const summary: RunSummary = {
       run_id: this.runId,
@@ -3013,13 +3200,14 @@ function buildImplementerPrompt(
   task: ParsedTaskDocument,
   correction: boolean,
   stateCorrection: StateCorrectionTask | null,
+  recoveryLessonLines: readonly string[] = [],
 ): string {
   const role = correction ? 'correction task' : 'task';
   return [
-    'Act as the CompassRose Implementer.',
-    '',
-    `Execute ${role} \`${task.taskId}\` for feature \`${task.featureId}\`.`,
-    '',
+      'Act as the CompassRose Implementer.',
+      '',
+      `Execute ${role} \`${task.taskId}\` for feature \`${task.featureId}\`.`,
+      '',
     'Read only:',
     '- `src/contracts/implementer/task-execution-prompt.md`',
     ...(stateCorrection ? ['- `src/contracts/task/state-correction-task.md`'] : []),
@@ -3032,6 +3220,7 @@ function buildImplementerPrompt(
     stateCorrection
       ? '- This task repairs repository state; keep the change documentation-only unless the task explicitly allows code edits.'
       : '- Use the declared development policy for the task.',
+    ...recoveryLessonLines,
     stateCorrection
       ? '- Preserve the restored task pointer and keep the correction narrowly focused on canonical state.'
       : '- Keep the change minimal and avoid unrelated refactors.',

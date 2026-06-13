@@ -40,6 +40,7 @@ Optional inputs:
 
 - Recent run summaries
 - Known blockers
+- Recent recovery lessons
 - User-provided planning hint
 
 ---

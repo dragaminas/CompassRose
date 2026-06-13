@@ -28,6 +28,7 @@ The planner should read:
 - the target feature's `architecture.md`
 - the target feature's `state.md`
 - the relevant project state summary
+- recent recovery lessons for the active feature, when present
 - relevant repository paths for the current gap
 
 ---
@@ -44,6 +45,7 @@ The planner must:
 - define minimum progress evidence that cannot be satisfied by reading alone
 - include enough context to avoid repository-wide exploration
 - derive the task from current repository reality
+- reuse recent recovery lessons to tighten the first executable step, minimum progress evidence, or acceptance criteria when the feature has already learned from a blocked or corrected run
 - treat `lifecycle_state` as the primary operational decision input
 
 The planner must not:

@@ -24,6 +24,8 @@ npm run proto -- run
 - `--no-commit`: do not create git commits after planning or approved review.
 - `--cwd <path>`: start from a different working directory inside the repo.
 
+When review returns `changes_required`, `proto:loop` now records a recovery lesson and continues into the generated correction task instead of forcing a manual restart.
+
 ## Typecheck
 
 ```bash
@@ -65,9 +67,14 @@ Prototype artifacts are written under `.git/proto-compassrose/`:
 - `latest-run.json`
 - `latest-refinement.md`
 - `latest-refinement.json`
+- `latest-recovery-lesson.md`
+- `latest-recovery-lesson.json`
+- `recovery-lessons/`
 - `task-interface-analysis/`
 - `blockers/`
 - `runs/`
 - `refinement/`
 
 If the script fails, start by checking `latest-refinement.md` and the matching run summary in `runs/`.
+
+For recovery-oriented failures, also inspect `latest-recovery-lesson.md` and the matching JSON artifact under `recovery-lessons/`.

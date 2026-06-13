@@ -2,8 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
-
+correction_pending
 
 ## Source Request
 
@@ -13,12 +12,9 @@ implementation_running
 
 - formalization: complete
 - active_task: F002-T05
-- active_correction_task: none
+- active_correction_task: F002-T05-C01
 - active_unblock_task: none
-- last_implementation_result: failed
-- last_quality_gate_result: unknown
-- last_review_result: not_run
-- last_unblock_result: not_run
+- last_review_result: changes_required
 
 ## Current Reality
 
@@ -79,4 +75,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Recover or finish `F002-T05` before allowing review or new planning.
+Execute correction task `F002-T05-C01` next.

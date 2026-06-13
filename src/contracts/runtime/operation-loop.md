@@ -331,6 +331,13 @@ If the reviewer reports `blocked`, the runtime must classify whether the blocker
 - blockers that require human intervention or are terminal must be persisted as explicit blocker state and stop the run
 - the blocker record must preserve enough evidence to decide whether the task interface should be tightened or the limitation should be documented
 
+If review returns `changes_required` and produces a correction task, the runtime must treat that result as a recoverable correction transition:
+
+- persist the correction as an explicit recovery lesson
+- keep the feature in `correction_pending`
+- continue into the recorded correction task when loop execution is allowed
+- carry the recovery lesson forward so later planning can tighten the task interface or document an implementer limitation
+
 ---
 
 ## State Update Rules
@@ -385,6 +392,7 @@ The runtime must not silently discard:
 - an active task
 - a correction task
 - partial implementation progress captured in the worktree or diff
+- a recorded recovery lesson
 
 Implementation recovery rules:
 
@@ -396,6 +404,12 @@ Implementation recovery rules:
 - a failed quality gate result
 - a recorded blocker
 - implementation diagnostics from an interrupted or empty attempt
+
+Correction recovery rules:
+
+- `correction_pending`: inspect the recorded correction task before selecting new work
+- if a review requested changes and a correction task was produced, continue into that correction task instead of forcing a manual restart
+- preserve the corresponding recovery lesson so future task planning can reuse the tighter interface or limitation note
 
 ---
 
