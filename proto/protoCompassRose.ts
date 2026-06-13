@@ -75,6 +75,13 @@ interface ImplementationAttempt {
   readonly error: string | null;
 }
 
+interface ImplementationAttemptHistory {
+  readonly task_id: string;
+  readonly retried_after_partial_changes: boolean;
+  readonly attempts: readonly ImplementationAttempt[];
+  readonly final_attempt: ImplementationAttempt;
+}
+
 interface StepDecision {
   readonly kind: StepKind;
   readonly feature_id: string | null;
@@ -356,24 +363,34 @@ class GitClient {
     }
   }
 
-  diffNameOnly(): string[] {
+  diffNameOnly(excludedPaths: readonly string[] = []): string[] {
+    const pathspecArgs = this.buildPathspecArgs(excludedPaths);
     return uniqueStrings([
-      ...parseGitPathList(this.execGit(['diff', '--name-only'])),
-      ...parseGitPathList(this.execGit(['diff', '--cached', '--name-only'])),
-      ...parseGitPathList(this.execGit(['ls-files', '--others', '--exclude-standard'])),
+      ...parseGitPathList(this.execGit(['diff', '--name-only', ...pathspecArgs])),
+      ...parseGitPathList(this.execGit(['diff', '--cached', '--name-only', ...pathspecArgs])),
+      ...parseGitPathList(this.execGit(['ls-files', '--others', '--exclude-standard', ...pathspecArgs])),
     ]);
   }
 
-  diffPatch(): string {
+  diffPatch(excludedPaths: readonly string[] = []): string {
+    const pathspecArgs = this.buildPathspecArgs(excludedPaths);
     const patches = [
-      this.execGit(['diff', '--patch', '--no-ext-diff']).trim(),
-      this.execGit(['diff', '--cached', '--patch', '--no-ext-diff']).trim(),
-      ...parseGitPathList(this.execGit(['ls-files', '--others', '--exclude-standard'])).map((path) =>
+      this.execGit(['diff', '--patch', '--no-ext-diff', ...pathspecArgs]).trim(),
+      this.execGit(['diff', '--cached', '--patch', '--no-ext-diff', ...pathspecArgs]).trim(),
+      ...parseGitPathList(this.execGit(['ls-files', '--others', '--exclude-standard', ...pathspecArgs])).map((path) =>
         this.execGitAllowStatus(['diff', '--no-index', '--', '/dev/null', path], [0, 1]).trim(),
       ),
     ].filter((patch) => patch.length > 0);
 
     return patches.join('\n');
+  }
+
+  private buildPathspecArgs(excludedPaths: readonly string[]): string[] {
+    if (excludedPaths.length === 0) {
+      return [];
+    }
+
+    return ['.', ...excludedPaths.map((path) => `:(exclude)${path}`)];
   }
 
   commit(paths: readonly string[], message: string): void {
@@ -1153,21 +1170,65 @@ class PrototypeCompassRose {
 
   private executeImplementation(task: ParsedTaskDocument, correction: boolean, stateCorrection: StateCorrectionTask | null): void {
     const prompt = buildImplementerPrompt(task, correction, stateCorrection);
-    const commandResult = this.opencode.run(prompt, correction ? `correction:${task.taskId}` : `implement:${task.taskId}`);
-    const attempt = this.captureImplementationAttempt(task, commandResult);
-    this.artifacts.writeJson(join('implementations', `${task.taskId}.json`), attempt);
-    this.artifacts.writeText(join('raw-output', `${task.taskId}.log`), ensureTrailingNewline(attempt.raw_output || 'No output.\n'));
-
     const feature = this.loadFeature(task.featureId);
+    const implementationStatePaths = [
+      relativePath(this.repositoryRoot, feature.statePath),
+      relativePath(this.repositoryRoot, this.projectStatePath),
+    ];
+    writeText(feature.statePath, this.updateFeatureStateDuringImplementation(feature.statePath, task.taskId));
+    writeText(this.projectStatePath, this.updateProjectStateDuringImplementation(task.featureId, task.taskId));
 
-    if (attempt.git_diff.trim().length > 0) {
-      this.artifacts.writeText(join('diffs', `${task.taskId}.patch`), attempt.git_diff);
+    const attempts: ImplementationAttempt[] = [];
+    let retriedAfterPartialChanges = false;
+    let finalAttempt: ImplementationAttempt | null = null;
+    const baseLabel = correction ? `correction:${task.taskId}` : `implement:${task.taskId}`;
+
+    for (let attemptIndex = 1; attemptIndex <= 2; attemptIndex += 1) {
+      if (attemptIndex === 2) {
+        console.log(`Implementation for ${task.taskId} left partial repository changes; retrying once from the current worktree.`);
+      }
+
+      const commandResult = this.opencode.run(prompt, `${baseLabel}:attempt-${attemptIndex}`);
+      const attempt = this.captureImplementationAttempt(task, commandResult, implementationStatePaths);
+      attempts.push(attempt);
+      this.persistImplementationAttemptArtifacts(task.taskId, attemptIndex, attempt);
+
+      if (attempt.status === 'success') {
+        finalAttempt = attempt;
+        break;
+      }
+
+      const hasPartialRepositoryChanges = attempt.git_diff.trim().length > 0;
+      if (attemptIndex === 1 && hasPartialRepositoryChanges) {
+        retriedAfterPartialChanges = true;
+        continue;
+      }
+
+      finalAttempt = attempt;
+      break;
     }
 
-    if (attempt.status !== 'success') {
+    if (!finalAttempt) {
+      throw new Error(`Implementation for ${task.taskId} did not produce a final attempt.`);
+    }
+
+    this.artifacts.writeJson(join('implementations', `${task.taskId}.json`), finalAttempt);
+    this.artifacts.writeJson(join('implementation-attempts', `${task.taskId}.json`), {
+      task_id: task.taskId,
+      retried_after_partial_changes: retriedAfterPartialChanges,
+      attempts,
+      final_attempt: finalAttempt,
+    } satisfies ImplementationAttemptHistory);
+    this.artifacts.writeText(join('raw-output', `${task.taskId}.log`), ensureTrailingNewline(finalAttempt.raw_output || 'No output.\n'));
+
+    if (finalAttempt.git_diff.trim().length > 0) {
+      this.artifacts.writeText(join('diffs', `${task.taskId}.patch`), finalAttempt.git_diff);
+    }
+
+    if (finalAttempt.status !== 'success') {
       writeText(feature.statePath, this.updateFeatureStateAfterImplementationFailure(feature.statePath, task.taskId));
       writeText(this.projectStatePath, this.updateProjectStateAfterImplementationFailure(task.featureId, task.taskId));
-      throw new Error(attempt.error ?? `Implementation for ${task.taskId} failed.`);
+      throw new Error(finalAttempt.error ?? `Implementation for ${task.taskId} failed.`);
     }
 
     const qualityResults = this.runQualityGates(task);
@@ -1189,9 +1250,26 @@ class PrototypeCompassRose {
     }
   }
 
-  private captureImplementationAttempt(task: ParsedTaskDocument, commandResult: CommandExecution): ImplementationAttempt {
-    const changedFiles = this.git.diffNameOnly();
-    const diff = this.git.diffPatch();
+  private persistImplementationAttemptArtifacts(
+    taskId: string,
+    attemptIndex: number,
+    attempt: ImplementationAttempt,
+  ): void {
+    this.artifacts.writeJson(join('implementation-attempts', `${taskId}.attempt-${attemptIndex}.json`), attempt);
+    this.artifacts.writeText(join('raw-output', `${taskId}.attempt-${attemptIndex}.log`), ensureTrailingNewline(attempt.raw_output || 'No output.\n'));
+
+    if (attempt.git_diff.trim().length > 0) {
+      this.artifacts.writeText(join('diffs', `${taskId}.attempt-${attemptIndex}.patch`), attempt.git_diff);
+    }
+  }
+
+  private captureImplementationAttempt(
+    task: ParsedTaskDocument,
+    commandResult: CommandExecution,
+    excludedPaths: readonly string[] = [],
+  ): ImplementationAttempt {
+    const changedFiles = this.git.diffNameOnly(excludedPaths);
+    const diff = this.git.diffPatch(excludedPaths);
     const rawOutput = joinOutput(commandResult.stdout, commandResult.stderr);
     const diagnostics = buildImplementationDiagnostics(task, commandResult, changedFiles, diff, rawOutput);
     const hasDiff = diff.trim().length > 0;
@@ -1218,10 +1296,17 @@ class PrototypeCompassRose {
       return stored;
     }
 
-    const diff = this.git.diffPatch();
+    const feature = this.loadFeature(task.featureId);
+    const diff = this.git.diffPatch([
+      relativePath(this.repositoryRoot, feature.statePath),
+      relativePath(this.repositoryRoot, this.projectStatePath),
+    ]);
     return {
       status: diff.trim().length > 0 ? 'success' : 'failed',
-      changed_files: this.git.diffNameOnly(),
+      changed_files: this.git.diffNameOnly([
+        relativePath(this.repositoryRoot, feature.statePath),
+        relativePath(this.repositoryRoot, this.projectStatePath),
+      ]),
       git_diff: diff,
       raw_output: 'No stored implementer output.',
       implementation_notes: null,
@@ -1928,6 +2013,27 @@ class PrototypeCompassRose {
     return markdown;
   }
 
+  private updateFeatureStateDuringImplementation(featureStatePath: string, taskId: string): string {
+    let markdown = readFileSync(featureStatePath, 'utf8');
+    markdown = replaceSection(markdown, 'Lifecycle State', 'implementation_running');
+    markdown = replaceOperationalStatus(markdown, {
+      active_task: taskId,
+      last_implementation_result: 'not_run',
+      last_quality_gate_result: 'unknown',
+      last_review_result: 'not_run',
+      active_correction_task: 'none',
+      active_unblock_task: 'none',
+    });
+    markdown = replaceSection(markdown, 'Blocked From', [
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+    ].join('\n'));
+    markdown = replaceSection(markdown, 'Next Planning Hint', `Recover or finish implementation of \`${taskId}\` before allowing review or new planning.`);
+    return markdown;
+  }
+
   private updateFeatureStateAfterImplementationFailure(featureStatePath: string, taskId: string): string {
     let markdown = readFileSync(featureStatePath, 'utf8');
     markdown = replaceSection(markdown, 'Lifecycle State', 'implementation_failed');
@@ -1950,6 +2056,17 @@ class PrototypeCompassRose {
       'Next Planning Hint',
       `Recover or rerun \`${taskId}\` before allowing further planning or review.`,
     );
+    return markdown;
+  }
+
+  private updateProjectStateDuringImplementation(featureId: string, taskId: string): string {
+    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
+    markdown = replaceSection(markdown, 'Pending', bulletList([
+      `Recover or finish implementation for \`${taskId}\`.`,
+      'Continue updating this file with approved repository facts as feature work lands.',
+    ]));
+    markdown = replaceSection(markdown, 'Next Planning Hint', `The active feature is \`${featureId}\`, and implementation of \`${taskId}\` is in progress.`);
     return markdown;
   }
 

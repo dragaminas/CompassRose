@@ -55,6 +55,16 @@ describe('proto blocker flows', () => {
     expect(result.stderr).not.toContain('FAIL:');
   });
 
+  test('retries implementation once when opencode leaves partial repository changes', () => {
+    const result = runProtoScenario('implementation-retry');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('PASS: implementation retry history was recorded');
+    expect(result.stdout).toContain('PASS: implementation retry recorded a failed first attempt and a successful retry');
+    expect(result.stdout).toContain('PASS: run completed successfully');
+    expect(result.stderr).not.toContain('FAIL:');
+  });
+
   test('creates a state correction task even when active_task is missing from malformed state', () => {
     const result = runProtoScenario('state-correction-missing-active-task');
 

@@ -45,6 +45,7 @@ function main(): number {
   const codexLog = join(tempRoot, 'codex.log');
   const opencodeLog = join(tempRoot, 'opencode.log');
   const countFile = join(tempRoot, 'codex-count.txt');
+  const opencodeCountFile = join(tempRoot, 'opencode-count.txt');
   const binPath = join(repoRoot, 'node_modules', '.bin');
 
   seedTaskArtifacts(cloneRoot);
@@ -72,6 +73,7 @@ function main(): number {
         PROTO_E2E_SCENARIO: scenario,
         PROTO_E2E_CODEX_LOG: codexLog,
         PROTO_E2E_OPENCODE_LOG: opencodeLog,
+        PROTO_E2E_OPENCODE_COUNT: opencodeCountFile,
         PROTO_E2E_CODEX_COUNT: countFile,
       },
       encoding: 'utf8',
@@ -108,6 +110,13 @@ function main(): number {
   const correctionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-C1.json');
   const taskInterfaceAnalysisPath = join(cloneRoot, '.git', 'proto-compassrose', 'task-interface-analysis', 'F002-T04.json');
   const stateCorrectionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T05-C1.json');
+  const implementationAttemptHistoryPath = join(
+    cloneRoot,
+    '.git',
+    'proto-compassrose',
+    'implementation-attempts',
+    'F002-T04.json',
+  );
   const stateCorrectionDocPath = join(
     cloneRoot,
     'docs',
@@ -128,6 +137,7 @@ function main(): number {
     unblockTaskPath,
     correctionTaskPath,
     taskInterfaceAnalysisPath,
+    implementationAttemptHistoryPath,
     stateCorrectionTaskPath,
     stateCorrectionDocPath,
     malformedFeatureStatePath,
@@ -158,6 +168,7 @@ function buildScenarioChecks(input: {
   unblockTaskPath: string;
   correctionTaskPath: string;
   taskInterfaceAnalysisPath: string;
+  implementationAttemptHistoryPath: string;
   stateCorrectionTaskPath: string;
   stateCorrectionDocPath: string;
   malformedFeatureStatePath: string;
@@ -172,6 +183,7 @@ function buildScenarioChecks(input: {
     unblockTaskPath,
     correctionTaskPath,
     taskInterfaceAnalysisPath,
+    implementationAttemptHistoryPath,
     stateCorrectionTaskPath,
     stateCorrectionDocPath,
     malformedFeatureStatePath,
@@ -218,6 +230,25 @@ function buildScenarioChecks(input: {
       },
       { name: 'task-interface analysis recorded at least one limitation or adjustment', ok: limitationCount > 0 || adjustmentCount > 0 },
       { name: 'correction task was created', ok: existsSync(correctionTaskPath) },
+      { name: 'opencode touched the repo', ok: markerExists },
+    ];
+  }
+
+  if (scenario === 'implementation-retry') {
+    const history = readJsonIfExists(implementationAttemptHistoryPath);
+    const attempts = Array.isArray(history?.attempts) ? history.attempts : [];
+    const firstAttemptStatus = typeof attempts[0]?.status === 'string' ? attempts[0].status : null;
+    const secondAttemptStatus = typeof attempts[1]?.status === 'string' ? attempts[1].status : null;
+
+    return [
+      { name: 'codex was called enough times to select, review, and stop', ok: codexCalls >= 3 },
+      { name: 'opencode was called twice for the retry path', ok: opencodeCalls === 2 },
+      { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
+      { name: 'implementation retry history was recorded', ok: history !== null && attempts.length === 2 },
+      {
+        name: 'implementation retry recorded a failed first attempt and a successful retry',
+        ok: firstAttemptStatus === 'failed' && secondAttemptStatus === 'success' && history?.retried_after_partial_changes === true,
+      },
       { name: 'opencode touched the repo', ok: markerExists },
     ];
   }
@@ -286,6 +317,8 @@ function markerFileNameForScenario(scenario: string): string {
       return 'interface-gap.txt';
     case 'state-correction-missing-active-task':
       return 'state-correction-missing-active-task.txt';
+    case 'implementation-retry':
+      return 'implementation-retry.txt';
     default:
       return 'e2e-control.txt';
   }
@@ -1033,14 +1066,23 @@ const path = require('node:path');
 
 const repoRoot = process.cwd();
 const logFile = process.env.PROTO_E2E_OPENCODE_LOG;
+const countFile = process.env.PROTO_E2E_OPENCODE_COUNT;
 const scenario = process.env.PROTO_E2E_SCENARIO || 'standard';
 const markerPath = path.join(repoRoot, 'proto', markerFileNameForScenario(scenario));
 const prompt = process.argv.slice(2).join(' ');
+const count = readCount(countFile) + 1;
 
 fs.mkdirSync(path.dirname(markerPath), { recursive: true });
 fs.writeFileSync(markerPath, 'opencode e2e touched this file\\n', 'utf8');
-fs.appendFileSync(logFile, JSON.stringify({ cwd: repoRoot, prompt }) + '\\n', 'utf8');
 
+fs.appendFileSync(logFile, JSON.stringify({ cwd: repoRoot, prompt, count }) + '\\n', 'utf8');
+
+if (scenario === 'implementation-retry' && count === 1) {
+  writeCount(countFile, count);
+  process.exit(1);
+}
+
+writeCount(countFile, count);
 process.exit(0);
 
 function markerFileNameForScenario(scenario) {
@@ -1055,9 +1097,27 @@ function markerFileNameForScenario(scenario) {
       return 'interface-gap.txt';
     case 'state-correction-missing-active-task':
       return 'state-correction-missing-active-task.txt';
+    case 'implementation-retry':
+      return 'implementation-retry.txt';
     default:
       return 'e2e-control.txt';
   }
+}
+
+function readCount(filePath) {
+  try {
+    return Number.parseInt(fs.readFileSync(filePath, 'utf8'), 10) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeCount(filePath, value) {
+  if (!filePath) {
+    return;
+  }
+
+  fs.writeFileSync(filePath, String(value), 'utf8');
 }
 `;
 
