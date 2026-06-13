@@ -835,6 +835,38 @@ function validateGitEnum<T extends string>(
   return value as T;
 }
 
+export function validateRuntimePreconditions(configuration: ProjectConfiguration): ConfigurationIssue[] {
+  const issues: ConfigurationIssue[] = [];
+
+  const executionMode = configuration.execution.mode;
+  if (!VALID_EXECUTION_MODES.has(executionMode)) {
+    issues.push({
+      field: 'execution.mode',
+      message: `Unsupported execution mode: ${executionMode}. Must be one of: interactive, semi_automatic, automatic.`,
+    });
+  }
+
+  const requiredRoles = ['planner', 'implementer', 'reviewer'] as const;
+  for (const role of requiredRoles) {
+    const entry = configuration.roles[role];
+    if (!entry.enabled) {
+      issues.push({
+        field: `roles.${role}.enabled`,
+        message: `Required role ${role} is disabled. The MVP runtime requires the planner role to be enabled.`,
+      });
+    }
+  }
+
+  if (configuration.git_policy.require_clean_worktree_before_task && configuration.git_policy.allow_dirty_worktree) {
+    issues.push({
+      field: 'git_policy',
+      message: 'Conflicting git policy: require_clean_worktree_before_task is true but allow_dirty_worktree is also true.',
+    });
+  }
+
+  return issues;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
+import { resolve, join } from 'node:path';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
+import { readProjectConfiguration, validateRuntimePreconditions } from '../config/configReader.js';
 
 export interface CliEnvironment {
   readonly cwd?: string;
@@ -23,6 +24,33 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     }
 
     return report.exitCode;
+  }
+
+  if (argv.length === 0) {
+    const configPath = join(cwd, 'docs/compassrose/CONFIG.md');
+    const configResult = readProjectConfiguration(configPath);
+
+    if (!configResult.ok) {
+      for (const issue of configResult.error) {
+        if (issue.line) {
+          stderr(`${issue.field} (line ${issue.line}): ${issue.message}`);
+        } else {
+          stderr(`${issue.field}: ${issue.message}`);
+        }
+      }
+      return 1;
+    }
+
+    const preflightIssues = validateRuntimePreconditions(configResult.value);
+    if (preflightIssues.length > 0) {
+      for (const issue of preflightIssues) {
+        stderr(`runtime preflight: ${issue.field}: ${issue.message}`);
+      }
+      return 1;
+    }
+
+    stdout('CompassRose preflight passed. No tasks to run.');
+    return 0;
   }
 
   stderr('Usage: compassrose doctor');
