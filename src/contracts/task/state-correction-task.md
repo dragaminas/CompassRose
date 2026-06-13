@@ -85,6 +85,7 @@ A state correction task must:
 - Reference the malformed state it is repairing.
 - Restore the documented lifecycle state and operational status instead of inventing a new one.
 - Preserve the current active task pointer when the active task is still the intended work target.
+- If the feature state lost `active_task`, derive the intended repair anchor from project-state hints or another documented repository source before generating the task, but still restore a canonical active task pointer.
 - Stay within state-document scope.
 - Include a concrete `first_executable_step`.
 - Include `minimum_progress_evidence` that cannot be satisfied by reading alone.
