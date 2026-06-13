@@ -24,6 +24,8 @@ type DevelopmentPolicyMode =
   | 'documentation_first'
   | 'strict_tdd';
 
+type ImplementerTool = 'codex' | 'opencode';
+
 type ReviewerStatus = 'approved' | 'changes_required' | 'blocked' | 'failed';
 type DiagnosticClassification =
   | 'context_overflow'
@@ -52,6 +54,10 @@ interface CommandExecution {
   readonly signal: string | null;
   readonly timedOut: boolean;
   readonly commandInvoked: string;
+}
+
+interface TaskImplementer {
+  run(prompt: string, label?: string): CommandExecution;
 }
 
 interface ImplementationDiagnostics {
@@ -334,6 +340,7 @@ interface ProtoOptions {
   readonly loop: boolean;
   readonly commit: boolean;
   readonly cwd: string;
+  readonly implementer: ImplementerTool;
 }
 
 interface StepExecutionResult {
@@ -476,7 +483,7 @@ class ArtifactStore {
   }
 }
 
-class CodexCli {
+class CodexCli implements TaskImplementer {
   constructor(
     private readonly repositoryRoot: string,
     private readonly command: string,
@@ -538,6 +545,50 @@ class CodexCli {
 
     return JSON.parse(readFileSync(outputPath, 'utf8')) as T;
   }
+
+  run(prompt: string, label = 'implementer'): CommandExecution {
+    const args = [
+      'exec',
+      '--ephemeral',
+      '--cd',
+      this.repositoryRoot,
+      '--dangerously-bypass-approvals-and-sandbox',
+    ];
+
+    const model = process.env.PROTO_COMPASSROSE_CODEX_MODEL;
+    if (model) {
+      args.push('-m', model);
+    }
+
+    args.push('-');
+
+    logAgentStart('codex', label, this.command);
+    const startedAt = Date.now();
+    const result = spawnSync(this.command, args, {
+      cwd: this.repositoryRoot,
+      input: prompt,
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024,
+    });
+    const elapsedMs = Date.now() - startedAt;
+
+    const stdout = result.stdout ?? '';
+    const errorText = result.error ? `\n${result.error.message}` : '';
+    const stderr = `${result.stderr ?? ''}${errorText}`;
+    logAgentStream('codex', label, 'stdout', stdout);
+    logAgentStream('codex', label, 'stderr', stderr);
+    logAgentEnd('codex', label, elapsedMs, result.status, result.error?.message ?? null);
+
+    return {
+      ok: result.status === 0 && !result.error,
+      stdout,
+      stderr,
+      exitCode: result.status,
+      signal: result.signal ?? null,
+      timedOut: false,
+      commandInvoked: [this.command, ...args].join(' '),
+    };
+  }
 }
 
 class OpenCodeCli {
@@ -589,6 +640,7 @@ class PrototypeCompassRose {
   private readonly artifacts: ArtifactStore;
   private readonly codex: CodexCli;
   private readonly opencode: OpenCodeCli;
+  private readonly implementer: TaskImplementer;
   private readonly skipCleanWorktreeCheck: boolean;
   private readonly configurationPath: string;
   private readonly projectStatePath: string;
@@ -608,6 +660,7 @@ class PrototypeCompassRose {
     this.artifacts = new ArtifactStore(repositoryRoot);
     this.codex = new CodexCli(repositoryRoot, process.env.PROTO_COMPASSROSE_CODEX_COMMAND ?? 'codex');
     this.opencode = new OpenCodeCli(repositoryRoot, process.env.PROTO_COMPASSROSE_OPENCODE_COMMAND ?? 'opencode');
+    this.implementer = options.implementer === 'codex' ? this.codex : this.opencode;
     this.skipCleanWorktreeCheck = process.env.PROTO_COMPASSROSE_SKIP_CLEAN_CHECK === '1';
 
     const configurationPath = join(repositoryRoot, 'docs', 'compassrose', 'CONFIG.md');
@@ -1230,7 +1283,7 @@ class PrototypeCompassRose {
         console.log(`Implementation for ${task.taskId} left partial repository changes; retrying once from the current worktree.`);
       }
 
-      const commandResult = this.opencode.run(prompt, `${baseLabel}:attempt-${attemptIndex}`);
+      const commandResult = this.implementer.run(prompt, `${baseLabel}:attempt-${attemptIndex}`);
       const attempt = this.captureImplementationAttempt(task, commandResult, implementationStatePaths);
       attempts.push(attempt);
       this.persistImplementationAttemptArtifacts(task.taskId, attemptIndex, attempt);
@@ -2819,6 +2872,7 @@ function parseArguments(argv: readonly string[]): ProtoOptions {
   let loop = false;
   let commit = true;
   let cwd = process.cwd();
+  let implementer: ImplementerTool = 'opencode';
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -2842,6 +2896,17 @@ function parseArguments(argv: readonly string[]): ProtoOptions {
       continue;
     }
 
+    if (argument === '--implementer') {
+      const value = argv[index + 1];
+      if (value !== 'codex' && value !== 'opencode') {
+        throw new Error('--implementer requires a value of codex or opencode.');
+      }
+
+      implementer = value;
+      index += 1;
+      continue;
+    }
+
     if (argument === 'run' || argument === 'run-once') {
       continue;
     }
@@ -2849,7 +2914,7 @@ function parseArguments(argv: readonly string[]): ProtoOptions {
     throw new Error(`Unknown argument: ${argument}`);
   }
 
-  return { loop, commit, cwd };
+  return { loop, commit, cwd, implementer };
 }
 
 function renderTaskMarkdown(task: PlannedTask): string {

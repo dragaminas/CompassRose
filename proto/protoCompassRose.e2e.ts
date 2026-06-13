@@ -10,6 +10,7 @@ function main(): number {
   const cloneRoot = join(tempRoot, 'repo');
   const tsxBinary = join(repoRoot, 'node_modules', '.bin', 'tsx');
   const scenario = process.env.PROTO_E2E_SCENARIO ?? 'standard';
+  const implementerTool = process.env.PROTO_E2E_IMPLEMENTER === 'codex' ? 'codex' : 'opencode';
   const commitEnabled = process.env.PROTO_E2E_COMMIT === '1';
 
   if (!existsSync(tsxBinary)) {
@@ -61,7 +62,7 @@ function main(): number {
 
   const runResult = spawnSync(
     tsxBinary,
-    ['proto/protoCompassRose.ts', 'run', '--loop', ...(commitEnabled ? [] : ['--no-commit'])],
+    ['proto/protoCompassRose.ts', 'run', '--loop', '--implementer', implementerTool, ...(commitEnabled ? [] : ['--no-commit'])],
     {
       cwd: cloneRoot,
       env: {
@@ -76,6 +77,7 @@ function main(): number {
         PROTO_E2E_OPENCODE_LOG: opencodeLog,
         PROTO_E2E_OPENCODE_COUNT: opencodeCountFile,
         PROTO_E2E_CODEX_COUNT: countFile,
+        PROTO_E2E_IMPLEMENTER: implementerTool,
       },
       encoding: 'utf8',
       maxBuffer: 20 * 1024 * 1024,
@@ -165,6 +167,7 @@ function main(): number {
     featureTasksDirectory,
     protoTasksDirectory,
     malformedFeatureStatePath,
+    implementerTool,
     worktreeClean,
   });
 
@@ -201,6 +204,7 @@ function buildScenarioChecks(input: {
   featureTasksDirectory: string;
   protoTasksDirectory: string;
   malformedFeatureStatePath: string;
+  implementerTool: 'codex' | 'opencode';
   worktreeClean: boolean;
 }): Array<{ name: string; ok: boolean }> {
   const {
@@ -221,6 +225,7 @@ function buildScenarioChecks(input: {
     featureTasksDirectory,
     protoTasksDirectory,
     malformedFeatureStatePath,
+    implementerTool,
     worktreeClean,
   } = input;
 
@@ -327,6 +332,15 @@ function buildScenarioChecks(input: {
       { name: 'opencode was called at least once', ok: opencodeCalls >= 1 },
       { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
       { name: 'opencode touched the repo', ok: markerExists },
+    ];
+  }
+
+  if (implementerTool === 'codex') {
+    return [
+      { name: 'codex was called enough times for selector, implementer, review, and stop', ok: codexCalls >= 4 },
+      { name: 'opencode was not called', ok: opencodeCalls === 0 },
+      { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
+      { name: 'codex touched the repo', ok: markerExists },
     ];
   }
 
@@ -484,11 +498,22 @@ const args = process.argv.slice(2);
 const countFile = process.env.PROTO_E2E_CODEX_COUNT;
 const logFile = process.env.PROTO_E2E_CODEX_LOG;
 const scenario = process.env.PROTO_E2E_SCENARIO || 'standard';
+const prompt = fs.readFileSync(0, 'utf8');
+const kind = detectPromptKind(prompt);
 const outputPath = readArgValue(args, '-o');
+const markerPath = path.join(process.cwd(), 'proto', markerFileNameForScenario(scenario));
+
+if (kind === 'implementer') {
+  appendLog(logFile, \`implementer: \${args.join(' ')}\`);
+  fs.mkdirSync(path.dirname(markerPath), { recursive: true });
+  fs.writeFileSync(markerPath, 'codex e2e touched this file\\n', 'utf8');
+  process.exit(0);
+}
+
 const count = readCount(countFile) + 1;
 
 writeCount(countFile, count);
-appendLog(logFile, \`call \${count}: \${args.join(' ')}\`);
+appendLog(logFile, \`call \${count} [\${kind}]: \${args.join(' ')}\`);
 
 let payload;
 if (scenario === 'unblock') {
@@ -1152,6 +1177,41 @@ function writeCount(filePath, value) {
 
 function appendLog(filePath, line) {
   fs.appendFileSync(filePath, \`\${JSON.stringify({ line })}\\n\`, 'utf8');
+}
+
+function markerFileNameForScenario(scenario) {
+  switch (scenario) {
+    case 'unblock':
+      return 'unblock-e2e.txt';
+    case 'recoverable-review-blocked':
+      return 'recoverable-review-blocked.txt';
+    case 'terminal-review-blocked':
+      return 'terminal-review-blocked.txt';
+    case 'interface-gap':
+      return 'interface-gap.txt';
+    case 'state-correction-missing-active-task':
+      return 'state-correction-missing-active-task.txt';
+    case 'implementation-retry':
+      return 'implementation-retry.txt';
+    default:
+      return 'e2e-control.txt';
+  }
+}
+
+function detectPromptKind(prompt) {
+  if (prompt.includes('Act as the CompassRose deterministic step selector.')) {
+    return 'selector';
+  }
+
+  if (prompt.includes('Act as the CompassRose Reviewer.')) {
+    return 'reviewer';
+  }
+
+  if (prompt.includes('Act as the CompassRose Implementer.')) {
+    return 'implementer';
+  }
+
+  return 'unknown';
 }
 `;
 

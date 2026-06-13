@@ -13,6 +13,7 @@ Useful variants:
 ```bash
 npm run proto:run
 npm run proto:loop
+npm run proto:loop:codex
 npm run proto -- run
 ```
 
@@ -23,6 +24,7 @@ npm run proto -- run
 - `--loop`: keep running additional passes until the prototype stops.
 - `--no-commit`: do not create git commits after planning, recovery checkpoints, or approved review.
 - `--cwd <path>`: start from a different working directory inside the repo.
+- `--implementer <codex|opencode>`: choose which CLI implements tasks. `opencode` remains the default.
 
 When review returns `changes_required`, `proto:loop` now records a recovery lesson and continues into the generated correction task instead of forcing a manual restart.
 
@@ -41,6 +43,12 @@ npm run proto:e2e
 ```
 
 This runs the prototype against fake `codex` and `opencode` binaries in a temporary clone so you can verify the orchestration path without touching the real tools.
+
+To verify the `codex` implementer path specifically, run:
+
+```bash
+npm run proto:e2e:codex
+```
 
 For a smaller control-flow check that only verifies the `codex -> opencode -> codex` sequence, use:
 
