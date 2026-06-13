@@ -4,12 +4,18 @@
 
 In progress
 
+## Active Feature
+
+`002-configuration-model`
+
 ## Current Reality
 
 - `docs/compassrose/PROJECT_STATE.md` exists as the repository-local project state document, and `docs/compassrose/CONFIG.md` already points at this path.
 - Feature `001-project-identity-and-foundation` is now complete: the package metadata, TypeScript configuration, and top-level docs all align with the accepted CLI-first foundation and required repository roots.
 - `package.json` points both `main` and `bin.compassrose` at `./dist/cli/main.js`, `tsconfig.json` preserves the Node CLI source/output layout without JSX assumptions, and the top-level docs expose `docs/`, `src/`, `src/contracts/`, and `docs/compassrose/PROJECT_STATE.md` in one pass.
-- Feature `002-configuration-model` has completed `F002-T03`, and `compassrose doctor` now validates `docs/compassrose/PROJECT_STATE.md` as a distinct preflight step before the broader runtime loop.
+- The active feature pointer currently targets `002-configuration-model`; the detailed task and lifecycle state for that feature lives in `docs/features/002-configuration-model/state.md`.
+- Feature `002-configuration-model` now has a planned next task, `F002-T04`, ready to extend the typed config loader with the first runtime-precondition policy fields.
+- `compassrose doctor` now validates `docs/compassrose/PROJECT_STATE.md` as a distinct preflight step before the broader runtime loop.
 
 ## Implemented
 
@@ -22,7 +28,7 @@ In progress
 
 ## Pending
 
-- Plan the next implementation task for feature `002-configuration-model`.
+- Execute `F002-T04` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -35,8 +41,8 @@ Task `F002-T03` was approved, accepting the distinct project-state preflight in 
 
 ## Known Gaps
 
-- Feature `002-configuration-model` now has a working runtime consumer for the project-local configuration contract plus a dedicated project-state preflight, and its next step is the next task-planning pass.
+- Feature `002-configuration-model` now has a working runtime consumer for the project-local configuration contract plus a dedicated project-state preflight, but the broader runtime loop still needs validated `execution`, `roles`, and `git_policy` data from the config loader.
 
 ## Next Planning Hint
 
-Select feature `002-configuration-model` next. Its next valid action is task planning for the follow-up runtime integration work.
+The active feature is `002-configuration-model`, and its next valid action is to execute `F002-T04`.

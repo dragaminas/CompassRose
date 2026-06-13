@@ -263,6 +263,7 @@ The project state contains:
 - Architecture knowledge
 - Implemented capabilities
 - Pending capabilities
+- Current active feature
 - Roadmap progress
 
 ```text

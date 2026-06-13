@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+task_ready
 
 ## Source Request
 
@@ -11,7 +11,7 @@ formalized
 ## Operational Status
 
 - formalization: complete
-- active_task: none
+- active_task: F002-T04
 - active_correction_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
@@ -26,6 +26,8 @@ CompassRose can now load that project-local configuration, validate the MVP doct
 The accepted architecture documentation already supports repository-local state, hierarchical configuration precedence, non-invasive external tool integration, configurable review policy, and quality-gate configuration. The MVP contract for Doctor is now explicit: only the project-level scope in `docs/compassrose/CONFIG.md` is in scope, the minimum required sections and fields are fixed, and command semantics distinguish missing keys from intentionally empty values.
 
 This feature is now formalized under `docs/features/002-configuration-model/`, and the first implementation tasks have now been completed against the configuration target defined in `docs/compassrose/CONFIG.md`.
+
+Task `F002-T04` is now planned and ready to execute. It extends the typed configuration loader to validate and expose the first runtime-precondition policy fields needed by the broader orchestration loop.
 
 ## Implemented Deliverables
 
@@ -59,8 +61,8 @@ Added the distinct project-state preflight to `compassrose doctor` and validated
 ## Known Gaps
 
 - The project-local configuration flow still needs to be connected to the broader runtime orchestration loop.
-- The next implementation task should build on the validated configuration loader and doctor checks rather than redefining the schema.
+- The active task should build on the validated configuration loader and doctor checks rather than redefining the schema.
 
 ## Next Planning Hint
 
-Connect the validated project-local configuration flow to the broader runtime orchestration loop.
+Execute `F002-T04` when the current execution mode allows it.

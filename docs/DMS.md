@@ -727,6 +727,7 @@ Yes, after approved changes.
 - Known features
 - Implemented capabilities
 - Pending capabilities
+- Current active feature
 - Known architecture reality
 - Current limitations
 - Last approved change
