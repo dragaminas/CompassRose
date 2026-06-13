@@ -54,4 +54,14 @@ describe('proto blocker flows', () => {
     expect(result.stdout).toContain('PASS: correction task was created');
     expect(result.stderr).not.toContain('FAIL:');
   });
+
+  test('creates a state correction task even when active_task is missing from malformed state', () => {
+    const result = runProtoScenario('state-correction-missing-active-task');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('PASS: state correction task was recorded');
+    expect(result.stdout).toContain('PASS: state correction document was written');
+    expect(result.stdout).toContain('PASS: feature state now records correction pending');
+    expect(result.stderr).not.toContain('FAIL:');
+  });
 });

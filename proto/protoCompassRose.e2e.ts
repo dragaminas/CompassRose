@@ -51,6 +51,9 @@ function main(): number {
   if (scenario === 'unblock') {
     seedBlockedFeatureState(cloneRoot);
   }
+  if (scenario === 'state-correction-missing-active-task') {
+    seedMalformedFeatureState(cloneRoot);
+  }
   writeExecutableScript(codexMock, CODEX_MOCK_SCRIPT);
   writeExecutableScript(opencodeMock, OPENCODE_MOCK_SCRIPT);
 
@@ -104,6 +107,16 @@ function main(): number {
   const unblockTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-U1.json');
   const correctionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-C1.json');
   const taskInterfaceAnalysisPath = join(cloneRoot, '.git', 'proto-compassrose', 'task-interface-analysis', 'F002-T04.json');
+  const stateCorrectionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T05-C1.json');
+  const stateCorrectionDocPath = join(
+    cloneRoot,
+    'docs',
+    'features',
+    '002-configuration-model',
+    'tasks',
+    '005.1-repair-feature-state-for-f002-t05.md',
+  );
+  const malformedFeatureStatePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
 
   const checks = buildScenarioChecks({
     scenario,
@@ -115,6 +128,9 @@ function main(): number {
     unblockTaskPath,
     correctionTaskPath,
     taskInterfaceAnalysisPath,
+    stateCorrectionTaskPath,
+    stateCorrectionDocPath,
+    malformedFeatureStatePath,
   });
 
   for (const check of checks) {
@@ -142,6 +158,9 @@ function buildScenarioChecks(input: {
   unblockTaskPath: string;
   correctionTaskPath: string;
   taskInterfaceAnalysisPath: string;
+  stateCorrectionTaskPath: string;
+  stateCorrectionDocPath: string;
+  malformedFeatureStatePath: string;
 }): Array<{ name: string; ok: boolean }> {
   const {
     scenario,
@@ -153,6 +172,9 @@ function buildScenarioChecks(input: {
     unblockTaskPath,
     correctionTaskPath,
     taskInterfaceAnalysisPath,
+    stateCorrectionTaskPath,
+    stateCorrectionDocPath,
+    malformedFeatureStatePath,
   } = input;
 
   if (scenario === 'recoverable-review-blocked') {
@@ -200,6 +222,25 @@ function buildScenarioChecks(input: {
     ];
   }
 
+  if (scenario === 'state-correction-missing-active-task') {
+    const malformedFeatureState = existsSync(malformedFeatureStatePath) ? readFileSync(malformedFeatureStatePath, 'utf8') : '';
+
+    return [
+      { name: 'codex was called enough times to repair malformed state', ok: codexCalls >= 2 },
+      { name: 'opencode was not called', ok: opencodeCalls === 0 },
+      { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
+      { name: 'state correction task was recorded', ok: existsSync(stateCorrectionTaskPath) },
+      { name: 'state correction document was written', ok: existsSync(stateCorrectionDocPath) },
+      {
+        name: 'feature state now records correction pending',
+        ok:
+          malformedFeatureState.includes('## Lifecycle State\n\ncorrection_pending') &&
+          malformedFeatureState.includes('- active_task: F002-T05') &&
+          malformedFeatureState.includes('- active_correction_task: F002-T05-C1'),
+      },
+    ];
+  }
+
   if (scenario === 'unblock') {
     return [
       { name: 'codex was called at least five times', ok: codexCalls >= 5 },
@@ -243,6 +284,8 @@ function markerFileNameForScenario(scenario: string): string {
       return 'terminal-review-blocked.txt';
     case 'interface-gap':
       return 'interface-gap.txt';
+    case 'state-correction-missing-active-task':
+      return 'state-correction-missing-active-task.txt';
     default:
       return 'e2e-control.txt';
   }
@@ -344,6 +387,11 @@ function seedTaskArtifacts(cloneRoot: string): void {
 function seedBlockedFeatureState(cloneRoot: string): void {
   const statePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
   writeFileSync(statePath, BLOCKED_STATE_SEED, 'utf8');
+}
+
+function seedMalformedFeatureState(cloneRoot: string): void {
+  const statePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+  writeFileSync(statePath, MALFORMED_STATE_MISSING_ACTIVE_TASK_SEED, 'utf8');
 }
 
 const CODEX_MOCK_SCRIPT = `#!/usr/bin/env node
@@ -674,6 +722,24 @@ if (scenario === 'unblock') {
       reason: 'e2e mock: stop after unblock planning',
     };
   }
+} else if (scenario === 'state-correction-missing-active-task') {
+  if (count === 1) {
+    payload = {
+      kind: 'correct_state',
+      feature_id: '002-configuration-model',
+      task_id: null,
+      correction_task_id: null,
+      reason: 'e2e mock: feature state is malformed and missing active_task',
+    };
+  } else {
+    payload = {
+      kind: 'stop',
+      feature_id: null,
+      task_id: null,
+      correction_task_id: null,
+      reason: 'e2e mock: stop after state correction planning',
+    };
+  }
 } else if (scenario === 'terminal-review-blocked') {
   if (count === 1) {
     payload = {
@@ -987,6 +1053,8 @@ function markerFileNameForScenario(scenario) {
       return 'terminal-review-blocked.txt';
     case 'interface-gap':
       return 'interface-gap.txt';
+    case 'state-correction-missing-active-task':
+      return 'state-correction-missing-active-task.txt';
     default:
       return 'e2e-control.txt';
   }
@@ -1127,6 +1195,85 @@ Task \`F002-T05\` was approved before the blocker was introduced in the e2e scen
 ## Next Planning Hint
 
 Execute an unblock task to restore the feature to task readiness.
+`;
+
+const MALFORMED_STATE_MISSING_ACTIVE_TASK_SEED = `# State: Configuration Model
+
+## Lifecycle State
+
+task_ready
+
+## Source Request
+
+\`request.md\`
+
+## Operational Status
+
+- formalization: complete
+- active_correction_task: none
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: approved
+
+## Current Reality
+
+The repository already contains \`docs/compassrose/CONFIG.md\` as a project-local CompassRose configuration document with a YAML configuration block, allowed values, override records, isolation rules, and a stabilized MVP Doctor contract.
+
+Task \`F002-T05\` is now planned and ready to execute. Add configuration-backed runtime preflight to the default CLI entrypoint.
+
+CompassRose can now load that project-local configuration, validate the MVP doctor contract, and report the repository readiness checks through \`compassrose doctor\`, including a distinct preflight for the configured project-state document.
+
+The accepted architecture documentation already supports repository-local state, hierarchical configuration precedence, non-invasive external tool integration, configurable review policy, and quality-gate configuration. The MVP contract for Doctor is now explicit: only the project-level scope in \`docs/compassrose/CONFIG.md\` is in scope, the minimum required sections and fields are fixed, and command semantics distinguish missing keys from intentionally empty values.
+
+This feature is now formalized under \`docs/features/002-configuration-model/\`, and the first implementation tasks have now been completed against the configuration target defined in \`docs/compassrose/CONFIG.md\`.
+
+Task \`F002-T04\` has now been approved. The typed configuration loader validates and exposes \`execution\`, \`roles\`, and \`git_policy\` data needed for the first broader orchestration handoff without expanding into feature selection or task execution.
+
+## Implemented Deliverables
+
+- the source feature request exists at \`docs/features/002-configuration-model/request.md\`
+- the project-local configuration contract already exists at \`docs/compassrose/CONFIG.md\`
+- canonical feature documents now exist for feature \`002-configuration-model\`
+- the repository already documents the configuration hierarchy and non-invasive tool expectations in project-wide architecture docs
+- the runtime can now load \`docs/compassrose/CONFIG.md\`, validate the MVP doctor contract, and report readiness through \`compassrose doctor\`
+- \`compassrose doctor\` now validates \`docs/compassrose/PROJECT_STATE.md\` as a distinct preflight step
+- \`readProjectConfiguration()\` now validates and exposes typed \`execution\`, \`roles\`, and \`git_policy\` policy data from the canonical project config
+
+## Remaining Deliverables
+
+- connect configuration validation to the broader runtime flow
+- prove the documented configuration model works through approved implementation tasks and quality gates
+
+## Outline Progress
+
+- Formalize the configuration model in canonical feature documents: complete
+- Stabilize the project-local configuration contract and any gaps in \`docs/compassrose/CONFIG.md\`: complete
+- Implement configuration loading and validation for the documented MVP scope: complete
+- Connect configuration validation to the doctor/runtime flow and update state based on approved behavior: complete
+
+## Blocked By
+
+- None
+
+## Blocked From
+
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
+
+## Last Approved Change
+
+Task \`F002-T04\` was approved, extending the typed config loader and its tests to validate the first runtime-precondition policy fields from \`docs/compassrose/CONFIG.md\`.
+
+## Known Gaps
+
+- The project-local configuration flow still needs a runtime consumer that uses the validated \`execution\`, \`roles\`, and \`git_policy\` data during orchestration.
+- The next task should build on the validated loader and doctor checks rather than redefining the schema.
+
+## Next Planning Hint
+
+Execute \`F002-T05\` when the current execution mode allows it.
 `;
 
 const exitCode = main();

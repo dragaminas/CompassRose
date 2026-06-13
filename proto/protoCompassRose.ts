@@ -1286,23 +1286,55 @@ class PrototypeCompassRose {
     const lifecycleState = stripTicks(requireSection(markdown, 'Lifecycle State').trim());
     const operationalStatusSection = requireSection(markdown, 'Operational Status');
     const activeTask = stripTicks(parsePreferredStatusValue(operationalStatusSection, 'active_task') ?? 'none');
+    const restoredActiveTask = activeTask !== 'none'
+      ? activeTask
+      : this.resolveStateCorrectionActiveTask(feature, markdown);
 
     if (activeTask === 'none') {
-      throw new Error(`Cannot create a state correction task for ${featureId} because no active task is recorded.`);
+      console.error(
+        `State correction fallback for ${featureId}: active_task is missing, so the prototype will use ${restoredActiveTask} as the repair anchor.`,
+      );
     }
 
-    const stateCorrection = this.buildStateCorrectionTask(feature, activeTask, lifecycleState, reason);
+    const stateCorrection = this.buildStateCorrectionTask(feature, restoredActiveTask, lifecycleState, reason);
     const path = this.writeStateCorrectionTask(stateCorrection);
     this.artifacts.writeJson(join('tasks', `${stateCorrection.task_id}.json`), {
       task: stateCorrectionTaskToTask(stateCorrection),
       state_correction: stateCorrection,
     });
 
-    const updatedFeatureState = this.updateFeatureStateForStateCorrection(feature.statePath, activeTask, stateCorrection.task_id);
+    const updatedFeatureState = this.updateFeatureStateForStateCorrection(
+      feature.statePath,
+      restoredActiveTask,
+      stateCorrection.task_id,
+    );
     const updatedProjectState = this.updateProjectStateForCorrection(featureId, stateCorrection.task_id);
     writeText(feature.statePath, updatedFeatureState);
     writeText(this.projectStatePath, updatedProjectState);
     console.error(`State correction task ${stateCorrection.task_id} created at ${relativePath(this.repositoryRoot, path)}.`);
+  }
+
+  private resolveStateCorrectionActiveTask(feature: FeatureRecord, featureStateMarkdown: string): string {
+    const projectStateMarkdown = readFileSync(this.projectStatePath, 'utf8');
+    const hintSources = [
+      optionalSection(projectStateMarkdown, 'Pending'),
+      optionalSection(projectStateMarkdown, 'Next Planning Hint'),
+      optionalSection(projectStateMarkdown, 'Current Reality'),
+      optionalSection(featureStateMarkdown, 'Current Reality'),
+      optionalSection(featureStateMarkdown, 'Next Planning Hint'),
+      optionalSection(featureStateMarkdown, 'Last Approved Change'),
+    ];
+
+    for (const source of hintSources) {
+      const taskId = extractTaskIdHint(source);
+      if (taskId) {
+        return taskId;
+      }
+    }
+
+    throw new Error(
+      `Cannot create a state correction task for ${feature.id} because no active task is recorded and no recoverable task hint could be derived from project state.`,
+    );
   }
 
   private buildStateCorrectionTask(
@@ -3325,26 +3357,37 @@ function parsePreferredStatusValue(sectionBody: string, key: string): string | n
 }
 
 function replaceSection(markdown: string, heading: string, newBody: string): string {
-  const pattern = new RegExp(`(^## ${escapeRegExp(heading)}\\n\\n)([\\s\\S]*?)(?=\\n## |$)`, 'm');
-  if (!pattern.test(markdown)) {
+  const sectionHeader = `## ${heading}\n\n`;
+  const sectionStart = markdown.indexOf(sectionHeader);
+  if (sectionStart === -1) {
     throw new Error(`Section "## ${heading}" was not found.`);
   }
 
-  return markdown.replace(pattern, `$1${ensureTrailingNewline(newBody).trimEnd()}\n`);
+  const bodyStart = sectionStart + sectionHeader.length;
+  const nextHeadingIndex = markdown.indexOf('\n## ', bodyStart);
+  const sectionEnd = nextHeadingIndex === -1 ? markdown.length : nextHeadingIndex;
+  const replacement = `${sectionHeader}${ensureTrailingNewline(newBody).trimEnd()}\n`;
+  return `${markdown.slice(0, sectionStart)}${replacement}${markdown.slice(sectionEnd)}`;
 }
 
 function setOrInsertSection(markdown: string, heading: string, newBody: string): string {
-  const pattern = new RegExp(`(^## ${escapeRegExp(heading)}\\n\\n)([\\s\\S]*?)(?=\\n## |$)`, 'm');
-  if (pattern.test(markdown)) {
-    return markdown.replace(pattern, `$1${ensureTrailingNewline(newBody).trimEnd()}\n`);
+  const sectionHeader = `## ${heading}\n\n`;
+  const sectionStart = markdown.indexOf(sectionHeader);
+  if (sectionStart !== -1) {
+    return replaceSection(markdown, heading, newBody);
   }
 
-  const statusPattern = /(^## Status\n\n[\s\S]*?)(?=\n## |$)/m;
-  if (!statusPattern.test(markdown)) {
+  const statusHeader = '## Status\n\n';
+  const statusStart = markdown.indexOf(statusHeader);
+  if (statusStart === -1) {
     throw new Error(`Unable to insert section "## ${heading}" because "## Status" was not found.`);
   }
 
-  return markdown.replace(statusPattern, `$1\n\n## ${heading}\n\n${ensureTrailingNewline(newBody).trimEnd()}`);
+  const statusBodyStart = statusStart + statusHeader.length;
+  const nextHeadingIndex = markdown.indexOf('\n## ', statusBodyStart);
+  const insertAt = nextHeadingIndex === -1 ? markdown.length : nextHeadingIndex;
+  const insertion = `\n\n${sectionHeader}${ensureTrailingNewline(newBody).trimEnd()}`;
+  return `${markdown.slice(0, insertAt)}${insertion}${markdown.slice(insertAt)}`;
 }
 
 function upsertBulletInSection(markdown: string, heading: string, startsWith: string, bullet: string): string {
@@ -3510,6 +3553,15 @@ function ensureTrailingNewline(text: string): string {
 
 function stripTicks(text: string): string {
   return text.replace(/^`+|`+$/g, '');
+}
+
+function extractTaskIdHint(text: string | null): string | null {
+  if (!text) {
+    return null;
+  }
+
+  const match = text.match(/\b(F\d+-T\d+(?:-U\d+)?)\b/);
+  return match?.[1] ?? null;
 }
 
 function slugify(text: string): string {
