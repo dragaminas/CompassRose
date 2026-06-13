@@ -74,6 +74,8 @@ Instructions:
 - Record findings with clear severity and path references when possible.
 - Use `approved`, `changes_required`, `blocked`, or `failed` exactly as defined in the contract.
 - If the result is `changes_required`, include a correction task that is narrower than the original task and conforms to the correction-task contract.
+- If the result is `blocked`, describe the blocker with enough specificity for the orchestrator to decide whether it can become an unblock task.
+- If the result is `blocked`, also say whether the blocker appears perfectible by tightening the task interface or whether it should be documented as a limitation of the implementer.
 - If the result is `approved`, set `correction_task` to `null`.
 - Do not modify files.
 - Do not rewrite the feature design.

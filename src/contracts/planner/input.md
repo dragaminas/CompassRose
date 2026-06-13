@@ -85,14 +85,16 @@ planner_input:
 
   state:
     source: string
-    lifecycle_state: formalization_pending | formalized | task_planning_pending | task_ready | implementation_running | implementation_failed | quality_gates_pending | quality_failed | review_pending | review_failed | correction_pending | blocked | completed
+    lifecycle_state: formalization_pending | formalized | task_planning_pending | task_ready | implementation_running | implementation_failed | quality_gates_pending | quality_failed | review_pending | review_failed | correction_pending | unblock_pending | blocked | completed
     operational_status:
       formalization: complete | not_started
       active_task: string | none
       active_correction_task: string | none
+      active_unblock_task: string | none
       last_implementation_result: not_run | passed | failed
       last_quality_gate_result: unknown | passed | failed | skipped
       last_review_result: not_run | approved | changes_required | blocked | failed | skipped
+      last_unblock_result: not_run | passed | failed | skipped
     implemented_deliverables:
       - string
     remaining_deliverables:
@@ -103,6 +105,11 @@ planner_input:
       - string
     blockers:
       - string
+    blocked_from:
+      lifecycle_state: string | none
+      active_task: string | none
+      active_correction_task: string | none
+      active_unblock_task: string | none
     next_planning_hint: string | null
 
   project_state:

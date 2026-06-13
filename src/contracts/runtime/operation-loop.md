@@ -40,7 +40,7 @@ The runtime must load:
 - project state from `docs/compassrose/PROJECT_STATE.md`
 - feature folders from `docs/features/`
 - feature state using `src/contracts/state/feature-state.md`
-- planner, implementer, reviewer, task, and correction-task contracts from `src/contracts/`
+- planner, implementer, reviewer, task, correction-task, state-correction-task, and unblock-task contracts from `src/contracts/`
 
 ---
 
@@ -100,8 +100,9 @@ Rules:
 2. Ignore features in `completed`.
 3. Select the first feature that is not `completed`.
 4. If the selected feature's state is malformed but repairable, generate a state correction task and transition the feature to `correction_pending`.
-5. If the selected feature is `blocked` for an unrecoverable reason, stop the run and report the blocker.
-6. Do not skip an earlier pending feature to work on a later one.
+5. If the selected feature is `blocked` for a recoverable reason, generate an unblock task with the planner-grade role and transition the feature to `unblock_pending`.
+6. If the selected feature is `blocked` for an unrecoverable reason, stop the run and report the blocker.
+7. Do not skip an earlier pending feature to work on a later one.
 
 This creates a strict feature-first execution policy for the MVP.
 
@@ -148,6 +149,16 @@ Next state:
 Action:
 
 - execute the recorded task if the execution mode allows it
+
+Next state:
+
+- `implementation_running`
+
+### unblock_pending
+
+Action:
+
+- execute the recorded unblock task if the execution mode allows it
 
 Next state:
 
@@ -215,7 +226,13 @@ Action:
 
 Action:
 
-- stop and surface the blocker
+- surface the blocker
+- if the blocker is recoverable, generate an unblock task with the planner-grade role and transition to `unblock_pending`
+
+Next state:
+
+- `unblock_pending`
+- stop when the blocker is unrecoverable
 
 ### completed
 
@@ -237,6 +254,10 @@ When planning:
 - do not create a backlog
 
 If a correction task is active, the runtime must prefer it over generating a new normal task.
+
+If an unblock task is active, the runtime must prefer it over generating a new normal task.
+
+If the selected feature is blocked for a recoverable reason, the runtime must prefer unblock task planning over a normal feature task.
 
 ---
 
@@ -298,6 +319,12 @@ The runtime must process only the structured reviewer statuses defined in `src/c
 The reviewer proposes results.
 The runtime owns the resulting lifecycle transition.
 
+If the reviewer reports `blocked`, the runtime must classify whether the blocker is recoverable or terminal:
+
+- recoverable blockers must be persisted as explicit blocker state and may continue into `unblock_pending` planning
+- blockers that require human intervention or are terminal must be persisted as explicit blocker state and stop the run
+- the blocker record must preserve enough evidence to decide whether the task interface should be tightened or the limitation should be documented
+
 ---
 
 ## State Update Rules
@@ -322,8 +349,9 @@ Operational sections must reflect the chosen lifecycle transition.
 The runtime must stop when:
 
 - configuration preconditions fail
-- the selected feature is blocked
 - the selected feature is malformed and no state correction task can repair it
+- the selected feature is blocked and no unblock task can repair it
+- the reviewer reports a blocked result that is terminal or requires human intervention
 - formalization fails
 - task planning fails
 - implementation fails

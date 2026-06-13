@@ -59,6 +59,13 @@ Task `F002-T04` has now been approved. The typed configuration loader validates 
 
 - None
 
+## Blocked From
+
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
+
 ## Last Approved Change
 
 Task `F002-T04` was approved, extending the typed config loader and its tests to validate the first runtime-precondition policy fields from `docs/compassrose/CONFIG.md`.

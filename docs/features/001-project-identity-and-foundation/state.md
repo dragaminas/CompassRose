@@ -47,6 +47,13 @@ The repository now presents CompassRose consistently as a CLI-first TypeScript p
 
 - None
 
+## Blocked From
+
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
+
 ## Last Approved Change
 
 Task 004 was approved, accepting the top-level foundation documentation alignment in `docs/README.md` and `docs/ROADMAP.md` after the repository quality gates passed.

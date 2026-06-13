@@ -48,6 +48,7 @@ The runtime may use only these sections for deterministic decisions:
 - `## Lifecycle State`
 - `## Operational Status`
 - `## Blocked By`
+- `## Blocked From`
 
 The runtime may use these sections as supporting context, but not as the primary transition key:
 
@@ -79,9 +80,11 @@ formalized
 - formalization: complete | not_started
 - active_task: none | <task-id>
 - active_correction_task: none | <correction-task-id>
+- active_unblock_task: none | <unblock-task-id>
 - last_implementation_result: not_run | passed | failed
 - last_quality_gate_result: unknown | passed | failed | skipped
 - last_review_result: not_run | approved | changes_required | blocked | failed | skipped
+- last_unblock_result: not_run | passed | failed | skipped
 
 ## Current Reality
 
@@ -102,6 +105,13 @@ formalized
 ## Blocked By
 
 - None
+
+## Blocked From
+
+- lifecycle_state: none | <suspended-lifecycle-state>
+- active_task: none | <task-id>
+- active_correction_task: none | <correction-task-id>
+- active_unblock_task: none | <unblock-task-id>
 
 ## Last Approved Change
 
@@ -133,6 +143,7 @@ States recorded in `## Lifecycle State`:
 - `review_pending`
 - `review_failed`
 - `correction_pending`
+- `unblock_pending`
 - `blocked`
 - `completed`
 
@@ -189,9 +200,15 @@ The review step failed to produce a valid result or reported an unrecoverable fa
 
 A reviewer requested a bounded correction task, or the runtime generated a state repair task, and that correction task is now the active execution target.
 
+### unblock_pending
+
+The feature has a bounded unblock task that is now the active execution target.
+After approval, the runtime restores the captured lifecycle state and clears `active_unblock_task`.
+
 ### blocked
 
 The feature cannot advance because of an explicit blocker recorded in `## Blocked By`.
+The suspended execution target to resume later is recorded in `## Blocked From`.
 
 ### completed
 
@@ -237,6 +254,10 @@ correction_pending
     -> implementation_running
     -> blocked
 
+unblock_pending
+    -> implementation_running
+    -> blocked
+
 implementation_failed
 quality_failed
 review_failed
@@ -248,6 +269,7 @@ blocked
     -> formalized
     -> task_planning_pending
     -> correction_pending
+    -> unblock_pending
 
 completed
     -> completed
@@ -264,8 +286,10 @@ The orchestrator must not invent transitions outside this contract.
   - `active_task: none`
   - `active_correction_task: none`
 - `blocked` requires at least one explicit blocker under `## Blocked By`
+- `blocked` requires a suspended execution target under `## Blocked From`
 - `task_ready`, `implementation_running`, `quality_gates_pending`, `review_pending`, and `review_failed` require `active_task` to be set
 - `correction_pending` requires `active_correction_task` to be set
+- `unblock_pending` requires `active_unblock_task` to be set
 - `last_review_result: changes_required` must not coexist with `active_correction_task: none`
 - `lifecycle_state` is the primary transition key; descriptive sections must not contradict it
 
@@ -281,5 +305,7 @@ Recovery rules:
 - `quality_gates_pending`: re-run or resume quality gates instead of planning a new task
 - `review_pending`: re-run or resume review instead of planning a new task
 - `correction_pending`: continue with the recorded correction task instead of generating a broader replacement task
+- `unblock_pending`: continue with the recorded unblock task instead of generating a broader replacement task
+- `blocked`: recover the blocker explicitly before generating new planning work
 
 CompassRose must prefer explicit recovery over silent state rewriting.

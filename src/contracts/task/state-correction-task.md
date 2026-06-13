@@ -8,6 +8,8 @@ A state correction task repairs feature or project state so deterministic orches
 
 This shape is distinct from `src/contracts/task/correction-task.md` because it targets state documents, not review findings.
 
+It is also a specialized form of `src/contracts/task/unblock-task.md` because its purpose is to remove a blocker that exists only in repository state.
+
 ---
 
 ## Responsibility

@@ -104,6 +104,8 @@ A correction task should be provided.
 ### blocked
 
 The task cannot proceed due to missing information, broken environment, external dependency, or architectural conflict.
+The orchestrator may use a blocked result to plan an unblock task if the blocker is recoverable.
+The blocker description should be specific enough to decide whether the task interface can be tightened for future runs or whether the limitation should be documented explicitly.
 
 ### failed
 
