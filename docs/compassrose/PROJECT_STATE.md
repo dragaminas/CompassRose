@@ -8,9 +8,12 @@ In progress
 
 `002-configuration-model`
 
+
 ## Current Reality
 
 - `docs/compassrose/PROJECT_STATE.md` exists as the repository-local project state document, and `docs/compassrose/CONFIG.md` already points at this path.
+- Feature `002-configuration-model` now has a planned next task, `F002-T05`, ready to execute.
+
 - Feature `001-project-identity-and-foundation` is now complete: the package metadata, TypeScript configuration, and top-level docs all align with the accepted CLI-first foundation and required repository roots.
 - `package.json` points both `main` and `bin.compassrose` at `./dist/cli/main.js`, `tsconfig.json` preserves the Node CLI source/output layout without JSX assumptions, and the top-level docs expose `docs/`, `src/`, `src/contracts/`, and `docs/compassrose/PROJECT_STATE.md` in one pass.
 - The active feature pointer currently targets `002-configuration-model`; the detailed task and lifecycle state for that feature lives in `docs/features/002-configuration-model/state.md`.
@@ -28,7 +31,9 @@ In progress
 
 ## Pending
 
-- Plan the next implementation task for the active feature.
+- Execute `F002-T05` for the active feature.
+- Continue updating this file with approved repository facts as feature work lands.
+
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -45,4 +50,5 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is the next task-planning pass.
+The active feature is `002-configuration-model`, and its next valid action is to execute `F002-T05`.
+

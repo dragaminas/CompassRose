@@ -2,7 +2,8 @@
 
 ## Lifecycle State
 
-formalized
+task_ready
+
 
 ## Source Request
 
@@ -11,6 +12,9 @@ formalized
 ## Operational Status
 
 - formalization: complete
+- active_task: F002-T05
+- active_correction_task: none
+
 - active_task: none
 - active_correction_task: none
 - last_implementation_result: passed
@@ -20,6 +24,9 @@ formalized
 ## Current Reality
 
 The repository already contains `docs/compassrose/CONFIG.md` as a project-local CompassRose configuration document with a YAML configuration block, allowed values, override records, isolation rules, and a stabilized MVP Doctor contract.
+
+Task `F002-T05` is now planned and ready to execute. Add configuration-backed runtime preflight to the default CLI entrypoint.
+
 
 CompassRose can now load that project-local configuration, validate the MVP doctor contract, and report the repository readiness checks through `compassrose doctor`, including a distinct preflight for the configured project-state document.
 
@@ -66,4 +73,5 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Plan the next task that consumes the validated runtime-precondition policy fields in a broader runtime entrypoint.
+Execute `F002-T05` when the current execution mode allows it.
+
