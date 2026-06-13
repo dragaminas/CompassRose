@@ -276,6 +276,7 @@ When executing implementation:
 - capture changed files
 - capture Git diff
 - capture normalized implementation diagnostics
+- preserve each implementation attempt as a separately auditable artifact when recovery or retry is allowed
 
 The implementation step must not decide task approval.
 

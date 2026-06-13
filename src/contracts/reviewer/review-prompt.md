@@ -39,6 +39,7 @@ The reviewer must:
 - evaluate scope compliance
 - evaluate quality gate results
 - identify architectural violations
+- when an implementation was retried after partial progress, compare the final diff against the retry context and note whether the task interface appears tight enough for future runs
 - return structured findings
 - return a correction task when status is `changes_required`
 
@@ -48,6 +49,7 @@ The reviewer must not:
 - implement fixes
 - expand task scope
 - approve changes that violate mandatory gates without explicit policy
+- ignore evidence that a retry happened after partial implementation progress
 
 ---
 

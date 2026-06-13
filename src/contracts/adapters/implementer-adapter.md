@@ -27,6 +27,8 @@ An Implementer Adapter must:
 - Capture Git diff.
 - Capture implementation notes if available.
 - Return normalized implementation result.
+- Treat repeated invocations for the same task as distinct attempts when the runtime allows recovery.
+- Preserve enough evidence to distinguish the latest attempt from any earlier interrupted attempt.
 
 ---
 
@@ -117,6 +119,7 @@ The adapter must:
 - Return a Git diff.
 - Preserve raw output for audit.
 - Preserve normalized diagnostics for audit.
+- Keep each attempt independently reviewable when the runtime retries a partially completed implementation.
 - Fail clearly if no diff is produced.
 - Remain provider-agnostic.
 

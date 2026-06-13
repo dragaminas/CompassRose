@@ -37,6 +37,12 @@ The implementer must:
 - run or support the required quality gates when possible
 - produce repository changes that can be reviewed through a Git diff
 
+Implementation recovery:
+
+- if the same task is re-invoked after an interrupted attempt, continue from the current worktree state instead of assuming a clean slate
+- preserve the partial repository changes created by the previous attempt unless the task contract explicitly says otherwise
+- do not rewrite the task scope to compensate for a recoverable interruption; let the runtime decide whether a retry is allowed
+
 The implementer must not:
 
 - redesign the feature outside the task
