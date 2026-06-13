@@ -169,6 +169,7 @@ Next state:
 Action:
 
 - wait for implementation completion or recover the interrupted implementation state
+- if the operator requests a controlled stop, preserve the current active task and stop at the next safe checkpoint instead of converting the feature to a failure state
 - if the implementer collapses after producing partial repository changes, retry the same active task once from the current worktree instead of discarding the progress
 - if the implementer collapses without producing repository progress, transition explicitly to `implementation_failed` or `blocked` according to the observed diagnostics
 - never replan the feature while an implementation retry is still available
@@ -373,6 +374,7 @@ The runtime must stop when:
 - review fails
 - a correction iteration would exceed configured limits
 - the current execution mode requires human approval before continuing
+- the operator requests a controlled stop (`SIGINT` or `SIGTERM`); the runtime must preserve the current checkpoint and record the run as `stopped` instead of synthesizing a failure transition
 - there is no selectable feature remaining
 
 ---
@@ -403,6 +405,7 @@ Implementation recovery rules:
 - if the retry also fails or no recoverable progress exists, transition explicitly to `implementation_failed` or `blocked`
 - preserve raw output, diff, and diagnostics for both the failed attempt and the retry so the operator can distinguish a transient collapse from a terminal stop
 - `implementation_failed`: inspect the latest implementation artifacts first and, when the active task anchor is still recoverable, plan a bounded unblock task that restores task readiness before retrying implementation
+- controlled stop is not a failure transition: if the operator interrupts the runtime, keep the current lifecycle state and active task pointers intact so the next run can resume from the recorded checkpoint
 - a failed quality gate result
 - a recorded blocker
 - implementation diagnostics from an interrupted or empty attempt

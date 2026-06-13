@@ -25,10 +25,13 @@ npm run proto -- run
 - `--no-commit`: do not create git commits after planning, recovery checkpoints, or approved review.
 - `--cwd <path>`: start from a different working directory inside the repo.
 - `--implementer <codex|opencode>`: choose which CLI implements tasks. `opencode` remains the default.
+- `Ctrl-C`, `SIGINT`, or `SIGTERM`: request a controlled stop. The prototype writes a stopped run summary and preserves the current task or state checkpoint for the next pass.
 
 When review returns `changes_required`, `proto:loop` now records a recovery lesson and continues into the generated correction task instead of forcing a manual restart.
 
 Planning-style recovery steps such as `correct_state` checkpoint their state/task documents in the default commit mode, and implementation/correction retries can continue from a partial diff when that diff is the active task's own recovery context.
+
+If you interrupt `proto:loop`, the process stops cleanly at the current safe checkpoint instead of converting the interruption into an implementation failure.
 
 ## Typecheck
 

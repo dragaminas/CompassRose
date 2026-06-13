@@ -177,6 +177,7 @@ A task already exists and may be executed when the current execution mode allows
 An implementation attempt is in progress or must be explicitly recovered after interruption.
 If the last attempt left partial repository changes, the runtime should retry the same active task once from the current worktree before declaring failure.
 The feature remains in `implementation_running` while that retry budget is still available.
+A controlled stop does not convert the feature to `implementation_failed` or `blocked`; it preserves the recorded active task and leaves the feature ready to resume from the checkpoint on the next run.
 
 ### implementation_failed
 
@@ -306,6 +307,7 @@ Recovery rules:
 
 - `implementation_running`: inspect execution artifacts and either resume the implementation step or transition explicitly to `implementation_failed` or `blocked`
 - `implementation_running`: inspect execution artifacts first; if the latest attempt left partial repository changes, retry the same active task once before deciding whether to stop
+- `operator-requested stop`: preserve the recorded lifecycle state and active task pointer; do not infer a failure transition from the interrupt alone
 - `implementation_failed`: inspect execution artifacts first; if the failed task can be recovered, plan a bounded unblock task and transition to `unblock_pending`
 - `quality_gates_pending`: re-run or resume quality gates instead of planning a new task
 - `review_pending`: re-run or resume review instead of planning a new task

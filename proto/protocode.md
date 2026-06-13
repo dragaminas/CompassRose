@@ -36,6 +36,12 @@ Implementation recovery:
 - Do not replan the feature while an implementation retry is still available.
 - Recovery-style mutating steps should not be rejected just because the worktree is dirty when the dirty paths belong to the active feature's own state or task documents.
 
+Controlled stop:
+
+- `Ctrl-C`, `SIGINT`, and `SIGTERM` request a controlled stop.
+- The prototype stops at the next safe checkpoint, writes a `stopped` run summary, and preserves the active feature and task state for the next pass.
+- A controlled stop is not a failure transition and should not create a refinement lesson.
+
 ## Stop Conditions
 
 The prototype stops when any of these is true:

@@ -47,6 +47,21 @@ type BlockerKind =
 
 type BlockerRecoverability = 'auto' | 'agent' | 'human' | 'terminal';
 
+class ControlledStopError extends Error {
+  constructor(
+    message: string,
+    readonly exitCode: number,
+    readonly signal: string | null,
+  ) {
+    super(message);
+    this.name = 'ControlledStopError';
+  }
+}
+
+function stopExitCodeForSignal(signal: string | null): number {
+  return signal === 'SIGTERM' ? 143 : 130;
+}
+
 interface CommandExecution {
   readonly ok: boolean;
   readonly stdout: string;
@@ -451,6 +466,14 @@ class GitClient {
       maxBuffer: 10 * 1024 * 1024,
     });
 
+    if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
+      throw new ControlledStopError(
+        `Controlled stop requested while running git ${args.join(' ')}.`,
+        stopExitCodeForSignal(result.signal),
+        result.signal,
+      );
+    }
+
     const status = result.status ?? -1;
     if (!allowedStatuses.includes(status)) {
       throw new Error(`git ${args.join(' ')} failed:\n${result.stderr || result.stdout}`);
@@ -566,6 +589,14 @@ class CodexCli implements TaskImplementer {
     logAgentStream('codex', label, 'stderr', result.stderr ?? '');
     logAgentEnd('codex', label, elapsedMs, result.status, result.error?.message ?? null);
 
+    if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
+      throw new ControlledStopError(
+        `Controlled stop requested while running codex exec for ${label}.`,
+        stopExitCodeForSignal(result.signal),
+        result.signal,
+      );
+    }
+
     if (result.status !== 0) {
       throw new Error(`codex exec failed:\n${result.stderr || result.stdout}`);
     }
@@ -605,6 +636,14 @@ class CodexCli implements TaskImplementer {
     logAgentStream('codex', label, 'stdout', stdout);
     logAgentStream('codex', label, 'stderr', stderr);
     logAgentEnd('codex', label, elapsedMs, result.status, result.error?.message ?? null);
+
+    if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
+      throw new ControlledStopError(
+        `Controlled stop requested while running codex exec for ${label}.`,
+        stopExitCodeForSignal(result.signal),
+        result.signal,
+      );
+    }
 
     return {
       ok: result.status === 0 && !result.error,
@@ -649,6 +688,14 @@ class OpenCodeCli {
     logAgentStream('opencode', label, 'stderr', stderr);
     logAgentEnd('opencode', label, elapsedMs, result.status, result.error?.message ?? null);
 
+    if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
+      throw new ControlledStopError(
+        `Controlled stop requested while running opencode for ${label}.`,
+        stopExitCodeForSignal(result.signal),
+        result.signal,
+      );
+    }
+
     return {
       ok: result.status === 0 && !result.error,
       stdout,
@@ -675,6 +722,10 @@ class PrototypeCompassRose {
   private readonly runId: string;
   private readonly startedAt: string;
   private readonly stepRecords: StepRunRecord[] = [];
+  private stopRequested = false;
+  private stopReason: string | null = null;
+  private stopExitCode = 130;
+  private stopSignal: string | null = null;
 
   constructor(private readonly options: ProtoOptions) {
     const repositoryRoot = findGitRepositoryRoot(options.cwd);
@@ -715,11 +766,13 @@ class PrototypeCompassRose {
   }
 
   run(): number {
+    const cleanupStopHandlers = this.installControlledStopHandlers();
     let keepRunning = true;
     let lastDecision: StepDecision | null = null;
 
     try {
       while (keepRunning) {
+        this.throwIfControlledStopRequested();
         const decision = this.determineNextStep();
         lastDecision = decision;
         console.log(`Next step: ${decision.kind}${decision.feature_id ? ` (${decision.feature_id})` : ''}`);
@@ -734,6 +787,10 @@ class PrototypeCompassRose {
           summary: result.summary,
         });
 
+        if (this.stopRequested) {
+          this.throwIfControlledStopRequested();
+        }
+
         if (result.exitCode !== 0) {
           this.writeRefinementFeedback(result.summary, lastDecision);
           this.writeRunSummary('stopped', result.exitCode, null);
@@ -745,14 +802,67 @@ class PrototypeCompassRose {
         }
       }
 
+      this.throwIfControlledStopRequested();
       this.writeRunSummary('completed', 0, null);
       return 0;
     } catch (error) {
+      if (error instanceof ControlledStopError) {
+        if (!this.stopRequested) {
+          console.error(error.message);
+        }
+        this.writeRunSummary('stopped', error.exitCode, null);
+        return error.exitCode;
+      }
+
       const message = error instanceof Error ? error.message : String(error);
       this.writeRefinementFeedback(message, lastDecision);
       this.writeRunSummary('failed', 1, message);
       throw error;
+    } finally {
+      cleanupStopHandlers();
     }
+  }
+
+  private installControlledStopHandlers(): () => void {
+    const onSignal = (signal: NodeJS.Signals): void => {
+      this.requestControlledStop(
+        `Controlled stop requested via ${signal}; stopping after the current safe checkpoint.`,
+        stopExitCodeForSignal(signal),
+        signal,
+      );
+    };
+
+    process.on('SIGINT', onSignal);
+    process.on('SIGTERM', onSignal);
+
+    return () => {
+      process.off('SIGINT', onSignal);
+      process.off('SIGTERM', onSignal);
+    };
+  }
+
+  private requestControlledStop(reason: string, exitCode: number, signal: string | null): void {
+    if (this.stopRequested) {
+      return;
+    }
+
+    this.stopRequested = true;
+    this.stopReason = reason;
+    this.stopExitCode = exitCode;
+    this.stopSignal = signal;
+    console.error(reason);
+  }
+
+  private throwIfControlledStopRequested(): void {
+    if (!this.stopRequested) {
+      return;
+    }
+
+    throw new ControlledStopError(
+      this.stopReason ?? 'Controlled stop requested.',
+      this.stopExitCode,
+      this.stopSignal,
+    );
   }
 
   private determineNextStep(): StepDecision {
@@ -1407,6 +1517,7 @@ class PrototypeCompassRose {
       }
 
       const commandResult = this.implementer.run(prompt, `${baseLabel}:attempt-${attemptIndex}`);
+      this.throwIfControlledStopRequested();
       const attempt = this.captureImplementationAttempt(task, commandResult, implementationStatePaths);
       attempts.push(attempt);
       this.persistImplementationAttemptArtifacts(task.taskId, attemptIndex, attempt);
@@ -1459,6 +1570,7 @@ class PrototypeCompassRose {
     }
 
     const qualityResults = this.runQualityGates(task);
+    this.throwIfControlledStopRequested();
     this.artifacts.writeJson(join('quality-gates', `${task.taskId}.json`), qualityResults);
 
     const passed = qualityResults.every((result) => result.status !== 'failed');
@@ -1561,6 +1673,14 @@ class PrototypeCompassRose {
         encoding: 'utf8',
         maxBuffer: 10 * 1024 * 1024,
       });
+
+      if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
+        throw new ControlledStopError(
+          `Controlled stop requested while running quality gate ${command}.`,
+          stopExitCodeForSignal(result.signal),
+          result.signal,
+        );
+      }
 
       return {
         name: command,
