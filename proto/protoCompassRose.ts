@@ -10,6 +10,7 @@ import { findGitRepositoryRoot } from '../src/git/gitStatus.js';
 type StepKind =
   | 'plan_feature'
   | 'plan_task'
+  | 'correct_state'
   | 'implement_task'
   | 'review_task'
   | 'correct_task'
@@ -133,6 +134,52 @@ interface CorrectionTask {
   readonly quality_gates: {
     readonly before_review: readonly string[];
   };
+}
+
+interface StateCorrectionTask {
+  readonly task_id: string;
+  readonly feature_id: string;
+  readonly title: string;
+  readonly objective: string;
+  readonly first_executable_step: string;
+  readonly minimum_progress_evidence: readonly string[];
+  readonly trace: {
+    readonly roadmap_objective: string;
+    readonly feature_goal: string;
+    readonly state_gap: string;
+  };
+  readonly state_target: {
+    readonly feature_state_path: string;
+    readonly project_state_path: string | null;
+    readonly contract_reference: string;
+    readonly detected_issue: string;
+    readonly restored_lifecycle_state: string;
+    readonly restored_active_task: string;
+    readonly restored_active_correction_task: string;
+  };
+  readonly context: {
+    readonly summary: string;
+    readonly relevant_paths: readonly string[];
+    readonly relevant_modules: readonly string[];
+  };
+  readonly scope: {
+    readonly allowed_paths: readonly string[];
+    readonly forbidden_paths: readonly string[];
+  };
+  readonly constraints: readonly string[];
+  readonly development_policy: {
+    readonly mode: DevelopmentPolicyMode;
+  };
+  readonly quality_gates: {
+    readonly before_review: readonly string[];
+  };
+  readonly acceptance_criteria: readonly string[];
+  readonly expected_deliverables: readonly ('documentation')[];
+}
+
+interface StoredTaskArtifact {
+  readonly task: PlannedTask;
+  readonly state_correction?: StateCorrectionTask;
 }
 
 interface ReviewerOutput {
@@ -561,6 +608,7 @@ class PrototypeCompassRose {
       '- `docs/compassrose/CONFIG.md`',
       '- `src/contracts/runtime/operation-loop.md`',
       '- `src/contracts/state/feature-state.md`',
+      '- `src/contracts/task/state-correction-task.md`',
       '- `docs/features/README.md`',
       '- the feature folders under `docs/features/` as needed',
       '',
@@ -569,6 +617,7 @@ class PrototypeCompassRose {
       'Rules:',
       '- Return `plan_feature` when the selected feature still has only `request.md` and must be formalized.',
       '- Return `plan_task` when the selected feature is ready for exactly one next task to be planned.',
+      '- Return `correct_state` when the selected feature state is malformed but repairable by a bounded state correction task.',
       '- Return `implement_task` when the selected feature has `task_ready` and no active correction task.',
       '- Return `review_task` when the selected feature is waiting for review.',
       '- Return `correct_task` when the selected feature has an active correction task ready to execute.',
@@ -592,6 +641,10 @@ class PrototypeCompassRose {
         this.ensureCleanWorktreeIfRequired();
         this.planTask(requireString(decision.feature_id, 'feature_id'));
         return { exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${requireString(decision.feature_id, 'feature_id')}.` };
+      case 'correct_state':
+        this.ensureCleanWorktreeIfRequired();
+        this.correctState(requireString(decision.feature_id, 'feature_id'), decision.reason);
+        return { exitCode: 0, continueLoop: true, summary: `State correction task created for feature ${requireString(decision.feature_id, 'feature_id')}.` };
       case 'implement_task':
         this.ensureCleanWorktreeIfRequired();
         this.implementTask(requireString(decision.task_id, 'task_id'));
@@ -732,12 +785,13 @@ class PrototypeCompassRose {
 
   private implementTask(taskId: string): void {
     const task = this.loadTask(taskId);
-    this.executeImplementation(task, false);
+    this.executeImplementation(task, false, null);
   }
 
   private correctTask(correctionTaskId: string): void {
     const task = this.loadTask(correctionTaskId);
-    this.executeImplementation(task, true);
+    const artifact = this.loadTaskArtifact(correctionTaskId);
+    this.executeImplementation(task, true, artifact?.state_correction ?? null);
   }
 
   private reviewTask(taskId: string): StepExecutionResult {
@@ -747,6 +801,8 @@ class PrototypeCompassRose {
     }
 
     const task = this.loadTask(taskId);
+    const artifact = this.loadTaskArtifact(taskId);
+    const stateCorrection = artifact?.state_correction ?? null;
     const feature = this.loadFeature(task.featureId);
     const qualityResults = this.ensureQualityGateResults(task);
     const implementation = this.ensureImplementationAttempt(task);
@@ -767,7 +823,7 @@ class PrototypeCompassRose {
       '- `src/contracts/reviewer/review-prompt.md`',
       '- `src/contracts/reviewer/input.md`',
       '- `src/contracts/reviewer/output.md`',
-      '- `src/contracts/task/correction-task.md`',
+      stateCorrection ? '- `src/contracts/task/state-correction-task.md`' : '- `src/contracts/task/correction-task.md`',
       `- \`${relativePath(this.repositoryRoot, task.path)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
@@ -780,7 +836,12 @@ class PrototypeCompassRose {
       '',
       'Rules:',
       '- Validate objective, acceptance criteria, scope, constraints, and quality gates.',
-      '- For `test_guided` tasks, confirm that the diff includes meaningful test changes for the claimed behavior.',
+      stateCorrection
+        ? '- Validate the state target, restored lifecycle state, and active task pointer for the repaired state document.'
+        : '- Validate the implementation against the task contract and acceptance criteria.',
+      stateCorrection
+        ? '- If status is `changes_required`, keep the correction task state-only and preserve the restored task pointer.'
+        : '- For `test_guided` tasks, confirm that the diff includes meaningful test changes for the claimed behavior.',
       '- Return JSON only.',
       '- If status is `changes_required`, include a correction task narrower than the original task.',
       '- Do not modify files.',
@@ -789,12 +850,16 @@ class PrototypeCompassRose {
     const review = this.codex.runStructured<ReviewerOutput>(prompt, REVIEWER_OUTPUT_SCHEMA, [tempDir], `review:${taskId}`);
     this.artifacts.writeJson(join('reviews', `${taskId}.json`), review);
     const taskInterfaceAnalysis = this.shouldAnalyzeTaskInterface(review)
-      ? this.analyzeTaskInterface(task, feature, review, implementation, qualityResults, tempDir)
+      ? this.analyzeTaskInterface(task, feature, review, implementation, qualityResults, tempDir, stateCorrection)
       : null;
 
     if (review.status === 'approved') {
-      const updatedFeatureState = this.updateFeatureStateAfterApprovedReview(feature.statePath, task);
-      const updatedProjectState = this.updateProjectStateAfterApprovedReview(task.featureId, task.taskId);
+      const updatedFeatureState = stateCorrection
+        ? this.updateFeatureStateAfterStateCorrection(feature.statePath, task, stateCorrection)
+        : this.updateFeatureStateAfterApprovedReview(feature.statePath, task);
+      const updatedProjectState = stateCorrection
+        ? this.updateProjectStateAfterStateCorrection(task.featureId, stateCorrection)
+        : this.updateProjectStateAfterApprovedReview(task.featureId, task.taskId);
       writeText(feature.statePath, updatedFeatureState);
       writeText(this.projectStatePath, updatedProjectState);
 
@@ -865,6 +930,7 @@ class PrototypeCompassRose {
     implementation: ImplementationAttempt,
     qualityResults: readonly QualityGateResult[],
     tempDir: string,
+    stateCorrection: StateCorrectionTask | null,
   ): TaskInterfaceAnalysis {
     const reviewPath = join(tempDir, 'review.json');
     writeFileSync(reviewPath, `${JSON.stringify(review, null, 2)}\n`, 'utf8');
@@ -876,6 +942,7 @@ class PrototypeCompassRose {
       '',
       'Read only:',
       '- `src/contracts/task/task.md`',
+      ...(stateCorrection ? ['- `src/contracts/task/state-correction-task.md`'] : []),
       '- `src/contracts/implementer/task-execution-prompt.md`',
       '- `src/contracts/adapters/implementer-adapter.md`',
       '- `src/contracts/reviewer/review-prompt.md`',
@@ -893,6 +960,9 @@ class PrototypeCompassRose {
       '- Decide whether the implementation problems are at least partly perfectible by tightening the task interface.',
       '- If yes, propose concrete adjustments to task fields so future implementers perform better.',
       '- If not fully perfectible, document implementer limitations that should be recognized by future task design.',
+      stateCorrection
+        ? '- If this is a state repair task, focus on `state_target`, restored lifecycle fields, and scope around canonicalizing state.'
+        : '- If this is a code task, focus on the minimal fields that improve code implementation behavior.',
       '',
       'Rules:',
       '- Focus on the task interface, not on fixing the code.',
@@ -915,8 +985,8 @@ class PrototypeCompassRose {
     return analysis;
   }
 
-  private executeImplementation(task: ParsedTaskDocument, correction: boolean): void {
-    const prompt = buildImplementerPrompt(task, correction);
+  private executeImplementation(task: ParsedTaskDocument, correction: boolean, stateCorrection: StateCorrectionTask | null): void {
+    const prompt = buildImplementerPrompt(task, correction, stateCorrection);
     const commandResult = this.opencode.run(prompt, correction ? `correction:${task.taskId}` : `implement:${task.taskId}`);
     const attempt = this.captureImplementationAttempt(task, commandResult);
     this.artifacts.writeJson(join('implementations', `${task.taskId}.json`), attempt);
@@ -1044,6 +1114,132 @@ class PrototypeCompassRose {
     return path;
   }
 
+  private correctState(featureId: string, reason: string): void {
+    const feature = this.loadFeature(featureId);
+    const markdown = readFileSync(feature.statePath, 'utf8');
+    const lifecycleState = stripTicks(requireSection(markdown, 'Lifecycle State').trim());
+    const operationalStatusSection = requireSection(markdown, 'Operational Status');
+    const activeTask = stripTicks(parsePreferredStatusValue(operationalStatusSection, 'active_task') ?? 'none');
+
+    if (activeTask === 'none') {
+      throw new Error(`Cannot create a state correction task for ${featureId} because no active task is recorded.`);
+    }
+
+    const stateCorrection = this.buildStateCorrectionTask(feature, activeTask, lifecycleState, reason);
+    const path = this.writeStateCorrectionTask(stateCorrection);
+    this.artifacts.writeJson(join('tasks', `${stateCorrection.task_id}.json`), {
+      task: stateCorrectionTaskToTask(stateCorrection),
+      state_correction: stateCorrection,
+    });
+
+    const updatedFeatureState = this.updateFeatureStateForStateCorrection(feature.statePath, activeTask, stateCorrection.task_id);
+    const updatedProjectState = this.updateProjectStateForCorrection(featureId, stateCorrection.task_id);
+    writeText(feature.statePath, updatedFeatureState);
+    writeText(this.projectStatePath, updatedProjectState);
+    console.error(`State correction task ${stateCorrection.task_id} created at ${relativePath(this.repositoryRoot, path)}.`);
+  }
+
+  private buildStateCorrectionTask(
+    feature: FeatureRecord,
+    activeTaskId: string,
+    lifecycleState: string,
+    reason: string,
+  ): StateCorrectionTask {
+    const statePath = relativePath(this.repositoryRoot, feature.statePath);
+    const projectStatePath = relativePath(this.repositoryRoot, this.projectStatePath);
+    const taskId = buildStateCorrectionTaskId(feature.tasksDirectory, activeTaskId);
+    const title = `Repair feature state for ${activeTaskId}`;
+    const detectedIssue = reason.trim();
+
+    return {
+      task_id: taskId,
+      feature_id: feature.id,
+      title,
+      objective: `Canonicalize ${statePath} so deterministic selection can continue with \`${activeTaskId}\`.`,
+      first_executable_step: `Open \`${statePath}\` and remove the conflicting operational-status entries so one canonical block remains.`,
+      minimum_progress_evidence: [
+        `\`${statePath}\` contains a single canonical \`Operational Status\` block that matches \`${lifecycleState}\`.`,
+        `\`${projectStatePath}\` still points at feature \`${feature.id}\` and the repaired active task \`${activeTaskId}\`.`,
+      ],
+      trace: {
+        roadmap_objective: 'Deterministic Orchestration',
+        feature_goal: 'Keep feature state canonical so the runtime selector can continue deterministically.',
+        state_gap: detectedIssue,
+      },
+      state_target: {
+        feature_state_path: statePath,
+        project_state_path: projectStatePath,
+        contract_reference: 'src/contracts/state/feature-state.md',
+        detected_issue: detectedIssue,
+        restored_lifecycle_state: lifecycleState,
+        restored_active_task: activeTaskId,
+        restored_active_correction_task: 'none',
+      },
+      context: {
+        summary: detectedIssue,
+        relevant_paths: [
+          statePath,
+          projectStatePath,
+          'src/contracts/state/feature-state.md',
+        ],
+        relevant_modules: [
+          'src/contracts/state/feature-state.md',
+          'docs/compassrose/PROJECT_STATE.md',
+        ],
+      },
+      scope: {
+        allowed_paths: [
+          statePath,
+          projectStatePath,
+        ],
+        forbidden_paths: [
+          'src/',
+          'tests/',
+          `docs/features/${feature.id}/feature.md`,
+          `docs/features/${feature.id}/architecture.md`,
+          'docs/compassrose/CONFIG.md',
+        ],
+      },
+      constraints: [
+        'Preserve the active task pointer for the repaired feature.',
+        'Do not change implementation code or unrelated feature docs.',
+        'Keep the correction narrowly focused on canonicalizing state.',
+      ],
+      development_policy: {
+        mode: 'documentation_first',
+      },
+      quality_gates: {
+        before_review: [
+          'git diff --check',
+          'npm run proto:smoke',
+        ],
+      },
+      acceptance_criteria: [
+        `\`${statePath}\` has a single canonical \`Operational Status\` block.`,
+        `\`active_task\` remains \`${activeTaskId}\` and \`active_correction_task\` is \`none\`.`,
+        `The feature returns to \`${lifecycleState}\` with the repaired state preserved.`,
+        'The runtime can continue selecting the active task after the correction is approved.',
+      ],
+      expected_deliverables: ['documentation'] as const,
+    };
+  }
+
+  private writeStateCorrectionTask(stateCorrection: StateCorrectionTask): string {
+    const feature = this.loadFeature(stateCorrection.feature_id);
+    const path = join(
+      feature.tasksDirectory,
+      buildCorrectionTaskFileName(stateCorrection.task_id, stateCorrection.title),
+    );
+
+    const markdown = renderStateCorrectionTaskMarkdown(stateCorrection);
+    writeText(path, markdown);
+    return path;
+  }
+
+  private loadTaskArtifact(taskId: string): StoredTaskArtifact | null {
+    return this.artifacts.readJson<StoredTaskArtifact>(join('tasks', `${taskId}.json`));
+  }
+
   private loadFeature(featureId: string): FeatureRecord {
     const features = this.listFeatures();
     const feature = features.find((item) => item.id === featureId);
@@ -1071,7 +1267,7 @@ class PrototypeCompassRose {
   }
 
   private loadTask(taskId: string): ParsedTaskDocument {
-    const stored = this.artifacts.readJson<{ task: PlannedTask }>(join('tasks', `${taskId}.json`));
+    const stored = this.artifacts.readJson<StoredTaskArtifact>(join('tasks', `${taskId}.json`));
     if (stored) {
       const feature = this.loadFeature(stored.task.feature_id);
       const taskPath = this.findTaskDocumentPath(taskId, feature.tasksDirectory);
@@ -1300,6 +1496,55 @@ class PrototypeCompassRose {
     return markdown;
   }
 
+  private updateFeatureStateForStateCorrection(
+    featureStatePath: string,
+    taskId: string,
+    correctionTaskId: string,
+  ): string {
+    let markdown = readFileSync(featureStatePath, 'utf8');
+    markdown = replaceSection(markdown, 'Lifecycle State', 'correction_pending');
+    markdown = replaceOperationalStatus(markdown, {
+      active_task: taskId,
+      active_correction_task: correctionTaskId,
+    });
+    markdown = replaceSection(markdown, 'Next Planning Hint', `Execute correction task \`${correctionTaskId}\` next.`);
+    return markdown;
+  }
+
+  private updateFeatureStateAfterStateCorrection(
+    featureStatePath: string,
+    task: ParsedTaskDocument,
+    stateCorrection: StateCorrectionTask,
+  ): string {
+    let markdown = readFileSync(featureStatePath, 'utf8');
+    markdown = replaceSection(markdown, 'Lifecycle State', stateCorrection.state_target.restored_lifecycle_state);
+    markdown = replaceOperationalStatus(markdown, {
+      active_task: stateCorrection.state_target.restored_active_task,
+      active_correction_task: stateCorrection.state_target.restored_active_correction_task,
+      last_implementation_result: 'passed',
+      last_quality_gate_result: 'passed',
+      last_review_result: 'approved',
+    });
+    markdown = replaceSection(markdown, 'Last Approved Change', `State correction task \`${task.taskId}\` was approved by the prototype orchestrator.`);
+    markdown = replaceSection(markdown, 'Next Planning Hint', stateCorrectionNextPlanningHint(stateCorrection));
+    return markdown;
+  }
+
+  private updateProjectStateAfterStateCorrection(featureId: string, stateCorrection: StateCorrectionTask): string {
+    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
+    markdown = replaceSection(markdown, 'Pending', bulletList(stateCorrectionProjectPendingLines(stateCorrection)));
+    markdown = replaceSection(markdown, 'Last Approved Change', `State correction task \`${stateCorrection.task_id}\` was approved by the prototype orchestrator.`);
+    markdown = replaceSection(markdown, 'Next Planning Hint', stateCorrectionNextPlanningHint(stateCorrection));
+    markdown = upsertBulletInSection(
+      markdown,
+      'Current Reality',
+      `- Feature \`${featureId}\` now has a planned next task`,
+      `- Feature \`${featureId}\` state was canonicalized; the active task pointer remains \`${stateCorrection.state_target.restored_active_task}\`.`,
+    );
+    return markdown;
+  }
+
   private writeRunSummary(status: 'completed' | 'stopped' | 'failed', exitCode: number, error: string | null): void {
     const summary: RunSummary = {
       run_id: this.runId,
@@ -1342,7 +1587,7 @@ const STEP_SCHEMA = {
   properties: {
     kind: {
       type: 'string',
-      enum: ['plan_feature', 'plan_task', 'implement_task', 'review_task', 'correct_task', 'stop', 'blocked'],
+      enum: ['plan_feature', 'plan_task', 'correct_state', 'implement_task', 'review_task', 'correct_task', 'stop', 'blocked'],
     },
     feature_id: { type: ['string', 'null'] },
     task_id: { type: ['string', 'null'] },
@@ -1779,6 +2024,24 @@ function renderCorrectionTaskMarkdown(correction: CorrectionTask): string {
   ].join('\n');
 }
 
+function renderStateCorrectionTaskMarkdown(stateCorrection: StateCorrectionTask): string {
+  const task = stateCorrectionTaskToTask(stateCorrection);
+  return [
+    renderTaskMarkdown(task).trimEnd(),
+    '',
+    '## State Target',
+    '',
+    `- feature_state_path: \`${stateCorrection.state_target.feature_state_path}\``,
+    `- project_state_path: \`${stateCorrection.state_target.project_state_path ?? 'none'}\``,
+    `- contract_reference: \`${stateCorrection.state_target.contract_reference}\``,
+    `- detected_issue: ${stateCorrection.state_target.detected_issue}`,
+    `- restored_lifecycle_state: ${stateCorrection.state_target.restored_lifecycle_state}`,
+    `- restored_active_task: \`${stateCorrection.state_target.restored_active_task}\``,
+    `- restored_active_correction_task: \`${stateCorrection.state_target.restored_active_correction_task}\``,
+    '',
+  ].join('\n');
+}
+
 function correctionTaskToTask(correction: CorrectionTask): PlannedTask {
   return {
     task_id: correction.correction_task_id,
@@ -1808,7 +2071,86 @@ function correctionTaskToTask(correction: CorrectionTask): PlannedTask {
   };
 }
 
-function buildImplementerPrompt(task: ParsedTaskDocument, correction: boolean): string {
+function stateCorrectionTaskToTask(stateCorrection: StateCorrectionTask): PlannedTask {
+  return {
+    task_id: stateCorrection.task_id,
+    feature_id: stateCorrection.feature_id,
+    title: stateCorrection.title,
+    objective: stateCorrection.objective,
+    first_executable_step: stateCorrection.first_executable_step,
+    minimum_progress_evidence: stateCorrection.minimum_progress_evidence,
+    trace: stateCorrection.trace,
+    context: stateCorrection.context,
+    scope: stateCorrection.scope,
+    constraints: stateCorrection.constraints,
+    development_policy: {
+      mode: stateCorrection.development_policy.mode,
+    },
+    quality_gates: stateCorrection.quality_gates,
+    acceptance_criteria: stateCorrection.acceptance_criteria,
+    expected_deliverables: stateCorrection.expected_deliverables,
+  };
+}
+
+function stateCorrectionNextPlanningHint(stateCorrection: StateCorrectionTask): string {
+  const activeTaskId = stateCorrection.state_target.restored_active_task;
+  switch (stateCorrection.state_target.restored_lifecycle_state) {
+    case 'task_ready':
+      return `Execute \`${activeTaskId}\` when the current execution mode allows it.`;
+    case 'review_pending':
+      return `Review \`${activeTaskId}\` next.`;
+    case 'implementation_running':
+      return `Resume \`${activeTaskId}\` implementation recovery before continuing.`;
+    case 'formalized':
+      return 'Plan the next task that advances this feature from the remaining gap.';
+    case 'correction_pending':
+      return `Execute correction task \`${stateCorrection.task_id}\` next.`;
+    default:
+      return `Continue from the repaired \`${stateCorrection.state_target.restored_lifecycle_state}\` state for \`${activeTaskId}\`.`;
+  }
+}
+
+function stateCorrectionProjectPendingLines(stateCorrection: StateCorrectionTask): string[] {
+  const activeTaskId = stateCorrection.state_target.restored_active_task;
+  switch (stateCorrection.state_target.restored_lifecycle_state) {
+    case 'task_ready':
+      return [
+        `Execute \`${activeTaskId}\` for the active feature.`,
+        'Continue updating this file with approved repository facts as feature work lands.',
+      ];
+    case 'review_pending':
+      return [
+        `Review \`${activeTaskId}\` for the active feature.`,
+        'Continue updating this file with approved repository facts as feature work lands.',
+      ];
+    case 'implementation_running':
+      return [
+        `Recover the implementation of \`${activeTaskId}\` before continuing.`,
+        'Continue updating this file with approved repository facts as feature work lands.',
+      ];
+    case 'formalized':
+      return [
+        `Plan the next implementation task for the active feature.`,
+        'Continue updating this file with approved repository facts as feature work lands.',
+      ];
+    case 'correction_pending':
+      return [
+        `Execute correction task \`${stateCorrection.task_id}\` for the active feature.`,
+        'Continue updating this file with approved repository facts as feature work lands.',
+      ];
+    default:
+      return [
+        `Continue from the repaired \`${stateCorrection.state_target.restored_lifecycle_state}\` state for the active feature.`,
+        'Continue updating this file with approved repository facts as feature work lands.',
+      ];
+  }
+}
+
+function buildImplementerPrompt(
+  task: ParsedTaskDocument,
+  correction: boolean,
+  stateCorrection: StateCorrectionTask | null,
+): string {
   const role = correction ? 'correction task' : 'task';
   return [
     'Act as the CompassRose Implementer.',
@@ -1817,12 +2159,19 @@ function buildImplementerPrompt(task: ParsedTaskDocument, correction: boolean): 
     '',
     'Read only:',
     '- `src/contracts/implementer/task-execution-prompt.md`',
+    ...(stateCorrection ? ['- `src/contracts/task/state-correction-task.md`'] : []),
     `- \`${task.path}\``,
     ...task.likelyAffectedFiles.map((item) => `- \`${item}\``),
     '',
     'Instructions:',
     `- Start with: ${task.firstExecutableStep}`,
     '- Follow TDD when the task changes code: add or update the smallest failing test first, then make it pass.',
+    stateCorrection
+      ? '- This task repairs repository state; keep the change documentation-only unless the task explicitly allows code edits.'
+      : '- Use the declared development policy for the task.',
+    stateCorrection
+      ? '- Preserve the restored task pointer and keep the correction narrowly focused on canonical state.'
+      : '- Keep the change minimal and avoid unrelated refactors.',
     '- Stay within the allowed paths listed in the task.',
     '- Do not modify forbidden paths.',
     '- Continue until there is repository evidence beyond read-only exploration.',
@@ -2203,6 +2552,36 @@ function parseStatusMap(sectionBody: string): Record<string, string> {
   return values;
 }
 
+function parsePreferredStatusValue(sectionBody: string, key: string): string | null {
+  let fallback: string | null = null;
+  let preferred: string | null = null;
+
+  for (const rawLine of sectionBody.split('\n')) {
+    const line = rawLine.trim();
+    if (!line.startsWith('- ')) {
+      continue;
+    }
+
+    const separator = line.indexOf(':');
+    if (separator === -1) {
+      continue;
+    }
+
+    const parsedKey = line.slice(2, separator).trim();
+    if (parsedKey !== key) {
+      continue;
+    }
+
+    const value = line.slice(separator + 1).trim();
+    fallback = value;
+    if (value !== 'none') {
+      preferred = value;
+    }
+  }
+
+  return preferred ?? fallback;
+}
+
 function replaceSection(markdown: string, heading: string, newBody: string): string {
   const pattern = new RegExp(`(^## ${escapeRegExp(heading)}\\n\\n)([\\s\\S]*?)(?=\\n## |$)`, 'm');
   if (!pattern.test(markdown)) {
@@ -2331,6 +2710,28 @@ function buildTaskFileName(taskId: string, title: string): string {
 
 function buildCorrectionTaskFileName(correctionTaskId: string, title: string): string {
   return `${humanCorrectionNumber(correctionTaskId).replace(/^Task\s+/i, '').trim()}-${slugify(title)}.md`;
+}
+
+function buildStateCorrectionTaskId(tasksDirectory: string, activeTaskId: string): string {
+  if (!statSafeIsDirectory(tasksDirectory)) {
+    return `${activeTaskId}-C1`;
+  }
+
+  const pattern = new RegExp('`' + escapeRegExp(activeTaskId) + '-C(\\d+)`', 'g');
+  let highestCorrection = 0;
+
+  for (const entry of readdirSync(tasksDirectory)) {
+    if (!entry.endsWith('.md')) {
+      continue;
+    }
+
+    const markdown = readFileSync(join(tasksDirectory, entry), 'utf8');
+    for (const match of markdown.matchAll(pattern)) {
+      highestCorrection = Math.max(highestCorrection, Number.parseInt(match[1] ?? '0', 10));
+    }
+  }
+
+  return `${activeTaskId}-C${highestCorrection + 1}`;
 }
 
 function humanTaskNumber(taskId: string): string {

@@ -8,6 +8,8 @@ A correction task is a task with a narrower scope.
 
 This shape may appear as a standalone task artifact or inline inside reviewer output.
 
+State repairs are modeled separately in `src/contracts/task/state-correction-task.md`.
+
 ---
 
 ## Responsibility

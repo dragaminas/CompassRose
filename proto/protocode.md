@@ -24,14 +24,15 @@ It is intentionally outside `src/` because it is a proving ground for orchestrat
 7. If the step is `review_task`, ask `codex exec` to review the current Git diff plus quality-gate and implementation artifacts.
 8. If the review is `approved`, update feature and project state and commit.
 9. If the review is `changes_required`, create a correction task, update state, return rejected, and stop.
-10. If the step is `correct_task`, ask `opencode run` to execute the correction task using TDD.
+10. If the selected feature's state is malformed but repairable, create a state correction task, update state, and continue.
+11. If the step is `correct_task`, ask `opencode run` to execute the correction task using TDD.
 
 ## Stop Conditions
 
 The prototype stops when any of these is true:
 
 - there is no non-completed feature left to implement
-- the selected feature is blocked
+- the selected feature is blocked and no state correction task can repair it
 - implementation fails
 - a required quality gate fails
 - review cannot proceed because there is no Git diff
@@ -60,6 +61,8 @@ Run artifacts are written under `.git/proto-compassrose/` so they do not dirty t
 - `refinement/`
 
 When a run stops because of a blocker or failure, the prototype also writes a refinement note that points back to the contracts or docs most likely needing improvement.
+
+When the runtime can repair malformed feature state, it writes a state correction task instead of stopping immediately.
 
 When a review diagnoses implementation problems, the prototype also writes a task-interface analysis artifact that distinguishes:
 

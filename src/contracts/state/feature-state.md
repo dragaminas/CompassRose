@@ -187,7 +187,7 @@ The review step failed to produce a valid result or reported an unrecoverable fa
 
 ### correction_pending
 
-A reviewer requested a bounded correction task and that correction task is now the active execution target.
+A reviewer requested a bounded correction task, or the runtime generated a state repair task, and that correction task is now the active execution target.
 
 ### blocked
 

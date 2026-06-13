@@ -99,8 +99,9 @@ Rules:
 1. Order features by numeric prefix ascending.
 2. Ignore features in `completed`.
 3. Select the first feature that is not `completed`.
-4. If the selected feature is `blocked`, stop the run and report the blocker.
-5. Do not skip an earlier pending feature to work on a later one.
+4. If the selected feature's state is malformed but repairable, generate a state correction task and transition the feature to `correction_pending`.
+5. If the selected feature is `blocked` for an unrecoverable reason, stop the run and report the blocker.
+6. Do not skip an earlier pending feature to work on a later one.
 
 This creates a strict feature-first execution policy for the MVP.
 
@@ -196,6 +197,7 @@ Next state:
 Action:
 
 - execute the recorded correction task instead of generating a broader replacement task
+- this may originate from review findings or from a state-repair task that restored malformed feature state
 
 Next state:
 
@@ -321,6 +323,7 @@ The runtime must stop when:
 
 - configuration preconditions fail
 - the selected feature is blocked
+- the selected feature is malformed and no state correction task can repair it
 - formalization fails
 - task planning fails
 - implementation fails

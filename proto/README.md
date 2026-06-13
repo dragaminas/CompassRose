@@ -48,6 +48,8 @@ The smoke harness sets `PROTO_COMPASSROSE_SKIP_CLEAN_CHECK=1` so the prototype c
 
 `proto:loop` now prints agent start/end markers plus captured `stdout` and `stderr`, which makes it easier to tell active agent work from a stalled loop.
 
+When the selector finds malformed but repairable feature state, the prototype now creates a state correction task instead of ending the run as a terminal blocker.
+
 ## Diagnostics
 
 Prototype artifacts are written under `.git/proto-compassrose/`:
