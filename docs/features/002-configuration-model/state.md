@@ -11,8 +11,8 @@ correction_pending
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T04-C2-U1-U1
-- active_correction_task: F002-T04-C2-U1-U1-C1
+- active_task: F002-T04-C2-U1-U1-C1
+- active_correction_task: F002-T04-C2-U1-U1-C1-C1
 - active_unblock_task: none
 - last_review_result: changes_required
 - last_implementation_result: not_run
@@ -80,4 +80,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Execute correction task `F002-T04-C2-U1-U1-C1` next.
+Execute correction task `F002-T04-C2-U1-U1-C1-C1` next.
