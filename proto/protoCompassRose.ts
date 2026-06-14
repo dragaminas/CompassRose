@@ -1818,6 +1818,16 @@ class PrototypeCompassRose {
       return snapshot.blockedFrom.active_task;
     }
 
+    for (const line of snapshot.blockedBy) {
+      const signatureMatch = line.match(/signature:\s*implementation-failure-(.+)/i);
+      if (signatureMatch) {
+        const taskId = signatureMatch[1].trim();
+        if (/^F\d+-T\d+/.test(taskId)) {
+          return taskId;
+        }
+      }
+    }
+
     return this.resolveStateCorrectionActiveTaskFromArtifacts(feature.id);
   }
 
