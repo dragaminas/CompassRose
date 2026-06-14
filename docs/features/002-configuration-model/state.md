@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+correction_pending
 
 ## Source Request
 
@@ -11,13 +11,13 @@ unblock_pending
 ## Operational Status
 
 - formalization: complete
-- active_correction_task: none
-- active_unblock_task: F002-T04-C2-U1-U1
-- last_review_result: blocked
-- last_unblock_result: not_run
-- active_task: none
+- active_task: F002-T04-C2-U1-U1
+- active_correction_task: F002-T04-C2-U1-U1-C1
+- active_unblock_task: none
+- last_review_result: changes_required
 - last_implementation_result: not_run
 - last_quality_gate_result: unknown
+- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -64,10 +64,10 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Blocked From
 
-- lifecycle_state: `task_ready`
-- active_task: `F002-T04-C2-U1`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
@@ -80,4 +80,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Execute unblock task `F002-T04-C2-U1-U1` next.
+Execute correction task `F002-T04-C2-U1-U1-C1` next.
