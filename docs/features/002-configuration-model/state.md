@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+correction_pending
 
 ## Source Request
 
@@ -11,19 +11,17 @@ unblock_pending
 ## Operational Status
 
 - formalization: complete
-- active_correction_task: none
-- active_unblock_task: F002-T04-C1-U1
-- last_review_result: blocked
-- last_unblock_result: not_run
-- active_task: none
+- active_task: F002-T04
+- active_correction_task: F002-T04-C2
+- active_unblock_task: none
 - last_implementation_result: not_run
 - last_quality_gate_result: unknown
+- last_review_result: not_run
+- last_unblock_result: not_run
 
 ## Current Reality
 
 The repository already contains `docs/compassrose/CONFIG.md` as a project-local CompassRose configuration document with a YAML configuration block, allowed values, override records, isolation rules, and a stabilized MVP Doctor contract.
-
-Task `F002-T05` is now in implementation recovery after a partial committed implementation. The next proto run should continue from the current repository state and finish the runtime-preflight coverage before review.
 
 CompassRose can now load that project-local configuration, validate the MVP doctor contract, and report the repository readiness checks through `compassrose doctor`, including a distinct preflight for the configured project-state document.
 
@@ -31,9 +29,7 @@ The accepted architecture documentation already supports repository-local state,
 
 This feature is now formalized under `docs/features/002-configuration-model/`, and the first implementation tasks have now been completed against the configuration target defined in `docs/compassrose/CONFIG.md`.
 
-Task `F002-T04` has now been approved. The typed configuration loader validates and exposes `execution`, `roles`, and `git_policy` data needed for the first broader orchestration handoff without expanding into feature selection or task execution.
-
-Feature state was repaired by correcting conflicting operational-status entries in `state.md`. The malformed `## Blocked By` section with contradictory evidence lines has been consolidated into a single coherent blocker description.
+Task `F002-T04` was approved, extending the typed config loader to validate and expose `execution`, `roles`, and `git_policy` data from the canonical project config.
 
 ## Implemented Deliverables
 
@@ -56,7 +52,7 @@ Feature state was repaired by correcting conflicting operational-status entries 
 - Stabilize the project-local configuration contract and any gaps in `docs/compassrose/CONFIG.md`: complete
 - Implement configuration loading and validation for the documented MVP scope: complete
 - Connect configuration validation to the doctor/runtime flow and update state based on approved behavior: blocked
-- Repair malformed operational-status entries in feature state: complete
+- Repair malformed operational-status entries in feature state: in progress
 
 ## Blocked By
 
@@ -68,21 +64,20 @@ Feature state was repaired by correcting conflicting operational-status entries 
 
 ## Blocked From
 
-- lifecycle_state: `task_ready`
-- active_task: `F002-T04-C1`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Task `F002-T04` was approved, extending the typed config loader and its tests to validate the first runtime-precondition policy fields from `docs/compassrose/CONFIG.md`. State correction F002-T04-C1 applied, consolidating malformed operational-status entries into a single canonical `blocked` block with repaired active task pointer `F002-T04`.
+Task `F002-T04` was approved, extending the typed config loader and its tests to validate the first runtime-precondition policy fields from `docs/compassrose/CONFIG.md`.
 
 ## Known Gaps
 
 - The project-local configuration flow still needs a runtime consumer that uses the validated `execution`, `roles`, and `git_policy` data during orchestration.
-- The active task has a partial implementation commit, so recovery must resume from the current repository state instead of assuming a fresh task start.
-- The operational status now reflects `blocked` with `active_task: F002-T04`; downstream tasks (F002-T05) require state re-evaluation after F002-T04 completes.
+- The correction task `F002-T04-C1` has a partial implementation attempt (no-diff), so recovery must resume from the current repository state instead of assuming a fresh task start.
 
 ## Next Planning Hint
 
-Execute unblock task `F002-T04-C1-U1` next.
+Execute correction task `F002-T04-C2` next.
