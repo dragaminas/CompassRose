@@ -11,9 +11,7 @@ In progress
 ## Current Reality
 
 - Feature `002-configuration-model` is blocked by `state-corruption-implementation-failed-feature-002-configuration-model-is-the-earliest-non-compl`.
-- Blocker recoverability: agent.
-- Feature `002-configuration-model` was suspended from `none`; the active task pointer remains `none`.
-- Blocking task context: none
+- Feature `002-configuration-model` now has a planned unblock task, `F002-T04-C1-U1`, to resolve a recoverable blocker and restore `task_ready`.
 
 ## Implemented
 
@@ -26,7 +24,7 @@ In progress
 
 ## Pending
 
-- Execute correction task `F002-T04-C1` for the active feature.
+- Execute unblock task `F002-T04-C1-U1` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -44,4 +42,4 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute correction task `F002-T04-C1`.
+The active feature is `002-configuration-model`, and its next valid action is to execute unblock task `F002-T04-C1-U1` from the captured `task_ready` state.
