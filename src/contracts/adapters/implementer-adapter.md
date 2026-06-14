@@ -26,6 +26,7 @@ An Implementer Adapter must:
 - Capture changed files.
 - Capture Git diff.
 - Capture implementation notes if available.
+- Treat implementation notes as concise execution commentary for the reviewer, not as product documentation.
 - Return normalized implementation result.
 - Treat repeated invocations for the same task as distinct attempts when the runtime allows recovery.
 - Preserve enough evidence to distinguish the latest attempt from any earlier interrupted attempt.

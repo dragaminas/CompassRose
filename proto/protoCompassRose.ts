@@ -298,6 +298,7 @@ interface RecoveryLesson {
   readonly correction_task_id: string | null;
   readonly review_status: ReviewerStatus;
   readonly summary: string;
+  readonly implementation_notes: string | null;
   readonly review_findings: readonly string[];
   readonly quality_gate_failures: readonly string[];
   readonly recommended_action: TaskInterfaceAnalysis['recommended_action'];
@@ -1078,9 +1079,7 @@ class PrototypeCompassRose {
 
     const planned = this.codex.runStructured<PlannerOutput>(prompt, PLANNER_OUTPUT_SCHEMA, [], `task-plan:${featureId}`);
     const task = planned.task;
-    if (task.expected_deliverables.includes('code') && task.development_policy.mode !== 'test_guided') {
-      throw new Error(`Planned task ${task.task_id} must use \`test_guided\` when it delivers code.`);
-    }
+    validateTaskDeliverables(task, 'task');
 
     const taskPath = join(feature.tasksDirectory, buildTaskFileName(task.task_id, task.title));
     const taskMarkdown = renderTaskMarkdown(task);
@@ -1166,9 +1165,7 @@ class PrototypeCompassRose {
 
     const planned = this.codex.runStructured<PlannerOutput>(prompt, PLANNER_OUTPUT_SCHEMA, [], `unblock-plan:${featureId}`);
     const task = planned.task;
-    if (task.expected_deliverables.includes('code') && task.development_policy.mode !== 'test_guided') {
-      throw new Error(`Planned unblock task ${task.task_id} must use \`test_guided\` when it delivers code.`);
-    }
+    validateTaskDeliverables(task, 'unblock task');
 
     const unblockMetadata: UnblockTaskMetadata = {
       blocker,
@@ -1293,6 +1290,7 @@ class PrototypeCompassRose {
       '- `docs/compassrose/CONFIG.md`',
       `- \`${diffPath}\``,
       `- \`${implementationPath}\``,
+      '- `implementation.notes` inside the implementation artifact when present; treat it as implementer-reported context, not proof.',
       `- \`${qualityPath}\``,
       '- if needed, only the files changed in the diff',
       '',
@@ -1461,6 +1459,7 @@ class PrototypeCompassRose {
       `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
       '- `docs/compassrose/CONFIG.md`',
       `- \`${join(tempDir, 'implementation.json')}\``,
+      '- `implementation.notes` inside `implementation.json` when present; treat it as implementer-reported context, not proof.',
       `- \`${join(tempDir, 'quality-gates.json')}\``,
       `- \`${reviewPath}\``,
       '',
@@ -1613,6 +1612,7 @@ class PrototypeCompassRose {
     const diff = this.git.diffPatch(excludedPaths);
     const rawOutput = joinOutput(commandResult.stdout, commandResult.stderr);
     const diagnostics = buildImplementationDiagnostics(task, commandResult, changedFiles, diff, rawOutput);
+    const implementationNotes = extractImplementationNotes(rawOutput);
     const hasDiff = diff.trim().length > 0;
     const status = commandResult.ok && hasDiff && diagnostics.minimum_progress_evidence_status !== 'absent'
       ? 'success'
@@ -1623,7 +1623,7 @@ class PrototypeCompassRose {
       changed_files: changedFiles,
       git_diff: diff,
       raw_output: rawOutput,
-      implementation_notes: null,
+      implementation_notes: implementationNotes,
       diagnostics,
       error: status === 'failed'
         ? buildImplementationErrorMessage(task.taskId, commandResult, diagnostics, hasDiff)
@@ -1650,7 +1650,7 @@ class PrototypeCompassRose {
       ]),
       git_diff: diff,
       raw_output: 'No stored implementer output.',
-      implementation_notes: null,
+      implementation_notes: extractImplementationNotes('No stored implementer output.'),
       diagnostics: {
         classification: 'unknown',
         evidence: ['No stored implementation artifact was found.'],
@@ -2761,6 +2761,7 @@ class PrototypeCompassRose {
       correction_task_id: correctionTaskId,
       review_status: review.status,
       summary: review.summary,
+      implementation_notes: implementation.implementation_notes,
       review_findings: review.findings.map((finding) => `[${finding.severity}] ${finding.message}`),
       quality_gate_failures: qualityGateFailures,
       recommended_action: analysis.recommended_action,
@@ -2826,6 +2827,7 @@ class PrototypeCompassRose {
       `- task_id: ${lesson.task_id}`,
       `- review_status: ${lesson.review_status}`,
       `- summary: ${lesson.summary}`,
+      `- implementation_notes: ${lesson.implementation_notes ?? 'none'}`,
       ...lesson.scope_isolation_notes.map((item) => `- scope_isolation: ${item}`),
       ...lesson.review_findings.map((item) => `- review_finding: ${item}`),
       ...lesson.quality_gate_failures.map((item) => `- quality_gate_failure: ${item}`),
@@ -2879,6 +2881,9 @@ class PrototypeCompassRose {
       '',
       '## Review Findings',
       ...(lesson.review_findings.length > 0 ? lesson.review_findings.map((item) => `- ${item}`) : ['- None recorded.']),
+      '',
+      '## Implementation Notes',
+      ...(lesson.implementation_notes ? lesson.implementation_notes.split('\n').map((item) => `- ${item}`) : ['- None recorded.']),
       '',
       '## Quality Gate Failures',
       ...(lesson.quality_gate_failures.length > 0 ? lesson.quality_gate_failures.map((item) => `- ${item}`) : ['- None recorded.']),
@@ -3705,6 +3710,8 @@ function buildImplementerPrompt(
     '- Continue until there is repository evidence beyond read-only exploration.',
     `- Follow \`${task.developmentPolicy}\`.`,
     '- Keep the change minimal and provider-independent.',
+    '- If you make no repository changes because the task already appears satisfied or blocked, end with a short `## Implementation Notes` section that explains why and cites the evidence.',
+    '- Keep implementation notes brief and separate from product documentation.',
     '- Do not claim approval.',
   ].join('\n');
 }
@@ -3790,6 +3797,29 @@ function buildImplementationErrorMessage(
   }
 
   return `Implementation for ${taskId} failed (${diagnostics.classification}).`;
+}
+
+function extractImplementationNotes(rawOutput: string): string | null {
+  const section = optionalSection(rawOutput, 'Implementation Notes');
+  if (!section) {
+    return null;
+  }
+
+  return section.trim();
+}
+
+function validateTaskDeliverables(task: PlannedTask, taskLabel: string): void {
+  const deliversExecutableWork = task.expected_deliverables.some((deliverable) => deliverable === 'code' || deliverable === 'tests');
+
+  if (task.development_policy.mode === 'documentation_first' && deliversExecutableWork) {
+    throw new Error(
+      `Planned ${taskLabel} ${task.task_id} must not deliver code or tests when it uses \`documentation_first\`.`,
+    );
+  }
+
+  if (deliversExecutableWork && task.development_policy.mode !== 'test_guided') {
+    throw new Error(`Planned ${taskLabel} ${task.task_id} must use \`test_guided\` when it delivers code or tests.`);
+  }
 }
 
 function inferLikelySources(trigger: string, selectedStep: StepDecision | null): string[] {

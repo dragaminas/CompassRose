@@ -96,6 +96,9 @@ An unblock task must:
 - Include a concrete `first_executable_step`.
 - Include `minimum_progress_evidence` that cannot be satisfied by reading alone.
 - When the blocker is an `implementation_failure`, preserve the active task anchor and make the recovery path explicit instead of reopening the whole feature backlog.
+- Keep `expected_deliverables` aligned with `development_policy.mode`.
+- If the unblock task is documentation-only, it must stay `documentation_first` and deliver documentation only.
+- If the unblock task needs code or tests, it must be planned as `test_guided`.
 
 An unblock task must not:
 

@@ -57,9 +57,20 @@ function main(): number {
   if (scenario === 'implementation-failed-recovery') {
     seedImplementationFailedFeatureState(cloneRoot);
   }
+  if (scenario === 'unblock-doc-code-mismatch') {
+    seedImplementationFailedFeatureState(cloneRoot);
+  }
   if (scenario === 'state-correction-missing-active-task') {
     seedMalformedFeatureState(cloneRoot);
     seedStateCorrectionFallbackTaskArtifact(cloneRoot);
+  }
+  if (
+    scenario !== 'unblock' &&
+    scenario !== 'implementation-failed-recovery' &&
+    scenario !== 'unblock-doc-code-mismatch' &&
+    scenario !== 'state-correction-missing-active-task'
+  ) {
+    seedTaskReadyState(cloneRoot);
   }
   writeExecutableScript(codexMock, CODEX_MOCK_SCRIPT);
   writeExecutableScript(opencodeMock, OPENCODE_MOCK_SCRIPT);
@@ -102,6 +113,7 @@ function main(): number {
     run_id?: string;
     status?: string;
     exit_code?: number;
+    error?: string | null;
     steps?: Array<{ decision?: { kind?: string }; summary?: string; continue_loop?: boolean; exit_code?: number }>;
   };
   const markerPath = join(cloneRoot, 'proto', markerFileNameForScenario(scenario));
@@ -120,7 +132,8 @@ function main(): number {
   const taskInterfaceAnalysisPath = join(cloneRoot, '.git', 'proto-compassrose', 'task-interface-analysis', 'F002-T04.json');
   const recoveryLessonPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-recovery-lesson.json');
   const refinementPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-refinement.json');
-  const stateCorrectionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T05-C1.json');
+  const stateCorrectionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-C2.json');
+  const implementationArtifactPath = join(cloneRoot, '.git', 'proto-compassrose', 'implementations', 'F002-T04.json');
   const implementationAttemptHistoryPath = join(
     cloneRoot,
     '.git',
@@ -134,7 +147,7 @@ function main(): number {
     'features',
     '002-configuration-model',
     'tasks',
-    '005.1-repair-feature-state-for-f002-t05.md',
+    '004.1-repair-feature-state-for-f002-t04.md',
   );
   const malformedFeatureStatePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
   const worktreeStatus = spawnSync('git', ['status', '--porcelain'], {
@@ -168,6 +181,7 @@ function main(): number {
     recoveryLessonPath,
     refinementPath,
     implementationAttemptHistoryPath,
+    implementationArtifactPath,
     stateCorrectionTaskPath,
     stateCorrectionDocPath,
     featureTasksDirectory,
@@ -200,6 +214,7 @@ function buildScenarioChecks(input: {
   runSummary: {
     status?: string;
     exit_code?: number;
+    error?: string | null;
     steps?: Array<{
       decision?: { kind?: string; task_id?: string | null; feature_id?: string | null; correction_task_id?: string | null };
       summary?: string;
@@ -216,6 +231,7 @@ function buildScenarioChecks(input: {
   recoveryLessonPath: string;
   refinementPath: string;
   implementationAttemptHistoryPath: string;
+  implementationArtifactPath: string;
   stateCorrectionTaskPath: string;
   stateCorrectionDocPath: string;
   featureTasksDirectory: string;
@@ -238,6 +254,7 @@ function buildScenarioChecks(input: {
     recoveryLessonPath,
     refinementPath,
     implementationAttemptHistoryPath,
+    implementationArtifactPath,
     stateCorrectionTaskPath,
     stateCorrectionDocPath,
     featureTasksDirectory,
@@ -266,6 +283,43 @@ function buildScenarioChecks(input: {
       { name: 'terminal blocker recorded a blocker profile', ok: existsSync(blockerProfilePath) },
       { name: 'no unblock task was created', ok: !existsSync(unblockTaskPath) },
       { name: 'opencode touched the repo', ok: markerExists },
+    ];
+  }
+
+  if (scenario === 'implementation-notes') {
+    const implementationArtifact = readJsonIfExists(implementationArtifactPath);
+    const implementationNotes = typeof implementationArtifact?.implementation_notes === 'string'
+      ? implementationArtifact.implementation_notes
+      : null;
+    const expectedCodexCalls = implementerTool === 'codex' ? 4 : 3;
+    const expectedOpenCodeCalls = implementerTool === 'codex' ? 0 : 1;
+
+    return [
+      { name: 'codex was called enough times to select, implement, review, and stop', ok: codexCalls >= expectedCodexCalls },
+      { name: 'opencode call count matched the configured implementer', ok: opencodeCalls === expectedOpenCodeCalls },
+      { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
+      {
+        name: 'implementation notes were captured in the implementation artifact',
+        ok: implementationNotes !== null && implementationNotes.includes('already_complete'),
+      },
+    ];
+  }
+
+  if (scenario === 'unblock-doc-code-mismatch') {
+    const refinement = readJsonIfExists(refinementPath);
+    const mismatchTaskPath = join(protoTasksDirectory, 'F002-T05-U2.json');
+    const failedDueToPolicyMismatch =
+      runSummary.status === 'failed' &&
+      typeof runSummary.error === 'string' &&
+      runSummary.error.includes('documentation_first') &&
+      runSummary.error.includes('code or tests');
+
+    return [
+      { name: 'codex was called enough times to reach the invalid unblock task', ok: codexCalls >= 1 },
+      { name: 'opencode was not called because planning failed before implementation', ok: opencodeCalls === 0 },
+      { name: 'run failed with a policy mismatch', ok: failedDueToPolicyMismatch },
+      { name: 'a refinement artifact was recorded for the failed unblock planning step', ok: refinement !== null },
+      { name: 'the invalid unblock task was not materialized', ok: !existsSync(mismatchTaskPath) },
     ];
   }
 
@@ -338,10 +392,10 @@ function buildScenarioChecks(input: {
   if (scenario === 'state-correction-missing-active-task') {
     const malformedFeatureState = existsSync(malformedFeatureStatePath) ? readFileSync(malformedFeatureStatePath, 'utf8') : '';
     const stateCorrectionArtifactExists = readdirSync(protoTasksDirectory).some(
-      (entry) => /^F002-T05-C\d+\.json$/.test(entry),
+      (entry) => /^F002-T04-C\d+\.json$/.test(entry),
     );
     const stateCorrectionDocumentExists = readdirSync(featureTasksDirectory).some(
-      (entry) => /^005\.\d+-repair-feature-state-for-f002-t05\.md$/.test(entry),
+      (entry) => /^004\.\d+-repair-feature-state-for-f002-t04\.md$/.test(entry),
     );
 
     return [
@@ -354,8 +408,8 @@ function buildScenarioChecks(input: {
         name: 'feature state now records correction pending',
         ok:
           malformedFeatureState.includes('## Lifecycle State\n\ncorrection_pending') &&
-          malformedFeatureState.includes('- active_task: F002-T05') &&
-          /- active_correction_task: `?F002-T05-C\d+`?/.test(malformedFeatureState) &&
+          malformedFeatureState.includes('- active_task: F002-T04') &&
+          /- active_correction_task: `?F002-T04-C\d+`?/.test(malformedFeatureState) &&
           malformedFeatureState.includes('- last_unblock_result: not_run'),
       },
       ...(commitEnabled ? [{ name: 'committed recovery steps left a clean worktree', ok: worktreeClean }] : []),
@@ -401,6 +455,10 @@ function expectedProtoExitCodesForScenario(scenario: string): readonly number[] 
     return [2];
   }
 
+  if (scenario === 'unblock-doc-code-mismatch') {
+    return [1];
+  }
+
   return [0];
 }
 
@@ -420,6 +478,10 @@ function markerFileNameForScenario(scenario: string): string {
       return 'state-correction-missing-active-task.txt';
     case 'implementation-retry':
       return 'implementation-retry.txt';
+    case 'implementation-notes':
+      return 'implementation-notes.txt';
+    case 'unblock-doc-code-mismatch':
+      return 'unblock-doc-code-mismatch.txt';
     default:
       return 'e2e-control.txt';
   }
@@ -549,6 +611,75 @@ function seedStateCorrectionFallbackTaskArtifact(cloneRoot: string): void {
   );
 }
 
+function seedTaskReadyState(cloneRoot: string): void {
+  const statePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+  writeFileSync(
+    statePath,
+    `# State: Configuration Model
+
+## Lifecycle State
+
+task_ready
+
+## Source Request
+
+\`request.md\`
+
+## Operational Status
+
+- formalization: complete
+- active_task: F002-T04
+- active_correction_task: none
+- active_unblock_task: none
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
+- last_unblock_result: not_run
+
+## Current Reality
+
+The configuration loader task is ready to execute.
+
+## Implemented Deliverables
+
+- feature formalization exists
+
+## Remaining Deliverables
+
+- validate runtime-precondition policy fields in the project config loader
+
+## Outline Progress
+
+- Plan the configuration loader task: complete
+- Implement the loader task: not started
+
+## Blocked By
+
+- None
+
+## Blocked From
+
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
+
+## Last Approved Change
+
+Task \`F002-T04\` was approved before the implementation-notes scenario.
+
+## Known Gaps
+
+- None
+
+## Next Planning Hint
+
+Execute \`F002-T04\` when the current execution mode allows it.
+`,
+    'utf8',
+  );
+}
+
 const CODEX_MOCK_SCRIPT = `#!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
@@ -566,6 +697,11 @@ if (kind === 'implementer') {
   appendLog(logFile, \`implementer: \${args.join(' ')}\`);
   fs.mkdirSync(path.dirname(markerPath), { recursive: true });
   fs.writeFileSync(markerPath, 'codex e2e touched this file\\n', 'utf8');
+  if (scenario === 'implementation-notes') {
+    process.stdout.write(
+      '## Implementation Notes\\n\\n- status: already_complete\\n- reason: the requested behavior already exists in src/config/configReader.ts\\n- evidence: src/config/configReader.ts, tests/configReader.test.ts\\n',
+    );
+  }
   process.exit(0);
 }
 
@@ -1038,6 +1174,74 @@ if (scenario === 'unblock') {
       reason: 'e2e mock: stop after implementation_failed recovery',
     };
   }
+} else if (scenario === 'unblock-doc-code-mismatch') {
+  if (count === 1) {
+    payload = {
+      task: {
+        task_id: 'F002-T05-U2',
+        feature_id: '002-configuration-model',
+        title: 'Repair the unblock task interface for a documentation-first recovery',
+        objective: 'Demonstrate that a documentation-first unblock task cannot also deliver code.',
+        first_executable_step: 'Read src/contracts/planner/unblock-task-planning-prompt.md and confirm the deliverable policy.',
+        minimum_progress_evidence: [
+          'The unblock planning contract forbids code deliverables under documentation_first.',
+          'The prototype rejects the invalid unblock task before implementation starts.',
+        ],
+        trace: {
+          roadmap_objective: 'Deterministic Orchestration',
+          feature_goal: 'Keep unblock planning consistent with task deliverables.',
+          state_gap: 'The unblock planning contract allowed a documentation-first task to drift into code deliverables.',
+        },
+        context: {
+          summary: 'The unblock task should remain documentation-only when it is planned as documentation_first.',
+          relevant_paths: [
+            'src/contracts/planner/unblock-task-planning-prompt.md',
+            'src/contracts/planner/output.md',
+            'src/contracts/task/unblock-task.md',
+            'src/contracts/runtime/operation-loop.md',
+          ],
+          relevant_modules: ['Planner output contract', 'Unblock task contract', 'Runtime operation loop'],
+        },
+        scope: {
+          allowed_paths: [
+            'src/contracts/planner/unblock-task-planning-prompt.md',
+            'src/contracts/planner/output.md',
+            'src/contracts/task/unblock-task.md',
+            'src/contracts/runtime/operation-loop.md',
+            'proto/unblock-doc-code-mismatch.txt',
+          ],
+          forbidden_paths: [
+            'src/cli/main.ts',
+            'src/config/configReader.ts',
+            'docs/compassrose/PROJECT_STATE.md',
+          ],
+        },
+        constraints: [
+          'Keep the unblock task documentation-only when it is declared documentation_first.',
+          'Do not add code or tests to a documentation-first unblock task.',
+        ],
+        development_policy: {
+          mode: 'documentation_first',
+        },
+        quality_gates: {
+          before_review: ['git diff --check'],
+        },
+        acceptance_criteria: [
+          'The unblock task contract and planner prompt agree on deliverable policy.',
+          'The unblock task does not mix documentation-first planning with code deliverables.',
+        ],
+        expected_deliverables: ['documentation', 'code'],
+      },
+    };
+  } else {
+    payload = {
+      kind: 'stop',
+      feature_id: null,
+      task_id: null,
+      correction_task_id: null,
+      reason: 'e2e mock: stop after documentation-first unblock mismatch',
+    };
+  }
 } else if (scenario === 'state-correction-missing-active-task') {
   if (count === 1) {
     payload = {
@@ -1404,6 +1608,10 @@ function markerFileNameForScenario(scenario) {
       return 'state-correction-missing-active-task.txt';
     case 'implementation-retry':
       return 'implementation-retry.txt';
+    case 'implementation-notes':
+      return 'implementation-notes.txt';
+    case 'unblock-doc-code-mismatch':
+      return 'unblock-doc-code-mismatch.txt';
     default:
       return 'e2e-control.txt';
   }
@@ -1444,6 +1652,11 @@ const count = readCount(countFile) + 1;
 
 fs.mkdirSync(path.dirname(markerPath), { recursive: true });
 fs.writeFileSync(markerPath, 'opencode e2e touched this file\\n', 'utf8');
+if (scenario === 'implementation-notes') {
+  process.stdout.write(
+    '## Implementation Notes\\n\\n- status: already_complete\\n- reason: the requested behavior already exists in src/config/configReader.ts\\n- evidence: src/config/configReader.ts, tests/configReader.test.ts\\n',
+  );
+}
 
 fs.appendFileSync(logFile, JSON.stringify({ cwd: repoRoot, prompt, count }) + '\\n', 'utf8');
 

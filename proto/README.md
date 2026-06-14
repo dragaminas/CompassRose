@@ -31,6 +31,8 @@ When review returns `changes_required`, `proto:loop` now records a recovery less
 
 Planning-style recovery steps such as `correct_state` checkpoint their state/task documents in the default commit mode, and implementation/correction retries can continue from a partial diff when that diff is the active task's own recovery context.
 
+Implementation attempts also capture optional `implementation_notes` in the stored artifact, which the reviewer can use as lightweight execution context when the implementer reports that no code changes were needed or that the task was already satisfied.
+
 If you interrupt `proto:loop`, the process stops cleanly at the current safe checkpoint instead of converting the interruption into an implementation failure.
 
 ## Typecheck

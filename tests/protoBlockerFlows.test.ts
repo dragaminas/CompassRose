@@ -107,6 +107,24 @@ describe('proto blocker flows', () => {
     expect(result.stderr).not.toContain('FAIL:');
   });
 
+  test('captures implementation notes from the implementer as reviewer context', () => {
+    const result = runProtoScenario('implementation-notes');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('PASS: implementation notes were captured in the implementation artifact');
+    expect(result.stdout).toContain('PASS: run completed successfully');
+    expect(result.stderr).not.toContain('FAIL:');
+  });
+
+  test('rejects documentation-first unblock tasks that try to deliver code', () => {
+    const result = runProtoScenario('unblock-doc-code-mismatch');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('PASS: run failed with a policy mismatch');
+    expect(result.stdout).toContain('PASS: the invalid unblock task was not materialized');
+    expect(result.stderr).not.toContain('FAIL:');
+  });
+
   test('creates a state correction task even when active_task is missing from malformed state', () => {
     const result = runProtoScenario('state-correction-missing-active-task');
 

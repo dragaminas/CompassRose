@@ -40,6 +40,7 @@ The reviewer must:
 - evaluate quality gate results
 - identify architectural violations
 - when an implementation was retried after partial progress, compare the final diff against the retry context and note whether the task interface appears tight enough for future runs
+- inspect implementation notes when present, especially when the implementer reports that no code changes were needed or that the task was already satisfied
 - when `changes_required` is returned, make the findings specific enough for the orchestrator to persist a recovery lesson, including explicit scope-isolation notes when the reviewable diff leaks runtime state files or other forbidden paths
 - return structured findings
 - return a correction task when status is `changes_required`

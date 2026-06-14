@@ -170,6 +170,9 @@ A task must:
 - Contain no hidden requirements.
 - Include a concrete `first_executable_step`.
 - Include `minimum_progress_evidence` that cannot be satisfied by reading alone.
+- Keep `expected_deliverables` aligned with `development_policy.mode`.
+- If `development_policy.mode` is `documentation_first`, `expected_deliverables` must be documentation-only.
+- If `expected_deliverables` includes `code` or `tests`, the task must be planned for `test_guided` execution.
 
 A task must not:
 

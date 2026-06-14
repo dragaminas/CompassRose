@@ -226,6 +226,7 @@ Action:
 
 - if the failed implementation is recoverable, generate a bounded unblock task with the planner-grade role and transition the feature to `unblock_pending`
 - otherwise stop the run unless an explicit recovery policy transitions the feature back into a valid pending state
+- documentation-only unblock tasks may remain `documentation_first`; unblock tasks that need code or tests must be planned as `test_guided`
 
 ### blocked
 

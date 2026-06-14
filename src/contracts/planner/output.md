@@ -96,6 +96,9 @@ The task must:
 - Include enough context to avoid repository-wide exploration.
 - Include a concrete first executable step that can begin the task without interpretation.
 - Include minimum progress evidence that proves the implementation moved beyond reading.
+- Keep `expected_deliverables` aligned with `development_policy.mode`.
+- If `development_policy.mode` is `documentation_first`, `expected_deliverables` must not include `code` or `tests`.
+- If `expected_deliverables` includes `code` or `tests`, `development_policy.mode` must be `test_guided`.
 
 The task must not:
 

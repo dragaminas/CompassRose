@@ -80,9 +80,10 @@ Instructions:
 - Run the required quality gates when they are available in the environment.
 
 Output expectations:
-- produce the code, tests, and documentation changes required by the task
+- produce the repository changes required by the task
 - identify the minimum progress evidence produced, when implementation notes are available
-- provide concise implementation notes when useful for review
+- if you made no repository changes because the task already appears satisfied or blocked, append a short `Implementation Notes` section that explains why and cites the evidence
+- keep implementation notes brief and separate from product documentation
 
 Do not claim approval.
 Do not generate a review result.

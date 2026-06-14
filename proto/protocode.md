@@ -59,6 +59,7 @@ The prototype stops when any of these is true:
 The prototype enforces TDD for implementation work:
 
 - task planning requires `development_policy.mode = test_guided` whenever the task delivers code
+- documentation-only unblock tasks may remain `documentation_first`; unblock tasks that deliver code or tests must be planned as `test_guided`
 - implementation prompts instruct the implementer to add or adjust the smallest failing test first, then make it pass
 - review prompts explicitly check that `test_guided` tasks include meaningful test changes
 
@@ -87,6 +88,8 @@ When a review diagnoses implementation problems, the prototype also writes a tas
 
 - what could be improved by tightening the task contract
 - what should be documented as an implementer limitation
+
+Implementation attempts may also emit concise `Implementation Notes`; the prototype stores them in the implementation artifact and reuses them as reviewer context when the implementer reports that no code changes were needed or that the task was already satisfied.
 
 ## State Updates
 

@@ -37,6 +37,8 @@ Optional inputs:
 - Previous review result
 - User review instructions
 
+When implementation notes are present, the Reviewer should treat them as implementer-reported context, not as proof that the task is complete.
+
 ---
 
 ## Required Shape
