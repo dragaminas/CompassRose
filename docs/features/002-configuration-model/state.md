@@ -12,7 +12,7 @@ unblock_pending
 
 - formalization: complete
 - active_correction_task: none
-- active_unblock_task: F002-T04-C2-U1
+- active_unblock_task: F002-T04-C2-U1-U1
 - last_review_result: blocked
 - last_unblock_result: not_run
 - active_task: none
@@ -57,15 +57,15 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 ## Blocked By
 
 - - kind: implementation_failure
-- - signature: implementation-failure-F002-T04-C2
+- - signature: implementation-failure-F002-T04-C2-U1
 - - recoverability: agent
-- - observed_state: lifecycle=implementation_failed; active_task=F002-T04-C2; active_correction_task=none; active_unblock_task=none
-- - evidence: Implementation for F002-T04-C2 produced no git diff (context_overflow).
+- - observed_state: lifecycle=implementation_failed; active_task=F002-T04-C2-U1; active_correction_task=none; active_unblock_task=none
+- - evidence: Implementation for F002-T04-C2-U1 produced no git diff (context_overflow).
 
 ## Blocked From
 
 - lifecycle_state: `task_ready`
-- active_task: `F002-T04-C2`
+- active_task: `F002-T04-C2-U1`
 - active_correction_task: `none`
 - active_unblock_task: `none`
 
@@ -80,4 +80,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Execute unblock task `F002-T04-C2-U1` next.
+Execute unblock task `F002-T04-C2-U1-U1` next.
