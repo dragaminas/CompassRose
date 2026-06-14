@@ -173,6 +173,9 @@ A task must:
 - Keep `expected_deliverables` aligned with `development_policy.mode`.
 - If `development_policy.mode` is `documentation_first`, `expected_deliverables` must be documentation-only.
 - If `expected_deliverables` includes `code` or `tests`, the task must be planned for `test_guided` execution.
+- Keep `quality_gates.before_review` runnable in a plain shell on the target runtime.
+- Prefer portable commands that are expected to exist in the runtime environment.
+- Do not require optional tools unless the task context explicitly states they are available.
 
 A task must not:
 

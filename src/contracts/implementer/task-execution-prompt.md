@@ -30,6 +30,7 @@ The implementer must:
 
 - start with the task's `first_executable_step`
 - produce at least one item of `minimum_progress_evidence`
+- end every attempt with a short `## Implementation Notes` section that justifies the outcome
 - stay within allowed paths
 - respect forbidden paths
 - satisfy the acceptance criteria
@@ -81,8 +82,8 @@ Instructions:
 
 Output expectations:
 - produce the repository changes required by the task
-- identify the minimum progress evidence produced, when implementation notes are available
-- if you made no repository changes because the task already appears satisfied or blocked, append a short `Implementation Notes` section that explains why and cites the evidence
+- identify the minimum progress evidence produced
+- always append a short `## Implementation Notes` section that explains what changed or, if nothing changed, why nothing changed and which evidence supports that outcome
 - keep implementation notes brief and separate from product documentation
 
 Do not claim approval.

@@ -8,13 +8,14 @@ const tsxBinary = join(repoRoot, 'node_modules', '.bin', 'tsx');
 
 function runProtoScenario(
   scenario: string,
-  options: { commit?: boolean } = {},
+  options: { commit?: boolean; implementer?: 'codex' | 'opencode' } = {},
 ): { status: number | null; stdout: string; stderr: string } {
   const result = spawnSync(tsxBinary, ['proto/protoCompassRose.e2e.ts'], {
     cwd: repoRoot,
     env: {
       ...process.env,
       PROTO_E2E_COMMIT: options.commit ? '1' : '0',
+      ...(options.implementer ? { PROTO_E2E_IMPLEMENTER: options.implementer } : {}),
       PROTO_E2E_SCENARIO: scenario,
     },
     encoding: 'utf8',
@@ -113,6 +114,26 @@ describe('proto blocker flows', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('PASS: implementation notes were captured in the implementation artifact');
     expect(result.stdout).toContain('PASS: run completed successfully');
+    expect(result.stderr).not.toContain('FAIL:');
+  });
+
+  test('captures implementation notes through the codex implementer path as well', () => {
+    const result = runProtoScenario('implementation-notes', { implementer: 'codex' });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('PASS: codex was called enough times to select, implement, review, and stop');
+    expect(result.stdout).toContain('PASS: opencode call count matched the configured implementer');
+    expect(result.stdout).toContain('PASS: implementation notes were captured in the implementation artifact');
+    expect(result.stderr).not.toContain('FAIL:');
+  });
+
+  test('fails implementation attempts that omit the required justification notes', () => {
+    const result = runProtoScenario('implementation-missing-notes');
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('PASS: implementation attempt failed because the justification was missing');
+    expect(result.stdout).toContain('PASS: implementation diagnostics recorded the missing justification');
+    expect(result.stdout).toContain('PASS: implementation artifact recorded no notes');
     expect(result.stderr).not.toContain('FAIL:');
   });
 

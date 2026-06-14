@@ -32,12 +32,13 @@ Required inputs:
 
 Optional inputs:
 
-- Implementation notes
+- Implementation notes from the attempt artifact, when available
 - Implementation diagnostics
 - Previous review result
 - User review instructions
 
 When implementation notes are present, the Reviewer should treat them as implementer-reported context, not as proof that the task is complete.
+If implementation notes are missing, the Reviewer should treat that omission as an execution defect and surface it explicitly in the review result.
 
 ---
 
@@ -70,7 +71,7 @@ reviewer_input:
     git_diff: string
     notes: string | null
     diagnostics:
-      classification: context_overflow | provider_failure | permission_prompt | tool_refusal | model_passivity | ui_cli_behavior | unknown
+      classification: context_overflow | provider_failure | permission_prompt | tool_refusal | missing_implementation_notes | model_passivity | ui_cli_behavior | unknown
       evidence:
         - string
       first_executable_step_status: attempted | not_attempted | unknown

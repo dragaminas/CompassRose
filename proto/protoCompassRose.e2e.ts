@@ -305,6 +305,41 @@ function buildScenarioChecks(input: {
     ];
   }
 
+  if (scenario === 'implementation-missing-notes') {
+    const implementationArtifact = readJsonIfExists(implementationArtifactPath);
+    const implementationError = typeof implementationArtifact?.error === 'string' ? implementationArtifact.error : null;
+    const implementationNotes = typeof implementationArtifact?.implementation_notes === 'string'
+      ? implementationArtifact.implementation_notes
+      : null;
+    const implementationClassification = typeof implementationArtifact?.diagnostics?.classification === 'string'
+      ? implementationArtifact.diagnostics.classification
+      : null;
+
+    return [
+      { name: 'codex was called enough times to reach an implementation attempt', ok: codexCalls >= 1 },
+      {
+        name: 'opencode call count matched the configured implementer',
+        ok: implementerTool === 'codex' ? opencodeCalls === 0 : opencodeCalls >= 1,
+      },
+      {
+        name: 'implementation attempt failed because the justification was missing',
+        ok:
+          implementationArtifact !== null &&
+          implementationArtifact.status === 'failed' &&
+          typeof implementationError === 'string' &&
+          implementationError.includes('Implementation Notes'),
+      },
+      {
+        name: 'implementation diagnostics recorded the missing justification',
+        ok: implementationClassification === 'missing_implementation_notes',
+      },
+      {
+        name: 'implementation artifact recorded no notes',
+        ok: implementationNotes === null,
+      },
+    ];
+  }
+
   if (scenario === 'unblock-doc-code-mismatch') {
     const refinement = readJsonIfExists(refinementPath);
     const mismatchTaskPath = join(protoTasksDirectory, 'F002-T05-U2.json');
@@ -459,6 +494,10 @@ function expectedProtoExitCodesForScenario(scenario: string): readonly number[] 
     return [1];
   }
 
+  if (scenario === 'implementation-missing-notes') {
+    return [0, 1, 2];
+  }
+
   return [0];
 }
 
@@ -480,6 +519,8 @@ function markerFileNameForScenario(scenario: string): string {
       return 'implementation-retry.txt';
     case 'implementation-notes':
       return 'implementation-notes.txt';
+    case 'implementation-missing-notes':
+      return 'implementation-missing-notes.txt';
     case 'unblock-doc-code-mismatch':
       return 'unblock-doc-code-mismatch.txt';
     default:
@@ -700,6 +741,10 @@ if (kind === 'implementer') {
   if (scenario === 'implementation-notes') {
     process.stdout.write(
       '## Implementation Notes\\n\\n- status: already_complete\\n- reason: the requested behavior already exists in src/config/configReader.ts\\n- evidence: src/config/configReader.ts, tests/configReader.test.ts\\n',
+    );
+  } else if (scenario !== 'implementation-missing-notes') {
+    process.stdout.write(
+      '## Implementation Notes\\n\\n- status: implemented\\n- reason: the mock implementer completed the requested task path\\n- evidence: marker file and repository diff\\n',
     );
   }
   process.exit(0);
@@ -1610,6 +1655,8 @@ function markerFileNameForScenario(scenario) {
       return 'implementation-retry.txt';
     case 'implementation-notes':
       return 'implementation-notes.txt';
+    case 'implementation-missing-notes':
+      return 'implementation-missing-notes.txt';
     case 'unblock-doc-code-mismatch':
       return 'unblock-doc-code-mismatch.txt';
     default:
@@ -1655,6 +1702,10 @@ fs.writeFileSync(markerPath, 'opencode e2e touched this file\\n', 'utf8');
 if (scenario === 'implementation-notes') {
   process.stdout.write(
     '## Implementation Notes\\n\\n- status: already_complete\\n- reason: the requested behavior already exists in src/config/configReader.ts\\n- evidence: src/config/configReader.ts, tests/configReader.test.ts\\n',
+  );
+} else if (scenario !== 'implementation-missing-notes') {
+  process.stdout.write(
+    '## Implementation Notes\\n\\n- status: implemented\\n- reason: the mock implementer completed the requested task path\\n- evidence: marker file and repository diff\\n',
   );
 }
 

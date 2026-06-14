@@ -89,6 +89,9 @@ A state correction task must:
 - Stay within state-document scope.
 - Include a concrete `first_executable_step`.
 - Include `minimum_progress_evidence` that cannot be satisfied by reading alone.
+- Keep `quality_gates.before_review` runnable in a plain shell on the target runtime.
+- Prefer portable commands that are expected to exist in the runtime environment.
+- Do not require optional tools unless the state-correction context explicitly states they are available.
 
 A state correction task must not:
 

@@ -60,8 +60,8 @@ Forbidden:
 ## Quality Gates to Run
 ```bash
 git diff --check
-rg -n "F002-T04-C1|permission_prompt|task_ready" docs/features/002-configuration-model/tasks/004.1-repair-feature-state-for-f002-t04.md docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md
-test -z "$(rg -n 'F002-T05|State correction F002-T04-C1 applied' docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md)"
+grep -E -n "F002-T04-C1|permission_prompt|task_ready" docs/features/002-configuration-model/tasks/004.1-repair-feature-state-for-f002-t04.md docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md
+test -z "$(grep -E -n 'F002-T05|State correction F002-T04-C1 applied' docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md)"
 ```
 
 ## Expected Deliverables

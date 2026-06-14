@@ -40,7 +40,7 @@ The reviewer must:
 - evaluate quality gate results
 - identify architectural violations
 - when an implementation was retried after partial progress, compare the final diff against the retry context and note whether the task interface appears tight enough for future runs
-- inspect implementation notes when present, especially when the implementer reports that no code changes were needed or that the task was already satisfied
+- inspect implementation notes, and treat their absence as an execution defect that should be surfaced explicitly
 - when `changes_required` is returned, make the findings specific enough for the orchestrator to persist a recovery lesson, including explicit scope-isolation notes when the reviewable diff leaks runtime state files or other forbidden paths
 - return structured findings
 - return a correction task when status is `changes_required`
@@ -76,6 +76,7 @@ Instructions:
 - Check whether changed files stay within task scope.
 - Check whether mandatory quality gates passed.
 - Record findings with clear severity and path references when possible.
+- If implementation notes are missing, say so explicitly and do not approve the attempt without a justification recovery path.
 - Use `approved`, `changes_required`, `blocked`, or `failed` exactly as defined in the contract.
 - If the result is `changes_required`, include a correction task that is narrower than the original task and conforms to the correction-task contract.
 - If the result is `blocked`, describe the blocker with enough specificity for the orchestrator to decide whether it can become an unblock task.

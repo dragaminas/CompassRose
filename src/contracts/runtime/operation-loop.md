@@ -172,6 +172,7 @@ Action:
 - if the operator requests a controlled stop, preserve the current active task and stop at the next safe checkpoint instead of converting the feature to a failure state
 - if the implementer collapses after producing partial repository changes, retry the same active task once from the current worktree instead of discarding the progress
 - if the implementer collapses without producing repository progress, transition explicitly to `implementation_failed` or `blocked` according to the observed diagnostics
+- if the implementer produces repository changes without the required implementation notes justification, treat the attempt as failed and preserve that omission in the recovery lesson
 - never replan the feature while an implementation retry is still available
 
 Next state:

@@ -99,6 +99,9 @@ An unblock task must:
 - Keep `expected_deliverables` aligned with `development_policy.mode`.
 - If the unblock task is documentation-only, it must stay `documentation_first` and deliver documentation only.
 - If the unblock task needs code or tests, it must be planned as `test_guided`.
+- Keep `quality_gates.before_review` runnable in a plain shell on the target runtime.
+- Prefer portable commands that are expected to exist in the runtime environment.
+- Do not require optional tools unless the unblock context explicitly states they are available.
 
 An unblock task must not:
 

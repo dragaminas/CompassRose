@@ -49,6 +49,9 @@ The Planner must:
 - use planner-grade reasoning to tighten the unblock interface when needed
 - reuse recent recovery lessons to make the unblock task narrower when the blocker has already been observed and partially diagnosed
 - when the blocker is an implementation failure, keep the active task anchor visible and prefer a bounded recovery task that restores task readiness before reattempting implementation
+- when planning a recovery or cleanup task, use only quality-gate commands that are expected to exist in the runtime environment
+- prefer portable shell commands for cleanup quality gates, and do not assume optional tools such as `rg` are installed unless the provided context explicitly says they are available
+- if the blocker can be repaired as a documentation or state cleanup, pass the exact cleanup target paths and the observed blocker evidence into the task so the implementer does not need repository-wide exploration
 - if the unblock task is documentation-only, keep `development_policy.mode` as `documentation_first` and set `expected_deliverables` to documentation only
 - if the unblock task needs code or tests, set `development_policy.mode` to `test_guided`
 

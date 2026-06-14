@@ -32,6 +32,7 @@ type DiagnosticClassification =
   | 'provider_failure'
   | 'permission_prompt'
   | 'tool_refusal'
+  | 'missing_implementation_notes'
   | 'model_passivity'
   | 'ui_cli_behavior'
   | 'unknown';
@@ -1290,7 +1291,7 @@ class PrototypeCompassRose {
       '- `docs/compassrose/CONFIG.md`',
       `- \`${diffPath}\``,
       `- \`${implementationPath}\``,
-      '- `implementation.notes` inside the implementation artifact when present; treat it as implementer-reported context, not proof.',
+      '- `implementation.notes` inside the implementation artifact; if it is missing, treat that as an execution defect and report it explicitly.',
       `- \`${qualityPath}\``,
       '- if needed, only the files changed in the diff',
       '',
@@ -1459,7 +1460,7 @@ class PrototypeCompassRose {
       `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
       '- `docs/compassrose/CONFIG.md`',
       `- \`${join(tempDir, 'implementation.json')}\``,
-      '- `implementation.notes` inside `implementation.json` when present; treat it as implementer-reported context, not proof.',
+      '- `implementation.notes` inside `implementation.json`; if it is missing, treat that as an execution defect and report it explicitly.',
       `- \`${join(tempDir, 'quality-gates.json')}\``,
       `- \`${reviewPath}\``,
       '',
@@ -1611,10 +1612,17 @@ class PrototypeCompassRose {
     const changedFiles = this.git.diffNameOnly(excludedPaths);
     const diff = this.git.diffPatch(excludedPaths);
     const rawOutput = joinOutput(commandResult.stdout, commandResult.stderr);
-    const diagnostics = buildImplementationDiagnostics(task, commandResult, changedFiles, diff, rawOutput);
     const implementationNotes = extractImplementationNotes(rawOutput);
+    const diagnostics = buildImplementationDiagnostics(
+      task,
+      commandResult,
+      changedFiles,
+      diff,
+      rawOutput,
+      implementationNotes,
+    );
     const hasDiff = diff.trim().length > 0;
-    const status = commandResult.ok && hasDiff && diagnostics.minimum_progress_evidence_status !== 'absent'
+    const status = commandResult.ok && hasDiff && diagnostics.minimum_progress_evidence_status !== 'absent' && implementationNotes !== null
       ? 'success'
       : 'failed';
 
@@ -1626,7 +1634,7 @@ class PrototypeCompassRose {
       implementation_notes: implementationNotes,
       diagnostics,
       error: status === 'failed'
-        ? buildImplementationErrorMessage(task.taskId, commandResult, diagnostics, hasDiff)
+        ? buildImplementationErrorMessage(task.taskId, commandResult, diagnostics, hasDiff, implementationNotes)
         : null,
     };
   }
@@ -1643,7 +1651,7 @@ class PrototypeCompassRose {
       relativePath(this.repositoryRoot, this.projectStatePath),
     ]);
     return {
-      status: diff.trim().length > 0 ? 'success' : 'failed',
+      status: 'failed',
       changed_files: this.git.diffNameOnly([
         relativePath(this.repositoryRoot, feature.statePath),
         relativePath(this.repositoryRoot, this.projectStatePath),
@@ -1653,7 +1661,7 @@ class PrototypeCompassRose {
       implementation_notes: extractImplementationNotes('No stored implementer output.'),
       diagnostics: {
         classification: 'unknown',
-        evidence: ['No stored implementation artifact was found.'],
+        evidence: ['No stored implementation artifact was found.', 'Implementation notes: absent'],
         first_executable_step_status: diff.trim().length > 0 ? 'attempted' : 'unknown',
         minimum_progress_evidence_status: diff.trim().length > 0 ? 'present' : 'absent',
         exit_code: null,
@@ -1661,7 +1669,7 @@ class PrototypeCompassRose {
         timed_out: false,
         command_invoked: null,
       },
-      error: diff.trim().length > 0 ? null : 'No stored implementation artifact was found.',
+      error: 'No stored implementation artifact was found.',
     };
   }
 
@@ -3710,7 +3718,9 @@ function buildImplementerPrompt(
     '- Continue until there is repository evidence beyond read-only exploration.',
     `- Follow \`${task.developmentPolicy}\`.`,
     '- Keep the change minimal and provider-independent.',
-    '- If you make no repository changes because the task already appears satisfied or blocked, end with a short `## Implementation Notes` section that explains why and cites the evidence.',
+    '- End every attempt with a short `## Implementation Notes` section.',
+    '- If you changed repository files, justify the change briefly and cite the evidence.',
+    '- If you made no repository changes because the task already appears satisfied or blocked, explain why and cite the evidence.',
     '- Keep implementation notes brief and separate from product documentation.',
     '- Do not claim approval.',
   ].join('\n');
@@ -3722,18 +3732,20 @@ function buildImplementationDiagnostics(
   changedFiles: readonly string[],
   diff: string,
   rawOutput: string,
+  implementationNotes: string | null,
 ): ImplementationDiagnostics {
   const hasDiff = diff.trim().length > 0;
   const evidence = [
     `Task: ${task.taskId}`,
     `Changed files: ${changedFiles.length > 0 ? changedFiles.join(', ') : 'none'}`,
+    `Implementation notes: ${implementationNotes ? 'present' : 'absent'}`,
     `Exit code: ${commandResult.exitCode ?? 'null'}`,
     `Signal: ${commandResult.signal ?? 'null'}`,
     `Output tail: ${summarizeText(rawOutput, 400)}`,
   ];
 
   return {
-    classification: classifyImplementation(commandResult, rawOutput, hasDiff),
+    classification: classifyImplementation(commandResult, rawOutput, hasDiff, implementationNotes),
     evidence,
     first_executable_step_status: hasDiff || rawOutput.trim().length > 0 ? 'attempted' : 'unknown',
     minimum_progress_evidence_status: hasDiff ? 'present' : 'absent',
@@ -3748,6 +3760,7 @@ function classifyImplementation(
   commandResult: CommandExecution,
   rawOutput: string,
   hasDiff: boolean,
+  implementationNotes: string | null,
 ): DiagnosticClassification {
   const normalized = rawOutput.toLowerCase();
 
@@ -3767,6 +3780,10 @@ function classifyImplementation(
     return 'provider_failure';
   }
 
+  if (commandResult.ok && !implementationNotes) {
+    return 'missing_implementation_notes';
+  }
+
   if (!hasDiff && commandResult.ok) {
     return 'model_passivity';
   }
@@ -3783,9 +3800,14 @@ function buildImplementationErrorMessage(
   commandResult: CommandExecution,
   diagnostics: ImplementationDiagnostics,
   hasDiff: boolean,
+  implementationNotes: string | null,
 ): string {
   if (!commandResult.ok && commandResult.exitCode !== null) {
     return `Implementation for ${taskId} failed with exit code ${commandResult.exitCode} (${diagnostics.classification}).`;
+  }
+
+  if (!implementationNotes) {
+    return `Implementation for ${taskId} did not include the required Implementation Notes justification.`;
   }
 
   if (!hasDiff) {
@@ -3867,6 +3889,15 @@ function inferLikelySources(trigger: string, selectedStep: StepDecision | null):
     sources.add('src/contracts/reviewer/input.md');
   }
 
+  if (normalized.includes('implementation notes') || normalized.includes('justification')) {
+    sources.add('src/contracts/implementer/task-execution-prompt.md');
+    sources.add('src/contracts/adapters/implementer-adapter.md');
+    sources.add('src/contracts/reviewer/input.md');
+    sources.add('src/contracts/reviewer/review-prompt.md');
+    sources.add('src/contracts/runtime/operation-loop.md');
+    sources.add('src/contracts/state/feature-state.md');
+  }
+
   if (normalized.includes('blocked') || normalized.includes('blocker')) {
     sources.add('src/contracts/task/unblock-task.md');
     sources.add('src/contracts/runtime/operation-loop.md');
@@ -3939,6 +3970,10 @@ function buildObservations(trigger: string, selectedStep: StepDecision | null): 
     observations.push('The runtime should continue into a bounded recovery unblock task instead of stopping on the failed implementation state.');
   }
 
+  if (/implementation notes|justification/i.test(trigger)) {
+    observations.push('The implementer must justify the attempt outcome before the reviewer can trust the artifact.');
+  }
+
   return observations;
 }
 
@@ -3966,6 +4001,10 @@ function buildNextQuestions(trigger: string, selectedStep: StepDecision | null):
 
   if (/implementation failed|implementation_failure/i.test(trigger)) {
     questions.push('Should implementation failure automatically open a bounded unblock task that restores the active task target?');
+  }
+
+  if (/implementation notes|justification/i.test(trigger)) {
+    questions.push('Should missing Implementation Notes fail the implementation attempt immediately so the reviewer never sees an ambiguous artifact?');
   }
 
   if (selectedStep?.kind === 'plan_task') {

@@ -25,8 +25,9 @@ An Implementer Adapter must:
 - Preserve working tree isolation.
 - Capture changed files.
 - Capture Git diff.
-- Capture implementation notes if available.
+- Capture implementation notes for every attempt.
 - Treat implementation notes as concise execution commentary for the reviewer, not as product documentation.
+- If the tool does not produce implementation notes, mark the attempt as failed and preserve the omission in diagnostics.
 - Return normalized implementation result.
 - Treat repeated invocations for the same task as distinct attempts when the runtime allows recovery.
 - Preserve enough evidence to distinguish the latest attempt from any earlier interrupted attempt.
@@ -63,7 +64,7 @@ adapter_output:
   raw_output: string
   implementation_notes: string | null
   diagnostics:
-    classification: context_overflow | provider_failure | permission_prompt | tool_refusal | model_passivity | ui_cli_behavior | unknown
+    classification: context_overflow | provider_failure | permission_prompt | tool_refusal | missing_implementation_notes | model_passivity | ui_cli_behavior | unknown
     evidence:
       - string
     first_executable_step_status: attempted | not_attempted | unknown
@@ -87,6 +88,7 @@ Allowed classifications:
 - `provider_failure`: the configured provider, endpoint, model, or upstream service failed before task execution could complete.
 - `permission_prompt`: execution stopped because the tool needed interactive approval, credentials, or filesystem/network permission.
 - `tool_refusal`: the tool explicitly refused the request or rejected the invocation.
+- `missing_implementation_notes`: the tool produced a repository attempt without the required implementation justification.
 - `model_passivity`: the tool completed without making changes, without producing minimum progress evidence, or without taking the requested first executable step, without an explicit refusal or infrastructure failure.
 - `ui_cli_behavior`: the wrapper, terminal UI, CLI mode, or command invocation prevented or obscured execution.
 - `unknown`: the adapter lacks enough evidence to choose a more specific classification.
@@ -96,6 +98,10 @@ The adapter must not infer intent from a missing diff.
 If no code was produced, the adapter must report the observable evidence instead of assuming why a previous implementer stopped.
 
 If the tool exits successfully after only reading context, the adapter must treat absent `minimum_progress_evidence` as a failed implementation attempt and classify it as `model_passivity` unless stronger evidence supports another classification.
+
+If the tool exits successfully but omits the required implementation notes, the adapter must treat that omission as a failed implementation attempt and classify it as `missing_implementation_notes` unless stronger evidence supports another classification.
+
+Successful implementation attempts must include non-null implementation notes so the reviewer can see the implementer justification.
 
 Diagnostic evidence may include concise excerpts from raw output, process status, timeout status, command metadata, and explicit tool messages.
 

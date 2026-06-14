@@ -27,11 +27,13 @@ npm run proto -- run
 - `--implementer <codex|opencode>`: choose which CLI implements tasks. `opencode` remains the default.
 - `Ctrl-C`, `SIGINT`, or `SIGTERM`: request a controlled stop. The prototype writes a stopped run summary and preserves the current task or state checkpoint for the next pass.
 
+If you want to compare behavior with the Codex CLI instead of OpenCode, run `npm run proto:loop:codex` or pass `--implementer codex`. The Codex wrapper also honors `PROTO_COMPASSROSE_CODEX_MODEL`, so you can pin it to the local model you want to evaluate.
+
 When review returns `changes_required`, `proto:loop` now records a recovery lesson and continues into the generated correction task instead of forcing a manual restart.
 
 Planning-style recovery steps such as `correct_state` checkpoint their state/task documents in the default commit mode, and implementation/correction retries can continue from a partial diff when that diff is the active task's own recovery context.
 
-Implementation attempts also capture optional `implementation_notes` in the stored artifact, which the reviewer can use as lightweight execution context when the implementer reports that no code changes were needed or that the task was already satisfied.
+Implementation attempts now require `implementation_notes` in the stored artifact. The reviewer uses them as lightweight execution context, and missing notes are treated as a failed attempt.
 
 If you interrupt `proto:loop`, the process stops cleanly at the current safe checkpoint instead of converting the interruption into an implementation failure.
 
