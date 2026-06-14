@@ -10,14 +10,10 @@ In progress
 
 ## Current Reality
 
-- `docs/compassrose/PROJECT_STATE.md` exists as the repository-local project state document, and `docs/compassrose/CONFIG.md` already points at this path.
-- Feature `002-configuration-model` now has `F002-T05` in implementation recovery after a partial committed implementation.
-
-- Feature `001-project-identity-and-foundation` is now complete: the package metadata, TypeScript configuration, and top-level docs all align with the accepted CLI-first foundation and required repository roots.
-- `package.json` points both `main` and `bin.compassrose` at `./dist/cli/main.js`, `tsconfig.json` preserves the Node CLI source/output layout without JSX assumptions, and the top-level docs expose `docs/`, `src/`, `src/contracts/`, and `docs/compassrose/PROJECT_STATE.md` in one pass.
-- The active feature pointer currently targets `002-configuration-model`; the detailed task and lifecycle state for that feature lives in `docs/features/002-configuration-model/state.md`.
-- Feature `002-configuration-model` has now approved `F002-T04`, so the typed config loader validates and exposes the first runtime-precondition policy fields needed for broader orchestration work.
-- `compassrose doctor` now validates `docs/compassrose/PROJECT_STATE.md` as a distinct preflight step before the broader runtime loop.
+- Feature `002-configuration-model` is blocked by `state-corruption-implementation-failed-feature-002-configuration-model-is-the-earliest-non-compl`.
+- Blocker recoverability: agent.
+- Feature `002-configuration-model` was suspended from `none`; the active task pointer remains `none`.
+- Blocking task context: none
 
 ## Implemented
 
@@ -30,7 +26,7 @@ In progress
 
 ## Pending
 
-- Execute correction task `F002-T05-C7` for the active feature.
+- Execute correction task `F002-T04-C1` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -48,4 +44,4 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute correction task `F002-T05-C7`.
+The active feature is `002-configuration-model`, and its next valid action is to execute correction task `F002-T04-C1`.

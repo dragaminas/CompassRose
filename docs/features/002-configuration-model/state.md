@@ -11,9 +11,13 @@ correction_pending
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T05
-- active_correction_task: F002-T05-C7
+- active_task: F002-T04
+- active_correction_task: F002-T04-C1
 - active_unblock_task: none
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
+- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -54,7 +58,14 @@ Task `F002-T04` has now been approved. The typed configuration loader validates 
 
 ## Blocked By
 
-- None
+- - kind: state_corruption
+- - signature: state-corruption-implementation-failed-feature-002-configuration-model-is-the-earliest-non-compl
+- - recoverability: agent
+- - observed_state: lifecycle=implementation_failed; active_task=none; active_correction_task=none; active_unblock_task=none
+- - evidence: Feature 002-configuration-model is the earliest non-completed feature. Its canonical lifecycle state is `implementation_failed` with active task `F002-T05-C7` in `docs/features/002-configuration-model/state.md`, and `docs/compassrose/PROJECT_STATE.md` says implementation of `F002-T05-C7` failed and the run should stop. Under `src/contracts/runtime/operation-loop.md`, `implementation_failed` stops the run unless an explicit recovery transition is already recorded, which it is not.
+- - evidence: None
+- - evidence: lifecycle=implementation_failed
+- - reason: Feature 002-configuration-model is the earliest non-completed feature. Its canonical lifecycle state is `implementation_failed` with active task `F002-T05-C7` in `docs/features/002-configuration-model/state.md`, and `docs/compassrose/PROJECT_STATE.md` says implementation of `F002-T05-C7` failed and the run should stop. Under `src/contracts/runtime/operation-loop.md`, `implementation_failed` stops the run unless an explicit recovery transition is already recorded, which it is not.
 
 ## Blocked From
 
@@ -74,4 +85,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Execute correction task `F002-T05-C7` next.
+Execute correction task `F002-T04-C1` next.
