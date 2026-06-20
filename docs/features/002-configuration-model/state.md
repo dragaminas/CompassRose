@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+quality_failed
 
 ## Source Request
 
@@ -11,12 +11,12 @@ unblock_pending
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T04-C3-U1-C1
+- active_task: F002-T04-C3-U1-C1-U1
 - active_correction_task: none
-- active_unblock_task: F002-T04-C3-U1-C1-U1
+- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: failed
-- last_review_result: blocked
+- last_review_result: not_run
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -32,6 +32,8 @@ This feature is now formalized under `docs/features/002-configuration-model/`, a
 Task `F002-T04` was approved, extending the typed config loader to validate and expose `execution`, `roles`, and `git_policy` data from the canonical project config.
 
 The latest recovery work uncovered a stale recovery interface around `F002-T04-C3`: the implementation attempt produced no diff and omitted the required `Implementation Notes`, so the current correction task `F002-T04-C3-U1-C1` must preserve that evidence while repairing the path back to `task_ready`.
+
+The latest hardening attempt then failed on a stale exact-string preimage, reporting `Could not find oldString in the file` and `No changes to apply: oldString and newString are identical`, so the next run needs a visible diagnostic before any retry.
 
 ## Implemented Deliverables
 
@@ -66,10 +68,10 @@ The latest recovery work uncovered a stale recovery interface around `F002-T04-C
 
 ## Blocked From
 
-- lifecycle_state: `task_ready`
-- active_task: `F002-T04-C3`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
@@ -79,7 +81,8 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 - The project-local configuration flow still needs a runtime consumer that uses the validated `execution`, `roles`, and `git_policy` data during orchestration.
 - The root `F002-T04-C3` attempt has a partial implementation attempt (no diff) and omitted the required Implementation Notes justification, so recovery must resume from the current repository state instead of assuming a fresh task start.
+- The latest hardening attempt also hit a stale edit preimage (`oldString` not found / identical no-op), so the recovery interface needs a live read before any further patch attempt and must emit a diagnostic instead of staying silent.
 
 ## Next Planning Hint
 
-Execute unblock task `F002-T04-C3-U1-C1-U1` next.
+Quality gates for `F002-T04-C3-U1-C1-U1` failed; stop and recover before continuing.

@@ -7,10 +7,10 @@
 `002-configuration-model`
 
 ## Goal
-Repair the stale recovery interface around `F002-T04-C3` so the current recovery artifact, feature state, and project state all describe one explicit `implementation_failed -> task_ready` path, and carry forward the prior `no diff` plus missing `Implementation Notes` evidence before normal execution resumes.
+Repair the stale recovery interface around `F002-T04-C3` so the current recovery artifact, feature state, and project state all describe one explicit `implementation_failed -> task_ready` path, surface the stale exact-string preimage mismatch as a diagnostic, and carry forward the prior `no diff` plus missing `Implementation Notes` evidence before normal execution resumes.
 
 ## First Executable Step
-grep -n 'F002-T04\|review_pending\|F002-T04-C1\|Implementation Notes\|no diff' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-complete-the-f002-t04-c3-recovery-path-refresh.md docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md
+sed -n '1,220p' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-complete-the-f002-t04-c3-recovery-path-refresh.md docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md
 
 ## Minimum Progress Evidence
 - `git diff -- docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-complete-the-f002-t04-c3-recovery-path-refresh.md` shows the recovery artifact now anchors its objective, blocker, restoration target, acceptance checks, and prior-attempt evidence on `F002-T04-C3`, `implementation_failed`, `task_ready`, `no diff`, and missing `Implementation Notes`.
@@ -19,10 +19,11 @@ grep -n 'F002-T04\|review_pending\|F002-T04-C1\|Implementation Notes\|no diff' d
 ## Trace
 - Roadmap objective: Deterministic Orchestration
 - Feature goal: Define a repository-local configuration model that CompassRose can read, validate, and use as the project-level source of runtime policy.
-- State gap: Feature `002-configuration-model` is stuck in `quality_failed` because the current recovery path is a stale recovery interface: the recovery artifact still preserves obsolete `F002-T04`/`review_pending` anchors, omits the prior `F002-T04-C3` no-diff plus missing `Implementation Notes` evidence, and leaves the feature/project recovery narrative inconsistent instead of exposing one explicit path back to `task_ready`.
+- State gap: Feature `002-configuration-model` is stuck in `quality_failed` because the current recovery path is a stale recovery interface: the recovery artifact still preserves obsolete `F002-T04`/`review_pending` anchors, omits the prior `F002-T04-C3` no-diff plus missing `Implementation Notes` evidence, and the latest edit attempt hit a stale exact-string preimage instead of producing a diagnostic or a diff.
 
 ## Context
 - The current observed state is `lifecycle=quality_failed; active_task=F002-T04-C3-U1-C1; active_correction_task=none; active_unblock_task=none`. This is not a simple malformed-state repair: the unblock task must reclassify the blocker as `task_interface_gap`, preserve `F002-T04-C3` as the recovery anchor, restate that the prior root attempt produced no diff and omitted required `Implementation Notes`, and remove or rewrite the stale markers `F002-T04`, `review_pending`, `F002-T04-C1`, and contradictory feature/project recovery narration.
+- The latest attempt also failed with `Could not find oldString in the file` followed by `No changes to apply: oldString and newString are identical`, which is evidence that the interface was patching a stale preimage and needs a live read before any retry.
 
 ## Scope
 Allowed:
@@ -75,15 +76,13 @@ files="$(git diff --name-only -- docs/features/002-configuration-model/tasks/F00
 
 ## Blocker Context
 
-- kind: state_corruption
-- signature: state-corruption-quality-failed-a-bounded-unblock-task-can-safely-repair-and-harden-this-stale-r
+- kind: task_interface_gap
+- signature: task-interface-gap-F002-T04-C3-stale-preimage-mismatch
 - recoverability: agent
 - observed_state: lifecycle=quality_failed; active_task=F002-T04-C3-U1-C1; active_correction_task=none; active_unblock_task=none
 - evidence: A bounded unblock task can safely repair and harden this stale recovery interface without architectural review. It should preserve `F002-T04-C3` as the recovery anchor, restate the prior implementation-failure evidence, and tighten the task text, acceptance checks, and quality gates so the recovery documents converge on one explicit `implementation_failed -> task_ready` path.
-- evidence: - kind: implementation_failure
-- evidence: - signature: implementation-failure-F002-T04-C3
-- evidence: - recoverability: agent
-- evidence: lifecycle=quality_failed
+- evidence: The latest edit attempt reported `Could not find oldString in the file` and then `No changes to apply: oldString and newString are identical`, which means the interface was operating on a stale preimage rather than a fresh target.
+- evidence: The earlier `F002-T04-C3` attempt still produced no diff and omitted the required `Implementation Notes`.
 
 ## Restoration Target
 

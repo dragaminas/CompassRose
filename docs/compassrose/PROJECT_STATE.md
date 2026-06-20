@@ -13,6 +13,7 @@ In progress
 - Feature `002-configuration-model` is currently in a `quality_failed` state for task `F002-T04-C3-U1-C1`.
 - Feature `002-configuration-model` still has a recovery path back to `task_ready` for `F002-T04-C3` once the stale recovery interface is repaired.
 - Implementation failure evidence: Implementation for F002-T04-C3 did not include the required Implementation Notes justification and produced no diff.
+- Latest hardening evidence: the edit attempt reported `Could not find oldString in the file` and `No changes to apply: oldString and newString are identical`, which is a stale preimage problem rather than a fresh repository defect.
 - Feature `002-configuration-model` now has a planned unblock task, `F002-T04-C3-U1-C1-U1`, to resolve a recoverable blocker and restore `task_ready`.
 
 ## Implemented
@@ -26,7 +27,7 @@ In progress
 
 ## Pending
 
-- Execute unblock task `F002-T04-C3-U1-C1-U1` for the active feature.
+- Investigate failed quality gates for `F002-T04-C3-U1-C1-U1`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -41,7 +42,8 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 - Feature `002-configuration-model` now has validated runtime-precondition policy data in the config loader, but the broader runtime loop still needs to consume that data in a concrete orchestration entrypoint.
 - The root `F002-T04-C3` attempt has a partial implementation attempt (no diff) and omitted the required Implementation Notes justification, so the current correction task must keep that evidence visible instead of inferring a fresh retry.
+- The latest hardening attempt also failed against a stale edit preimage, so the next run needs an explicit diagnostic before any retry instead of silently attempting the same replacement again.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute unblock task `F002-T04-C3-U1-C1-U1` from the captured `task_ready` state.
+The active feature is `002-configuration-model`, but quality gates for `F002-T04-C3-U1-C1-U1` failed and the run should stop.
