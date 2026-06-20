@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-correction_pending
+unblock_pending
 
 ## Source Request
 
@@ -11,12 +11,12 @@ correction_pending
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T04
-- active_correction_task: F002-T04-C3
-- active_unblock_task: none
-- last_implementation_result: not_run
+- active_task: F002-T04-C3
+- active_correction_task: none
+- active_unblock_task: F002-T04-C3-U1
+- last_implementation_result: failed
 - last_quality_gate_result: unknown
-- last_review_result: not_run
+- last_review_result: blocked
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -57,17 +57,17 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 ## Blocked By
 
 - - kind: implementation_failure
-- - signature: implementation-failure-F002-T04-C2-U1-U1-C1-C1
+- - signature: implementation-failure-F002-T04-C3
 - - recoverability: agent
-- - observed_state: lifecycle=implementation_failed; active_task=F002-T04-C2-U1-U1-C1-C1; active_correction_task=none; active_unblock_task=none
-- - evidence: Implementation for F002-T04-C2-U1-U1-C1-C1 produced no git diff (context_overflow).
+- - observed_state: lifecycle=implementation_failed; active_task=F002-T04-C3; active_correction_task=none; active_unblock_task=none
+- - evidence: Implementation for F002-T04-C3 did not include the required Implementation Notes justification.
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `task_ready`
+- active_task: `F002-T04-C3`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -80,4 +80,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Execute correction task `F002-T04-C3` next.
+Execute unblock task `F002-T04-C3-U1` next.
