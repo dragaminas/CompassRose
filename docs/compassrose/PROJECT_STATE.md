@@ -13,6 +13,7 @@ In progress
 - Feature `002-configuration-model` is currently in a `quality_failed` state for task `F002-T04-C3-U1-C1`.
 - Feature `002-configuration-model` still has a recovery path back to `task_ready` for `F002-T04-C3` once the stale recovery interface is repaired.
 - Implementation failure evidence: Implementation for F002-T04-C3 did not include the required Implementation Notes justification and produced no diff.
+- Feature `002-configuration-model` now has a planned unblock task, `F002-T04-C3-U1-C1-U1`, to resolve a recoverable blocker and restore `task_ready`.
 
 ## Implemented
 
@@ -25,7 +26,7 @@ In progress
 
 ## Pending
 
-- Complete correction task `F002-T04-C3-U1-C1` and preserve the `F002-T04-C3` restoration target.
+- Execute unblock task `F002-T04-C3-U1-C1-U1` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -43,4 +44,4 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-Complete the current correction task `F002-T04-C3-U1-C1` before selecting new work, then resume the restored task anchor `F002-T04-C3`.
+The active feature is `002-configuration-model`, and its next valid action is to execute unblock task `F002-T04-C3-U1-C1-U1` from the captured `task_ready` state.

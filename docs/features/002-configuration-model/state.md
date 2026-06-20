@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-quality_failed
+unblock_pending
 
 ## Source Request
 
@@ -13,10 +13,10 @@ quality_failed
 - formalization: complete
 - active_task: F002-T04-C3-U1-C1
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F002-T04-C3-U1-C1-U1
 - last_implementation_result: passed
 - last_quality_gate_result: failed
-- last_review_result: not_run
+- last_review_result: blocked
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -66,10 +66,10 @@ The latest recovery work uncovered a stale recovery interface around `F002-T04-C
 
 ## Blocked From
 
-- lifecycle_state: task_ready
-- active_task: F002-T04-C3
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `task_ready`
+- active_task: `F002-T04-C3`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -82,4 +82,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Complete the current correction task `F002-T04-C3-U1-C1` before allowing review or new planning, then resume the restored task anchor `F002-T04-C3`.
+Execute unblock task `F002-T04-C3-U1-C1-U1` next.
