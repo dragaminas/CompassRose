@@ -10,9 +10,9 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `state-corruption-implementation-failed-feature-002-configuration-model-is-the-earliest-non-compl`.
-- Feature `002-configuration-model` now has a planned unblock task, `F002-T04-C3-U1`, to resolve a recoverable blocker and restore `task_ready`.
-- Implementation failure evidence: Implementation for F002-T04-C3 did not include the required Implementation Notes justification.
+- Feature `002-configuration-model` is currently in a `quality_failed` state for task `F002-T04-C3-U1-C1`.
+- Feature `002-configuration-model` still has a recovery path back to `task_ready` for `F002-T04-C3` once the stale recovery interface is repaired.
+- Implementation failure evidence: Implementation for F002-T04-C3 did not include the required Implementation Notes justification and produced no diff.
 
 ## Implemented
 
@@ -25,7 +25,7 @@ In progress
 
 ## Pending
 
-- Execute correction task `F002-T04-C3-U1-C1` for the active feature.
+- Complete correction task `F002-T04-C3-U1-C1` and preserve the `F002-T04-C3` restoration target.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -39,8 +39,8 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 ## Known Gaps
 
 - Feature `002-configuration-model` now has validated runtime-precondition policy data in the config loader, but the broader runtime loop still needs to consume that data in a concrete orchestration entrypoint.
-- The active task has a partial committed implementation, so recovery must resume from the current repository state instead of assuming a fresh task start.
+- The root `F002-T04-C3` attempt has a partial implementation attempt (no diff) and omitted the required Implementation Notes justification, so the current correction task must keep that evidence visible instead of inferring a fresh retry.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute correction task `F002-T04-C3-U1-C1`.
+Complete the current correction task `F002-T04-C3-U1-C1` before selecting new work, then resume the restored task anchor `F002-T04-C3`.

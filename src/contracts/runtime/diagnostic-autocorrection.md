@@ -16,6 +16,7 @@ Diagnostic Autocorrection must:
 - decide whether deterministic state repair is enough
 - decide whether a bounded unblock task should tighten the task interface
 - stop with a diagnostic when the fix needs architectural review, human judgment, or a non-obvious tradeoff
+- distinguish a stale recovery interface from a fresh malformed state and call that out explicitly
 
 Diagnostic Autocorrection must not:
 
@@ -47,6 +48,7 @@ Use when:
 - the blocker is recoverable
 - a bounded unblock task can remove the blocker
 - interface hardening, prompt tightening, or contract cleanup should happen inside that unblock task
+- the blocker is a stale recovery interface, obsolete task ID, mismatched restoration target, or missing prior-attempt evidence that must be preserved before the feature can resume
 
 ### `stop_with_diagnostic`
 
@@ -61,6 +63,8 @@ Use when:
 ## Interface Hardening Rule
 
 If the blocker was caused by a weak task, prompt, adapter, or contract interface, the diagnosis must say so explicitly.
+
+Stale recovery interfaces include obsolete task IDs, a restoration target that no longer matches the observed active task, or recovery artifacts that omit required implementation-failure evidence such as no diff or missing Implementation Notes.
 
 If that hardening can be applied safely through a bounded unblock task, choose `plan_unblock_task`.
 

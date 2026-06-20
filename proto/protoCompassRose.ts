@@ -1424,12 +1424,82 @@ class PrototypeCompassRose {
       '- Return JSON only.',
     ].join('\n');
 
-    return this.codex.runStructured<DiagnosticAutocorrectionDecision>(
-      prompt,
-      this.contracts.schema('diagnostic_autocorrection'),
-      [],
-      `diagnostic:${feature.id}`,
-    );
+    try {
+      const decision = this.codex.runStructured<DiagnosticAutocorrectionDecision>(
+        prompt,
+        this.contracts.schema('diagnostic_autocorrection'),
+        [],
+        `diagnostic:${feature.id}`,
+      );
+      return this.ensureDiagnosticAutocorrectionDecision(feature, reason, decision);
+    } catch (error) {
+      return this.buildDiagnosticFallbackDecision(feature, reason, errorMessage(error));
+    }
+  }
+
+  private ensureDiagnosticAutocorrectionDecision(
+    feature: FeatureRecord,
+    reason: string,
+    decision: DiagnosticAutocorrectionDecision,
+  ): DiagnosticAutocorrectionDecision {
+    const blocker = decision?.blocker;
+    const interfaceResponse = decision?.interface_response;
+
+    if (
+      !decision ||
+      typeof decision.feature_id !== 'string' ||
+      typeof decision.diagnosis_summary !== 'string' ||
+      !blocker ||
+      typeof blocker.kind !== 'string' ||
+      typeof blocker.signature !== 'string' ||
+      typeof blocker.recoverability !== 'string' ||
+      !Array.isArray(blocker.evidence) ||
+      typeof decision.next_step !== 'string' ||
+      typeof decision.next_step_reason !== 'string' ||
+      !interfaceResponse ||
+      typeof interfaceResponse.mode !== 'string' ||
+      typeof interfaceResponse.summary !== 'string' ||
+      !Array.isArray(interfaceResponse.target_paths)
+    ) {
+      return this.buildDiagnosticFallbackDecision(
+        feature,
+        reason,
+        'Diagnostic/autocorrection returned malformed structured output.',
+      );
+    }
+
+    return decision;
+  }
+
+  private buildDiagnosticFallbackDecision(
+    feature: FeatureRecord,
+    reason: string,
+    cause: string,
+  ): DiagnosticAutocorrectionDecision {
+    return {
+      feature_id: feature.id,
+      diagnosis_summary: 'Diagnostic/autocorrection could not trust the structured output, so the runtime is stopping with a bounded diagnostic instead of crashing.',
+      blocker: {
+        kind: 'unknown',
+        signature: `diagnostic-fallback-${feature.id}`,
+        recoverability: 'terminal',
+        evidence: [
+          reason,
+          cause,
+          'The diagnostic/autocorrection contract requires a valid blocker.kind before recovery can continue.',
+        ],
+      },
+      next_step: 'stop_with_diagnostic',
+      next_step_reason: 'Diagnostic/autocorrection returned malformed or incomplete structured output, so the runtime is stopping with a diagnostic artifact for manual follow-up.',
+      interface_response: {
+        mode: 'manual_review',
+        summary: 'No trusted interface response could be derived from the malformed diagnostic output.',
+        target_paths: [
+          'src/contracts/runtime/diagnostic-autocorrection.md',
+          'src/contracts/runtime/operation-loop.md',
+        ],
+      },
+    };
   }
 
   private buildDiagnosticArtifactPromptLines(feature: FeatureRecord): string[] {

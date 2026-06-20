@@ -17,6 +17,7 @@ This shape is distinct from `src/contracts/task/correction-task.md` because it t
 An unblock task resolves a named blocker without reopening the whole feature.
 
 It preserves the feature's intended execution target and only changes the minimum repository surface needed to resume progress.
+When the blocker is a stale recovery interface, the unblock task must preserve the current active task anchor and the previous implementation-failure lesson instead of inventing a new task anchor.
 
 ---
 
@@ -96,6 +97,9 @@ An unblock task must:
 - Include a concrete `first_executable_step`.
 - Include `minimum_progress_evidence` that cannot be satisfied by reading alone.
 - When the blocker is an `implementation_failure`, preserve the active task anchor and make the recovery path explicit instead of reopening the whole feature backlog.
+- When `blocker.kind` is `task_interface_gap`, record the stale interface markers, the observed state, and the prior attempt evidence that explains why the interface is stale.
+- Preserve the current active task anchor verbatim when the source state still contains one; do not mint a synthetic suffix such as a new `-C3` variant.
+- If the blocker is a stale recovery interface, make the restoration target explicit in the task text and do not replace it with a future-state guess.
 - Keep `expected_deliverables` aligned with `development_policy.mode`.
 - If the unblock task is documentation-only, it must stay `documentation_first` and deliver documentation only.
 - If the unblock task needs code or tests, it must be planned as `test_guided`.
@@ -109,6 +113,7 @@ An unblock task must not:
 - Widen the blocker into a backlog item.
 - Solve unrelated issues opportunistically.
 - Assume the blocker can be fixed without evidence.
+- Invent a new task anchor or restoration target when the blocker evidence already names the current one.
 
 ---
 

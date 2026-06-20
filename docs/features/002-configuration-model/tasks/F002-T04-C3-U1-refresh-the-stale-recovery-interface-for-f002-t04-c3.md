@@ -13,8 +13,8 @@ Repair the stale recovery instructions around `F002-T04-C3` so they match the cu
 Open `docs/features/002-configuration-model/tasks/004.3-repair-feature-state-for-f002-t04.md` and replace its obsolete `review_pending`-based recovery target and stale task references with the current `implementation_failed` -> `task_ready` recovery target for `F002-T04-C3`.
 
 ## Minimum Progress Evidence
-- `git diff -- docs/features/002-configuration-model/tasks/004.3-repair-feature-state-for-f002-t04.md` shows the repaired recovery task now names the current blocker, the current task anchor `F002-T04-C3`, and the restoration target `task_ready`.
-- `git diff -- docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md` shows both state documents aligned to the repaired recovery path and no longer referencing obsolete unblock-task identifiers or stale recovery narration.
+- `git diff -- docs/features/002-configuration-model/tasks/004.3-repair-feature-state-for-f002-t04.md` shows the repaired recovery task now names the current `task_interface_gap`, the current task anchor `F002-T04-C3`, and the restoration target `task_ready`.
+- `git diff -- docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md` shows both state documents aligned to the repaired recovery path, no longer referencing obsolete unblock-task identifiers or stale recovery narration, and preserving the no-diff plus missing `Implementation Notes` lesson.
 
 ## Trace
 - Roadmap objective: Keep repository-local configuration work moving by preserving deterministic runtime recovery for the configuration-model feature.
@@ -74,15 +74,14 @@ grep -q 'F002-T04-C3' docs/features/002-configuration-model/state.md && grep -q 
 
 ## Blocker Context
 
-- kind: state_corruption
-- signature: state-corruption-implementation-failed-correct-state-is-not-safe-because-the-repository-is-not-b
+- kind: task_interface_gap
+- signature: task-interface-gap-F002-T04-C3-stale-state-repair-task
 - recoverability: agent
 - observed_state: lifecycle=implementation_failed; active_task=F002-T04-C3; active_correction_task=none; active_unblock_task=none
-- evidence: `correct_state` is not safe because the repository is not blocked only by malformed state; retrying the existing state-correction task would reuse a stale interface and discard the recorded implementation-failure lesson. A bounded unblock task can preserve the active feature anchor, rewrite or supersede the stale recovery instructions, and then re-align feature and project state without broader architectural review.
-- evidence: - kind: implementation_failure
-- evidence: - signature: implementation-failure-F002-T04-C3
-- evidence: - recoverability: agent
-- evidence: lifecycle=implementation_failed
+- evidence: `F002-T04-C3` asks the implementer to fix an older `review_pending` inconsistency that no longer matches the current `state.md` and `PROJECT_STATE.md`, so the implementer produced no diff, no minimum-progress evidence, and no required `Implementation Notes`.
+- evidence: `docs/features/002-configuration-model/state.md` records the recoverable implementation failure for `F002-T04-C3` and keeps the active task anchor visible.
+- evidence: `docs/features/002-configuration-model/tasks/004.3-repair-feature-state-for-f002-t04.md` still needs to preserve the current recovery anchor and stale-interface lesson in one place.
+- evidence: `docs/compassrose/PROJECT_STATE.md` still pointed at an older unblock artifact before the recovery interface was refreshed.
 
 ## Restoration Target
 

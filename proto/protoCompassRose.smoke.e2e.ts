@@ -43,7 +43,7 @@ function main(): number {
   }
 
   syncPrototypeRuntime(repoRoot, cloneRoot);
-  syncFeatureStateDocs(repoRoot, cloneRoot);
+  seedSmokeFeatureStateDocs(cloneRoot);
 
   const codexMock = join(tempRoot, 'codex-mock.cjs');
   const opencodeMock = join(tempRoot, 'opencode-mock.cjs');
@@ -85,16 +85,13 @@ function main(): number {
   const markerPath = join(cloneRoot, 'proto', 'e2e-control.txt');
 
   const expectedSequence = [
-    'codex:selector',
     'opencode:implementer',
-    'codex:selector',
     'codex:reviewer',
-    'codex:selector',
   ];
 
   const checks = [
     {
-      name: 'control sequence matched selector -> opencode -> selector -> reviewer -> selector',
+      name: 'control sequence matched implementer -> reviewer',
       ok: sequence.length === expectedSequence.length
         && expectedSequence.every((item, index) => sequence[index] === item),
     },
@@ -123,20 +120,63 @@ function syncPrototypeRuntime(repoRoot: string, cloneRoot: string): void {
   writeFileSync(targetPath, readFileSync(sourcePath, 'utf8'), 'utf8');
 }
 
-function syncFeatureStateDocs(repoRoot: string, cloneRoot: string): void {
-  const sourceRoot = join(repoRoot, 'docs', 'features');
-  const targetRoot = join(cloneRoot, 'docs', 'features');
-
-  for (const entry of readdirSync(sourceRoot)) {
-    const sourceState = join(sourceRoot, entry, 'state.md');
-    if (!existsSync(sourceState) || !statSync(sourceState).isFile()) {
-      continue;
-    }
-
-    const targetState = join(targetRoot, entry, 'state.md');
-    mkdirSync(dirname(targetState), { recursive: true });
-    writeFileSync(targetState, readFileSync(sourceState, 'utf8'), 'utf8');
-  }
+function seedSmokeFeatureStateDocs(cloneRoot: string): void {
+  const targetState = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+  mkdirSync(dirname(targetState), { recursive: true });
+  writeFileSync(
+    targetState,
+    [
+      '# State: Configuration Model',
+      '',
+      '## Lifecycle State',
+      '',
+      'task_ready',
+      '',
+      '## Source Request',
+      '',
+      '`request.md`',
+      '',
+      '## Operational Status',
+      '',
+      '- formalization: complete',
+      '- active_task: F002-T04',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+      '- last_implementation_result: not_run',
+      '- last_quality_gate_result: unknown',
+      '- last_review_result: not_run',
+      '- last_unblock_result: not_run',
+      '',
+      '## Current Reality',
+      '',
+      'Smoke control task `F002-T04` is ready to execute.',
+      '',
+      '## Blocked By',
+      '',
+      '- None',
+      '',
+      '## Blocked From',
+      '',
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+      '',
+      '## Last Approved Change',
+      '',
+      'Smoke control task `F002-T04` was seeded by the smoke harness.',
+      '',
+      '## Known Gaps',
+      '',
+      '- The smoke harness verifies the control flow only.',
+      '',
+      '## Next Planning Hint',
+      '',
+      'Execute `F002-T04` when the current execution mode allows it.',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
 }
 
 function normalizeClonedWorktree(cloneRoot: string): void {
@@ -229,27 +269,116 @@ appendLog(logFile, {
 writeCount(countFile, count);
 
 let payload;
-if (count === 1) {
+if (kind === 'diagnostic') {
   payload = {
-    kind: 'implement_task',
-    feature_id: null,
-    task_id: 'F002-T04',
-    correction_task_id: null,
-    reason: 'smoke test: implement task',
+    feature_id: '002-configuration-model',
+    diagnosis_summary: 'Smoke test diagnostic: the recovery path is deterministic and should continue through the bounded unblock task.',
+    blocker: {
+      kind: 'task_interface_gap',
+      signature: 'smoke-diagnostic-002-configuration-model',
+      recoverability: 'agent',
+      evidence: [
+        'The smoke harness is verifying a recovery scenario.',
+        'The runtime should not crash when the diagnostic path is invoked.',
+      ],
+    },
+    next_step: 'plan_unblock_task',
+    next_step_reason: 'The smoke scenario is recoverable and should continue through a bounded unblock task.',
+    interface_response: {
+      mode: 'apply_in_unblock_task',
+      summary: 'Tighten the recovery interface inside a bounded unblock task.',
+      target_paths: [
+        'docs/features/002-configuration-model/state.md',
+        'docs/compassrose/PROJECT_STATE.md',
+      ],
+    },
   };
-} else if (count === 2) {
+} else if (kind === 'planner') {
   payload = {
-    kind: 'review_task',
-    feature_id: null,
-    task_id: 'F002-T04',
-    correction_task_id: null,
-    reason: 'smoke test: review task',
+    task: {
+      task_id: 'F002-T04-U1',
+      feature_id: '002-configuration-model',
+      title: 'Smoke recovery unblock',
+      objective: 'Keep the recovery path deterministic and restore the active task after the smoke correction pass.',
+      first_executable_step: 'Update proto/e2e-control.txt so the smoke can observe a visible diff.',
+      minimum_progress_evidence: [
+        'The prototype writes a reviewable diff for the recovery path.',
+        'The runtime can continue from unblock planning to implementation.',
+      ],
+      trace: {
+        roadmap_objective: 'Prototype control flow',
+        feature_goal: 'Smoke-test the orchestration recovery loop.',
+        state_gap: 'The recovery path should be exercised end to end.',
+      },
+      context: {
+        summary: 'Minimal unblock task used by the smoke harness.',
+        relevant_paths: [
+          'proto/e2e-control.txt',
+          'docs/compassrose/PROJECT_STATE.md',
+          'docs/features/002-configuration-model/state.md',
+        ],
+        relevant_modules: ['PrototypeCompassRose', 'CodexCli', 'OpenCodeCli'],
+      },
+      scope: {
+        allowed_paths: [
+          'proto/e2e-control.txt',
+          'docs/compassrose/PROJECT_STATE.md',
+          'docs/features/002-configuration-model/state.md',
+        ],
+        forbidden_paths: [
+          'docs/compassrose/CONFIG.md',
+          'src/cli/main.ts',
+        ],
+      },
+      constraints: [
+        'Keep the change minimal.',
+        'Do not modify the forbidden paths.',
+      ],
+      development_policy: {
+        mode: 'documentation_first',
+      },
+      quality_gates: {
+        before_review: ['node -e "process.exit(0)"'],
+      },
+      acceptance_criteria: [
+        'The prototype can continue deterministically after the unblock task.',
+        'The smoke harness observes a visible repository change.',
+      ],
+      expected_deliverables: ['documentation'],
+    },
   };
-} else if (count === 3) {
+} else if (kind === 'reviewer') {
+  const taskId = readTaskId(prompt, 'Review task') ?? readTaskId(prompt, 'task') ?? 'F002-T04';
+  payload = {
+    task_id: taskId,
+    status: 'approved',
+    summary: 'Smoke test review approved ' + taskId + '.',
+    acceptance: {
+      criteria: [
+        {
+          criterion: 'prototype invokes codex and opencode in the expected control-flow roles',
+          status: 'passed',
+          notes: 'observed through mock invocations',
+        },
+      ],
+    },
+    findings: [],
+    scope_check: {
+      status: 'passed',
+      unrelated_changes: [],
+    },
+    quality_gate_check: {
+      status: 'passed',
+      failed_gates: [],
+    },
+    correction_task: null,
+    project_state_update_hint: null,
+  };
+} else {
   payload = {
     task_id: 'F002-T04',
     status: 'approved',
-    summary: 'smoke test review approved the implementation',
+    summary: 'Smoke test default approval.',
     acceptance: {
       criteria: [
         {
@@ -270,14 +399,6 @@ if (count === 1) {
     },
     correction_task: null,
     project_state_update_hint: null,
-  };
-} else {
-  payload = {
-    kind: 'stop',
-    feature_id: null,
-    task_id: null,
-    correction_task_id: null,
-    reason: 'smoke test: stop',
   };
 }
 
@@ -313,8 +434,12 @@ function appendLog(filePath, entry) {
 }
 
 function detectPromptKind(prompt) {
-  if (prompt.includes('Act as the CompassRose deterministic step selector.')) {
-    return 'selector';
+  if (prompt.includes('Act as the CompassRose Diagnostic/Autocorrection role.')) {
+    return 'diagnostic';
+  }
+
+  if (prompt.includes('Act as the CompassRose Planner.')) {
+    return 'planner';
   }
 
   if (prompt.includes('Act as the CompassRose Reviewer.')) {
@@ -325,7 +450,23 @@ function detectPromptKind(prompt) {
     return 'implementer';
   }
 
+  if (prompt.includes('Act as the CompassRose task-interface analyst.')) {
+    return 'task_interface_analyst';
+  }
+
   return 'unknown';
+}
+
+function readTaskId(prompt, prefix) {
+  const marker = prefix + ' \`';
+  const start = prompt.indexOf(marker);
+  if (start === -1) {
+    return null;
+  }
+
+  const remainder = prompt.slice(start + marker.length);
+  const end = remainder.indexOf('\`');
+  return end === -1 ? null : remainder.slice(0, end);
 }
 `;
 
@@ -340,6 +481,12 @@ const prompt = process.argv.slice(2).join(' ');
 
 fs.mkdirSync(path.dirname(markerPath), { recursive: true });
 fs.writeFileSync(markerPath, 'opencode smoke test touched this file\\n', 'utf8');
+process.stdout.write([
+  '## Implementation Notes',
+  '- smoke test implementation completed successfully.',
+  '- the fake implementer touched proto/e2e-control.txt to create a visible diff.',
+  '',
+].join('\\n'));
 fs.appendFileSync(
   logFile,
   JSON.stringify({

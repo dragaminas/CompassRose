@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-correction_pending
+quality_failed
 
 ## Source Request
 
@@ -11,12 +11,12 @@ correction_pending
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T04-C3-U1
-- active_correction_task: F002-T04-C3-U1-C1
+- active_task: F002-T04-C3-U1-C1
+- active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: changes_required
+- last_quality_gate_result: failed
+- last_review_result: not_run
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -30,6 +30,8 @@ The accepted architecture documentation already supports repository-local state,
 This feature is now formalized under `docs/features/002-configuration-model/`, and the first implementation tasks have now been completed against the configuration target defined in `docs/compassrose/CONFIG.md`.
 
 Task `F002-T04` was approved, extending the typed config loader to validate and expose `execution`, `roles`, and `git_policy` data from the canonical project config.
+
+The latest recovery work uncovered a stale recovery interface around `F002-T04-C3`: the implementation attempt produced no diff and omitted the required `Implementation Notes`, so the current correction task `F002-T04-C3-U1-C1` must preserve that evidence while repairing the path back to `task_ready`.
 
 ## Implemented Deliverables
 
@@ -51,8 +53,8 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 - Formalize the configuration model in canonical feature documents: complete
 - Stabilize the project-local configuration contract and any gaps in `docs/compassrose/CONFIG.md`: complete
 - Implement configuration loading and validation for the documented MVP scope: complete
-- Connect configuration validation to the doctor/runtime flow and update state based on approved behavior: blocked
-- Repair malformed operational-status entries in feature state: in progress
+- Connect configuration validation to the doctor/runtime flow and update state based on approved behavior: complete
+- Repair malformed operational-status entries in feature state: completed
 
 ## Blocked By
 
@@ -60,12 +62,12 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 - - signature: implementation-failure-F002-T04-C3
 - - recoverability: agent
 - - observed_state: lifecycle=implementation_failed; active_task=F002-T04-C3; active_correction_task=none; active_unblock_task=none
-- - evidence: Implementation for F002-T04-C3 did not include the required Implementation Notes justification.
+- - evidence: The implementation attempt for F002-T04-C3 produced no diff and did not include the required Implementation Notes justification.
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
+- lifecycle_state: task_ready
+- active_task: F002-T04-C3
 - active_correction_task: none
 - active_unblock_task: none
 
@@ -76,8 +78,8 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 ## Known Gaps
 
 - The project-local configuration flow still needs a runtime consumer that uses the validated `execution`, `roles`, and `git_policy` data during orchestration.
-- The correction task `F002-T04-C1` has a partial implementation attempt (no-diff), so recovery must resume from the current repository state instead of assuming a fresh task start.
+- The root `F002-T04-C3` attempt has a partial implementation attempt (no diff) and omitted the required Implementation Notes justification, so recovery must resume from the current repository state instead of assuming a fresh task start.
 
 ## Next Planning Hint
 
-Execute correction task `F002-T04-C3-U1-C1` next.
+Complete the current correction task `F002-T04-C3-U1-C1` before allowing review or new planning, then resume the restored task anchor `F002-T04-C3`.

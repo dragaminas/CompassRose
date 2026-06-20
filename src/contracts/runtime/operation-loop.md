@@ -236,6 +236,8 @@ Next state:
 Action:
 
 - run effective quality gates in deterministic order
+- if a required gate fails on a correction or unblock task, preserve the recorded task and carry the failure into `quality_failed` instead of inventing a fresh normal task
+- if the failure exposes a stale recovery interface, classify it as `task_interface_gap` and invoke diagnostic/autocorrection before planning any broader recovery change
 
 Next state:
 
@@ -276,6 +278,7 @@ Next state:
 Action:
 
 - if the failed implementation is recoverable, generate a bounded unblock task with the planner-grade role and transition the feature to `unblock_pending`
+- if the quality failure is on a correction or unblock task and it exposes a stale recovery interface, continue from the recorded task, classify the blocker as `task_interface_gap`, and plan a bounded unblock task that preserves the current active task anchor
 - otherwise stop the run unless an explicit recovery policy transitions the feature back into a valid pending state
 - documentation-only unblock tasks may remain `documentation_first`; unblock tasks that need code or tests must be planned as `test_guided`
 
