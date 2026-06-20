@@ -63,6 +63,12 @@ task:
     - code
     - tests
     - documentation
+
+  reviewable_diff_handoff?:
+    require_live_diff: boolean
+    allow_git_commit_before_handoff: boolean
+    required_changed_files:
+      - string
 ```
 
 ---
@@ -156,6 +162,16 @@ Commands or checks that must run before review.
 ### acceptance_criteria
 
 Concrete criteria used by the Reviewer.
+
+### reviewable_diff_handoff
+
+Optional handoff rules for tasks that need the reviewable diff to remain visible in the live worktree.
+
+Use this when the task must pin:
+
+- whether the live worktree diff is mandatory at handoff
+- whether `git commit` is forbidden before CompassRose captures the change
+- which exact changed paths should remain visible at handoff
 
 ---
 

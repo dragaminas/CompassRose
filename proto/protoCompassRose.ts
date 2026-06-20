@@ -12,6 +12,7 @@ type StepKind =
   | 'plan_task'
   | 'correct_state'
   | 'unblock_task'
+  | 'diagnose_autocorrect'
   | 'implement_task'
   | 'review_task'
   | 'correct_task'
@@ -31,6 +32,7 @@ type DiagnosticClassification =
   | 'context_overflow'
   | 'provider_failure'
   | 'permission_prompt'
+  | 'reviewable_diff_lost'
   | 'tool_refusal'
   | 'missing_implementation_notes'
   | 'model_passivity'
@@ -47,6 +49,12 @@ type BlockerKind =
   | 'unknown';
 
 type BlockerRecoverability = 'auto' | 'agent' | 'human' | 'terminal';
+type StructuredSchemaId =
+  | 'feature_plan'
+  | 'planner_output'
+  | 'reviewer_output'
+  | 'task_interface_analysis'
+  | 'diagnostic_autocorrection';
 
 class ControlledStopError extends Error {
   constructor(
@@ -92,6 +100,8 @@ interface ImplementationAttempt {
   readonly status: 'success' | 'failed';
   readonly changed_files: readonly string[];
   readonly git_diff: string;
+  readonly fallback_changed_files: readonly string[];
+  readonly fallback_git_diff: string | null;
   readonly raw_output: string;
   readonly implementation_notes: string | null;
   readonly diagnostics: ImplementationDiagnostics;
@@ -291,6 +301,24 @@ interface TaskInterfaceAnalysis {
   readonly notes_for_documentation: readonly string[];
 }
 
+interface DiagnosticAutocorrectionDecision {
+  readonly feature_id: string;
+  readonly diagnosis_summary: string;
+  readonly blocker: {
+    readonly kind: BlockerKind;
+    readonly signature: string;
+    readonly recoverability: BlockerRecoverability;
+    readonly evidence: readonly string[];
+  };
+  readonly next_step: 'correct_state' | 'plan_unblock_task' | 'stop_with_diagnostic';
+  readonly next_step_reason: string;
+  readonly interface_response: {
+    readonly mode: 'none' | 'apply_in_unblock_task' | 'manual_review';
+    readonly summary: string;
+    readonly target_paths: readonly string[];
+  };
+}
+
 interface RecoveryLesson {
   readonly run_id: string;
   readonly created_at: string;
@@ -324,7 +352,19 @@ interface ParsedTaskDocument {
   readonly qualityGates: readonly string[];
   readonly developmentPolicy: DevelopmentPolicyMode;
   readonly likelyAffectedFiles: readonly string[];
+  readonly trace: PlannedTask['trace'];
+  readonly context: PlannedTask['context'];
+  readonly expectedDeliverables: readonly ('code' | 'tests' | 'documentation')[];
+  readonly stateCorrection: StateCorrectionTask | null;
+  readonly unblock: UnblockTaskMetadata | null;
+  readonly reviewableDiffHandoff: ReviewableDiffHandoff;
   readonly path: string;
+}
+
+interface ReviewableDiffHandoff {
+  readonly requireLiveDiff: boolean;
+  readonly allowGitCommitBeforeHandoff: boolean;
+  readonly requiredChangedFiles: readonly string[];
 }
 
 interface FeatureRecord {
@@ -396,6 +436,40 @@ interface RefinementFeedback {
   readonly next_questions: readonly string[];
 }
 
+interface FileFingerprint {
+  readonly exists: boolean;
+  readonly mtimeMs: number;
+  readonly size: number;
+}
+
+interface ContractRefreshResult {
+  readonly reloadedSchemas: readonly string[];
+  readonly restartRequired: boolean;
+  readonly restartReasons: readonly string[];
+}
+
+interface FeatureInspection {
+  readonly kind:
+    | 'request_pending'
+    | 'formalization_pending'
+    | 'formalized'
+    | 'task_planning_pending'
+    | 'task_ready'
+    | 'unblock_pending'
+    | 'implementation_running'
+    | 'quality_gates_pending'
+    | 'review_pending'
+    | 'correction_pending'
+    | 'implementation_failed'
+    | 'quality_failed'
+    | 'review_failed'
+    | 'blocked'
+    | 'completed'
+    | 'malformed';
+  readonly reason: string;
+  readonly snapshot: FeatureStateSnapshot | null;
+}
+
 class GitClient {
   constructor(private readonly repositoryRoot: string) {}
 
@@ -433,6 +507,20 @@ class GitClient {
     ].filter((patch) => patch.length > 0);
 
     return patches.join('\n');
+  }
+
+  diffNameOnlyBetween(fromRef: string, toRef: string, excludedPaths: readonly string[] = []): string[] {
+    const pathspecArgs = this.buildPathspecArgs(excludedPaths);
+    return parseGitPathList(this.execGit(['diff', '--name-only', fromRef, toRef, '--', ...pathspecArgs]));
+  }
+
+  diffPatchBetween(fromRef: string, toRef: string, excludedPaths: readonly string[] = []): string {
+    const pathspecArgs = this.buildPathspecArgs(excludedPaths);
+    return this.execGit(['diff', '--patch', '--no-ext-diff', fromRef, toRef, '--', ...pathspecArgs]).trim();
+  }
+
+  headCommit(): string {
+    return this.execGit(['rev-parse', 'HEAD']).trim();
   }
 
   private buildPathspecArgs(excludedPaths: readonly string[]): string[] {
@@ -532,6 +620,82 @@ class ArtifactStore {
     mkdirSync(dirname(targetPath), { recursive: true });
     writeFileSync(targetPath, normalizeTextForWrite(value), 'utf8');
     return targetPath;
+  }
+}
+
+const STRUCTURED_SCHEMA_PATHS: Record<StructuredSchemaId, string> = {
+  feature_plan: 'src/contracts/planner/feature-output.schema.json',
+  planner_output: 'src/contracts/planner/output.schema.json',
+  reviewer_output: 'src/contracts/reviewer/output.schema.json',
+  task_interface_analysis: 'src/contracts/runtime/task-interface-analysis.schema.json',
+  diagnostic_autocorrection: 'src/contracts/runtime/diagnostic-autocorrection.schema.json',
+};
+
+const RUNTIME_CRITICAL_PATHS = [
+  'proto/protoCompassRose.ts',
+] as const;
+
+class ContractRegistry {
+  private readonly schemaPaths: Record<StructuredSchemaId, string>;
+  private readonly runtimeCriticalPaths: readonly string[];
+  private readonly schemas = new Map<StructuredSchemaId, unknown>();
+  private readonly fingerprints = new Map<string, FileFingerprint>();
+
+  constructor(private readonly repositoryRoot: string) {
+    this.schemaPaths = Object.fromEntries(
+      Object.entries(STRUCTURED_SCHEMA_PATHS).map(([key, value]) => [key, join(repositoryRoot, value)]),
+    ) as Record<StructuredSchemaId, string>;
+    this.runtimeCriticalPaths = RUNTIME_CRITICAL_PATHS.map((value) => join(repositoryRoot, value));
+    this.initialize();
+  }
+
+  schema<T>(id: StructuredSchemaId): T {
+    if (!this.schemas.has(id)) {
+      throw new Error(`Structured schema ${id} is not loaded.`);
+    }
+
+    return this.schemas.get(id) as T;
+  }
+
+  refresh(): ContractRefreshResult {
+    const reloadedSchemas: string[] = [];
+    const restartReasons: string[] = [];
+
+    for (const [schemaId, schemaPath] of Object.entries(this.schemaPaths) as Array<[StructuredSchemaId, string]>) {
+      const current = fingerprintForPath(schemaPath);
+      const previous = this.fingerprints.get(schemaPath);
+      if (!sameFingerprint(previous, current)) {
+        this.schemas.set(schemaId, readJsonFile(schemaPath));
+        this.fingerprints.set(schemaPath, current);
+        reloadedSchemas.push(relativePath(this.repositoryRoot, schemaPath));
+      }
+    }
+
+    for (const runtimePath of this.runtimeCriticalPaths) {
+      const current = fingerprintForPath(runtimePath);
+      const previous = this.fingerprints.get(runtimePath);
+      if (!sameFingerprint(previous, current)) {
+        this.fingerprints.set(runtimePath, current);
+        restartReasons.push(relativePath(this.repositoryRoot, runtimePath));
+      }
+    }
+
+    return {
+      reloadedSchemas,
+      restartRequired: restartReasons.length > 0,
+      restartReasons,
+    };
+  }
+
+  private initialize(): void {
+    for (const [schemaId, schemaPath] of Object.entries(this.schemaPaths) as Array<[StructuredSchemaId, string]>) {
+      this.schemas.set(schemaId, readJsonFile(schemaPath));
+      this.fingerprints.set(schemaPath, fingerprintForPath(schemaPath));
+    }
+
+    for (const runtimePath of this.runtimeCriticalPaths) {
+      this.fingerprints.set(runtimePath, fingerprintForPath(runtimePath));
+    }
   }
 }
 
@@ -714,6 +878,7 @@ class PrototypeCompassRose {
   private readonly repositoryRoot: string;
   private readonly git: GitClient;
   private readonly artifacts: ArtifactStore;
+  private readonly contracts: ContractRegistry;
   private readonly codex: CodexCli;
   private readonly opencode: OpenCodeCli;
   private readonly implementer: TaskImplementer;
@@ -721,9 +886,11 @@ class PrototypeCompassRose {
   private readonly configurationPath: string;
   private readonly projectStatePath: string;
   private readonly featuresRoot: string;
+  private readonly maxTasksPerRun: number;
   private readonly runId: string;
   private readonly startedAt: string;
   private readonly stepRecords: StepRunRecord[] = [];
+  private readonly completedPrimaryTaskAnchors = new Set<string>();
   private stopRequested = false;
   private stopReason: string | null = null;
   private stopExitCode = 130;
@@ -738,6 +905,7 @@ class PrototypeCompassRose {
     this.repositoryRoot = repositoryRoot;
     this.git = new GitClient(repositoryRoot);
     this.artifacts = new ArtifactStore(repositoryRoot);
+    this.contracts = new ContractRegistry(repositoryRoot);
     this.codex = new CodexCli(repositoryRoot, process.env.PROTO_COMPASSROSE_CODEX_COMMAND ?? 'codex');
     this.opencode = new OpenCodeCli(repositoryRoot, process.env.PROTO_COMPASSROSE_OPENCODE_COMMAND ?? 'opencode');
     this.implementer = options.implementer === 'codex' ? this.codex : this.opencode;
@@ -751,6 +919,7 @@ class PrototypeCompassRose {
 
     this.configurationPath = configurationPath;
     const documentation = configuration.value.documentation as Record<string, unknown>;
+    const limits = isRecord(configuration.value.limits) ? configuration.value.limits : {};
     const projectStatePath = resolveRepositoryRelativePath(repositoryRoot, configuration.value.documentation.project_state);
     const featuresRoot = resolveRepositoryRelativePath(
       repositoryRoot,
@@ -763,6 +932,7 @@ class PrototypeCompassRose {
 
     this.projectStatePath = projectStatePath;
     this.featuresRoot = featuresRoot;
+    this.maxTasksPerRun = readPositiveInteger(limits, 'max_tasks_per_run') ?? Number.POSITIVE_INFINITY;
     this.runId = createRunId();
     this.startedAt = new Date().toISOString();
   }
@@ -775,6 +945,11 @@ class PrototypeCompassRose {
     try {
       while (keepRunning) {
         this.throwIfControlledStopRequested();
+        const restartExitCode = this.refreshContractsAtCheckpoint('loop-start');
+        if (restartExitCode !== null) {
+          return restartExitCode;
+        }
+
         const decision = this.determineNextStep();
         lastDecision = decision;
         console.log(`Next step: ${decision.kind}${decision.feature_id ? ` (${decision.feature_id})` : ''}`);
@@ -867,90 +1042,340 @@ class PrototypeCompassRose {
     );
   }
 
-  private determineNextStep(): StepDecision {
-    const deterministicRecovery = this.selectDeterministicRecoveryStep();
-    if (deterministicRecovery) {
-      return deterministicRecovery;
+  private refreshContractsAtCheckpoint(checkpoint: string): number | null {
+    const refresh = this.contracts.refresh();
+
+    if (refresh.reloadedSchemas.length > 0) {
+      console.log(`Reloaded contract schemas at ${checkpoint}: ${refresh.reloadedSchemas.join(', ')}`);
     }
 
-    const prompt = [
-      'Act as the CompassRose deterministic step selector.',
-      '',
-      'Read only these repository sources:',
-      '- `docs/compassrose/PROJECT_STATE.md`',
-      '- `docs/compassrose/CONFIG.md`',
-      '- `src/contracts/runtime/operation-loop.md`',
-      '- `src/contracts/state/feature-state.md`',
-      '- `src/contracts/task/state-correction-task.md`',
-      '- `docs/features/README.md`',
-      '- the feature folders under `docs/features/` as needed',
-      '',
-      'Choose the next executable step for one prototype run.',
-      '',
-      'Rules:',
-      '- Return `plan_feature` when the selected feature still has only `request.md` and must be formalized.',
-      '- Return `plan_task` when the selected feature is ready for exactly one next task to be planned.',
-      '- Return `correct_state` when the selected feature state is malformed but repairable by a bounded state correction task.',
-      '- Return `unblock_task` when the selected feature is blocked for a recoverable reason and a bounded unblock task can restore progress.',
-      '- Return `implement_task` when the selected feature has `task_ready`, `unblock_pending`, or `implementation_running` and the corresponding active task or unblock task is ready to execute.',
-      '- Return `review_task` when the selected feature is waiting for review.',
-      '- Return `correct_task` when the selected feature has an active correction task ready to execute.',
-      '- Return `blocked` when the selected feature is blocked for an unrecoverable reason or a failed state prevents progress.',
-      '- Return `stop` when there is no non-completed feature left to implement.',
-      '- Respect numeric feature order and do not skip an earlier non-completed feature.',
-      '',
-      'Return JSON only.',
-    ].join('\n');
+    if (!refresh.restartRequired) {
+      return null;
+    }
 
-    return this.codex.runStructured<StepDecision>(prompt, STEP_SCHEMA, [], 'step-selector');
+    const reason = `Runtime restart required at ${checkpoint} because runtime-critical files changed: ${refresh.restartReasons.join(', ')}.`;
+    console.log(reason);
+    this.writeRunSummary('stopped', 0, null);
+    return this.restartProcess(reason);
   }
 
-  private selectDeterministicRecoveryStep(): StepDecision | null {
+  private restartProcess(reason: string): number {
+    const restartDepth = Number.parseInt(process.env.PROTO_COMPASSROSE_RESTART_DEPTH ?? '0', 10) || 0;
+    if (restartDepth >= 3) {
+      throw new Error(`Refusing to restart the prototype more than 3 times in one run. Last reason: ${reason}`);
+    }
+
+    const args = [
+      ...process.execArgv,
+      ...process.argv.slice(1),
+    ];
+    const result = spawnSync(process.execPath, args, {
+      cwd: this.repositoryRoot,
+      env: {
+        ...process.env,
+        PROTO_COMPASSROSE_RESTART_DEPTH: String(restartDepth + 1),
+      },
+      stdio: 'inherit',
+    });
+
+    if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
+      return stopExitCodeForSignal(result.signal);
+    }
+
+    if (result.error) {
+      throw result.error;
+    }
+
+    return result.status ?? 1;
+  }
+
+  private determineNextStep(): StepDecision {
     for (const feature of this.listFeatures()) {
-      if (!existsSync(feature.statePath)) {
+      const decision = this.selectStepForFeature(feature);
+      if (decision) {
+        return decision;
+      }
+    }
+
+    return {
+      kind: 'stop',
+      feature_id: null,
+      task_id: null,
+      correction_task_id: null,
+      reason: 'No non-completed feature remains.',
+    };
+  }
+
+  private selectStepForFeature(feature: FeatureRecord): StepDecision | null {
+    const inspection = this.inspectFeature(feature);
+
+    switch (inspection.kind) {
+      case 'completed':
         return null;
-      }
-
-      let snapshot: FeatureStateSnapshot;
-      try {
-        snapshot = this.readFeatureStateSnapshot(feature);
-      } catch {
-        return null;
-      }
-
-      if (snapshot.lifecycleState === 'completed') {
-        continue;
-      }
-
-      if (snapshot.lifecycleState !== 'implementation_failed') {
-        return null;
-      }
-
-      const activeTask = this.resolveImplementationFailureActiveTask(feature, snapshot);
-      if (!activeTask) {
-        const decision: StepDecision = {
-          kind: 'correct_state',
+      case 'request_pending':
+      case 'formalization_pending':
+        return {
+          kind: 'plan_feature',
           feature_id: feature.id,
           task_id: null,
           correction_task_id: null,
-          reason: `Feature ${feature.id} is in implementation_failed but no active task anchor could be recovered, so the runtime must repair the state before resuming.`,
+          reason: inspection.reason,
         };
-        this.writeRefinementFeedback(decision.reason, decision);
-        return decision;
-      }
+      case 'formalized':
+      case 'task_planning_pending':
+        if (this.completedPrimaryTaskAnchors.size >= this.maxTasksPerRun) {
+          return {
+            kind: 'stop',
+            feature_id: feature.id,
+            task_id: null,
+            correction_task_id: null,
+            reason: `Primary task limit reached for this run (${this.maxTasksPerRun}); stop before planning another normal task for feature ${feature.id}.`,
+          };
+        }
 
-      const decision: StepDecision = {
-        kind: 'unblock_task',
-        feature_id: feature.id,
-        task_id: null,
-        correction_task_id: null,
-        reason: `Feature ${feature.id} is in implementation_failed; plan a bounded recovery unblock task that restores task readiness for ${activeTask}.`,
+        return {
+          kind: 'plan_task',
+          feature_id: feature.id,
+          task_id: null,
+          correction_task_id: null,
+          reason: inspection.reason,
+        };
+      case 'task_ready':
+        return {
+          kind: 'implement_task',
+          feature_id: feature.id,
+          task_id: requireNonNoneValue(inspection.snapshot?.activeTask, `Feature ${feature.id} requires active_task for task_ready.`),
+          correction_task_id: null,
+          reason: inspection.reason,
+        };
+      case 'unblock_pending':
+        return {
+          kind: 'implement_task',
+          feature_id: feature.id,
+          task_id: requireNonNoneValue(inspection.snapshot?.activeUnblockTask, `Feature ${feature.id} requires active_unblock_task for unblock_pending.`),
+          correction_task_id: null,
+          reason: inspection.reason,
+        };
+      case 'implementation_running':
+        return {
+          kind: 'implement_task',
+          feature_id: feature.id,
+          task_id: requireNonNoneValue(inspection.snapshot?.activeTask, `Feature ${feature.id} requires active_task for implementation_running.`),
+          correction_task_id: null,
+          reason: inspection.reason,
+        };
+      case 'quality_gates_pending':
+      case 'review_pending':
+        return {
+          kind: 'review_task',
+          feature_id: feature.id,
+          task_id: requireNonNoneValue(inspection.snapshot?.activeTask, `Feature ${feature.id} requires active_task for review.`),
+          correction_task_id: null,
+          reason: inspection.reason,
+        };
+      case 'correction_pending':
+        return {
+          kind: 'correct_task',
+          feature_id: feature.id,
+          task_id: null,
+          correction_task_id: requireNonNoneValue(
+            inspection.snapshot?.activeCorrectionTask,
+            `Feature ${feature.id} requires active_correction_task for correction_pending.`,
+          ),
+          reason: inspection.reason,
+        };
+      case 'implementation_failed':
+      case 'quality_failed':
+      case 'review_failed':
+      case 'blocked':
+      case 'malformed':
+        return {
+          kind: 'diagnose_autocorrect',
+          feature_id: feature.id,
+          task_id: inspection.snapshot?.activeTask ?? null,
+          correction_task_id: inspection.snapshot?.activeCorrectionTask ?? null,
+          reason: inspection.reason,
+        };
+      default:
+        return assertNever(inspection.kind);
+    }
+  }
+
+  private inspectFeature(feature: FeatureRecord): FeatureInspection {
+    const hasRequest = statSafeIsFile(feature.requestPath);
+    const hasFeatureDoc = statSafeIsFile(feature.featurePath);
+    const hasArchitectureDoc = statSafeIsFile(feature.architecturePath);
+    const hasStateDoc = statSafeIsFile(feature.statePath);
+
+    if (hasRequest && (!hasFeatureDoc || !hasArchitectureDoc || !hasStateDoc)) {
+      return {
+        kind: 'request_pending',
+        reason: `Feature ${feature.id} is missing one or more formalized documents, so the runtime must formalize the request first.`,
+        snapshot: null,
       };
-      this.writeRefinementFeedback(decision.reason, decision);
-      return decision;
     }
 
-    return null;
+    if (!hasStateDoc) {
+      return {
+        kind: 'malformed',
+        reason: `Feature ${feature.id} has no readable state.md outside a clean request_pending start, so diagnosis/autocorrection must decide the recovery path.`,
+        snapshot: null,
+      };
+    }
+
+    let snapshot: FeatureStateSnapshot;
+    try {
+      snapshot = this.readFeatureStateSnapshot(feature);
+    } catch (error) {
+      return {
+        kind: 'malformed',
+        reason: `Feature ${feature.id} state.md is malformed: ${errorMessage(error)}.`,
+        snapshot: null,
+      };
+    }
+
+    if ((!hasFeatureDoc || !hasArchitectureDoc) && snapshot.lifecycleState !== 'formalization_pending') {
+      return {
+        kind: 'malformed',
+        reason: `Feature ${feature.id} is missing formalized feature documents while lifecycle state is ${snapshot.lifecycleState}; diagnosis/autocorrection must repair the inconsistency.`,
+        snapshot,
+      };
+    }
+
+    switch (snapshot.lifecycleState) {
+      case 'request_pending':
+        return {
+          kind: 'request_pending',
+          reason: `Feature ${feature.id} is waiting for formalization from request.md.`,
+          snapshot,
+        };
+      case 'formalization_pending':
+        return {
+          kind: 'formalization_pending',
+          reason: `Feature ${feature.id} is in formalization_pending and should resume formalization deterministically.`,
+          snapshot,
+        };
+      case 'formalized':
+        return {
+          kind: 'formalized',
+          reason: `Feature ${feature.id} is formalized and its next deterministic action is task planning.`,
+          snapshot,
+        };
+      case 'task_planning_pending':
+        return {
+          kind: 'task_planning_pending',
+          reason: `Feature ${feature.id} is waiting for exactly one next task to be planned.`,
+          snapshot,
+        };
+      case 'task_ready':
+        return snapshot.activeTask !== 'none'
+          ? {
+              kind: 'task_ready',
+              reason: `Feature ${feature.id} is task_ready with active task ${snapshot.activeTask}.`,
+              snapshot,
+            }
+          : {
+              kind: 'malformed',
+              reason: `Feature ${feature.id} is task_ready but active_task is missing, so diagnosis/autocorrection must restore the execution anchor.`,
+              snapshot,
+            };
+      case 'unblock_pending':
+        return snapshot.activeUnblockTask !== 'none'
+          ? {
+              kind: 'unblock_pending',
+              reason: `Feature ${feature.id} is unblock_pending with active unblock task ${snapshot.activeUnblockTask}.`,
+              snapshot,
+            }
+          : {
+              kind: 'malformed',
+              reason: `Feature ${feature.id} is unblock_pending but active_unblock_task is missing, so diagnosis/autocorrection must restore the recovery anchor.`,
+              snapshot,
+            };
+      case 'implementation_running':
+        return snapshot.activeTask !== 'none'
+          ? {
+              kind: 'implementation_running',
+              reason: `Feature ${feature.id} is implementation_running for ${snapshot.activeTask} and should resume deterministically.`,
+              snapshot,
+            }
+          : {
+              kind: 'malformed',
+              reason: `Feature ${feature.id} is implementation_running but active_task is missing, so diagnosis/autocorrection must decide whether to repair state or unblock.`,
+              snapshot,
+            };
+      case 'quality_gates_pending':
+        return snapshot.activeTask !== 'none'
+          ? {
+              kind: 'quality_gates_pending',
+              reason: `Feature ${feature.id} is quality_gates_pending for ${snapshot.activeTask}; the runtime should resume review-side validation deterministically.`,
+              snapshot,
+            }
+          : {
+              kind: 'malformed',
+              reason: `Feature ${feature.id} is quality_gates_pending but active_task is missing, so diagnosis/autocorrection must restore the review anchor.`,
+              snapshot,
+            };
+      case 'review_pending':
+        return snapshot.activeTask !== 'none'
+          ? {
+              kind: 'review_pending',
+              reason: `Feature ${feature.id} is review_pending for ${snapshot.activeTask}.`,
+              snapshot,
+            }
+          : {
+              kind: 'malformed',
+              reason: `Feature ${feature.id} is review_pending but active_task is missing, so diagnosis/autocorrection must restore the review anchor.`,
+              snapshot,
+            };
+      case 'correction_pending':
+        return snapshot.activeCorrectionTask !== 'none'
+          ? {
+              kind: 'correction_pending',
+              reason: `Feature ${feature.id} is correction_pending with correction task ${snapshot.activeCorrectionTask}.`,
+              snapshot,
+            }
+          : {
+              kind: 'malformed',
+              reason: `Feature ${feature.id} is correction_pending but active_correction_task is missing, so diagnosis/autocorrection must restore the correction anchor.`,
+              snapshot,
+            };
+      case 'implementation_failed':
+        return {
+          kind: 'implementation_failed',
+          reason: `Feature ${feature.id} is in implementation_failed and needs diagnosis/autocorrection before normal execution can resume.`,
+          snapshot,
+        };
+      case 'quality_failed':
+        return {
+          kind: 'quality_failed',
+          reason: `Feature ${feature.id} is in quality_failed and needs diagnosis/autocorrection before normal execution can resume.`,
+          snapshot,
+        };
+      case 'review_failed':
+        return {
+          kind: 'review_failed',
+          reason: `Feature ${feature.id} is in review_failed and needs diagnosis/autocorrection before normal execution can resume.`,
+          snapshot,
+        };
+      case 'blocked':
+        return {
+          kind: 'blocked',
+          reason: `Feature ${feature.id} is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.`,
+          snapshot,
+        };
+      case 'completed':
+        return {
+          kind: 'completed',
+          reason: `Feature ${feature.id} is completed.`,
+          snapshot,
+        };
+      default:
+        return {
+          kind: 'malformed',
+          reason: `Feature ${feature.id} has unknown lifecycle state ${snapshot.lifecycleState}, so diagnosis/autocorrection must repair or stop.`,
+          snapshot,
+        };
+    }
   }
 
   private executeStep(decision: StepDecision): StepExecutionResult {
@@ -967,6 +1392,8 @@ class PrototypeCompassRose {
       case 'unblock_task':
         this.planUnblockTask(requireString(decision.feature_id, 'feature_id'), decision.reason);
         return { exitCode: 0, continueLoop: true, summary: `Unblock task planned for feature ${requireString(decision.feature_id, 'feature_id')}.` };
+      case 'diagnose_autocorrect':
+        return this.diagnoseAndAutocorrect(requireString(decision.feature_id, 'feature_id'), decision.reason);
       case 'implement_task':
         return this.implementTask(requireString(decision.task_id, 'task_id'));
       case 'correct_task':
@@ -1023,7 +1450,12 @@ class PrototypeCompassRose {
       'Do not modify files.',
     ].join('\n');
 
-    const planned = this.codex.runStructured<PlannedFeatureDocs>(prompt, FEATURE_PLAN_SCHEMA, [], `feature-plan:${featureId}`);
+    const planned = this.codex.runStructured<PlannedFeatureDocs>(
+      prompt,
+      this.contracts.schema('feature_plan'),
+      [],
+      `feature-plan:${featureId}`,
+    );
     writeText(feature.featurePath, ensureTrailingNewline(planned.feature_md));
     writeText(feature.architecturePath, ensureTrailingNewline(planned.architecture_md));
     writeText(feature.statePath, ensureTrailingNewline(planned.state_md));
@@ -1078,7 +1510,12 @@ class PrototypeCompassRose {
       '- Return JSON only and do not modify files.',
     ].join('\n');
 
-    const planned = this.codex.runStructured<PlannerOutput>(prompt, PLANNER_OUTPUT_SCHEMA, [], `task-plan:${featureId}`);
+    const planned = this.codex.runStructured<PlannerOutput>(
+      prompt,
+      this.contracts.schema('planner_output'),
+      [],
+      `task-plan:${featureId}`,
+    );
     const task = planned.task;
     validateTaskDeliverables(task, 'task');
 
@@ -1115,12 +1552,7 @@ class PrototypeCompassRose {
     const blocker = this.buildBlockerProfile(snapshot, reason);
     const restorationTarget = snapshot.lifecycleState === 'implementation_failed'
       ? this.buildImplementationFailureRestorationTarget(feature, snapshot)
-      : snapshot.blockedFrom ?? {
-          lifecycle_state: snapshot.lifecycleState,
-          active_task: snapshot.activeTask,
-          active_correction_task: snapshot.activeCorrectionTask,
-          active_unblock_task: snapshot.activeUnblockTask,
-        };
+      : this.preferredRestorationTarget(snapshot);
     const prompt = [
       'Act as the CompassRose Planner.',
       '',
@@ -1140,6 +1572,7 @@ class PrototypeCompassRose {
       '- `docs/compassrose/PROJECT_STATE.md`',
       '- `docs/compassrose/CONFIG.md`',
       '- `src/contracts/runtime/operation-loop.md`',
+      ...this.buildLatestDiagnosticPromptLines(featureId),
       ...this.buildRecoveryLessonPromptLines(featureId),
       '',
       'Blocker context:',
@@ -1164,7 +1597,12 @@ class PrototypeCompassRose {
       '- Return JSON only and do not modify files.',
     ].join('\n');
 
-    const planned = this.codex.runStructured<PlannerOutput>(prompt, PLANNER_OUTPUT_SCHEMA, [], `unblock-plan:${featureId}`);
+    const planned = this.codex.runStructured<PlannerOutput>(
+      prompt,
+      this.contracts.schema('planner_output'),
+      [],
+      `unblock-plan:${featureId}`,
+    );
     const task = planned.task;
     validateTaskDeliverables(task, 'unblock task');
 
@@ -1219,6 +1657,176 @@ class PrototypeCompassRose {
     };
   }
 
+  private diagnoseAndAutocorrect(featureId: string, reason: string): StepExecutionResult {
+    const feature = this.loadFeature(featureId);
+    const decision = this.runDiagnosticAutocorrection(feature, reason);
+    this.writeDiagnosticArtifact(decision);
+
+    if (decision.next_step === 'correct_state') {
+      if (!statSafeIsFile(feature.statePath)) {
+        return {
+          exitCode: 2,
+          continueLoop: false,
+          summary: `${decision.next_step_reason} The current runtime cannot generate a deterministic state-correction task because ${relativePath(this.repositoryRoot, feature.statePath)} is missing.`,
+        };
+      }
+
+      this.correctState(featureId, decision.next_step_reason);
+      return {
+        exitCode: 0,
+        continueLoop: true,
+        summary: `Diagnostic/autocorrection created a state correction task for feature ${featureId}.`,
+      };
+    }
+
+    if (decision.next_step === 'plan_unblock_task') {
+      if (!this.tryReadFeatureStateSnapshot(feature)) {
+        return {
+          exitCode: 2,
+          continueLoop: false,
+          summary: `${decision.next_step_reason} The current runtime cannot plan an unblock task because feature state is unreadable and no restoration target can be trusted.`,
+        };
+      }
+
+      this.planUnblockTask(featureId, decision.next_step_reason);
+      return {
+        exitCode: 0,
+        continueLoop: true,
+        summary: `Diagnostic/autocorrection planned an unblock task for feature ${featureId}.`,
+      };
+    }
+
+    if (statSafeIsFile(feature.statePath)) {
+      try {
+        this.recordBlockedFeature(featureId, decision.next_step_reason);
+      } catch {
+        // Keep the diagnostic artifact even when the malformed state cannot be persisted as blocked state.
+      }
+    }
+
+    console.error(decision.next_step_reason);
+    return {
+      exitCode: 2,
+      continueLoop: false,
+      summary: decision.next_step_reason,
+    };
+  }
+
+  private runDiagnosticAutocorrection(feature: FeatureRecord, reason: string): DiagnosticAutocorrectionDecision {
+    const prompt = [
+      'Act as the CompassRose Diagnostic/Autocorrection role.',
+      '',
+      `Diagnose feature \`${feature.id}\` and choose the next safe recovery action.`,
+      '',
+      'Read only:',
+      '- `src/contracts/runtime/diagnostic-autocorrection.md`',
+      '- `src/contracts/runtime/operation-loop.md`',
+      '- `src/contracts/state/feature-state.md`',
+      '- `src/contracts/task/unblock-task.md`',
+      '- `src/contracts/task/state-correction-task.md`',
+      '- `src/contracts/task/task.md`',
+      `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
+      statSafeIsFile(feature.statePath) ? `- \`${relativePath(this.repositoryRoot, feature.statePath)}\`` : `- Feature state is missing at \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
+      '- `docs/compassrose/PROJECT_STATE.md`',
+      '- `docs/compassrose/CONFIG.md`',
+      ...this.buildDiagnosticArtifactPromptLines(feature),
+      '',
+      'Observed issue:',
+      `- ${reason}`,
+      '',
+      'Rules:',
+      '- Use `correct_state` only when the existing state-correction contract is sufficient and no broader interface hardening is needed first.',
+      '- Use `plan_unblock_task` when a bounded unblock task can remove the blocker or tighten the interface that caused it.',
+      '- Use `stop_with_diagnostic` when the best fix needs architectural review, human judgment, or a non-obvious tradeoff.',
+      '- Return JSON only.',
+    ].join('\n');
+
+    return this.codex.runStructured<DiagnosticAutocorrectionDecision>(
+      prompt,
+      this.contracts.schema('diagnostic_autocorrection'),
+      [],
+      `diagnostic:${feature.id}`,
+    );
+  }
+
+  private buildDiagnosticArtifactPromptLines(feature: FeatureRecord): string[] {
+    const lines: string[] = [];
+    const inspection = statSafeIsFile(feature.statePath) ? this.tryReadFeatureStateSnapshot(feature) : null;
+    const activeTaskCandidates = uniqueStrings([
+      inspection?.activeTask ?? 'none',
+      inspection?.activeCorrectionTask ?? 'none',
+      inspection?.activeUnblockTask ?? 'none',
+    ].filter((value) => value !== 'none'));
+
+    for (const taskId of activeTaskCandidates) {
+      const taskPath = this.tryFindTaskDocumentPath(taskId, feature.tasksDirectory);
+      if (taskPath) {
+        lines.push(`- \`${relativePath(this.repositoryRoot, taskPath)}\``);
+      }
+
+      const artifactPaths = [
+        join(this.repositoryRoot, '.git', 'proto-compassrose', 'implementations', `${taskId}.json`),
+        join(this.repositoryRoot, '.git', 'proto-compassrose', 'implementation-attempts', `${taskId}.json`),
+        join(this.repositoryRoot, '.git', 'proto-compassrose', 'quality-gates', `${taskId}.json`),
+        join(this.repositoryRoot, '.git', 'proto-compassrose', 'reviews', `${taskId}.json`),
+        join(this.repositoryRoot, '.git', 'proto-compassrose', 'task-interface-analysis', `${taskId}.json`),
+      ];
+
+      for (const artifactPath of artifactPaths) {
+        if (statSafeIsFile(artifactPath)) {
+          lines.push(`- \`${relativePath(this.repositoryRoot, artifactPath)}\``);
+        }
+      }
+    }
+
+    const latestRecoveryLesson = join(this.repositoryRoot, '.git', 'proto-compassrose', 'latest-recovery-lesson.json');
+    if (statSafeIsFile(latestRecoveryLesson)) {
+      lines.push(`- \`${relativePath(this.repositoryRoot, latestRecoveryLesson)}\``);
+    }
+
+    const latestRefinement = join(this.repositoryRoot, '.git', 'proto-compassrose', 'latest-refinement.json');
+    if (statSafeIsFile(latestRefinement)) {
+      lines.push(`- \`${relativePath(this.repositoryRoot, latestRefinement)}\``);
+    }
+
+    return uniqueStrings(lines);
+  }
+
+  private writeDiagnosticArtifact(decision: DiagnosticAutocorrectionDecision): void {
+    const markdown = [
+      `# Diagnostic: ${decision.feature_id}`,
+      '',
+      '## Summary',
+      '',
+      decision.diagnosis_summary,
+      '',
+      '## Blocker',
+      '',
+      `- kind: ${decision.blocker.kind}`,
+      `- signature: ${decision.blocker.signature}`,
+      `- recoverability: ${decision.blocker.recoverability}`,
+      ...decision.blocker.evidence.map((item) => `- evidence: ${item}`),
+      '',
+      '## Next Step',
+      '',
+      `- action: ${decision.next_step}`,
+      `- reason: ${decision.next_step_reason}`,
+      '',
+      '## Interface Response',
+      '',
+      `- mode: ${decision.interface_response.mode}`,
+      `- summary: ${decision.interface_response.summary}`,
+      ...decision.interface_response.target_paths.map((item) => `- target_path: ${item}`),
+      '',
+    ].join('\n');
+
+    this.artifacts.writeJson(join('diagnostics', `${decision.feature_id}.json`), decision);
+    this.artifacts.writeText(join('diagnostics', `${decision.feature_id}.md`), markdown);
+    this.artifacts.writeJson('latest-diagnostic.json', decision);
+    this.artifacts.writeText('latest-diagnostic.md', markdown);
+  }
+
   private implementTask(taskId: string): StepExecutionResult {
     const task = this.loadTask(taskId);
     const failed = this.executeImplementation(task, false, null);
@@ -1253,11 +1861,6 @@ class PrototypeCompassRose {
   }
 
   private reviewTask(taskId: string): StepExecutionResult {
-    const diff = this.git.diffPatch();
-    if (diff.trim().length === 0) {
-      throw new Error(`Review for ${taskId} cannot proceed because git diff is empty.`);
-    }
-
     const task = this.loadTask(taskId);
     const artifact = this.loadTaskArtifact(taskId);
     const stateCorrection = artifact?.state_correction ?? null;
@@ -1265,11 +1868,17 @@ class PrototypeCompassRose {
     const feature = this.loadFeature(task.featureId);
     const qualityResults = this.ensureQualityGateResults(task);
     const implementation = this.ensureImplementationAttempt(task);
+    const liveDiff = this.git.diffPatch();
+    const reviewDiff = selectReviewableDiffForReview(liveDiff, implementation);
+    if (reviewDiff.diff.trim().length === 0) {
+      throw new Error(`Review for ${taskId} cannot proceed because git diff is empty.`);
+    }
+
     const tempDir = mkdtempSync(join(tmpdir(), 'proto-compassrose-review-'));
     const diffPath = join(tempDir, 'diff.patch');
     const qualityPath = join(tempDir, 'quality-gates.json');
     const implementationPath = join(tempDir, 'implementation.json');
-    writeFileSync(diffPath, diff, 'utf8');
+    writeFileSync(diffPath, reviewDiff.diff, 'utf8');
     writeFileSync(qualityPath, `${JSON.stringify(qualityResults, null, 2)}\n`, 'utf8');
     writeFileSync(implementationPath, `${JSON.stringify(implementation, null, 2)}\n`, 'utf8');
 
@@ -1294,6 +1903,12 @@ class PrototypeCompassRose {
       '- `implementation.notes` inside the implementation artifact; if it is missing, treat that as an execution defect and report it explicitly.',
       `- \`${qualityPath}\``,
       '- if needed, only the files changed in the diff',
+      reviewDiff.source === 'fallback'
+        ? '- The live worktree diff is empty because the implementer appears to have committed away the reviewable diff before handoff.'
+        : null,
+      reviewDiff.source === 'fallback'
+        ? '- The provided diff is a fallback capture from the commit created during the attempt; use it to diagnose the attempted change, not as proof that handoff requirements were satisfied.'
+        : null,
       '',
       'Rules:',
       '- Validate objective, acceptance criteria, scope, constraints, and quality gates.',
@@ -1303,13 +1918,21 @@ class PrototypeCompassRose {
       stateCorrection
         ? '- If status is `changes_required`, keep the correction task state-only and preserve the restored task pointer.'
         : '- For `test_guided` tasks, confirm that the diff includes meaningful test changes for the claimed behavior.',
+      reviewDiff.source === 'fallback'
+        ? '- Do not approve the attempt while the live reviewable diff is missing; treat the lost handoff as an execution defect even if the fallback diff looks correct.'
+        : null,
       unblock ? '- If this is an unblock task, verify that the blocker signature is resolved and the feature can resume from the captured lifecycle state.' : null,
       '- Return JSON only.',
       '- If status is `changes_required`, include a correction task narrower than the original task.',
       '- Do not modify files.',
     ].join('\n');
 
-    const review = this.codex.runStructured<ReviewerOutput>(prompt, REVIEWER_OUTPUT_SCHEMA, [tempDir], `review:${taskId}`);
+    const review = this.codex.runStructured<ReviewerOutput>(
+      prompt,
+      this.contracts.schema('reviewer_output'),
+      [tempDir],
+      `review:${taskId}`,
+    );
     this.artifacts.writeJson(join('reviews', `${taskId}.json`), review);
     const taskInterfaceAnalysis = this.shouldAnalyzeTaskInterface(review)
       ? this.analyzeTaskInterface(task, feature, review, implementation, qualityResults, tempDir, stateCorrection, unblock)
@@ -1332,6 +1955,10 @@ class PrototypeCompassRose {
           : this.updateProjectStateAfterApprovedReview(task.featureId, task.taskId);
       writeText(feature.statePath, updatedFeatureState);
       writeText(this.projectStatePath, updatedProjectState);
+
+      if (!stateCorrection && !unblock) {
+        this.completedPrimaryTaskAnchors.add(this.primaryTaskAnchor(task.taskId));
+      }
 
       if (this.options.commit) {
         const changedFiles = this.git.diffNameOnly();
@@ -1385,10 +2012,10 @@ class PrototypeCompassRose {
 
     if (review.status === 'blocked') {
       const blocker = this.recordBlockedReview(task, review, implementation, qualityResults);
-      const continueLoop = blocker.recoverability === 'agent' || blocker.recoverability === 'auto';
-      const blockedSummary = continueLoop
-        ? `Recoverable blocker ${blocker.signature} recorded; the loop can continue to unblock planning.`
-        : `Terminal blocker ${blocker.signature} recorded; the run will stop.`;
+      const recoverable = blocker.recoverability === 'agent' || blocker.recoverability === 'auto';
+      const analysisSuffix = taskInterfaceAnalysis
+        ? ' Task-interface analysis and a recovery lesson were recorded.'
+        : '';
 
       if (this.options.commit) {
         this.git.commit(
@@ -1400,18 +2027,33 @@ class PrototypeCompassRose {
         );
       }
 
-      if (continueLoop) {
-        console.log(blockedSummary);
-      } else {
-        console.error(blockedSummary);
+      if (this.options.loop) {
+        const blockedSummary = recoverable
+          ? `Recoverable blocker ${blocker.signature} recorded; diagnostic/autocorrection will continue through bounded recovery planning.`
+          : `Terminal blocker ${blocker.signature} recorded; diagnostic/autocorrection will stop the run with a bounded diagnostic.`;
+
+        if (recoverable) {
+          console.log(blockedSummary);
+        } else {
+          console.error(blockedSummary);
+        }
+
+        return {
+          exitCode: 0,
+          continueLoop: true,
+          summary: `${review.summary} ${blockedSummary}${analysisSuffix}`,
+        };
       }
 
+      const blockedSummary = recoverable
+        ? `Recoverable blocker ${blocker.signature} recorded; running diagnostic/autocorrection before stopping because loop mode is disabled.`
+        : `Terminal blocker ${blocker.signature} recorded; running diagnostic/autocorrection before stopping because loop mode is disabled.`;
+      const diagnosticResult = this.diagnoseAndAutocorrect(task.featureId, blockedSummary);
+
       return {
-        exitCode: continueLoop ? 0 : 2,
-        continueLoop,
-        summary: taskInterfaceAnalysis
-          ? `${review.summary} ${blockedSummary} Task-interface analysis and a recovery lesson were recorded.`
-          : `${review.summary} ${blockedSummary}`,
+        exitCode: diagnosticResult.exitCode,
+        continueLoop: diagnosticResult.continueLoop,
+        summary: `${review.summary} ${blockedSummary} ${diagnosticResult.summary}${analysisSuffix}`,
       };
     }
 
@@ -1454,6 +2096,7 @@ class PrototypeCompassRose {
       '- `src/contracts/adapters/implementer-adapter.md`',
       '- `src/contracts/reviewer/review-prompt.md`',
       '- `src/contracts/reviewer/output.md`',
+      '- `src/contracts/runtime/task-interface-analysis.md`',
       `- \`${relativePath(this.repositoryRoot, task.path)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
@@ -1483,7 +2126,7 @@ class PrototypeCompassRose {
 
     const analysis = this.codex.runStructured<TaskInterfaceAnalysis>(
       prompt,
-      TASK_INTERFACE_ANALYSIS_SCHEMA,
+      this.contracts.schema('task_interface_analysis'),
       [tempDir],
       `task-interface:${task.taskId}`,
     );
@@ -1516,9 +2159,11 @@ class PrototypeCompassRose {
         console.log(`Implementation for ${task.taskId} left partial repository changes; retrying once from the current worktree.`);
       }
 
+      const headBefore = this.git.headCommit();
       const commandResult = this.implementer.run(prompt, `${baseLabel}:attempt-${attemptIndex}`);
       this.throwIfControlledStopRequested();
-      const attempt = this.captureImplementationAttempt(task, commandResult, implementationStatePaths);
+      const headAfter = this.git.headCommit();
+      const attempt = this.captureImplementationAttempt(task, commandResult, implementationStatePaths, headBefore, headAfter);
       attempts.push(attempt);
       this.persistImplementationAttemptArtifacts(task.taskId, attemptIndex, attempt);
 
@@ -1552,6 +2197,8 @@ class PrototypeCompassRose {
 
     if (finalAttempt.git_diff.trim().length > 0) {
       this.artifacts.writeText(join('diffs', `${task.taskId}.patch`), finalAttempt.git_diff);
+    } else if (finalAttempt.fallback_git_diff) {
+      this.artifacts.writeText(join('diffs', `${task.taskId}.fallback.patch`), finalAttempt.fallback_git_diff);
     }
 
     if (finalAttempt.status !== 'success') {
@@ -1601,6 +2248,8 @@ class PrototypeCompassRose {
 
     if (attempt.git_diff.trim().length > 0) {
       this.artifacts.writeText(join('diffs', `${taskId}.attempt-${attemptIndex}.patch`), attempt.git_diff);
+    } else if (attempt.fallback_git_diff) {
+      this.artifacts.writeText(join('diffs', `${taskId}.attempt-${attemptIndex}.fallback.patch`), attempt.fallback_git_diff);
     }
   }
 
@@ -1608,9 +2257,17 @@ class PrototypeCompassRose {
     task: ParsedTaskDocument,
     commandResult: CommandExecution,
     excludedPaths: readonly string[] = [],
+    headBefore: string | null = null,
+    headAfter: string | null = null,
   ): ImplementationAttempt {
     const changedFiles = this.git.diffNameOnly(excludedPaths);
     const diff = this.git.diffPatch(excludedPaths);
+    const fallbackChangedFiles = diff.trim().length === 0 && headBefore && headAfter && headBefore !== headAfter
+      ? this.git.diffNameOnlyBetween(headBefore, headAfter, excludedPaths)
+      : [];
+    const fallbackDiff = diff.trim().length === 0 && headBefore && headAfter && headBefore !== headAfter
+      ? this.git.diffPatchBetween(headBefore, headAfter, excludedPaths)
+      : null;
     const rawOutput = joinOutput(commandResult.stdout, commandResult.stderr);
     const implementationNotes = extractImplementationNotes(rawOutput);
     const diagnostics = buildImplementationDiagnostics(
@@ -1618,8 +2275,11 @@ class PrototypeCompassRose {
       commandResult,
       changedFiles,
       diff,
+      fallbackDiff,
       rawOutput,
       implementationNotes,
+      headBefore,
+      headAfter,
     );
     const hasDiff = diff.trim().length > 0;
     const status = commandResult.ok && hasDiff && diagnostics.minimum_progress_evidence_status !== 'absent' && implementationNotes !== null
@@ -1630,6 +2290,8 @@ class PrototypeCompassRose {
       status,
       changed_files: changedFiles,
       git_diff: diff,
+      fallback_changed_files: fallbackChangedFiles,
+      fallback_git_diff: fallbackDiff,
       raw_output: rawOutput,
       implementation_notes: implementationNotes,
       diagnostics,
@@ -1657,6 +2319,8 @@ class PrototypeCompassRose {
         relativePath(this.repositoryRoot, this.projectStatePath),
       ]),
       git_diff: diff,
+      fallback_changed_files: [],
+      fallback_git_diff: null,
       raw_output: 'No stored implementer output.',
       implementation_notes: extractImplementationNotes('No stored implementer output.'),
       diagnostics: {
@@ -1820,8 +2484,9 @@ class PrototypeCompassRose {
 
     for (const line of snapshot.blockedBy) {
       const signatureMatch = line.match(/signature:\s*implementation-failure-(.+)/i);
-      if (signatureMatch) {
-        const taskId = signatureMatch[1].trim();
+      const taskIdCandidate = signatureMatch?.[1];
+      if (taskIdCandidate) {
+        const taskId = taskIdCandidate.trim();
         if (/^F\d+-T\d+/.test(taskId)) {
           return taskId;
         }
@@ -1952,7 +2617,6 @@ class PrototypeCompassRose {
       quality_gates: {
         before_review: [
           'git diff --check',
-          'npm run proto:smoke',
         ],
       },
       acceptance_criteria: [
@@ -2001,6 +2665,27 @@ class PrototypeCompassRose {
     };
   }
 
+  private tryReadFeatureStateSnapshot(feature: FeatureRecord): FeatureStateSnapshot | null {
+    try {
+      return this.readFeatureStateSnapshot(feature);
+    } catch {
+      return null;
+    }
+  }
+
+  private preferredRestorationTarget(snapshot: FeatureStateSnapshot): RestorationTarget {
+    if (snapshot.blockedFrom && snapshot.blockedFrom.lifecycle_state !== 'none') {
+      return snapshot.blockedFrom;
+    }
+
+    return {
+      lifecycle_state: snapshot.lifecycleState,
+      active_task: snapshot.activeTask,
+      active_correction_task: snapshot.activeCorrectionTask,
+      active_unblock_task: snapshot.activeUnblockTask,
+    };
+  }
+
   private buildBlockerProfile(snapshot: FeatureStateSnapshot, reason: string): BlockerProfile {
     const blockerKind = classifyBlockerKind(reason, snapshot.blockedBy, snapshot.lifecycleState);
     return {
@@ -2036,12 +2721,7 @@ class PrototypeCompassRose {
     const feature = this.loadFeature(featureId);
     const snapshot = this.readFeatureStateSnapshot(feature);
     const blocker = this.buildBlockerProfile(snapshot, reason);
-    const restorationTarget = snapshot.blockedFrom ?? {
-      lifecycle_state: snapshot.lifecycleState,
-      active_task: snapshot.activeTask,
-      active_correction_task: snapshot.activeCorrectionTask,
-      active_unblock_task: snapshot.activeUnblockTask,
-    };
+    const restorationTarget = this.preferredRestorationTarget(snapshot);
     this.persistBlockedFeature(featureId, taskId ?? (snapshot.activeTask === 'none' ? null : snapshot.activeTask), reason, blocker, restorationTarget, feature);
     return blocker;
   }
@@ -2055,12 +2735,7 @@ class PrototypeCompassRose {
     const feature = this.loadFeature(task.featureId);
     const snapshot = this.readFeatureStateSnapshot(feature);
     const blocker = this.buildReviewBlockerProfile(review, implementation, qualityResults, snapshot);
-    const restorationTarget = snapshot.blockedFrom ?? {
-      lifecycle_state: snapshot.lifecycleState,
-      active_task: snapshot.activeTask,
-      active_correction_task: snapshot.activeCorrectionTask,
-      active_unblock_task: snapshot.activeUnblockTask,
-    };
+    const restorationTarget = this.preferredRestorationTarget(snapshot);
     const reason = this.buildReviewBlockerReason(review, implementation, qualityResults);
 
     this.persistBlockedFeature(task.featureId, task.taskId, reason, blocker, restorationTarget, feature);
@@ -2245,7 +2920,29 @@ class PrototypeCompassRose {
   }
 
   private loadTaskArtifact(taskId: string): StoredTaskArtifact | null {
-    return this.artifacts.readJson<StoredTaskArtifact>(join('tasks', `${taskId}.json`));
+    const stored = this.artifacts.readJson<StoredTaskArtifact>(join('tasks', `${taskId}.json`));
+    if (stored) {
+      return stored;
+    }
+
+    const taskPath = this.tryFindTaskDocumentPath(taskId);
+    if (!taskPath) {
+      return null;
+    }
+
+    return storedTaskArtifactFromDocument(taskPath, readFileSync(taskPath, 'utf8'));
+  }
+
+  private primaryTaskAnchor(taskId: string): string {
+    const artifact = this.loadTaskArtifact(taskId);
+    const restoredTask = artifact?.unblock?.restoration_target.active_task
+      ?? artifact?.state_correction?.state_target.restored_active_task
+      ?? 'none';
+    if (restoredTask !== 'none') {
+      return primaryTaskAnchorFromId(restoredTask);
+    }
+
+    return primaryTaskAnchorFromId(taskId);
   }
 
   private loadFeature(featureId: string): FeatureRecord {
@@ -2279,6 +2976,7 @@ class PrototypeCompassRose {
     if (stored) {
       const feature = this.loadFeature(stored.task.feature_id);
       const taskPath = this.findTaskDocumentPath(taskId, feature.tasksDirectory);
+      const parsed = parseTaskDocument(taskPath, readFileSync(taskPath, 'utf8'));
       return {
         taskId: stored.task.task_id,
         featureId: stored.task.feature_id,
@@ -2293,6 +2991,12 @@ class PrototypeCompassRose {
         qualityGates: stored.task.quality_gates.before_review,
         developmentPolicy: stored.task.development_policy.mode,
         likelyAffectedFiles: stored.task.context.relevant_paths,
+        trace: stored.task.trace,
+        context: stored.task.context,
+        expectedDeliverables: stored.task.expected_deliverables,
+        stateCorrection: stored.state_correction ?? parsed.stateCorrection,
+        unblock: stored.unblock ?? parsed.unblock,
+        reviewableDiffHandoff: parsed.reviewableDiffHandoff,
         path: taskPath,
       };
     }
@@ -2323,6 +3027,14 @@ class PrototypeCompassRose {
     }
 
     throw new Error(`Task document for ${taskId} was not found.`);
+  }
+
+  private tryFindTaskDocumentPath(taskId: string, tasksDirectory?: string): string | null {
+    try {
+      return this.findTaskDocumentPath(taskId, tasksDirectory);
+    } catch {
+      return null;
+    }
   }
 
   private updateProjectStateForFeaturePlan(featureId: string): string {
@@ -2800,6 +3512,15 @@ class PrototypeCompassRose {
     return lesson;
   }
 
+  private loadLatestDiagnostic(featureId: string): DiagnosticAutocorrectionDecision | null {
+    const diagnostic = this.artifacts.readJson<DiagnosticAutocorrectionDecision>('latest-diagnostic.json');
+    if (!diagnostic || diagnostic.feature_id !== featureId) {
+      return null;
+    }
+
+    return diagnostic;
+  }
+
   private loadLatestRefinement(featureId: string): RefinementFeedback | null {
     const feedback = this.artifacts.readJson<RefinementFeedback>('latest-refinement.json');
     if (!feedback || feedback.selected_step?.feature_id !== featureId) {
@@ -2807,6 +3528,28 @@ class PrototypeCompassRose {
     }
 
     return feedback;
+  }
+
+  private buildLatestDiagnosticPromptLines(featureId: string): string[] {
+    const diagnostic = this.loadLatestDiagnostic(featureId);
+    if (!diagnostic) {
+      return [];
+    }
+
+    return [
+      '',
+      'Latest diagnostic/autocorrection:',
+      `- diagnosis_summary: ${diagnostic.diagnosis_summary}`,
+      `- blocker_kind: ${diagnostic.blocker.kind}`,
+      `- blocker_signature: ${diagnostic.blocker.signature}`,
+      `- blocker_recoverability: ${diagnostic.blocker.recoverability}`,
+      ...diagnostic.blocker.evidence.map((item) => `- blocker_evidence: ${item}`),
+      `- next_step: ${diagnostic.next_step}`,
+      `- next_step_reason: ${diagnostic.next_step_reason}`,
+      `- interface_mode: ${diagnostic.interface_response.mode}`,
+      `- interface_summary: ${diagnostic.interface_response.summary}`,
+      ...diagnostic.interface_response.target_paths.map((item) => `- interface_target_path: ${item}`),
+    ];
   }
 
   private buildRecoveryLessonPromptLines(featureId: string): string[] {
@@ -2967,304 +3710,6 @@ class PrototypeCompassRose {
     this.artifacts.writeJson('latest-refinement.json', feedback);
   }
 }
-
-const STEP_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['kind', 'feature_id', 'task_id', 'correction_task_id', 'reason'],
-  properties: {
-    kind: {
-      type: 'string',
-      enum: ['plan_feature', 'plan_task', 'correct_state', 'unblock_task', 'implement_task', 'review_task', 'correct_task', 'stop', 'blocked'],
-    },
-    feature_id: { type: ['string', 'null'] },
-    task_id: { type: ['string', 'null'] },
-    correction_task_id: { type: ['string', 'null'] },
-    reason: { type: 'string' },
-  },
-} as const;
-
-const FEATURE_PLAN_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['feature_id', 'feature_md', 'architecture_md', 'state_md', 'summary'],
-  properties: {
-    feature_id: { type: 'string' },
-    feature_md: { type: 'string' },
-    architecture_md: { type: 'string' },
-    state_md: { type: 'string' },
-    summary: { type: 'string' },
-  },
-} as const;
-
-const PLANNER_OUTPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['task'],
-  properties: {
-    task: {
-      type: 'object',
-      additionalProperties: false,
-      required: [
-        'task_id',
-        'feature_id',
-        'title',
-        'objective',
-        'first_executable_step',
-        'minimum_progress_evidence',
-        'trace',
-        'context',
-        'scope',
-        'constraints',
-        'development_policy',
-        'quality_gates',
-        'acceptance_criteria',
-        'expected_deliverables',
-      ],
-      properties: {
-        task_id: { type: 'string' },
-        feature_id: { type: 'string' },
-        title: { type: 'string' },
-        objective: { type: 'string' },
-        first_executable_step: { type: 'string' },
-        minimum_progress_evidence: {
-          type: 'array',
-          items: { type: 'string' },
-        },
-        trace: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['roadmap_objective', 'feature_goal', 'state_gap'],
-          properties: {
-            roadmap_objective: { type: 'string' },
-            feature_goal: { type: 'string' },
-            state_gap: { type: 'string' },
-          },
-        },
-        context: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['summary', 'relevant_paths', 'relevant_modules'],
-          properties: {
-            summary: { type: 'string' },
-            relevant_paths: { type: 'array', items: { type: 'string' } },
-            relevant_modules: { type: 'array', items: { type: 'string' } },
-          },
-        },
-        scope: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['allowed_paths', 'forbidden_paths'],
-          properties: {
-            allowed_paths: { type: 'array', items: { type: 'string' } },
-            forbidden_paths: { type: 'array', items: { type: 'string' } },
-          },
-        },
-        constraints: { type: 'array', items: { type: 'string' } },
-        development_policy: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['mode'],
-          properties: {
-            mode: {
-              type: 'string',
-              enum: ['test_guided', 'implementation_first', 'documentation_first', 'strict_tdd'],
-            },
-          },
-        },
-        quality_gates: {
-          type: 'object',
-          additionalProperties: false,
-          required: ['before_review'],
-          properties: {
-            before_review: {
-              type: 'array',
-              items: { type: 'string' },
-            },
-          },
-        },
-        acceptance_criteria: { type: 'array', items: { type: 'string' } },
-        expected_deliverables: {
-          type: 'array',
-          items: { type: 'string', enum: ['code', 'tests', 'documentation'] },
-        },
-      },
-    },
-  },
-} as const;
-
-const REVIEWER_OUTPUT_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: [
-    'task_id',
-    'status',
-    'summary',
-    'acceptance',
-    'findings',
-    'scope_check',
-    'quality_gate_check',
-    'correction_task',
-    'project_state_update_hint',
-  ],
-  properties: {
-    task_id: { type: 'string' },
-    status: { type: 'string', enum: ['approved', 'changes_required', 'blocked', 'failed'] },
-    summary: { type: 'string' },
-    acceptance: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['criteria'],
-      properties: {
-        criteria: {
-          type: 'array',
-          items: {
-            type: 'object',
-            additionalProperties: false,
-            required: ['criterion', 'status', 'notes'],
-            properties: {
-              criterion: { type: 'string' },
-              status: { type: 'string', enum: ['passed', 'failed', 'not_verified'] },
-              notes: { type: 'string' },
-            },
-          },
-        },
-      },
-    },
-    findings: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['severity', 'message', 'path', 'related_acceptance_criterion'],
-        properties: {
-          severity: { type: 'string', enum: ['info', 'warning', 'error', 'blocker'] },
-          message: { type: 'string' },
-          path: { type: ['string', 'null'] },
-          related_acceptance_criterion: { type: ['string', 'null'] },
-        },
-      },
-    },
-    scope_check: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['status', 'unrelated_changes'],
-      properties: {
-        status: { type: 'string', enum: ['passed', 'failed'] },
-        unrelated_changes: { type: 'array', items: { type: 'string' } },
-      },
-    },
-    quality_gate_check: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['status', 'failed_gates'],
-      properties: {
-        status: { type: 'string', enum: ['passed', 'failed', 'skipped'] },
-        failed_gates: { type: 'array', items: { type: 'string' } },
-      },
-    },
-    correction_task: {
-      anyOf: [
-        { type: 'null' },
-        {
-          type: 'object',
-          additionalProperties: false,
-          required: [
-            'parent_task_id',
-            'correction_task_id',
-            'feature_id',
-            'title',
-            'objective',
-            'first_executable_step',
-            'minimum_progress_evidence',
-            'review_findings',
-            'scope',
-            'constraints',
-            'acceptance_criteria',
-            'quality_gates',
-          ],
-          properties: {
-            parent_task_id: { type: 'string' },
-            correction_task_id: { type: 'string' },
-            feature_id: { type: 'string' },
-            title: { type: 'string' },
-            objective: { type: 'string' },
-            first_executable_step: { type: 'string' },
-            minimum_progress_evidence: { type: 'array', items: { type: 'string' } },
-            review_findings: { type: 'array', items: { type: 'string' } },
-            scope: {
-              type: 'object',
-              additionalProperties: false,
-              required: ['allowed_paths', 'forbidden_paths'],
-              properties: {
-                allowed_paths: { type: 'array', items: { type: 'string' } },
-                forbidden_paths: { type: 'array', items: { type: 'string' } },
-              },
-            },
-            constraints: { type: 'array', items: { type: 'string' } },
-            acceptance_criteria: { type: 'array', items: { type: 'string' } },
-            quality_gates: {
-              type: 'object',
-              additionalProperties: false,
-              required: ['before_review'],
-              properties: {
-                before_review: { type: 'array', items: { type: 'string' } },
-              },
-            },
-          },
-        },
-      ],
-    },
-    project_state_update_hint: { type: ['string', 'null'] },
-  },
-} as const;
-
-const TASK_INTERFACE_ANALYSIS_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: [
-    'task_id',
-    'review_status',
-    'summary',
-    'recommended_action',
-    'perfectible',
-    'implementer_limitations',
-    'task_interface_adjustments',
-    'notes_for_documentation',
-  ],
-  properties: {
-    task_id: { type: 'string' },
-    review_status: { type: 'string', enum: ['approved', 'changes_required', 'blocked', 'failed'] },
-    summary: { type: 'string' },
-    recommended_action: {
-      type: 'string',
-      enum: ['tighten_task_interface', 'document_implementer_limitation', 'both', 'none'],
-    },
-    perfectible: { type: 'boolean' },
-    implementer_limitations: { type: 'array', items: { type: 'string' } },
-    task_interface_adjustments: {
-      type: 'object',
-      additionalProperties: false,
-      required: [
-        'first_executable_step',
-        'minimum_progress_evidence',
-        'context_additions',
-        'scope_adjustments',
-        'acceptance_criteria_adjustments',
-        'quality_gate_adjustments',
-      ],
-      properties: {
-        first_executable_step: { type: ['string', 'null'] },
-        minimum_progress_evidence: { type: 'array', items: { type: 'string' } },
-        context_additions: { type: 'array', items: { type: 'string' } },
-        scope_adjustments: { type: 'array', items: { type: 'string' } },
-        acceptance_criteria_adjustments: { type: 'array', items: { type: 'string' } },
-        quality_gate_adjustments: { type: 'array', items: { type: 'string' } },
-      },
-    },
-    notes_for_documentation: { type: 'array', items: { type: 'string' } },
-  },
-} as const;
 
 function main(argv: readonly string[]): number {
   const options = parseArguments(argv);
@@ -3702,6 +4147,11 @@ function buildImplementerPrompt(
   recoveryLessonLines: readonly string[] = [],
 ): string {
   const role = correction ? 'correction task' : 'task';
+  const requiredDiffLine = task.reviewableDiffHandoff.requireLiveDiff
+    ? (task.reviewableDiffHandoff.requiredChangedFiles.length > 0
+        ? `- At handoff, leave the live worktree diff visible and limited to: ${task.reviewableDiffHandoff.requiredChangedFiles.map((item) => `\`${item}\``).join(', ')}.`
+        : '- Leave the live worktree diff visible for handoff so CompassRose can capture the reviewable change directly.')
+    : '- The task contract allows a non-live-diff handoff, but you still need to preserve the required repository evidence.';
   return [
       'Act as the CompassRose Implementer.',
       '',
@@ -3725,6 +4175,10 @@ function buildImplementerPrompt(
       : '- Keep the change minimal and avoid unrelated refactors.',
     '- Stay within the allowed paths listed in the task.',
     '- Do not modify forbidden paths.',
+    requiredDiffLine,
+    !task.reviewableDiffHandoff.requireLiveDiff || task.reviewableDiffHandoff.allowGitCommitBeforeHandoff
+      ? '- The task contract explicitly allows clearing the live diff before handoff if you still preserve the required evidence.'
+      : '- Do not run `git commit` or otherwise clear the live worktree diff before handoff; CompassRose captures reviewable evidence from the live diff.',
     '- Continue until there is repository evidence beyond read-only exploration.',
     `- Follow \`${task.developmentPolicy}\`.`,
     '- Keep the change minimal and provider-independent.',
@@ -3741,21 +4195,27 @@ function buildImplementationDiagnostics(
   commandResult: CommandExecution,
   changedFiles: readonly string[],
   diff: string,
+  fallbackDiff: string | null,
   rawOutput: string,
   implementationNotes: string | null,
+  headBefore: string | null,
+  headAfter: string | null,
 ): ImplementationDiagnostics {
   const hasDiff = diff.trim().length > 0;
+  const headChanged = Boolean(headBefore && headAfter && headBefore !== headAfter);
   const evidence = [
     `Task: ${task.taskId}`,
     `Changed files: ${changedFiles.length > 0 ? changedFiles.join(', ') : 'none'}`,
+    `Fallback diff: ${fallbackDiff && fallbackDiff.trim().length > 0 ? 'present' : 'absent'}`,
     `Implementation notes: ${implementationNotes ? 'present' : 'absent'}`,
     `Exit code: ${commandResult.exitCode ?? 'null'}`,
     `Signal: ${commandResult.signal ?? 'null'}`,
+    `Head changed during attempt: ${headChanged ? `yes (${headBefore} -> ${headAfter})` : 'no'}`,
     `Output tail: ${summarizeText(rawOutput, 400)}`,
   ];
 
   return {
-    classification: classifyImplementation(commandResult, rawOutput, hasDiff, implementationNotes),
+    classification: classifyImplementation(commandResult, rawOutput, hasDiff, implementationNotes, headBefore, headAfter, fallbackDiff),
     evidence,
     first_executable_step_status: hasDiff || rawOutput.trim().length > 0 ? 'attempted' : 'unknown',
     minimum_progress_evidence_status: hasDiff ? 'present' : 'absent',
@@ -3766,13 +4226,22 @@ function buildImplementationDiagnostics(
   };
 }
 
-function classifyImplementation(
+export function classifyImplementation(
   commandResult: CommandExecution,
   rawOutput: string,
   hasDiff: boolean,
   implementationNotes: string | null,
+  headBefore: string | null = null,
+  headAfter: string | null = null,
+  fallbackDiff: string | null = null,
 ): DiagnosticClassification {
   const normalized = rawOutput.toLowerCase();
+  const headChanged = Boolean(headBefore && headAfter && headBefore !== headAfter);
+  const hasFallbackDiff = Boolean(fallbackDiff && fallbackDiff.trim().length > 0);
+
+  if (!hasDiff && commandResult.ok && ((headChanged && hasFallbackDiff) || outputShowsCommittedReviewableDiff(rawOutput))) {
+    return 'reviewable_diff_lost';
+  }
 
   if (/context|token|too (large|long)|window/i.test(normalized)) {
     return 'context_overflow';
@@ -3805,6 +4274,27 @@ function classifyImplementation(
   return 'unknown';
 }
 
+function outputShowsCommittedReviewableDiff(rawOutput: string): boolean {
+  return /^\$ .*git\s+.*commit/m.test(rawOutput)
+    || /^\[[^\]]+\s+[0-9a-f]{7,}\]/m.test(rawOutput)
+    || /evidence committed:\s*[0-9a-f]{7,}/i.test(rawOutput);
+}
+
+export function selectReviewableDiffForReview(
+  liveDiff: string,
+  implementation: Pick<ImplementationAttempt, 'diagnostics' | 'fallback_git_diff'>,
+): { diff: string; source: 'live' | 'fallback' | 'none' } {
+  if (liveDiff.trim().length > 0) {
+    return { diff: liveDiff, source: 'live' };
+  }
+
+  if (implementation.diagnostics.classification === 'reviewable_diff_lost' && implementation.fallback_git_diff) {
+    return { diff: implementation.fallback_git_diff, source: 'fallback' };
+  }
+
+  return { diff: '', source: 'none' };
+}
+
 function buildImplementationErrorMessage(
   taskId: string,
   commandResult: CommandExecution,
@@ -3818,6 +4308,10 @@ function buildImplementationErrorMessage(
 
   if (!implementationNotes) {
     return `Implementation for ${taskId} did not include the required Implementation Notes justification.`;
+  }
+
+  if (diagnostics.classification === 'reviewable_diff_lost') {
+    return `Implementation for ${taskId} lost the live reviewable diff before handoff (reviewable_diff_lost).`;
   }
 
   if (!hasDiff) {
@@ -3877,6 +4371,13 @@ function inferLikelySources(trigger: string, selectedStep: StepDecision | null):
     sources.add('src/contracts/state/feature-state.md');
   }
 
+  if (selectedStep?.kind === 'diagnose_autocorrect') {
+    sources.add('src/contracts/runtime/diagnostic-autocorrection.md');
+    sources.add('src/contracts/task/unblock-task.md');
+    sources.add('src/contracts/task/state-correction-task.md');
+    sources.add('src/contracts/state/feature-state.md');
+  }
+
   if (selectedStep?.kind === 'implement_task' || selectedStep?.kind === 'correct_task') {
     sources.add('src/contracts/implementer/task-execution-prompt.md');
     sources.add('src/contracts/adapters/implementer-adapter.md');
@@ -3894,9 +4395,11 @@ function inferLikelySources(trigger: string, selectedStep: StepDecision | null):
     sources.add('src/config/configReader.ts');
   }
 
-  if (normalized.includes('git diff is empty') || normalized.includes('produced no git diff')) {
+  if (normalized.includes('git diff is empty') || normalized.includes('produced no git diff') || normalized.includes('reviewable diff')) {
     sources.add('src/contracts/adapters/implementer-adapter.md');
     sources.add('src/contracts/reviewer/input.md');
+    sources.add('src/contracts/implementer/task-execution-prompt.md');
+    sources.add('src/contracts/task/task.md');
   }
 
   if (normalized.includes('implementation notes') || normalized.includes('justification')) {
@@ -3960,7 +4463,7 @@ function buildObservations(trigger: string, selectedStep: StepDecision | null): 
     observations.push(`Selector reason: ${selectedStep.reason}`);
   }
 
-  if (/git diff is empty|produced no git diff/i.test(trigger)) {
+  if (/git diff is empty|produced no git diff|reviewable diff/i.test(trigger)) {
     observations.push('The prototype reached a point where repository evidence was missing or not reviewable.');
   }
 
@@ -3997,8 +4500,9 @@ function buildNextQuestions(trigger: string, selectedStep: StepDecision | null):
     questions.push('Should this Markdown document gain a stricter canonical template or a machine-readable projection?');
   }
 
-  if (/git diff is empty|produced no git diff/i.test(trigger)) {
+  if (/git diff is empty|produced no git diff|reviewable diff/i.test(trigger)) {
     questions.push('Should the implementer adapter preserve stronger minimum-progress evidence before review is attempted?');
+    questions.push('Should the task contract make live-diff handoff and no-commit expectations explicit?');
   }
 
   if (/quality gates failed/i.test(trigger)) {
@@ -4027,6 +4531,11 @@ function buildNextQuestions(trigger: string, selectedStep: StepDecision | null):
 
   if (selectedStep?.kind === 'unblock_task') {
     questions.push('Did the unblock prompt expose enough blocker context and restoration target detail for the planner?');
+  }
+
+  if (selectedStep?.kind === 'diagnose_autocorrect') {
+    questions.push('Did the diagnostic/autocorrection step choose the smallest safe recovery path instead of falling back to a generic stop?');
+    questions.push('If the blocker came from a weak interface, was that hardening captured for the unblock task or the diagnostic stop?');
   }
 
   return questions;
@@ -4130,7 +4639,7 @@ function renderTaskInterfaceAnalysisMarkdown(
   ].join('\n');
 }
 
-function parseTaskDocument(taskPath: string, markdown: string): ParsedTaskDocument {
+export function parseTaskDocument(taskPath: string, markdown: string): ParsedTaskDocument {
   const taskId = stripTicks(requireSection(markdown, 'Task ID').trim());
   const featureId = stripTicks(requireSection(markdown, 'Parent Feature').trim());
   const titleMatch = markdown.match(/^#\s+Task\s+.+?:\s+(.+)$/m);
@@ -4149,6 +4658,29 @@ function parseTaskDocument(taskPath: string, markdown: string): ParsedTaskDocume
   const qualityGates = parseCodeBlock(optionalSection(markdown, 'Quality Gates to Run')) ?? [];
   const likelyAffectedFiles = parseBulletSection(optionalSection(markdown, 'Files Likely Affected'))?.map(stripTicks) ?? allowedPaths;
   const developmentPolicy = stripTicks(parseBulletSection(optionalSection(markdown, 'Development Policy'))?.[0] ?? 'implementation_first') as DevelopmentPolicyMode;
+  const trace = parseTaskTrace(markdown);
+  const context = parseTaskContext(markdown, likelyAffectedFiles.map(stripTicks));
+  const expectedDeliverables = parseExpectedDeliverables(markdown, allowedPaths.map(stripTicks));
+  const stateCorrection = parseStateCorrectionTaskFromDocument(
+    taskId,
+    featureId,
+    title,
+    objective,
+    firstExecutableStep,
+    minimumProgressEvidence,
+    trace,
+    context,
+    allowedPaths.map(stripTicks),
+    forbiddenPaths.map(stripTicks),
+    constraints,
+    developmentPolicy,
+    qualityGates,
+    acceptanceCriteria,
+    expectedDeliverables,
+    markdown,
+  );
+  const unblock = parseUnblockTaskMetadataFromDocument(markdown);
+  const reviewableDiffHandoff = inferReviewableDiffHandoff(markdown, constraints, acceptanceCriteria, qualityGates);
 
   return {
     taskId,
@@ -4164,8 +4696,283 @@ function parseTaskDocument(taskPath: string, markdown: string): ParsedTaskDocume
     qualityGates,
     developmentPolicy,
     likelyAffectedFiles,
+    trace,
+    context,
+    expectedDeliverables,
+    stateCorrection,
+    unblock,
+    reviewableDiffHandoff,
     path: taskPath,
   };
+}
+
+function storedTaskArtifactFromDocument(taskPath: string, markdown: string): StoredTaskArtifact {
+  const parsed = parseTaskDocument(taskPath, markdown);
+
+  return {
+    task: {
+      task_id: parsed.taskId,
+      feature_id: parsed.featureId,
+      title: parsed.title,
+      objective: parsed.objective,
+      first_executable_step: parsed.firstExecutableStep,
+      minimum_progress_evidence: parsed.minimumProgressEvidence,
+      trace: parsed.trace,
+      context: parsed.context,
+      scope: {
+        allowed_paths: parsed.allowedPaths,
+        forbidden_paths: parsed.forbiddenPaths,
+      },
+      constraints: parsed.constraints,
+      development_policy: {
+        mode: parsed.developmentPolicy,
+      },
+      quality_gates: {
+        before_review: parsed.qualityGates,
+      },
+      acceptance_criteria: parsed.acceptanceCriteria,
+      expected_deliverables: parsed.expectedDeliverables,
+    },
+    ...(parsed.stateCorrection ? { state_correction: parsed.stateCorrection } : {}),
+    ...(parsed.unblock ? { unblock: parsed.unblock } : {}),
+  };
+}
+
+function parseTaskTrace(markdown: string): PlannedTask['trace'] {
+  const traceSection = optionalSection(markdown, 'Trace');
+  const traceMap = traceSection ? parseStatusMap(traceSection) : {};
+
+  return {
+    roadmap_objective: traceMap['Roadmap objective'] ?? 'Unknown',
+    feature_goal: traceMap['Feature goal'] ?? 'Unknown',
+    state_gap: traceMap['State gap'] ?? 'Unknown',
+  };
+}
+
+function parseTaskContext(markdown: string, relevantPaths: readonly string[]): PlannedTask['context'] {
+  const contextSection = optionalSection(markdown, 'Context');
+  const summary = parseBulletSection(contextSection)?.[0]
+    ?? contextSection?.trim()
+    ?? 'Context was reconstructed from the task document.';
+
+  return {
+    summary,
+    relevant_paths: relevantPaths,
+    relevant_modules: relevantPaths,
+  };
+}
+
+function parseExpectedDeliverables(
+  markdown: string,
+  allowedPaths: readonly string[],
+): readonly ('code' | 'tests' | 'documentation')[] {
+  const sectionItems = (parseBulletSection(optionalSection(markdown, 'Expected Deliverables')) ?? [])
+    .map((item) => stripTicks(item))
+    .filter(isExpectedDeliverable);
+
+  if (sectionItems.length > 0) {
+    return uniqueStrings(sectionItems) as Array<'code' | 'tests' | 'documentation'>;
+  }
+
+  const documentationOnly = allowedPaths.length > 0 && allowedPaths.every((item) => item.startsWith('docs/'));
+  return documentationOnly ? ['documentation'] : ['code', 'tests'];
+}
+
+function parseStateCorrectionTaskFromDocument(
+  taskId: string,
+  featureId: string,
+  title: string,
+  objective: string,
+  firstExecutableStep: string,
+  minimumProgressEvidence: readonly string[],
+  trace: PlannedTask['trace'],
+  context: PlannedTask['context'],
+  allowedPaths: readonly string[],
+  forbiddenPaths: readonly string[],
+  constraints: readonly string[],
+  developmentPolicy: DevelopmentPolicyMode,
+  qualityGates: readonly string[],
+  acceptanceCriteria: readonly string[],
+  expectedDeliverables: readonly ('code' | 'tests' | 'documentation')[],
+  markdown: string,
+): StateCorrectionTask | null {
+  const stateTargetSection = optionalSection(markdown, 'State Target');
+  if (!stateTargetSection) {
+    return null;
+  }
+
+  const targetMap = parseStatusMap(stateTargetSection);
+  const projectStatePath = stripTicks(targetMap.project_state_path ?? 'none');
+
+  return {
+    task_id: taskId,
+    feature_id: featureId,
+    title,
+    objective,
+    first_executable_step: firstExecutableStep,
+    minimum_progress_evidence: minimumProgressEvidence,
+    trace,
+    state_target: {
+      feature_state_path: stripTicks(targetMap.feature_state_path ?? ''),
+      project_state_path: projectStatePath === 'none' ? null : projectStatePath,
+      contract_reference: stripTicks(targetMap.contract_reference ?? ''),
+      detected_issue: targetMap.detected_issue ?? '',
+      restored_lifecycle_state: stripTicks(targetMap.restored_lifecycle_state ?? 'none'),
+      restored_active_task: stripTicks(targetMap.restored_active_task ?? 'none'),
+      restored_active_correction_task: stripTicks(targetMap.restored_active_correction_task ?? 'none'),
+    },
+    context,
+    scope: {
+      allowed_paths: allowedPaths,
+      forbidden_paths: forbiddenPaths,
+    },
+    constraints,
+    development_policy: {
+      mode: developmentPolicy,
+    },
+    quality_gates: {
+      before_review: qualityGates,
+    },
+    acceptance_criteria: acceptanceCriteria,
+    expected_deliverables: expectedDeliverables.includes('documentation') ? ['documentation'] : ['documentation'],
+  };
+}
+
+function parseUnblockTaskMetadataFromDocument(markdown: string): UnblockTaskMetadata | null {
+  const blockerSection = optionalSection(markdown, 'Blocker Context');
+  const restorationSection = optionalSection(markdown, 'Restoration Target');
+  if (!blockerSection || !restorationSection) {
+    return null;
+  }
+
+  const blockerMap = parseStatusMap(blockerSection);
+  const restorationMap = parseStatusMap(restorationSection);
+  const evidence = (parseBulletSection(blockerSection) ?? [])
+    .filter((item) => item.startsWith('evidence:'))
+    .map((item) => item.slice('evidence:'.length).trim())
+    .filter((item) => item.length > 0 && item !== 'none');
+
+  return {
+    blocker: {
+      kind: parseBlockerKindValue(blockerMap.kind),
+      signature: blockerMap.signature ?? 'unknown',
+      evidence,
+      recoverability: parseBlockerRecoverabilityValue(blockerMap.recoverability),
+      observed_state: blockerMap.observed_state ?? 'unknown',
+    },
+    restoration_target: {
+      lifecycle_state: stripTicks(restorationMap.lifecycle_state ?? 'none'),
+      active_task: stripTicks(restorationMap.active_task ?? 'none'),
+      active_correction_task: stripTicks(restorationMap.active_correction_task ?? 'none'),
+      active_unblock_task: stripTicks(restorationMap.active_unblock_task ?? 'none'),
+    },
+  };
+}
+
+function isExpectedDeliverable(value: string): value is 'code' | 'tests' | 'documentation' {
+  return value === 'code' || value === 'tests' || value === 'documentation';
+}
+
+function parseBlockerKindValue(value: string | undefined): BlockerKind {
+  switch (value) {
+    case 'state_corruption':
+    case 'task_interface_gap':
+    case 'cli_mismatch':
+    case 'environment':
+    case 'implementation_failure':
+    case 'review_failure':
+    case 'unknown':
+      return value;
+    default:
+      return 'unknown';
+  }
+}
+
+function parseBlockerRecoverabilityValue(value: string | undefined): BlockerRecoverability {
+  switch (value) {
+    case 'auto':
+    case 'agent':
+    case 'human':
+    case 'terminal':
+      return value;
+    default:
+      return 'agent';
+  }
+}
+
+function inferReviewableDiffHandoff(
+  markdown: string,
+  constraints: readonly string[],
+  acceptanceCriteria: readonly string[],
+  qualityGates: readonly string[],
+): ReviewableDiffHandoff {
+  const handoffSection = optionalSection(markdown, 'Reviewable Diff Handoff');
+  const handoffMap = handoffSection ? parseStatusMap(handoffSection) : {};
+  const legacySubmissionSection = optionalSection(markdown, 'Submission Preservation') ?? '';
+  const legacyText = [legacySubmissionSection, ...constraints, ...acceptanceCriteria, ...qualityGates].join('\n');
+  const requiredChangedFiles = uniqueStrings([
+    ...parseDiffPathEqualityQualityGates(qualityGates),
+    ...parseExactChangedFilesFromText(legacyText),
+    ...parseCsvPaths(handoffMap.required_changed_files),
+  ]);
+
+  return {
+    requireLiveDiff: parseBooleanSetting(handoffMap.require_live_diff, true),
+    allowGitCommitBeforeHandoff: parseBooleanSetting(handoffMap.allow_git_commit_before_handoff, false),
+    requiredChangedFiles,
+  };
+}
+
+function parseBooleanSetting(value: string | undefined, fallback: boolean): boolean {
+  if (!value) {
+    return fallback;
+  }
+
+  const normalized = stripTicks(value).trim().toLowerCase();
+  if (normalized === 'true' || normalized === 'yes') {
+    return true;
+  }
+
+  if (normalized === 'false' || normalized === 'no') {
+    return false;
+  }
+
+  return fallback;
+}
+
+function parseCsvPaths(value: string | undefined): string[] {
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(',')
+    .map((item) => stripTicks(item.trim()))
+    .filter((item) => item.length > 0 && item !== 'any' && item !== 'none');
+}
+
+function parseDiffPathEqualityQualityGates(qualityGates: readonly string[]): string[] {
+  const paths: string[] = [];
+  for (const gate of qualityGates) {
+    const match = gate.match(/git diff --name-only\)"\s*=\s*"([^"\n]+)"/i);
+    if (match?.[1]) {
+      paths.push(match[1].trim());
+    }
+  }
+
+  return uniqueStrings(paths);
+}
+
+function parseExactChangedFilesFromText(text: string): string[] {
+  const paths: string[] = [];
+  const exactChangedFilePattern = /exactly one changed file:\s*`([^`]+)`/gi;
+  for (const match of text.matchAll(exactChangedFilePattern)) {
+    if (match[1]) {
+      paths.push(match[1].trim());
+    }
+  }
+
+  return uniqueStrings(paths);
 }
 
 function replaceOperationalStatus(markdown: string, overrides: Partial<Record<string, string>>): string {
@@ -4249,36 +5056,36 @@ function parsePreferredStatusValue(sectionBody: string, key: string): string | n
 }
 
 function replaceSection(markdown: string, heading: string, newBody: string): string {
-  const sectionHeader = `## ${heading}\n\n`;
-  const sectionStart = markdown.indexOf(sectionHeader);
-  if (sectionStart === -1) {
+  const sectionHeaderPattern = new RegExp(`^## ${escapeRegExp(heading)}\\n+`, 'm');
+  const sectionMatch = markdown.match(sectionHeaderPattern);
+  if (!sectionMatch || sectionMatch.index === undefined) {
     throw new Error(`Section "## ${heading}" was not found.`);
   }
 
-  const bodyStart = sectionStart + sectionHeader.length;
+  const sectionStart = sectionMatch.index;
+  const bodyStart = sectionStart + sectionMatch[0].length;
   const nextHeadingIndex = markdown.indexOf('\n## ', bodyStart);
   const sectionEnd = nextHeadingIndex === -1 ? markdown.length : nextHeadingIndex;
-  const replacement = `${sectionHeader}${ensureTrailingNewline(newBody).trimEnd()}\n`;
+  const replacement = `## ${heading}\n\n${ensureTrailingNewline(newBody).trimEnd()}\n`;
   return `${markdown.slice(0, sectionStart)}${replacement}${markdown.slice(sectionEnd)}`;
 }
 
 function setOrInsertSection(markdown: string, heading: string, newBody: string): string {
-  const sectionHeader = `## ${heading}\n\n`;
-  const sectionStart = markdown.indexOf(sectionHeader);
-  if (sectionStart !== -1) {
+  const sectionHeaderPattern = new RegExp(`^## ${escapeRegExp(heading)}\\n+`, 'm');
+  if (sectionHeaderPattern.test(markdown)) {
     return replaceSection(markdown, heading, newBody);
   }
 
-  const statusHeader = '## Status\n\n';
-  const statusStart = markdown.indexOf(statusHeader);
-  if (statusStart === -1) {
+  const statusHeaderPattern = /^## Status\n+/m;
+  const statusMatch = markdown.match(statusHeaderPattern);
+  if (!statusMatch || statusMatch.index === undefined) {
     throw new Error(`Unable to insert section "## ${heading}" because "## Status" was not found.`);
   }
 
-  const statusBodyStart = statusStart + statusHeader.length;
+  const statusBodyStart = statusMatch.index + statusMatch[0].length;
   const nextHeadingIndex = markdown.indexOf('\n## ', statusBodyStart);
   const insertAt = nextHeadingIndex === -1 ? markdown.length : nextHeadingIndex;
-  const insertion = `\n\n${sectionHeader}${ensureTrailingNewline(newBody).trimEnd()}`;
+  const insertion = `\n\n## ${heading}\n\n${ensureTrailingNewline(newBody).trimEnd()}`;
   return `${markdown.slice(0, insertAt)}${insertion}${markdown.slice(insertAt)}`;
 }
 
@@ -4324,9 +5131,16 @@ function requireSection(markdown: string, heading: string): string {
 }
 
 function optionalSection(markdown: string, heading: string): string | null {
-  const pattern = new RegExp(`^## ${escapeRegExp(heading)}\\n\\n([\\s\\S]*?)(?=\\n## |$)`, 'm');
+  const pattern = new RegExp(`^## ${escapeRegExp(heading)}\\n+`, 'm');
   const match = markdown.match(pattern);
-  return match?.[1]?.trimEnd() ?? null;
+  if (!match || match.index === undefined) {
+    return null;
+  }
+
+  const bodyStart = match.index + match[0].length;
+  const nextHeadingIndex = markdown.indexOf('\n## ', bodyStart);
+  const sectionEnd = nextHeadingIndex === -1 ? markdown.length : nextHeadingIndex;
+  return markdown.slice(bodyStart, sectionEnd).trimEnd();
 }
 
 function parseBulletSection(section: string | null): string[] | null {
@@ -4565,18 +5379,65 @@ function uniqueStrings(values: readonly string[]): string[] {
   return [...new Set(values)];
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function readRecordString(record: Record<string, unknown>, key: string): string | null {
   const value = record[key];
   return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function readPositiveInteger(record: Record<string, unknown>, key: string): number | null {
+  const value = record[key];
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null;
 }
 
 function createRunId(): string {
   return `run-${new Date().toISOString().replace(/[:.]/g, '-').replace('T', '--').replace('Z', '')}`;
 }
 
+function readJsonFile(path: string): unknown {
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function fingerprintForPath(path: string): FileFingerprint {
+  try {
+    const stat = statSync(path);
+    return {
+      exists: true,
+      mtimeMs: stat.mtimeMs,
+      size: stat.size,
+    };
+  } catch {
+    return {
+      exists: false,
+      mtimeMs: 0,
+      size: 0,
+    };
+  }
+}
+
+function sameFingerprint(left: FileFingerprint | undefined, right: FileFingerprint): boolean {
+  return Boolean(
+    left
+    && left.exists === right.exists
+    && left.mtimeMs === right.mtimeMs
+    && left.size === right.size,
+  );
+}
+
 function statSafeIsDirectory(path: string): boolean {
   try {
     return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function statSafeIsFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
   } catch {
     return false;
   }
@@ -4597,6 +5458,23 @@ function requireString(value: string | null, field: string): string {
   }
 
   return value;
+}
+
+function requireNonNoneValue(value: string | null | undefined, message: string): string {
+  if (!value || value === 'none') {
+    throw new Error(message);
+  }
+
+  return value;
+}
+
+function primaryTaskAnchorFromId(taskId: string): string {
+  const match = taskId.match(/^(F\d+-T\d+)/);
+  return match?.[1] ?? taskId;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function assertNever(value: never): never {

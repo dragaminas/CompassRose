@@ -55,7 +55,7 @@ describe('proto blocker flows', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('PASS: implementation_failed recovery created an unblock task');
-    expect(result.stdout).toContain('PASS: implementation_failed recovery recorded a refinement artifact');
+    expect(result.stdout).toContain('PASS: implementation_failed recovery recorded a diagnostic artifact');
     expect(result.stdout).toContain('PASS: the original implementation task was resumed after recovery');
     expect(result.stdout).toContain('PASS: run completed successfully');
     expect(result.stderr).not.toContain('FAIL:');
@@ -81,7 +81,7 @@ describe('proto blocker flows', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('PASS: state correction task was recorded');
     expect(result.stdout).toContain('PASS: state correction document was written');
-    expect(result.stdout).toContain('PASS: feature state now records correction pending');
+    expect(result.stdout).toContain('PASS: feature state no longer contains the malformed task_ready gap');
     expect(result.stdout).toContain('PASS: committed recovery steps left a clean worktree');
     expect(result.stderr).not.toContain('FAIL:');
   });
@@ -121,7 +121,7 @@ describe('proto blocker flows', () => {
     const result = runProtoScenario('implementation-notes', { implementer: 'codex' });
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('PASS: codex was called enough times to select, implement, review, and stop');
+    expect(result.stdout).toContain('PASS: codex was called enough times to implement and review under the deterministic loop');
     expect(result.stdout).toContain('PASS: opencode call count matched the configured implementer');
     expect(result.stdout).toContain('PASS: implementation notes were captured in the implementation artifact');
     expect(result.stderr).not.toContain('FAIL:');
@@ -152,7 +152,7 @@ describe('proto blocker flows', () => {
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('PASS: state correction task was recorded');
     expect(result.stdout).toContain('PASS: state correction document was written');
-    expect(result.stdout).toContain('PASS: feature state now records correction pending');
+    expect(result.stdout).toContain('PASS: feature state no longer contains the malformed task_ready gap');
     expect(result.stderr).not.toContain('FAIL:');
   });
 });

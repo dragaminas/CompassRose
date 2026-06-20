@@ -1,0 +1,132 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["task"],
+  "properties": {
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "task_id",
+        "feature_id",
+        "title",
+        "objective",
+        "first_executable_step",
+        "minimum_progress_evidence",
+        "trace",
+        "context",
+        "scope",
+        "constraints",
+        "development_policy",
+        "quality_gates",
+        "acceptance_criteria",
+        "expected_deliverables"
+      ],
+      "properties": {
+        "task_id": { "type": "string" },
+        "feature_id": { "type": "string" },
+        "title": { "type": "string" },
+        "objective": { "type": "string" },
+        "first_executable_step": { "type": "string" },
+        "minimum_progress_evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "trace": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "roadmap_objective",
+            "feature_goal",
+            "state_gap"
+          ],
+          "properties": {
+            "roadmap_objective": { "type": "string" },
+            "feature_goal": { "type": "string" },
+            "state_gap": { "type": "string" }
+          }
+        },
+        "context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "summary",
+            "relevant_paths",
+            "relevant_modules"
+          ],
+          "properties": {
+            "summary": { "type": "string" },
+            "relevant_paths": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "relevant_modules": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "allowed_paths",
+            "forbidden_paths"
+          ],
+          "properties": {
+            "allowed_paths": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "forbidden_paths": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "constraints": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "development_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["mode"],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "test_guided",
+                "implementation_first",
+                "documentation_first",
+                "strict_tdd"
+              ]
+            }
+          }
+        },
+        "quality_gates": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["before_review"],
+          "properties": {
+            "before_review": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "expected_deliverables": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["code", "tests", "documentation"]
+          }
+        }
+      }
+    }
+  }
+}

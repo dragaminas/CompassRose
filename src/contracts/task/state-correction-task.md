@@ -91,6 +91,8 @@ A state correction task must:
 - Include `minimum_progress_evidence` that cannot be satisfied by reading alone.
 - Keep `quality_gates.before_review` runnable in a plain shell on the target runtime.
 - Prefer portable commands that are expected to exist in the runtime environment.
+- For documentation-only state correction, default to portable documentation-safe gates such as `git diff --check`.
+- Add repo-specific smoke, typecheck, or test commands only when the task context or repository configuration explicitly guarantees they are available and relevant.
 - Do not require optional tools unless the state-correction context explicitly states they are available.
 
 A state correction task must not:

@@ -1,0 +1,78 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "feature_id",
+    "diagnosis_summary",
+    "blocker",
+    "next_step",
+    "next_step_reason",
+    "interface_response"
+  ],
+  "properties": {
+    "feature_id": { "type": "string" },
+    "diagnosis_summary": { "type": "string" },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "signature",
+        "recoverability",
+        "evidence"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "state_corruption",
+            "task_interface_gap",
+            "cli_mismatch",
+            "environment",
+            "implementation_failure",
+            "review_failure",
+            "unknown"
+          ]
+        },
+        "signature": { "type": "string" },
+        "recoverability": {
+          "type": "string",
+          "enum": ["auto", "agent", "human", "terminal"]
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "next_step": {
+      "type": "string",
+      "enum": [
+        "correct_state",
+        "plan_unblock_task",
+        "stop_with_diagnostic"
+      ]
+    },
+    "next_step_reason": { "type": "string" },
+    "interface_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "summary",
+        "target_paths"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["none", "apply_in_unblock_task", "manual_review"]
+        },
+        "summary": { "type": "string" },
+        "target_paths": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

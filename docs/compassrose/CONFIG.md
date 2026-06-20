@@ -187,6 +187,33 @@ The runtime contract and feature state contract constrain how `execution.mode`, 
 
 ---
 
+## Configuration boundary
+
+This file is the policy surface for the current repository.
+
+Configuration may tune:
+
+- execution mode and limits
+- enabled roles and adapters
+- command wiring
+- review policy
+- quality-gate policy
+
+Configuration must not redefine:
+
+- lifecycle states
+- deterministic loop order
+- blocker, correction, or unblock semantics
+- required task and review artifact fields
+
+Those invariants belong to the repository contracts under `src/contracts/`.
+
+If CompassRose discovers through diagnosis/autocorrection that the repository needs a different policy, it should prefer changing this configuration surface.
+
+If it discovers that the invariant workflow itself is wrong or incomplete, it should treat that as contract/interface work instead of a config-only repair.
+
+---
+
 ## Doctor MVP configuration contract
 
 The YAML block above remains the canonical project-level configuration example, but the first implementation of `compassrose doctor` must validate only the minimum project contract listed below.

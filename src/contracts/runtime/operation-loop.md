@@ -32,6 +32,26 @@ The runtime must not:
 
 ---
 
+## AI Boundary
+
+The runtime must keep workflow control deterministic.
+
+AI may be used only for:
+
+- feature planning
+- task planning
+- review
+- diagnostic/autocorrection when the repository is blocked, malformed, or otherwise not recoverable through deterministic rules alone
+
+AI must not be used for:
+
+- per-step workflow selection
+- lifecycle-state decoding when repository state is already valid
+- choosing between equivalent deterministic transitions
+- silently redefining repository contracts
+
+---
+
 ## Required Inputs
 
 The runtime must load:
@@ -76,6 +96,36 @@ Before selecting work, the runtime must validate:
 - configured commands required for the next step exist or are intentionally empty
 
 If preconditions fail, the runtime must stop before feature selection.
+
+---
+
+## Invariant Core And Configurable Policy
+
+CompassRose must split repository behavior into:
+
+- invariant contracts owned by `src/contracts/`
+- configurable policy owned by `docs/compassrose/CONFIG.md`
+
+Contracts own:
+
+- lifecycle states and their meanings
+- step ordering and recovery semantics
+- task and review artifact shapes
+- blocker, correction, and unblock semantics
+- stop conditions that protect deterministic execution
+
+Configuration owns:
+
+- execution mode
+- enabled roles and adapters
+- command wiring
+- review policy
+- quality-gate profiles
+- retry and run limits
+
+Configuration must not redefine contract enums, artifact shapes, or lifecycle semantics.
+
+If a recovery path needs to change those invariants, it is an interface change and must be treated as contract work rather than a simple config tweak.
 
 ---
 

@@ -37,6 +37,7 @@ The implementer must:
 - follow the declared development policy
 - run or support the required quality gates when possible
 - produce repository changes that can be reviewed through a Git diff
+- leave the reviewable diff visible in the live worktree at handoff unless the task contract explicitly says otherwise
 
 Implementation recovery:
 
@@ -52,6 +53,7 @@ The implementer must not:
 - silently ignore failing quality gates
 - assume why any previous implementer stopped without producing code
 - stop after reading context unless blocked by an explicit error
+- run `git commit` or otherwise clear the live worktree diff before handoff unless the task contract explicitly allows it
 
 ---
 
@@ -73,6 +75,7 @@ Instructions:
 - Do not stop after reading context; continue until there is repository evidence matching `minimum_progress_evidence` or an explicit blocker.
 - Stay within `scope.allowed_paths`.
 - Do not modify `scope.forbidden_paths`.
+- Leave the reviewable diff visible in the live worktree for handoff unless the task contract explicitly allows a different handoff mode.
 - Satisfy the task objective and acceptance criteria.
 - Follow the declared development policy.
 - Keep the change as small as possible.

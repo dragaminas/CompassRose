@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "feature_id",
+    "feature_md",
+    "architecture_md",
+    "state_md",
+    "summary"
+  ],
+  "properties": {
+    "feature_id": { "type": "string" },
+    "feature_md": { "type": "string" },
+    "architecture_md": { "type": "string" },
+    "state_md": { "type": "string" },
+    "summary": { "type": "string" }
+  }
+}

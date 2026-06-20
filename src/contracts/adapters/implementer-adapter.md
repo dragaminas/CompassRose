@@ -61,10 +61,13 @@ adapter_output:
   changed_files:
     - string
   git_diff: string
+  fallback_changed_files:
+    - string
+  fallback_git_diff: string | null
   raw_output: string
   implementation_notes: string | null
   diagnostics:
-    classification: context_overflow | provider_failure | permission_prompt | tool_refusal | missing_implementation_notes | model_passivity | ui_cli_behavior | unknown
+    classification: context_overflow | provider_failure | permission_prompt | reviewable_diff_lost | tool_refusal | missing_implementation_notes | model_passivity | ui_cli_behavior | unknown
     evidence:
       - string
     first_executable_step_status: attempted | not_attempted | unknown
@@ -87,6 +90,7 @@ Allowed classifications:
 - `context_overflow`: the tool reported or strongly indicated a context, token, or conversation-size limit.
 - `provider_failure`: the configured provider, endpoint, model, or upstream service failed before task execution could complete.
 - `permission_prompt`: execution stopped because the tool needed interactive approval, credentials, or filesystem/network permission.
+- `reviewable_diff_lost`: the tool appears to have created a commit or otherwise cleared the live worktree diff before CompassRose could capture the reviewable change.
 - `tool_refusal`: the tool explicitly refused the request or rejected the invocation.
 - `missing_implementation_notes`: the tool produced a repository attempt without the required implementation justification.
 - `model_passivity`: the tool completed without making changes, without producing minimum progress evidence, or without taking the requested first executable step, without an explicit refusal or infrastructure failure.
@@ -96,6 +100,8 @@ Allowed classifications:
 The adapter must not infer intent from a missing diff.
 
 If no code was produced, the adapter must report the observable evidence instead of assuming why a previous implementer stopped.
+
+If the live worktree diff is empty because the tool committed or cleaned away the change before handoff, the adapter must fail the attempt, classify it as `reviewable_diff_lost`, and preserve any fallback commit diff only as diagnostic evidence.
 
 If the tool exits successfully after only reading context, the adapter must treat absent `minimum_progress_evidence` as a failed implementation attempt and classify it as `model_passivity` unless stronger evidence supports another classification.
 
@@ -124,6 +130,7 @@ The adapter must:
 - Respect allowed and forbidden paths.
 - Check whether the task's `minimum_progress_evidence` is present.
 - Return a Git diff.
+- Preserve fallback diff evidence when the live worktree diff was lost after a commit, without treating that fallback as a successful handoff.
 - Preserve raw output for audit.
 - Preserve normalized diagnostics for audit.
 - Keep each attempt independently reviewable when the runtime retries a partially completed implementation.
