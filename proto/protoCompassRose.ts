@@ -3,52 +3,42 @@ import { dirname, join, relative as relativePath, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import type {
+  BlockerKind,
+  BlockerProfile,
+  BlockerRecoverability,
+  CorrectionTask,
+  DevelopmentPolicyMode,
+  DiagnosticAutocorrectionDecision,
+  DiagnosticClassification,
+  FeatureStateSnapshot,
+  ImplementationAttempt,
+  ImplementationAttemptHistory,
+  ImplementationDiagnostics,
+  ParsedTaskDocument,
+  PlannedFeatureDocs,
+  PlannedTask,
+  PlannerOutput,
+  QualityGateResult,
+  RecoveryLesson,
+  RefinementFeedback,
+  RestorationTarget,
+  ReviewerOutput,
+  ReviewerStatus,
+  StateCorrectionTask,
+  StepDecision,
+  StepKind,
+  StoredTaskArtifact,
+  TaskInterfaceAnalysis,
+  UnblockTaskMetadata,
+  ReviewableDiffHandoff,
+  ExpectedDeliverable,
+} from '../src/contracts/types.js';
 import { readProjectConfiguration } from '../src/config/configReader.js';
 import { resolveRepositoryRelativePath } from '../src/filesystem/pathResolver.js';
 import { findGitRepositoryRoot } from '../src/git/gitStatus.js';
 
-type StepKind =
-  | 'plan_feature'
-  | 'plan_task'
-  | 'correct_state'
-  | 'unblock_task'
-  | 'diagnose_autocorrect'
-  | 'implement_task'
-  | 'review_task'
-  | 'correct_task'
-  | 'stop'
-  | 'blocked';
-
-type DevelopmentPolicyMode =
-  | 'test_guided'
-  | 'implementation_first'
-  | 'documentation_first'
-  | 'strict_tdd';
-
 type ImplementerTool = 'codex' | 'opencode';
-
-type ReviewerStatus = 'approved' | 'changes_required' | 'blocked' | 'failed';
-type DiagnosticClassification =
-  | 'context_overflow'
-  | 'provider_failure'
-  | 'permission_prompt'
-  | 'reviewable_diff_lost'
-  | 'tool_refusal'
-  | 'missing_implementation_notes'
-  | 'model_passivity'
-  | 'ui_cli_behavior'
-  | 'unknown';
-
-type BlockerKind =
-  | 'state_corruption'
-  | 'task_interface_gap'
-  | 'cli_mismatch'
-  | 'environment'
-  | 'implementation_failure'
-  | 'review_failure'
-  | 'unknown';
-
-type BlockerRecoverability = 'auto' | 'agent' | 'human' | 'terminal';
 type StructuredSchemaId =
   | 'feature_plan'
   | 'planner_output'
@@ -85,288 +75,6 @@ interface TaskImplementer {
   run(prompt: string, label?: string): CommandExecution;
 }
 
-interface ImplementationDiagnostics {
-  readonly classification: DiagnosticClassification;
-  readonly evidence: readonly string[];
-  readonly first_executable_step_status: 'attempted' | 'not_attempted' | 'unknown';
-  readonly minimum_progress_evidence_status: 'present' | 'absent' | 'unknown';
-  readonly exit_code: number | null;
-  readonly signal: string | null;
-  readonly timed_out: boolean;
-  readonly command_invoked: string | null;
-}
-
-interface ImplementationAttempt {
-  readonly status: 'success' | 'failed';
-  readonly changed_files: readonly string[];
-  readonly git_diff: string;
-  readonly fallback_changed_files: readonly string[];
-  readonly fallback_git_diff: string | null;
-  readonly raw_output: string;
-  readonly implementation_notes: string | null;
-  readonly diagnostics: ImplementationDiagnostics;
-  readonly error: string | null;
-}
-
-interface ImplementationAttemptHistory {
-  readonly task_id: string;
-  readonly retried_after_partial_changes: boolean;
-  readonly attempts: readonly ImplementationAttempt[];
-  readonly final_attempt: ImplementationAttempt;
-}
-
-interface StepDecision {
-  readonly kind: StepKind;
-  readonly feature_id: string | null;
-  readonly task_id: string | null;
-  readonly correction_task_id: string | null;
-  readonly reason: string;
-}
-
-interface PlannedFeatureDocs {
-  readonly feature_id: string;
-  readonly feature_md: string;
-  readonly architecture_md: string;
-  readonly state_md: string;
-  readonly summary: string;
-}
-
-interface PlannedTask {
-  readonly task_id: string;
-  readonly feature_id: string;
-  readonly title: string;
-  readonly objective: string;
-  readonly first_executable_step: string;
-  readonly minimum_progress_evidence: readonly string[];
-  readonly trace: {
-    readonly roadmap_objective: string;
-    readonly feature_goal: string;
-    readonly state_gap: string;
-  };
-  readonly context: {
-    readonly summary: string;
-    readonly relevant_paths: readonly string[];
-    readonly relevant_modules: readonly string[];
-  };
-  readonly scope: {
-    readonly allowed_paths: readonly string[];
-    readonly forbidden_paths: readonly string[];
-  };
-  readonly constraints: readonly string[];
-  readonly development_policy: {
-    readonly mode: DevelopmentPolicyMode;
-  };
-  readonly quality_gates: {
-    readonly before_review: readonly string[];
-  };
-  readonly acceptance_criteria: readonly string[];
-  readonly expected_deliverables: readonly ('code' | 'tests' | 'documentation')[];
-}
-
-interface PlannerOutput {
-  readonly task: PlannedTask;
-}
-
-interface CorrectionTask {
-  readonly parent_task_id: string;
-  readonly correction_task_id: string;
-  readonly feature_id: string;
-  readonly title: string;
-  readonly objective: string;
-  readonly first_executable_step: string;
-  readonly minimum_progress_evidence: readonly string[];
-  readonly review_findings: readonly string[];
-  readonly scope: {
-    readonly allowed_paths: readonly string[];
-    readonly forbidden_paths: readonly string[];
-  };
-  readonly constraints: readonly string[];
-  readonly acceptance_criteria: readonly string[];
-  readonly quality_gates: {
-    readonly before_review: readonly string[];
-  };
-}
-
-interface StateCorrectionTask {
-  readonly task_id: string;
-  readonly feature_id: string;
-  readonly title: string;
-  readonly objective: string;
-  readonly first_executable_step: string;
-  readonly minimum_progress_evidence: readonly string[];
-  readonly trace: {
-    readonly roadmap_objective: string;
-    readonly feature_goal: string;
-    readonly state_gap: string;
-  };
-  readonly state_target: {
-    readonly feature_state_path: string;
-    readonly project_state_path: string | null;
-    readonly contract_reference: string;
-    readonly detected_issue: string;
-    readonly restored_lifecycle_state: string;
-    readonly restored_active_task: string;
-    readonly restored_active_correction_task: string;
-  };
-  readonly context: {
-    readonly summary: string;
-    readonly relevant_paths: readonly string[];
-    readonly relevant_modules: readonly string[];
-  };
-  readonly scope: {
-    readonly allowed_paths: readonly string[];
-    readonly forbidden_paths: readonly string[];
-  };
-  readonly constraints: readonly string[];
-  readonly development_policy: {
-    readonly mode: DevelopmentPolicyMode;
-  };
-  readonly quality_gates: {
-    readonly before_review: readonly string[];
-  };
-  readonly acceptance_criteria: readonly string[];
-  readonly expected_deliverables: readonly ('documentation')[];
-}
-
-interface RestorationTarget {
-  readonly lifecycle_state: string;
-  readonly active_task: string;
-  readonly active_correction_task: string;
-  readonly active_unblock_task: string;
-}
-
-interface BlockerProfile {
-  readonly kind: BlockerKind;
-  readonly signature: string;
-  readonly evidence: readonly string[];
-  readonly recoverability: BlockerRecoverability;
-  readonly observed_state: string;
-}
-
-interface UnblockTaskMetadata {
-  readonly blocker: BlockerProfile;
-  readonly restoration_target: RestorationTarget;
-}
-
-interface StoredTaskArtifact {
-  readonly task: PlannedTask;
-  readonly state_correction?: StateCorrectionTask;
-  readonly unblock?: UnblockTaskMetadata;
-}
-
-interface ReviewerOutput {
-  readonly task_id: string;
-  readonly status: ReviewerStatus;
-  readonly summary: string;
-  readonly acceptance: {
-    readonly criteria: readonly {
-      readonly criterion: string;
-      readonly status: 'passed' | 'failed' | 'not_verified';
-      readonly notes: string;
-    }[];
-  };
-  readonly findings: readonly {
-    readonly severity: 'info' | 'warning' | 'error' | 'blocker';
-    readonly message: string;
-    readonly path: string | null;
-    readonly related_acceptance_criterion: string | null;
-  }[];
-  readonly scope_check: {
-    readonly status: 'passed' | 'failed';
-    readonly unrelated_changes: readonly string[];
-  };
-  readonly quality_gate_check: {
-    readonly status: 'passed' | 'failed' | 'skipped';
-    readonly failed_gates: readonly string[];
-  };
-  readonly correction_task: CorrectionTask | null;
-  readonly project_state_update_hint: string | null;
-}
-
-interface TaskInterfaceAnalysis {
-  readonly task_id: string;
-  readonly review_status: ReviewerStatus;
-  readonly summary: string;
-  readonly recommended_action: 'tighten_task_interface' | 'document_implementer_limitation' | 'both' | 'none';
-  readonly perfectible: boolean;
-  readonly implementer_limitations: readonly string[];
-  readonly task_interface_adjustments: {
-    readonly first_executable_step: string | null;
-    readonly minimum_progress_evidence: readonly string[];
-    readonly context_additions: readonly string[];
-    readonly scope_adjustments: readonly string[];
-    readonly acceptance_criteria_adjustments: readonly string[];
-    readonly quality_gate_adjustments: readonly string[];
-  };
-  readonly notes_for_documentation: readonly string[];
-}
-
-interface DiagnosticAutocorrectionDecision {
-  readonly feature_id: string;
-  readonly diagnosis_summary: string;
-  readonly blocker: {
-    readonly kind: BlockerKind;
-    readonly signature: string;
-    readonly recoverability: BlockerRecoverability;
-    readonly evidence: readonly string[];
-  };
-  readonly next_step: 'correct_state' | 'plan_unblock_task' | 'stop_with_diagnostic';
-  readonly next_step_reason: string;
-  readonly interface_response: {
-    readonly mode: 'none' | 'apply_in_unblock_task' | 'manual_review';
-    readonly summary: string;
-    readonly target_paths: readonly string[];
-  };
-}
-
-interface RecoveryLesson {
-  readonly run_id: string;
-  readonly created_at: string;
-  readonly feature_id: string;
-  readonly task_id: string;
-  readonly correction_task_id: string | null;
-  readonly review_status: ReviewerStatus;
-  readonly summary: string;
-  readonly implementation_notes: string | null;
-  readonly review_findings: readonly string[];
-  readonly quality_gate_failures: readonly string[];
-  readonly recommended_action: TaskInterfaceAnalysis['recommended_action'];
-  readonly perfectible: boolean;
-  readonly scope_isolation_notes: readonly string[];
-  readonly implementer_limitations: readonly string[];
-  readonly task_interface_adjustments: TaskInterfaceAnalysis['task_interface_adjustments'];
-  readonly notes_for_documentation: readonly string[];
-}
-
-interface ParsedTaskDocument {
-  readonly taskId: string;
-  readonly featureId: string;
-  readonly title: string;
-  readonly objective: string;
-  readonly firstExecutableStep: string;
-  readonly minimumProgressEvidence: readonly string[];
-  readonly allowedPaths: readonly string[];
-  readonly forbiddenPaths: readonly string[];
-  readonly constraints: readonly string[];
-  readonly acceptanceCriteria: readonly string[];
-  readonly qualityGates: readonly string[];
-  readonly developmentPolicy: DevelopmentPolicyMode;
-  readonly likelyAffectedFiles: readonly string[];
-  readonly trace: PlannedTask['trace'];
-  readonly context: PlannedTask['context'];
-  readonly expectedDeliverables: readonly ('code' | 'tests' | 'documentation')[];
-  readonly stateCorrection: StateCorrectionTask | null;
-  readonly unblock: UnblockTaskMetadata | null;
-  readonly reviewableDiffHandoff: ReviewableDiffHandoff;
-  readonly path: string;
-}
-
-interface ReviewableDiffHandoff {
-  readonly requireLiveDiff: boolean;
-  readonly allowGitCommitBeforeHandoff: boolean;
-  readonly requiredChangedFiles: readonly string[];
-}
-
 interface FeatureRecord {
   readonly id: string;
   readonly name: string;
@@ -376,22 +84,6 @@ interface FeatureRecord {
   readonly architecturePath: string;
   readonly statePath: string;
   readonly tasksDirectory: string;
-}
-
-interface FeatureStateSnapshot {
-  readonly lifecycleState: string;
-  readonly activeTask: string;
-  readonly activeCorrectionTask: string;
-  readonly activeUnblockTask: string;
-  readonly blockedBy: readonly string[];
-  readonly blockedFrom: RestorationTarget | null;
-}
-
-interface QualityGateResult {
-  readonly name: string;
-  readonly command: string;
-  readonly status: 'passed' | 'failed' | 'skipped';
-  readonly output_summary: string;
 }
 
 interface ProtoOptions {
@@ -424,16 +116,6 @@ interface RunSummary {
   readonly options: ProtoOptions;
   readonly steps: readonly StepRunRecord[];
   readonly error: string | null;
-}
-
-interface RefinementFeedback {
-  readonly run_id: string;
-  readonly created_at: string;
-  readonly trigger: string;
-  readonly selected_step: StepDecision | null;
-  readonly likely_sources: readonly string[];
-  readonly observations: readonly string[];
-  readonly next_questions: readonly string[];
 }
 
 interface FileFingerprint {

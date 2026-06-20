@@ -32,12 +32,12 @@ describe('proto reviewable diff handoff', () => {
       'features',
       '002-configuration-model',
       'tasks',
-      '004.3-repair-feature-state-for-f002-t04.md',
+      '004.2-repair-feature-state-for-f002-t04.md',
     );
     const task = parseTaskDocument(taskPath, readFileSync(taskPath, 'utf8'));
 
     expect(task.stateCorrection).not.toBeNull();
-    expect(task.stateCorrection?.state_target.restored_lifecycle_state).toBe('review_pending');
+    expect(task.stateCorrection?.state_target.restored_lifecycle_state).toBe('quality_failed');
     expect(task.stateCorrection?.state_target.restored_active_task).toBe('F002-T04');
   });
 
