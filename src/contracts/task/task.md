@@ -21,6 +21,7 @@ A task tells the Implementer what to change and tells the Reviewer what to valid
 ```yaml
 task:
   task_id: string
+  previous_task_id?: string | null
   feature_id: string
   title: string
   objective: string
@@ -78,6 +79,14 @@ task:
 ### task_id
 
 Unique identifier for the task within a run or project.
+
+### previous_task_id
+
+Optional identifier for the immediately previous version of this task.
+
+Use this when a task is reissued as a later version because the task interface changed, a recovery lesson tightened the scope, or the prior version became obsolete.
+
+The earlier task remains historical evidence and must not be deleted just because a later version exists.
 
 ### feature_id
 
@@ -186,6 +195,7 @@ A task must:
 - Contain no hidden requirements.
 - Include a concrete `first_executable_step`.
 - Include `minimum_progress_evidence` that cannot be satisfied by reading alone.
+- If this task is a later version of a previously planned task, set `previous_task_id` to the prior task and preserve the earlier task as history.
 - Keep `expected_deliverables` aligned with `development_policy.mode`.
 - If `development_policy.mode` is `documentation_first`, `expected_deliverables` must be documentation-only.
 - If `expected_deliverables` includes `code` or `tests`, the task must be planned for `test_guided` execution.
@@ -200,3 +210,4 @@ A task must not:
 - Mix unrelated features.
 - Require repository-wide exploration unless explicitly allowed.
 - Assume why a previous implementer stopped without producing code.
+- Replace a previous task version by deleting or rewriting the older task artifact.

@@ -25,7 +25,7 @@ It is intentionally outside `src/` because it is a proving ground for orchestrat
 8. If the step is `review_task`, ask `codex exec` to review the current Git diff plus quality-gate and implementation artifacts.
 9. If the review is `approved`, update feature and project state and commit.
 10. If the review is `changes_required`, create a correction task, update state, return rejected, and stop.
-11. If the selected feature's state is malformed but repairable, create a state correction task from project/feature hints or recorded task artifacts, update state, and continue.
+11. If the selected feature's state is malformed but repairable, create a state correction artifact from project/feature hints or recorded task artifacts, apply the repaired state directly, update state, and continue.
 12. If the step is `correct_task`, ask the configured implementer CLI to execute the correction task using TDD.
 
 Implementation recovery:
@@ -59,7 +59,8 @@ The prototype stops when any of these is true:
 The prototype enforces TDD for implementation work:
 
 - task planning requires `development_policy.mode = test_guided` whenever the task delivers code
-- documentation-only unblock tasks may remain `documentation_first`; unblock tasks that deliver code or tests must be planned as `test_guided`
+- unblock tasks are source-only; if they deliver code or tests they must be planned as `test_guided`
+- state and documentation drift are handled by `correct_state` before the implementer is involved
 - implementation prompts instruct the implementer to add or adjust the smallest failing test first, then make it pass
 - review prompts explicitly check that `test_guided` tasks include meaningful test changes
 
@@ -80,7 +81,7 @@ Run artifacts are written under `.git/proto-compassrose/` so they do not dirty t
 
 When a run stops because of a blocker or failure, the prototype also writes a refinement note that points back to the contracts or docs most likely needing improvement.
 
-When the runtime can repair malformed feature state, it writes a state correction task instead of stopping immediately.
+When the runtime can repair malformed feature state, it writes and applies a state correction artifact instead of stopping immediately.
 
 When the runtime can recover a blocker, it writes a blocker profile artifact and an unblock task instead of stopping immediately.
 

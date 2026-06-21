@@ -1269,6 +1269,7 @@ class PrototypeCompassRose {
       'Rules:',
       '- Generate exactly one atomic task.',
       '- Keep the task feature-scoped and reviewable.',
+      '- If this task is a later version of an earlier task, include `previous_task_id` so the earlier task remains historical evidence.',
       '- Use `test_guided` for implementation tasks that produce code.',
       '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
       '- Return JSON only and do not modify files.',
@@ -1355,6 +1356,9 @@ class PrototypeCompassRose {
       'Rules:',
       '- Generate exactly one unblock task.',
       '- Keep the task narrowly focused on removing the blocker or tightening the interface that caused it.',
+      '- Keep the task source-only when the blocker is an implementation or design interface gap, and keep repository documentation, contract markdown, and state out of scope.',
+      '- If the unblock task is a later version of an earlier task, include `previous_task_id` so the earlier task remains historical evidence.',
+      '- If the blocker is pure documentation or state drift, do not plan an unblock task; use `correct_state` instead.',
       '- Restore the captured lifecycle state after approval.',
       '- Use `test_guided` for implementation tasks that produce code.',
       '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
@@ -1431,7 +1435,7 @@ class PrototypeCompassRose {
         return {
           exitCode: 2,
           continueLoop: false,
-          summary: `${decision.next_step_reason} The current runtime cannot generate a deterministic state-correction task because ${relativePath(this.repositoryRoot, feature.statePath)} is missing.`,
+          summary: `${decision.next_step_reason} The current runtime cannot generate a deterministic state-correction artifact because ${relativePath(this.repositoryRoot, feature.statePath)} is missing.`,
         };
       }
 
@@ -1439,7 +1443,7 @@ class PrototypeCompassRose {
       return {
         exitCode: 0,
         continueLoop: true,
-        summary: `Diagnostic/autocorrection created a state correction task for feature ${featureId}.`,
+        summary: `Diagnostic/autocorrection applied a state correction for feature ${featureId}.`,
       };
     }
 
@@ -1500,8 +1504,9 @@ class PrototypeCompassRose {
       `- ${reason}`,
       '',
       'Rules:',
-      '- Use `correct_state` only when the existing state-correction contract is sufficient and no broader interface hardening is needed first.',
-      '- Use `plan_unblock_task` when a bounded unblock task can remove the blocker or tighten the interface that caused it.',
+      '- Use `correct_state` only when the existing state-correction contract is sufficient, the runtime can apply the repair directly, and no broader interface hardening is needed first.',
+      '- Use `plan_unblock_task` when a bounded source-only unblock task can remove the blocker or tighten the interface that caused it.',
+      '- If the blocker is pure documentation or state drift, choose `correct_state` instead of planning an unblock task.',
       '- Use `stop_with_diagnostic` when the best fix needs architectural review, human judgment, or a non-obvious tradeoff.',
       '- Return JSON only.',
     ].join('\n');
@@ -1777,8 +1782,8 @@ class PrototypeCompassRose {
     }
 
     if (review.status === 'approved') {
-      const updatedFeatureState = stateCorrection
-        ? this.updateFeatureStateAfterStateCorrection(feature.statePath, task, stateCorrection)
+    const updatedFeatureState = stateCorrection
+        ? this.updateFeatureStateAfterStateCorrection(feature.statePath, task.taskId, stateCorrection)
         : unblock
           ? this.updateFeatureStateAfterUnblock(feature.statePath, task, unblock)
           : this.updateFeatureStateAfterApprovedReview(feature.statePath, task);
@@ -2245,12 +2250,9 @@ class PrototypeCompassRose {
       state_correction: stateCorrection,
     });
 
-    const updatedFeatureState = this.updateFeatureStateForStateCorrection(
-      feature.statePath,
-      restoredActiveTask,
-      stateCorrection.task_id,
-    );
-    const updatedProjectState = this.updateProjectStateForCorrection(featureId, stateCorrection.task_id);
+    const stateCorrectionTask = stateCorrectionTaskToTask(stateCorrection);
+    const updatedFeatureState = this.updateFeatureStateAfterStateCorrection(feature.statePath, stateCorrection.task_id, stateCorrection);
+    const updatedProjectState = this.updateProjectStateAfterStateCorrection(featureId, stateCorrection);
     writeText(feature.statePath, updatedFeatureState);
     writeText(this.projectStatePath, updatedProjectState);
 
@@ -2264,7 +2266,7 @@ class PrototypeCompassRose {
         `proto: repair state for ${featureId}`,
       );
     }
-    console.error(`State correction task ${stateCorrection.task_id} created at ${relativePath(this.repositoryRoot, path)}.`);
+    console.error(`State correction artifact ${stateCorrection.task_id} applied and recorded at ${relativePath(this.repositoryRoot, path)}.`);
   }
 
   private resolveStateCorrectionActiveTask(feature: FeatureRecord, featureStateMarkdown: string): string {
@@ -2291,7 +2293,7 @@ class PrototypeCompassRose {
     }
 
     throw new Error(
-      `Cannot create a state correction task for ${feature.id} because no active task is recorded and no recoverable task hint could be derived from project state or recorded task artifacts.`,
+      `Cannot create a state correction artifact for ${feature.id} because no active task is recorded and no recoverable task hint could be derived from project state or recorded task artifacts.`,
     );
   }
 
@@ -2398,7 +2400,7 @@ class PrototypeCompassRose {
       feature_id: feature.id,
       title,
       objective: `Canonicalize ${statePath} so deterministic selection can continue with \`${activeTaskId}\`.`,
-      first_executable_step: `Open \`${statePath}\` and remove the conflicting operational-status entries so one canonical block remains.`,
+      first_executable_step: `Apply the canonical repair directly to \`${statePath}\` and \`${projectStatePath}\`, preserving \`${activeTaskId}\`.`,
       minimum_progress_evidence: [
         `\`${statePath}\` contains a single canonical \`Operational Status\` block that matches \`${lifecycleState}\`.`,
         `\`${projectStatePath}\` still points at feature \`${feature.id}\` and the repaired active task \`${activeTaskId}\`.`,
@@ -2445,6 +2447,7 @@ class PrototypeCompassRose {
       constraints: [
         'Preserve the active task pointer for the repaired feature.',
         'Do not change implementation code or unrelated feature docs.',
+        'Apply the repair directly through the runtime state-correction path instead of delegating it to the implementer.',
         'Keep the correction narrowly focused on canonicalizing state.',
       ],
       development_policy: {
@@ -2815,6 +2818,7 @@ class PrototypeCompassRose {
       const parsed = parseTaskDocument(taskPath, readFileSync(taskPath, 'utf8'));
       return {
         taskId: stored.task.task_id,
+        previousTaskId: parsed.previousTaskId,
         featureId: stored.task.feature_id,
         title: stored.task.title,
         objective: stored.task.objective,
@@ -3182,7 +3186,7 @@ class PrototypeCompassRose {
 
   private updateFeatureStateAfterStateCorrection(
     featureStatePath: string,
-    task: ParsedTaskDocument,
+    taskId: string,
     stateCorrection: StateCorrectionTask,
   ): string {
     let markdown = readFileSync(featureStatePath, 'utf8');
@@ -3201,7 +3205,7 @@ class PrototypeCompassRose {
       '- active_correction_task: none',
       '- active_unblock_task: none',
     ].join('\n'));
-    markdown = replaceSection(markdown, 'Last Approved Change', `State correction task \`${task.taskId}\` was approved by the prototype orchestrator.`);
+    markdown = replaceSection(markdown, 'Last Approved Change', `State correction artifact \`${taskId}\` was applied by the prototype orchestrator.`);
     markdown = replaceSection(markdown, 'Next Planning Hint', stateCorrectionNextPlanningHint(stateCorrection));
     return markdown;
   }
@@ -3238,7 +3242,7 @@ class PrototypeCompassRose {
     let markdown = readFileSync(this.projectStatePath, 'utf8');
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList(stateCorrectionProjectPendingLines(stateCorrection)));
-    markdown = replaceSection(markdown, 'Last Approved Change', `State correction task \`${stateCorrection.task_id}\` was approved by the prototype orchestrator.`);
+    markdown = replaceSection(markdown, 'Last Approved Change', `State correction artifact \`${stateCorrection.task_id}\` was applied by the prototype orchestrator.`);
     markdown = replaceSection(markdown, 'Next Planning Hint', stateCorrectionNextPlanningHint(stateCorrection));
     markdown = upsertBulletInSection(
       markdown,
@@ -3603,12 +3607,22 @@ function parseArguments(argv: readonly string[]): ProtoOptions {
 }
 
 function renderTaskMarkdown(task: PlannedTask): string {
+  const lineageSection = task.previous_task_id
+    ? [
+        '## Task Lineage',
+        '',
+        `- previous_task_id: \`${task.previous_task_id}\``,
+        '',
+      ]
+    : [];
+
   return [
     `# Task ${humanTaskNumber(task.task_id)}: ${task.title}`,
     '',
     '## Task ID',
     `\`${task.task_id}\``,
     '',
+    ...lineageSection,
     '## Parent Feature',
     `\`${task.feature_id}\``,
     '',
@@ -4172,11 +4186,20 @@ function extractImplementationNotes(rawOutput: string): string | null {
 
 function validateTaskDeliverables(task: PlannedTask, taskLabel: string): void {
   const deliversExecutableWork = task.expected_deliverables.some((deliverable) => deliverable === 'code' || deliverable === 'tests');
+  const deliversDocumentation = task.expected_deliverables.includes('documentation');
 
   if (task.development_policy.mode === 'documentation_first' && deliversExecutableWork) {
     throw new Error(
       `Planned ${taskLabel} ${task.task_id} must not deliver code or tests when it uses \`documentation_first\`.`,
     );
+  }
+
+  if (taskLabel === 'unblock task' && deliversDocumentation) {
+    throw new Error(`Planned unblock task ${task.task_id} must not deliver documentation.`);
+  }
+
+  if (taskLabel === 'unblock task' && task.development_policy.mode !== 'test_guided') {
+    throw new Error(`Planned unblock task ${task.task_id} must use \`test_guided\`.`);
   }
 
   if (deliversExecutableWork && task.development_policy.mode !== 'test_guided') {
@@ -4477,6 +4500,7 @@ function renderTaskInterfaceAnalysisMarkdown(
 
 export function parseTaskDocument(taskPath: string, markdown: string): ParsedTaskDocument {
   const taskId = stripTicks(requireSection(markdown, 'Task ID').trim());
+  const previousTaskId = parseOptionalTaskLineage(markdown);
   const featureId = stripTicks(requireSection(markdown, 'Parent Feature').trim());
   const titleMatch = markdown.match(/^#\s+Task\s+.+?:\s+(.+)$/m);
   const title = titleMatch?.[1]?.trim() ?? taskId;
@@ -4520,6 +4544,7 @@ export function parseTaskDocument(taskPath: string, markdown: string): ParsedTas
 
   return {
     taskId,
+    previousTaskId,
     featureId,
     title,
     objective,
@@ -4548,6 +4573,7 @@ function storedTaskArtifactFromDocument(taskPath: string, markdown: string): Sto
   return {
     task: {
       task_id: parsed.taskId,
+      ...(parsed.previousTaskId ? { previous_task_id: parsed.previousTaskId } : {}),
       feature_id: parsed.featureId,
       title: parsed.title,
       objective: parsed.objective,
@@ -4596,6 +4622,25 @@ function parseTaskContext(markdown: string, relevantPaths: readonly string[]): P
     relevant_paths: relevantPaths,
     relevant_modules: relevantPaths,
   };
+}
+
+function parseOptionalTaskLineage(markdown: string): string | null {
+  const lineageSection = optionalSection(markdown, 'Task Lineage');
+  if (!lineageSection) {
+    return null;
+  }
+
+  const rawValue = parsePreferredStatusValue(lineageSection, 'previous_task_id');
+  if (!rawValue) {
+    return null;
+  }
+
+  const normalized = stripTicks(rawValue).trim();
+  if (normalized.length === 0 || normalized === 'none') {
+    return null;
+  }
+
+  return normalized;
 }
 
 function parseExpectedDeliverables(

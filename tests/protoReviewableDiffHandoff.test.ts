@@ -41,6 +41,71 @@ describe('proto reviewable diff handoff', () => {
     expect(task.stateCorrection?.state_target.restored_active_task).toBe('F002-T04');
   });
 
+  test('reconstructs task lineage metadata directly from the task markdown', () => {
+    const taskPath = join(repoRoot, 'tmp', 'versioned-task.md');
+    const markdown = [
+      '# Task 9: Revise the planner output contract',
+      '',
+      '## Task ID',
+      '',
+      '`F002-T04-C9`',
+      '',
+      '## Task Lineage',
+      '',
+      '- previous_task_id: `F002-T04-C8`',
+      '',
+      '## Parent Feature',
+      '',
+      '`002-configuration-model`',
+      '',
+      '## Goal',
+      '',
+      'Revise the planner output contract without changing feature scope.',
+      '',
+      '## First Executable Step',
+      '',
+      'Open the contract and add the lineage field.',
+      '',
+      '## Minimum Progress Evidence',
+      '',
+      '- `src/contracts/planner/output.md` changes on disk.',
+      '',
+      '## Scope',
+      '',
+      'Allowed:',
+      '- `src/contracts/planner/output.md`',
+      '',
+      'Forbidden:',
+      '- `docs/features/`',
+      '',
+      '## Constraints',
+      '',
+      '- Keep the change minimal.',
+      '',
+      '## Development Policy',
+      '',
+      '- `documentation_first`',
+      '',
+      '## Acceptance Criteria',
+      '',
+      '- The contract can express task lineage.',
+      '',
+      '## Quality Gates to Run',
+      '',
+      '```bash',
+      'git diff --check',
+      '```',
+      '',
+      '## Expected Deliverables',
+      '',
+      '- `documentation`',
+      '',
+    ].join('\n');
+    const task = parseTaskDocument(taskPath, markdown);
+
+    expect(task.previousTaskId).toBe('F002-T04-C8');
+  });
+
   test('reconstructs unblock metadata directly from the task markdown', () => {
     const taskPath = join(
       repoRoot,

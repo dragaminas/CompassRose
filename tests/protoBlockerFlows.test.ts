@@ -79,7 +79,7 @@ describe('proto blocker flows', () => {
     const result = runProtoScenario('state-correction-missing-active-task', { commit: true });
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('PASS: state correction task was recorded');
+    expect(result.stdout).toContain('PASS: state correction artifact was recorded');
     expect(result.stdout).toContain('PASS: state correction document was written');
     expect(result.stdout).toContain('PASS: feature state no longer contains the malformed task_ready gap');
     expect(result.stdout).toContain('PASS: committed recovery steps left a clean worktree');
@@ -150,7 +150,7 @@ describe('proto blocker flows', () => {
     const result = runProtoScenario('state-correction-missing-active-task');
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('PASS: state correction task was recorded');
+    expect(result.stdout).toContain('PASS: state correction artifact was recorded');
     expect(result.stdout).toContain('PASS: state correction document was written');
     expect(result.stdout).toContain('PASS: feature state no longer contains the malformed task_ready gap');
     expect(result.stderr).not.toContain('FAIL:');

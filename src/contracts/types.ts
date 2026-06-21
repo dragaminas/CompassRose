@@ -85,6 +85,7 @@ export interface PlannedFeatureDocs {
 
 export interface PlannedTask {
   readonly task_id: string;
+  readonly previous_task_id?: string | null;
   readonly feature_id: string;
   readonly title: string;
   readonly objective: string;
@@ -269,6 +270,7 @@ export interface ReviewableDiffHandoff {
 
 export interface ParsedTaskDocument {
   readonly taskId: string;
+  readonly previousTaskId: string | null;
   readonly featureId: string;
   readonly title: string;
   readonly objective: string;

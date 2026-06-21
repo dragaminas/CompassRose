@@ -47,13 +47,15 @@ The Planner must:
 - define minimum progress evidence that cannot be satisfied by reading alone
 - include enough blocker context to avoid repository-wide exploration
 - use planner-grade reasoning to tighten the unblock interface when needed
+- if the unblock task is a later version of a previous task, set `previous_task_id` to that earlier task and keep the earlier task as history
 - reuse recent recovery lessons to make the unblock task narrower when the blocker has already been observed and partially diagnosed
 - when the blocker is an implementation failure, keep the active task anchor visible and prefer a bounded recovery task that restores task readiness before reattempting implementation
+- when the blocker is an implementation or design interface gap discovered from diagnostics, keep the unblock task source-only: limit `allowed_paths` to implementation code under `src/` and any required tests, keep docs, contract markdown, and state files in `forbidden_paths`, and do not ask the implementer to modify repository documentation or project state
+- when the blocker is pure documentation or state drift, do not generate an unblock task; route the repair through `correct_state` instead
 - when planning a recovery or cleanup task, use only quality-gate commands that are expected to exist in the runtime environment
 - prefer portable shell commands for cleanup quality gates, and do not assume optional tools such as `rg` are installed unless the provided context explicitly says they are available
-- if the blocker can be repaired as a documentation or state cleanup, pass the exact cleanup target paths and the observed blocker evidence into the task so the implementer does not need repository-wide exploration
-- if the unblock task is documentation-only, keep `development_policy.mode` as `documentation_first` and set `expected_deliverables` to documentation only
 - if the unblock task needs code or tests, set `development_policy.mode` to `test_guided`
+- keep documentation and state cleanup out of unblock-task scope; those repairs belong to `correct_state`
 
 The Planner must not:
 
@@ -97,6 +99,7 @@ Instructions:
 - Define `minimum_progress_evidence` as observable repository progress inside the allowed scope.
 - Include concrete acceptance criteria and quality gates.
 - Prefer the narrowest blocker-specific scope that can restore progress.
+- If the blocker is an implementation or design interface gap, keep the task source-only and do not route it through repository documentation or state edits.
 - Do not generate future tasks, a roadmap, or a phase plan.
 
 Return:

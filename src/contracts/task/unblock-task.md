@@ -4,11 +4,13 @@
 
 Defines a bounded task generated when a feature is blocked but the blocker is recoverable.
 
-An unblock task removes a known blocker, tightens the task interface, recovers a failed implementation attempt, or restores the surrounding execution conditions so deterministic orchestration can resume.
+An unblock task removes a known blocker, tightens the task interface, or recovers a failed implementation attempt so deterministic orchestration can resume.
+
+Pure documentation or state drift is not an unblock task; those repairs belong to `src/contracts/runtime/diagnostic-autocorrection.md` via `correct_state`.
 
 This shape is distinct from `src/contracts/task/correction-task.md` because it targets blocker recovery, not review findings.
 
-`src/contracts/task/state-correction-task.md` is a specialized unblock task that only repairs malformed state documents.
+`src/contracts/task/state-correction-task.md` is the runtime-applied state repair artifact for malformed state documents.
 
 ---
 
@@ -26,6 +28,7 @@ When the blocker is a stale recovery interface, the unblock task must preserve t
 ```yaml
 unblock_task:
   task_id: string
+  previous_task_id?: string | null
   feature_id: string
   title: string
   objective: string
@@ -69,7 +72,7 @@ unblock_task:
     - string
 
   development_policy:
-    mode: test_guided | implementation_first | documentation_first | strict_tdd
+    mode: test_guided
 
   quality_gates:
     before_review:
@@ -81,7 +84,6 @@ unblock_task:
   expected_deliverables:
     - code
     - tests
-    - documentation
 ```
 
 ---
@@ -100,8 +102,10 @@ An unblock task must:
 - When `blocker.kind` is `task_interface_gap`, record the stale interface markers, the observed state, and the prior attempt evidence that explains why the interface is stale.
 - Preserve the current active task anchor verbatim when the source state still contains one; do not mint a synthetic suffix such as a new `-C3` variant.
 - If the blocker is a stale recovery interface, make the restoration target explicit in the task text and do not replace it with a future-state guess.
+- If the unblock task is a later version of a previous task, set `previous_task_id` to that earlier task and keep the earlier task as historical evidence instead of rewriting it.
+- If the blocker is a design or implementation interface gap, keep the task source-only: limit `scope.allowed_paths` to implementation code under `src/` and any necessary tests, and keep repository documentation, contract markdown, and state files in `scope.forbidden_paths`.
+- If the blocker is pure documentation or state drift, do not generate an unblock task; use `correct_state` instead.
 - Keep `expected_deliverables` aligned with `development_policy.mode`.
-- If the unblock task is documentation-only, it must stay `documentation_first` and deliver documentation only.
 - If the unblock task needs code or tests, it must be planned as `test_guided`.
 - Keep `quality_gates.before_review` runnable in a plain shell on the target runtime.
 - Prefer portable commands that are expected to exist in the runtime environment.
@@ -114,6 +118,8 @@ An unblock task must not:
 - Solve unrelated issues opportunistically.
 - Assume the blocker can be fixed without evidence.
 - Invent a new task anchor or restoration target when the blocker evidence already names the current one.
+- Delete or rewrite the earlier task artifact instead of linking the new version to it.
+- Modify repository documentation or state files when the blocker is a design or implementation interface gap and the unblock task is meant to repair source behavior.
 
 ---
 

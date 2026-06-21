@@ -31,7 +31,7 @@ If you want to compare behavior with the Codex CLI instead of OpenCode, run `npm
 
 When review returns `changes_required`, `proto:loop` now records a recovery lesson and continues into the generated correction task instead of forcing a manual restart.
 
-Planning-style recovery steps such as `correct_state` checkpoint their state/task documents in the default commit mode, and implementation/correction retries can continue from a partial diff when that diff is the active task's own recovery context.
+Planning-style recovery steps such as `correct_state` checkpoint their state/task documents in the default commit mode, and the runtime applies the canonical state repair directly before resuming.
 
 Implementation attempts now require `implementation_notes` in the stored artifact. The reviewer uses them as lightweight execution context, and missing notes are treated as a failed attempt.
 
@@ -73,7 +73,7 @@ The smoke harness sets `PROTO_COMPASSROSE_SKIP_CLEAN_CHECK=1` so the prototype c
 
 `proto:loop` now prints agent start/end markers plus captured `stdout` and `stderr`, which makes it easier to tell active agent work from a stalled loop.
 
-When the selector finds malformed but repairable feature state, the prototype now creates a state correction task instead of ending the run as a terminal blocker.
+When the selector finds malformed but repairable feature state, the prototype now creates and applies a state correction artifact instead of ending the run as a terminal blocker.
 
 When the selector finds a recoverable blocker, the prototype now creates a blocker profile plus an unblock task, then restores the suspended lifecycle state after the unblock task is approved.
 

@@ -149,7 +149,7 @@ Rules:
 1. Order features by numeric prefix ascending.
 2. Ignore features in `completed`.
 3. Select the first feature that is not `completed`.
-4. If the selected feature's state is malformed but repairable, generate a state correction task and transition the feature to `correction_pending`.
+4. If the selected feature's state is malformed but repairable, generate a state correction artifact, apply the repair directly, and continue from the restored lifecycle state.
 5. If the selected feature is `blocked` for a recoverable reason, generate an unblock task with the planner-grade role and transition the feature to `unblock_pending`.
 6. If the selected feature is `blocked` for an unrecoverable reason, stop the run and report the blocker.
 7. Do not skip an earlier pending feature to work on a later one.
@@ -238,6 +238,8 @@ Action:
 - run effective quality gates in deterministic order
 - if a required gate fails on a correction or unblock task, preserve the recorded task and carry the failure into `quality_failed` instead of inventing a fresh normal task
 - if the failure exposes a stale recovery interface, classify it as `task_interface_gap` and invoke diagnostic/autocorrection before planning any broader recovery change
+- if that interface gap is an implementation or design issue, keep the resulting unblock task source-only and out of repository documentation, contract markdown, and state paths
+- if the blocker is pure documentation or state drift, route it through `correct_state` instead of unblock planning
 
 Next state:
 
@@ -264,8 +266,8 @@ Next state:
 
 Action:
 
-- execute the recorded correction task instead of generating a broader replacement task
-- this may originate from review findings or from a state-repair task that restored malformed feature state
+- execute the recorded correction task produced by review findings instead of generating a broader replacement task
+- state repair uses the direct runtime correction path and does not pass through this state
 
 Next state:
 
@@ -280,7 +282,8 @@ Action:
 - if the failed implementation is recoverable, generate a bounded unblock task with the planner-grade role and transition the feature to `unblock_pending`
 - if the quality failure is on a correction or unblock task and it exposes a stale recovery interface, continue from the recorded task, classify the blocker as `task_interface_gap`, and plan a bounded unblock task that preserves the current active task anchor
 - otherwise stop the run unless an explicit recovery policy transitions the feature back into a valid pending state
-- documentation-only unblock tasks may remain `documentation_first`; unblock tasks that need code or tests must be planned as `test_guided`
+- unblock tasks are source-only; if they deliver code or tests they must be planned as `test_guided`
+- if the blocker is pure documentation or state drift, route it through `correct_state` instead of unblock planning
 
 ### blocked
 
@@ -311,6 +314,7 @@ When planning:
 - respect `src/contracts/planner/input.md`
 - respect `src/contracts/planner/output.md`
 - treat `state.md` as runtime reality
+- if the task is a later version of an earlier task, keep the earlier task as history and record the relation through `previous_task_id`
 - do not create a backlog
 
 If a correction task is active, the runtime must prefer it over generating a new normal task.
@@ -460,6 +464,7 @@ Implementation recovery rules:
 - if the retry also fails or no recoverable progress exists, transition explicitly to `implementation_failed` or `blocked`
 - preserve raw output, diff, and diagnostics for both the failed attempt and the retry so the operator can distinguish a transient collapse from a terminal stop
 - `implementation_failed`: inspect the latest implementation artifacts first and, when the active task anchor is still recoverable, plan a bounded unblock task that restores task readiness before retrying implementation
+- if the failed implementation exposed an implementation or design interface gap, keep that unblock task source-only and do not route it through repository documentation, contract markdown, or state edits
 - controlled stop is not a failure transition: if the operator interrupts the runtime, keep the current lifecycle state and active task pointers intact so the next run can resume from the recorded checkpoint
 - a failed quality gate result
 - a recorded blocker
@@ -467,7 +472,7 @@ Implementation recovery rules:
 
 Correction recovery rules:
 
-- `correction_pending`: inspect the recorded correction task before selecting new work
+- `correction_pending`: inspect the recorded review-driven correction task before selecting new work
 - if a review requested changes and a correction task was produced, continue into that correction task instead of forcing a manual restart
 - preserve the corresponding recovery lesson so future task planning can reuse the tighter interface or limitation note
 - planning-style recovery steps that only update repository state or task documents should checkpoint those changes when commit policy is active, so the next pass resumes from a clean transition point

@@ -288,69 +288,70 @@ if (kind === 'diagnostic') {
     },
     next_step: 'plan_unblock_task',
     next_step_reason: 'The smoke scenario is recoverable and should continue through a bounded unblock task.',
-    interface_response: {
-      mode: 'apply_in_unblock_task',
-      summary: 'Tighten the recovery interface inside a bounded unblock task.',
-      target_paths: [
-        'docs/features/002-configuration-model/state.md',
-        'docs/compassrose/PROJECT_STATE.md',
-      ],
-    },
-  };
+      interface_response: {
+        mode: 'apply_in_unblock_task',
+        summary: 'Tighten the recovery interface inside a bounded unblock task.',
+        target_paths: [
+          'src/doctor/projectState.ts',
+          'src/cli/main.ts',
+        ],
+      },
+    };
 } else if (kind === 'planner') {
   payload = {
-    task: {
-      task_id: 'F002-T04-U1',
-      feature_id: '002-configuration-model',
-      title: 'Smoke recovery unblock',
-      objective: 'Keep the recovery path deterministic and restore the active task after the smoke correction pass.',
-      first_executable_step: 'Update proto/e2e-control.txt so the smoke can observe a visible diff.',
-      minimum_progress_evidence: [
-        'The prototype writes a reviewable diff for the recovery path.',
-        'The runtime can continue from unblock planning to implementation.',
-      ],
-      trace: {
+      task: {
+        task_id: 'F002-T04-U1',
+        feature_id: '002-configuration-model',
+        title: 'Smoke recovery unblock',
+        objective: 'Keep the recovery path deterministic and restore the active task after the smoke correction pass.',
+        first_executable_step: 'Update src/doctor/projectState.ts so the smoke can observe a visible diff.',
+        minimum_progress_evidence: [
+          'The prototype writes a reviewable diff for the recovery path.',
+          'The runtime can continue from unblock planning to implementation.',
+        ],
+        trace: {
         roadmap_objective: 'Prototype control flow',
         feature_goal: 'Smoke-test the orchestration recovery loop.',
         state_gap: 'The recovery path should be exercised end to end.',
       },
-      context: {
-        summary: 'Minimal unblock task used by the smoke harness.',
-        relevant_paths: [
-          'proto/e2e-control.txt',
-          'docs/compassrose/PROJECT_STATE.md',
-          'docs/features/002-configuration-model/state.md',
+        context: {
+          summary: 'Minimal unblock task used by the smoke harness.',
+          relevant_paths: [
+            'src/doctor/projectState.ts',
+            'src/cli/main.ts',
+            'src/config/configReader.ts',
+          ],
+          relevant_modules: ['PrototypeCompassRose', 'CodexCli', 'OpenCodeCli'],
+        },
+        scope: {
+          allowed_paths: [
+            'src/doctor/projectState.ts',
+            'src/cli/main.ts',
+            'src/config/configReader.ts',
+          ],
+          forbidden_paths: [
+            'docs/compassrose/CONFIG.md',
+            'docs/compassrose/PROJECT_STATE.md',
+            'docs/features/002-configuration-model/state.md',
+          ],
+        },
+        constraints: [
+          'Keep the change minimal.',
+          'Do not modify the forbidden paths.',
         ],
-        relevant_modules: ['PrototypeCompassRose', 'CodexCli', 'OpenCodeCli'],
-      },
-      scope: {
-        allowed_paths: [
-          'proto/e2e-control.txt',
-          'docs/compassrose/PROJECT_STATE.md',
-          'docs/features/002-configuration-model/state.md',
+        development_policy: {
+          mode: 'test_guided',
+        },
+        quality_gates: {
+          before_review: ['node -e "process.exit(0)"'],
+        },
+        acceptance_criteria: [
+          'The prototype can continue deterministically after the unblock task.',
+          'The smoke harness observes a visible repository change.',
         ],
-        forbidden_paths: [
-          'docs/compassrose/CONFIG.md',
-          'src/cli/main.ts',
-        ],
+        expected_deliverables: ['code', 'tests'],
       },
-      constraints: [
-        'Keep the change minimal.',
-        'Do not modify the forbidden paths.',
-      ],
-      development_policy: {
-        mode: 'documentation_first',
-      },
-      quality_gates: {
-        before_review: ['node -e "process.exit(0)"'],
-      },
-      acceptance_criteria: [
-        'The prototype can continue deterministically after the unblock task.',
-        'The smoke harness observes a visible repository change.',
-      ],
-      expected_deliverables: ['documentation'],
-    },
-  };
+    };
 } else if (kind === 'reviewer') {
   const taskId = readTaskId(prompt, 'Review task') ?? readTaskId(prompt, 'task') ?? 'F002-T04';
   payload = {

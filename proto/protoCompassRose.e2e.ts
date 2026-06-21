@@ -355,8 +355,7 @@ function buildScenarioChecks(input: {
     const failedDueToPolicyMismatch =
       runSummary.status === 'failed' &&
       typeof runSummary.error === 'string' &&
-      runSummary.error.includes('documentation_first') &&
-      runSummary.error.includes('code or tests');
+      runSummary.error.includes('must not deliver documentation');
 
     return [
       { name: 'codex was called enough times to diagnose the mismatch and reach the invalid unblock task', ok: codexCalls >= 2 },
@@ -440,15 +439,15 @@ function buildScenarioChecks(input: {
     const stateCorrectionDocumentExists = readdirSync(featureTasksDirectory).some(
       (entry) => /^004\.\d+-repair-feature-state-for-f002-t04\.md$/.test(entry),
     );
-    const correctedTaskExecuted = runSummary.steps?.some((step) => step.decision?.kind === 'correct_task') === true;
+    const stateRepairApplied = runSummary.steps?.some((step) => typeof step.summary === 'string' && step.summary.includes('applied a state correction')) === true;
 
     return [
-      { name: 'codex was called enough times to diagnose malformed state, review the state repair, and resume the original task', ok: codexCalls >= 3 },
-      { name: 'opencode was called twice for the state repair and the restored task', ok: opencodeCalls === 2 },
+      { name: 'codex was called enough times to diagnose malformed state and review the resumed task', ok: codexCalls >= 2 },
+      { name: 'opencode was called once for the restored original task', ok: opencodeCalls === 1 },
       { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
-      { name: 'state correction task was recorded', ok: stateCorrectionArtifactExists },
+      { name: 'state correction artifact was recorded', ok: stateCorrectionArtifactExists },
       { name: 'state correction document was written', ok: stateCorrectionDocumentExists },
-      { name: 'the correction task was executed after diagnosis', ok: correctedTaskExecuted },
+      { name: 'the direct state repair path was applied after diagnosis', ok: stateRepairApplied },
       { name: 'feature state no longer contains the malformed task_ready gap', ok: !malformedFeatureState.includes('## Lifecycle State\n\ntask_ready\n\n## Source Request') || malformedFeatureState.includes('- active_task: none') || malformedFeatureState.includes('formalized') },
       ...(commitEnabled ? [{ name: 'committed recovery steps left a clean worktree', ok: worktreeClean }] : []),
     ];
@@ -800,15 +799,15 @@ function sequenceForScenario(scenario) {
   switch (scenario) {
     case 'unblock':
       return [
-        () => diagnosticPayload('002-configuration-model', 'plan_unblock_task', 'Recover the blocked feature through a bounded unblock task.', 'state_corruption', 'blocked-feature', 'agent', ['Blocked feature state recorded a restoration target.'], 'apply_in_unblock_task', 'Keep the unblock task focused on restoring task readiness.', ['docs/features/002-configuration-model/state.md']),
+        () => diagnosticPayload('002-configuration-model', 'plan_unblock_task', 'Recover the blocked feature through a bounded unblock task.', 'state_corruption', 'blocked-feature', 'agent', ['Blocked feature state recorded a restoration target.'], 'apply_in_unblock_task', 'Keep the unblock task focused on restoring task readiness.', ['src/doctor/projectState.ts', 'src/cli/main.ts']),
         () => plannerTask({
           task_id: 'F002-T05-U1',
           feature_id: '002-configuration-model',
           title: 'Restore progress after a recoverable blocker',
           objective: 'Use the blocked-from target in feature state so the feature can resume from task readiness.',
-          first_executable_step: 'Open docs/features/002-configuration-model/state.md and confirm the blocked-from target to restore.',
+          first_executable_step: 'Open src/doctor/projectState.ts and tighten the blocked-from recovery path.',
           minimum_progress_evidence: [
-            'docs/features/002-configuration-model/state.md records a blocked-from target.',
+            'src/doctor/projectState.ts records the recovery anchor for the blocked feature.',
             'The unblock task restores the feature to task_ready.',
           ],
           trace: {
@@ -819,8 +818,9 @@ function sequenceForScenario(scenario) {
           context: {
             summary: 'The feature is blocked, but the blocked-from target is known.',
             relevant_paths: [
-              'docs/features/002-configuration-model/state.md',
-              'docs/compassrose/PROJECT_STATE.md',
+              'src/doctor/projectState.ts',
+              'src/cli/main.ts',
+              'src/config/configReader.ts',
               'src/contracts/runtime/operation-loop.md',
               'src/contracts/state/feature-state.md',
             ],
@@ -828,27 +828,27 @@ function sequenceForScenario(scenario) {
           },
           scope: {
             allowed_paths: [
-              'docs/features/002-configuration-model/state.md',
-              'docs/compassrose/PROJECT_STATE.md',
-              'proto/unblock-e2e.txt',
-            ],
-            forbidden_paths: [
+              'src/doctor/projectState.ts',
               'src/cli/main.ts',
               'src/config/configReader.ts',
-              'src/doctor/projectState.ts',
+            ],
+            forbidden_paths: [
+              'docs/features/002-configuration-model/state.md',
+              'docs/compassrose/PROJECT_STATE.md',
+              'docs/compassrose/CONFIG.md',
             ],
           },
           constraints: [
             'Keep the unblock task narrowly focused on restoring progress from the blocked-from target.',
             'Do not broaden the feature scope.',
           ],
-          development_policy: { mode: 'documentation_first' },
+          development_policy: { mode: 'test_guided' },
           quality_gates: { before_review: ['git diff --check'] },
           acceptance_criteria: [
             'The blocked-from target is explicit and usable for restoration.',
             'The unblock task keeps the feature narrow and reviewable.',
           ],
-          expected_deliverables: ['documentation'],
+          expected_deliverables: ['code', 'tests'],
         }),
         () => approvedReview('F002-T05-U1', 'prototype can plan and execute unblock tasks', 'e2e mock review approved the unblock task'),
         () => approvedReview('F002-T05', 'prototype resumes the restored task after unblock recovery', 'e2e mock review approved the restored task after unblock recovery'),
@@ -864,15 +864,15 @@ function sequenceForScenario(scenario) {
           acceptance_criteria_adjustments: ['Require the unblock task to state the restoration target explicitly.'],
           quality_gate_adjustments: ['Keep the quick diff check as the only gate.'],
         }, ['Review-blocked recovery should record whether the task interface can be tightened for future runs.']),
-        () => diagnosticPayload('002-configuration-model', 'plan_unblock_task', 'Plan a focused unblock task before retrying the blocked review target.', 'task_interface_gap', 'recoverable-review-blocker', 'agent', ['The blocked review can be recovered through a narrower unblock task.'], 'apply_in_unblock_task', 'Use the unblock task to tighten the interface and restore review_pending.', ['src/contracts/task/unblock-task.md']),
+        () => diagnosticPayload('002-configuration-model', 'plan_unblock_task', 'Plan a focused unblock task before retrying the blocked review target.', 'task_interface_gap', 'recoverable-review-blocker', 'agent', ['The blocked review can be recovered through a narrower unblock task.'], 'apply_in_unblock_task', 'Use the unblock task to tighten the interface and restore review_pending.', ['src/doctor/projectState.ts', 'src/cli/main.ts']),
         () => plannerTask({
           task_id: 'F002-T04-U1',
           feature_id: '002-configuration-model',
           title: 'Restore progress after a blocked review',
           objective: 'Use the blocked-from target in feature state so the feature can resume after a recoverable blocked review.',
-          first_executable_step: 'Open docs/features/002-configuration-model/state.md and confirm the blocked-from target to restore.',
+          first_executable_step: 'Open src/doctor/projectState.ts and tighten the review-blocked recovery path.',
           minimum_progress_evidence: [
-            'docs/features/002-configuration-model/state.md records a blocked-from target.',
+            'src/doctor/projectState.ts records the recovery anchor for the blocked review.',
             'The unblock task restores the feature to review_pending after review blockage.',
           ],
           trace: {
@@ -883,8 +883,9 @@ function sequenceForScenario(scenario) {
           context: {
             summary: 'The review reported a recoverable blocker, so the feature should restore review_pending.',
             relevant_paths: [
-              'docs/features/002-configuration-model/state.md',
-              'docs/compassrose/PROJECT_STATE.md',
+              'src/doctor/projectState.ts',
+              'src/cli/main.ts',
+              'src/config/configReader.ts',
               'src/contracts/runtime/operation-loop.md',
               'src/contracts/state/feature-state.md',
             ],
@@ -892,42 +893,42 @@ function sequenceForScenario(scenario) {
           },
           scope: {
             allowed_paths: [
-              'docs/features/002-configuration-model/state.md',
-              'docs/compassrose/PROJECT_STATE.md',
-              'proto/recoverable-review-blocked.txt',
-            ],
-            forbidden_paths: [
+              'src/doctor/projectState.ts',
               'src/cli/main.ts',
               'src/config/configReader.ts',
-              'src/doctor/projectState.ts',
+            ],
+            forbidden_paths: [
+              'docs/features/002-configuration-model/state.md',
+              'docs/compassrose/PROJECT_STATE.md',
+              'docs/compassrose/CONFIG.md',
             ],
           },
           constraints: [
             'Keep the unblock task narrowly focused on restoring progress after a blocked review.',
             'Do not broaden the feature scope.',
           ],
-          development_policy: { mode: 'documentation_first' },
+          development_policy: { mode: 'test_guided' },
           quality_gates: { before_review: ['git diff --check'] },
           acceptance_criteria: [
             'The blocked-from target is explicit and usable for restoration.',
             'The unblock task keeps the feature narrow and reviewable.',
           ],
-          expected_deliverables: ['documentation'],
+          expected_deliverables: ['code', 'tests'],
         }),
         () => approvedReview('F002-T04-U1', 'prototype can recover from a blocked review via unblock tasks', 'e2e mock review approved the unblock task after a blocked review'),
         () => approvedReview('F002-T04', 'prototype resumes the original task after unblock recovery', 'e2e mock review approved the restored original task'),
       ];
     case 'implementation-failed-recovery':
       return [
-        () => diagnosticPayload('002-configuration-model', 'plan_unblock_task', 'Recover the failed implementation through a bounded unblock task before retrying F002-T04.', 'implementation_failure', 'implementation-failed-f002-t04', 'agent', ['The implementation attempt for F002-T04 failed and needs bounded recovery.'], 'apply_in_unblock_task', 'Use the unblock task to restore task_ready for F002-T04.', ['src/contracts/task/unblock-task.md']),
+        () => diagnosticPayload('002-configuration-model', 'plan_unblock_task', 'Recover the failed implementation through a bounded unblock task before retrying F002-T04.', 'implementation_failure', 'implementation-failed-f002-t04', 'agent', ['The implementation attempt for F002-T04 failed and needs bounded recovery.'], 'apply_in_unblock_task', 'Use the unblock task to restore task_ready for F002-T04.', ['src/doctor/projectState.ts', 'src/cli/main.ts']),
         () => plannerTask({
           task_id: 'F002-T05-U1',
           feature_id: '002-configuration-model',
           title: 'Recover the failed implementation for the configuration loader',
           objective: 'Create a bounded unblock task that restores task readiness after the failed implementation of F002-T04.',
-          first_executable_step: 'Open docs/features/002-configuration-model/state.md and confirm the failed implementation anchor that must be recovered.',
+          first_executable_step: 'Open src/doctor/projectState.ts and tighten the implementation-failed recovery path.',
           minimum_progress_evidence: [
-            'docs/features/002-configuration-model/state.md records implementation_failed for F002-T04.',
+            'src/doctor/projectState.ts records the recovery anchor for the failed implementation.',
             'The unblock task restores the feature to task_ready for F002-T04.',
           ],
           trace: {
@@ -938,8 +939,9 @@ function sequenceForScenario(scenario) {
           context: {
             summary: 'The active task failed during implementation, but the task anchor remains recoverable.',
             relevant_paths: [
-              'docs/features/002-configuration-model/state.md',
-              'docs/compassrose/PROJECT_STATE.md',
+              'src/doctor/projectState.ts',
+              'src/cli/main.ts',
+              'src/config/configReader.ts',
               'src/contracts/runtime/operation-loop.md',
               'src/contracts/state/feature-state.md',
             ],
@@ -947,51 +949,51 @@ function sequenceForScenario(scenario) {
           },
           scope: {
             allowed_paths: [
-              'docs/features/002-configuration-model/state.md',
-              'docs/compassrose/PROJECT_STATE.md',
-              'proto/implementation-failed-recovery.txt',
-            ],
-            forbidden_paths: [
+              'src/doctor/projectState.ts',
               'src/cli/main.ts',
               'src/config/configReader.ts',
-              'src/doctor/projectState.ts',
+            ],
+            forbidden_paths: [
+              'docs/features/002-configuration-model/state.md',
+              'docs/compassrose/PROJECT_STATE.md',
+              'docs/compassrose/CONFIG.md',
             ],
           },
           constraints: [
             'Keep the unblock task narrowly focused on restoring progress after implementation_failed.',
             'Do not broaden the feature scope.',
           ],
-          development_policy: { mode: 'documentation_first' },
+          development_policy: { mode: 'test_guided' },
           quality_gates: { before_review: ['git diff --check'] },
           acceptance_criteria: [
             'The failed implementation anchor is explicit and usable for restoration.',
             'The unblock task keeps the feature narrow and reviewable.',
           ],
-          expected_deliverables: ['documentation'],
+          expected_deliverables: ['code', 'tests'],
         }),
         () => approvedReview('F002-T05-U1', 'prototype can recover from implementation_failed via unblock tasks', 'e2e mock review approved the recovery unblock task'),
         () => approvedReview('F002-T04', 'prototype resumes the original task after implementation_failed recovery', 'e2e mock review approved the resumed implementation'),
       ];
     case 'unblock-doc-code-mismatch':
       return [
-        () => diagnosticPayload('002-configuration-model', 'plan_unblock_task', 'Plan an unblock task to repair the documentation-first/code-deliverable mismatch.', 'task_interface_gap', 'unblock-deliverable-mismatch', 'agent', ['The unblock task contract drifted on deliverable policy.'], 'apply_in_unblock_task', 'Repair the planner/task contract mismatch through an unblock task.', ['src/contracts/planner/unblock-task-planning-prompt.md']),
+        () => diagnosticPayload('002-configuration-model', 'plan_unblock_task', 'Plan an unblock task to repair the source-only/documentation-deliverable mismatch.', 'task_interface_gap', 'unblock-deliverable-mismatch', 'agent', ['The unblock task contract drifted on deliverable policy.'], 'apply_in_unblock_task', 'Repair the planner/task contract mismatch through an unblock task.', ['src/contracts/planner/unblock-task-planning-prompt.md']),
         () => plannerTask({
           task_id: 'F002-T05-U2',
           feature_id: '002-configuration-model',
-          title: 'Repair the unblock task interface for a documentation-first recovery',
-          objective: 'Demonstrate that a documentation-first unblock task cannot also deliver code.',
+          title: 'Repair the unblock task interface for a source-only recovery',
+          objective: 'Demonstrate that a source-only unblock task cannot also deliver documentation.',
           first_executable_step: 'Read src/contracts/planner/unblock-task-planning-prompt.md and confirm the deliverable policy.',
           minimum_progress_evidence: [
-            'The unblock planning contract forbids code deliverables under documentation_first.',
+            'The unblock planning contract forbids documentation deliverables for unblock tasks.',
             'The prototype rejects the invalid unblock task before implementation starts.',
           ],
           trace: {
             roadmap_objective: 'Deterministic Orchestration',
-            feature_goal: 'Keep unblock planning consistent with task deliverables.',
-            state_gap: 'The unblock planning contract allowed a documentation-first task to drift into code deliverables.',
+            feature_goal: 'Keep unblock planning consistent with source-only task deliverables.',
+            state_gap: 'The unblock planning contract allowed a documentation deliverable to drift into unblock planning.',
           },
           context: {
-            summary: 'The unblock task should remain documentation-only when it is planned as documentation_first.',
+            summary: 'The unblock task should remain source-only and not carry documentation deliverables.',
             relevant_paths: [
               'src/contracts/planner/unblock-task-planning-prompt.md',
               'src/contracts/planner/output.md',
@@ -1015,14 +1017,14 @@ function sequenceForScenario(scenario) {
             ],
           },
           constraints: [
-            'Keep the unblock task documentation-only when it is declared documentation_first.',
-            'Do not add code or tests to a documentation-first unblock task.',
+            'Keep the unblock task source-only.',
+            'Do not add documentation deliverables to unblock planning.',
           ],
-          development_policy: { mode: 'documentation_first' },
+          development_policy: { mode: 'test_guided' },
           quality_gates: { before_review: ['git diff --check'] },
           acceptance_criteria: [
-            'The unblock task contract and planner prompt agree on deliverable policy.',
-            'The unblock task does not mix documentation-first planning with code deliverables.',
+            'The unblock task contract and planner prompt agree on source-only deliverables.',
+            'The unblock task does not mix unblock planning with documentation deliverables.',
           ],
           expected_deliverables: ['documentation', 'code'],
         }),
@@ -1124,7 +1126,7 @@ function sequenceForScenario(scenario) {
     case 'state-correction-missing-active-task':
       return [
         () => diagnosticPayload('002-configuration-model', 'correct_state', 'Repair the malformed feature state first because active_task is missing.', 'state_corruption', 'missing-active-task', 'auto', ['task_ready state is missing active_task.'], 'none', 'The state-correction contract is sufficient for this repair.', ['src/contracts/task/state-correction-task.md']),
-        (prompt) => approvedReview(extractTaskIdFromPrompt(prompt), 'prototype approved the state-correction task and restored the active task anchor', 'e2e mock review approved the state correction task'),
+        (prompt) => approvedReview(extractTaskIdFromPrompt(prompt), 'prototype approved the resumed task after direct state repair', 'e2e mock review approved the resumed task after state correction'),
         () => approvedReview('F002-T04', 'prototype resumed the original task after state correction', 'e2e mock review approved the restored original task'),
       ];
     case 'implementation-missing-notes':

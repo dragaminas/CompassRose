@@ -24,6 +24,9 @@
       ],
       "properties": {
         "task_id": { "type": "string" },
+        "previous_task_id": {
+          "type": ["string", "null"]
+        },
         "feature_id": { "type": "string" },
         "title": { "type": "string" },
         "objective": { "type": "string" },
