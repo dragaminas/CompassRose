@@ -74,19 +74,19 @@ grep -q 'F002-T04-C3' docs/features/002-configuration-model/tasks/F002-T04-C3-U1
 
 ## Blocker Context
 
-- kind: state_corruption
-- signature: state-corruption-quality-failed-a-bounded-unblock-task-can-repair-the-stale-recovery-interface-p
+- kind: task_interface_gap
+- signature: stale-recovery-interface-F002-T04-C3-implementation_failed-to-task_ready
 - recoverability: agent
-- observed_state: lifecycle=quality_failed; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
-- evidence: A bounded unblock task can repair the stale recovery interface, preserve the current `F002-T04-C3` anchor, and align the task/state/project narratives. A plain `correct_state` pass would not fix the interface mismatch, and no human architectural decision is required yet.
+- observed_state: lifecycle=implementation_failed; active_task=F002-T04-C3; active_correction_task=none; active_unblock_task=none
+- evidence: A bounded unblock task can repair the stale recovery interface, preserve the current `F002-T04-C3` anchor with its no-diff / missing Implementation Notes failure evidence, and align the task/state/project narratives on the `implementation_failed` -> `task_ready` recovery path. A plain `correct_state` pass would not fix the interface mismatch, and no human architectural decision is required yet.
 - evidence: - kind: implementation_failure
 - evidence: - signature: implementation-failure-F002-T04-C3
 - evidence: - recoverability: agent
-- evidence: lifecycle=quality_failed
+- evidence: lifecycle=implementation_failed
 
 ## Restoration Target
 
-- lifecycle_state: quality_failed
+- lifecycle_state: task_ready
 - active_task: `F002-T04-C3-U1-C1-U1`
 - active_correction_task: `none`
 - active_unblock_task: `none`

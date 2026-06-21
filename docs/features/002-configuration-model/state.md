@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-correction_pending
+implementation_failed
 
 ## Source Request
 
@@ -11,12 +11,12 @@ correction_pending
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T04-C3-U1-C1
-- active_correction_task: F002-T04-C3-U1-C1-C1
+- active_task: F002-T04-C3-U1-C1-U1
+- active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: changes_required
+- last_implementation_result: failed
+- last_quality_gate_result: unknown
+- last_review_result: not_run
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -58,18 +58,19 @@ The latest recovery work uncovered a stale recovery interface around `F002-T04-C
 
 ## Blocked By
 
-- - kind: implementation_failure
-- - signature: implementation-failure-F002-T04-C3
+- - kind: task_interface_gap
+- - signature: stale-recovery-interface-F002-T04-C3-implementation_failed-to-task_ready
 - - recoverability: agent
 - - observed_state: lifecycle=implementation_failed; active_task=F002-T04-C3; active_correction_task=none; active_unblock_task=none
-- - evidence: The implementation attempt for F002-T04-C3 produced no diff and did not include the required Implementation Notes justification.
+- - evidence: A bounded unblock task can repair the stale recovery interface, preserve the current `F002-T04-C3` anchor with its no-diff / missing Implementation Notes failure evidence, and align the task/state/project narratives on the `implementation_failed` -> `task_ready` recovery path. A plain `correct_state` pass would not fix the interface mismatch, and no human architectural decision is required yet.
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `task_ready`
+- active_task: `F002-T04-C3-U1-C1-U1`
+- active_correction_task: `none`
+- active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -82,4 +83,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Execute correction task `F002-T04-C3-U1-C1-C1` next.
+Plan a bounded unblock task for the failed implementation of `F002-T04-C3-U1-C1-U1` and restore task readiness before continuing.
