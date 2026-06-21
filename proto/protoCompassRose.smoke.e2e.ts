@@ -276,7 +276,7 @@ let payload;
 if (kind === 'diagnostic') {
   payload = {
     feature_id: '002-configuration-model',
-    diagnosis_summary: 'Smoke test diagnostic: the recovery path is deterministic and should continue through the bounded unblock task.',
+    diagnosis_summary: 'Smoke test diagnostic: the recovery path is deterministic and should continue through a bounded doctor recovery task.',
     blocker: {
       kind: 'task_interface_gap',
       signature: 'smoke-diagnostic-002-configuration-model',
@@ -286,11 +286,11 @@ if (kind === 'diagnostic') {
         'The runtime should not crash when the diagnostic path is invoked.',
       ],
     },
-    next_step: 'plan_unblock_task',
-    next_step_reason: 'The smoke scenario is recoverable and should continue through a bounded unblock task.',
+    next_step: 'plan_doctor_recovery',
+    next_step_reason: 'The smoke scenario is recoverable and should continue through a bounded doctor recovery task.',
       interface_response: {
-        mode: 'apply_in_unblock_task',
-        summary: 'Tighten the recovery interface inside a bounded unblock task.',
+        mode: 'apply_in_doctor_recovery',
+        summary: 'Tighten the recovery interface inside a bounded doctor recovery task.',
         target_paths: [
           'src/doctor/projectState.ts',
           'src/cli/main.ts',
@@ -302,12 +302,12 @@ if (kind === 'diagnostic') {
       task: {
         task_id: 'F002-T04-U1',
         feature_id: '002-configuration-model',
-        title: 'Smoke recovery unblock',
+        title: 'Smoke doctor recovery',
         objective: 'Keep the recovery path deterministic and restore the active task after the smoke correction pass.',
         first_executable_step: 'Update src/doctor/projectState.ts so the smoke can observe a visible diff.',
         minimum_progress_evidence: [
           'The prototype writes a reviewable diff for the recovery path.',
-          'The runtime can continue from unblock planning to implementation.',
+          'The runtime can continue from doctor recovery planning to implementation.',
         ],
         trace: {
         roadmap_objective: 'Prototype control flow',
@@ -315,7 +315,7 @@ if (kind === 'diagnostic') {
         state_gap: 'The recovery path should be exercised end to end.',
       },
         context: {
-          summary: 'Minimal unblock task used by the smoke harness.',
+          summary: 'Minimal doctor recovery task used by the smoke harness.',
           relevant_paths: [
             'src/doctor/projectState.ts',
             'src/cli/main.ts',
@@ -346,7 +346,7 @@ if (kind === 'diagnostic') {
           before_review: ['node -e "process.exit(0)"'],
         },
         acceptance_criteria: [
-          'The prototype can continue deterministically after the unblock task.',
+          'The prototype can continue deterministically after the doctor recovery task.',
           'The smoke harness observes a visible repository change.',
         ],
         expected_deliverables: ['code', 'tests'],
@@ -447,6 +447,10 @@ function detectPromptKind(prompt) {
     return 'planner';
   }
 
+  if (prompt.includes('Act as the CompassRose Doctor.')) {
+    return 'doctor';
+  }
+
   if (prompt.includes('Act as the CompassRose Reviewer.')) {
     return 'reviewer';
   }
@@ -507,6 +511,10 @@ process.exit(0);
 function detectPromptKind(prompt) {
   if (prompt.includes('Act as the CompassRose Implementer.')) {
     return 'implementer';
+  }
+
+  if (prompt.includes('Act as the CompassRose Doctor.')) {
+    return 'doctor';
   }
 
   return 'unknown';

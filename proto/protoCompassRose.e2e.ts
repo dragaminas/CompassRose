@@ -272,12 +272,12 @@ function buildScenarioChecks(input: {
   if (scenario === 'recoverable-review-blocked') {
     const resumedReview = runSummary.steps?.some((step) => step.decision?.kind === 'review_task' && step.decision?.task_id === 'F002-T04') === true;
     return [
-      { name: 'codex was called enough times to diagnose, analyze, unblock, and resume the blocked task', ok: codexCalls >= 6 },
-      { name: 'opencode was called twice for the original task and the unblock task', ok: opencodeCalls === 2 },
+      { name: 'codex was called enough times to diagnose, analyze, doctor, and resume the blocked task', ok: codexCalls >= 6 },
+      { name: 'opencode was called once for the original task before doctor recovery resumed review', ok: opencodeCalls === 1 },
       { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
-      { name: 'recoverable blocker created an unblock task', ok: existsSync(unblockTaskPath) },
+      { name: 'recoverable blocker created a doctor recovery task', ok: existsSync(unblockTaskPath) },
       { name: 'blocked review recorded a blocker profile', ok: existsSync(blockerProfilePath) },
-      { name: 'the original task was reviewed again after unblock recovery', ok: resumedReview },
+      { name: 'the original task was reviewed again after doctor recovery', ok: resumedReview },
       { name: 'opencode touched the repo', ok: markerExists },
     ];
   }
@@ -288,7 +288,7 @@ function buildScenarioChecks(input: {
       { name: 'opencode was called exactly once', ok: opencodeCalls === 1 },
       { name: 'run stopped with a blocked status', ok: runSummary.status === 'stopped' && runSummary.exit_code === 2 },
       { name: 'terminal blocker recorded a blocker profile', ok: existsSync(blockerProfilePath) },
-      { name: 'no unblock task was created', ok: !existsSync(unblockTaskPath) },
+      { name: 'no doctor recovery task was created', ok: !existsSync(unblockTaskPath) },
       { name: 'opencode touched the repo', ok: markerExists },
     ];
   }
@@ -350,19 +350,11 @@ function buildScenarioChecks(input: {
   }
 
   if (scenario === 'unblock-doc-code-mismatch') {
-    const diagnostic = readJsonIfExists(diagnosticPath);
-    const mismatchTaskPath = join(protoTasksDirectory, 'F002-T05-U2.json');
-    const failedDueToPolicyMismatch =
-      runSummary.status === 'failed' &&
-      typeof runSummary.error === 'string' &&
-      runSummary.error.includes('must not deliver documentation');
-
     return [
-      { name: 'codex was called enough times to diagnose the mismatch and reach the invalid unblock task', ok: codexCalls >= 2 },
-      { name: 'opencode was not called because planning failed before implementation', ok: opencodeCalls === 0 },
-      { name: 'run failed with a policy mismatch', ok: failedDueToPolicyMismatch },
-      { name: 'a diagnostic artifact was recorded before the failed unblock planning step', ok: diagnostic !== null },
-      { name: 'the invalid unblock task was not materialized', ok: !existsSync(mismatchTaskPath) },
+      { name: 'codex was called enough times to diagnose, plan, and execute doctor recovery', ok: codexCalls >= 3 },
+      { name: 'opencode was called once when deterministic execution resumed after doctor recovery', ok: opencodeCalls === 1 },
+      { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
+      { name: 'doctor recovery task was materialized', ok: existsSync(join(protoTasksDirectory, 'F002-T05-U2.json')) },
     ];
   }
 
@@ -372,10 +364,10 @@ function buildScenarioChecks(input: {
     const resumedImplementation = runSummary.steps?.some((step) => step.decision?.kind === 'implement_task' && step.decision?.task_id === 'F002-T04') === true;
 
     return [
-      { name: 'codex was called enough times to diagnose implementation_failed, plan recovery, and review the resumed task', ok: codexCalls >= 4 },
-      { name: 'opencode was called twice for the recovery unblock and resumed implementation', ok: opencodeCalls === 2 },
+      { name: 'codex was called enough times to diagnose implementation_failed, plan doctor recovery, execute it, and review the resumed task', ok: codexCalls >= 4 },
+      { name: 'opencode was called once for the resumed implementation after doctor recovery', ok: opencodeCalls === 1 },
       { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
-      { name: 'implementation_failed recovery created an unblock task', ok: existsSync(implementationFailedUnblockTaskPath) },
+      { name: 'implementation_failed recovery created a doctor recovery task', ok: existsSync(implementationFailedUnblockTaskPath) },
       { name: 'implementation_failed recovery recorded a diagnostic artifact', ok: diagnostic !== null },
       { name: 'the original implementation task was resumed after recovery', ok: resumedImplementation },
       { name: 'opencode touched the repo', ok: markerExists },
@@ -455,8 +447,8 @@ function buildScenarioChecks(input: {
 
   if (scenario === 'unblock') {
     return [
-      { name: 'codex was called enough times to diagnose, plan, and review the unblock recovery', ok: codexCalls >= 4 },
-      { name: 'opencode was called twice for the unblock task and restored task', ok: opencodeCalls === 2 },
+      { name: 'codex was called enough times to diagnose, plan, execute doctor recovery, and review the restored task', ok: codexCalls >= 4 },
+      { name: 'opencode was called once for the restored task after doctor recovery', ok: opencodeCalls === 1 },
       { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
       { name: 'opencode touched the repo', ok: markerExists },
     ];
@@ -493,7 +485,7 @@ function expectedProtoExitCodesForScenario(scenario: string): readonly number[] 
   }
 
   if (scenario === 'unblock-doc-code-mismatch') {
-    return [1];
+    return [0];
   }
 
   if (scenario === 'implementation-missing-notes') {
@@ -763,10 +755,10 @@ const outputPath = readArgValue(args, '-o');
 const markerPath = path.join(process.cwd(), 'proto', markerFileNameForScenario(scenario));
 const implementerCountFile = countFile ? countFile + '.implementer' : null;
 
-if (kind === 'implementer') {
+if (kind === 'implementer' || kind === 'doctor') {
   const implementerCount = readCount(implementerCountFile) + 1;
   writeCount(implementerCountFile, implementerCount);
-  appendLog(logFile, \`implementer: \${args.join(' ')}\`);
+  appendLog(logFile, \`\${kind}: \${args.join(' ')}\`);
   fs.mkdirSync(path.dirname(markerPath), { recursive: true });
   fs.writeFileSync(markerPath, \`codex e2e touched this file on implementer call \${implementerCount}\\n\`, 'utf8');
   if (scenario === 'implementation-notes') {
@@ -799,16 +791,16 @@ function sequenceForScenario(scenario) {
   switch (scenario) {
     case 'unblock':
       return [
-        () => diagnosticPayload('002-configuration-model', 'plan_unblock_task', 'Recover the blocked feature through a bounded unblock task.', 'state_corruption', 'blocked-feature', 'agent', ['Blocked feature state recorded a restoration target.'], 'apply_in_unblock_task', 'Keep the unblock task focused on restoring task readiness.', ['src/doctor/projectState.ts', 'src/cli/main.ts']),
+        () => diagnosticPayload('002-configuration-model', 'plan_doctor_recovery', 'Recover the blocked feature through a bounded doctor recovery task.', 'state_corruption', 'blocked-feature', 'agent', ['Blocked feature state recorded a restoration target.'], 'apply_in_doctor_recovery', 'Keep the doctor recovery task focused on restoring task readiness.', ['src/doctor/projectState.ts', 'src/cli/main.ts']),
         () => plannerTask({
           task_id: 'F002-T05-U1',
           feature_id: '002-configuration-model',
           title: 'Restore progress after a recoverable blocker',
-          objective: 'Use the blocked-from target in feature state so the feature can resume from task readiness.',
+          objective: 'Use the blocked-from target in feature state so the feature can resume from task readiness through doctor recovery.',
           first_executable_step: 'Open src/doctor/projectState.ts and tighten the blocked-from recovery path.',
           minimum_progress_evidence: [
             'src/doctor/projectState.ts records the recovery anchor for the blocked feature.',
-            'The unblock task restores the feature to task_ready.',
+            'The doctor recovery task restores the feature to task_ready.',
           ],
           trace: {
             roadmap_objective: 'Deterministic Orchestration',
@@ -839,41 +831,40 @@ function sequenceForScenario(scenario) {
             ],
           },
           constraints: [
-            'Keep the unblock task narrowly focused on restoring progress from the blocked-from target.',
+            'Keep the doctor recovery task narrowly focused on restoring progress from the blocked-from target.',
             'Do not broaden the feature scope.',
           ],
           development_policy: { mode: 'test_guided' },
           quality_gates: { before_review: ['git diff --check'] },
           acceptance_criteria: [
             'The blocked-from target is explicit and usable for restoration.',
-            'The unblock task keeps the feature narrow and reviewable.',
+            'The doctor recovery task keeps the feature narrow and bounded.',
           ],
           expected_deliverables: ['code', 'tests'],
         }),
-        () => approvedReview('F002-T05-U1', 'prototype can plan and execute unblock tasks', 'e2e mock review approved the unblock task'),
-        () => approvedReview('F002-T05', 'prototype resumes the restored task after unblock recovery', 'e2e mock review approved the restored task after unblock recovery'),
+        () => approvedReview('F002-T05', 'prototype resumes the restored task after doctor recovery', 'e2e mock review approved the restored task after doctor recovery'),
       ];
     case 'recoverable-review-blocked':
       return [
-        () => blockedReview('F002-T04', 'recoverable blocker: the task needs an unblock pass before review can proceed', 'The blocker is recoverable by planning a focused unblock task.', 'passed'),
-        () => taskInterfaceAnalysis('F002-T04', 'blocked', 'A focused unblock task should tighten the interface before the task continues.', 'both', true, ['The current task interface leaves too much room for interpretation once a review reports a blocker.'], {
-          first_executable_step: 'Make the unblock task opening step a single concrete file or command.',
-          minimum_progress_evidence: ['The unblock task shows a narrower first executable step.'],
-          context_additions: ['Call out the exact blocker signature that the unblock task must address.'],
-          scope_adjustments: ['Keep the unblock task focused on the blocker and the task interface only.'],
-          acceptance_criteria_adjustments: ['Require the unblock task to state the restoration target explicitly.'],
+        () => blockedReview('F002-T04', 'recoverable blocker: the task needs a doctor recovery pass before review can proceed', 'The blocker is recoverable by planning a focused doctor recovery task.', 'passed'),
+        () => taskInterfaceAnalysis('F002-T04', 'blocked', 'A focused doctor recovery task should tighten the interface before the task continues.', 'both', true, ['The current task interface leaves too much room for interpretation once a review reports a blocker.'], {
+          first_executable_step: 'Make the doctor recovery opening step a single concrete file or command.',
+          minimum_progress_evidence: ['The doctor recovery task shows a narrower first executable step.'],
+          context_additions: ['Call out the exact blocker signature that the doctor recovery task must address.'],
+          scope_adjustments: ['Keep the doctor recovery task focused on the blocker and the task interface only.'],
+          acceptance_criteria_adjustments: ['Require the doctor recovery task to state the restoration target explicitly.'],
           quality_gate_adjustments: ['Keep the quick diff check as the only gate.'],
         }, ['Review-blocked recovery should record whether the task interface can be tightened for future runs.']),
-        () => diagnosticPayload('002-configuration-model', 'plan_unblock_task', 'Plan a focused unblock task before retrying the blocked review target.', 'task_interface_gap', 'recoverable-review-blocker', 'agent', ['The blocked review can be recovered through a narrower unblock task.'], 'apply_in_unblock_task', 'Use the unblock task to tighten the interface and restore review_pending.', ['src/doctor/projectState.ts', 'src/cli/main.ts']),
+        () => diagnosticPayload('002-configuration-model', 'plan_doctor_recovery', 'Plan a focused doctor recovery task before retrying the blocked review target.', 'task_interface_gap', 'recoverable-review-blocker', 'agent', ['The blocked review can be recovered through a narrower doctor recovery task.'], 'apply_in_doctor_recovery', 'Use the doctor recovery task to tighten the interface and restore review_pending.', ['src/doctor/projectState.ts', 'src/cli/main.ts']),
         () => plannerTask({
           task_id: 'F002-T04-U1',
           feature_id: '002-configuration-model',
           title: 'Restore progress after a blocked review',
-          objective: 'Use the blocked-from target in feature state so the feature can resume after a recoverable blocked review.',
+          objective: 'Use the blocked-from target in feature state so the feature can resume after a recoverable blocked review through doctor recovery.',
           first_executable_step: 'Open src/doctor/projectState.ts and tighten the review-blocked recovery path.',
           minimum_progress_evidence: [
             'src/doctor/projectState.ts records the recovery anchor for the blocked review.',
-            'The unblock task restores the feature to review_pending after review blockage.',
+            'The doctor recovery task restores the feature to review_pending after review blockage.',
           ],
           trace: {
             roadmap_objective: 'Deterministic Orchestration',
@@ -904,32 +895,31 @@ function sequenceForScenario(scenario) {
             ],
           },
           constraints: [
-            'Keep the unblock task narrowly focused on restoring progress after a blocked review.',
+            'Keep the doctor recovery task narrowly focused on restoring progress after a blocked review.',
             'Do not broaden the feature scope.',
           ],
           development_policy: { mode: 'test_guided' },
           quality_gates: { before_review: ['git diff --check'] },
           acceptance_criteria: [
             'The blocked-from target is explicit and usable for restoration.',
-            'The unblock task keeps the feature narrow and reviewable.',
+            'The doctor recovery task keeps the feature narrow and bounded.',
           ],
           expected_deliverables: ['code', 'tests'],
         }),
-        () => approvedReview('F002-T04-U1', 'prototype can recover from a blocked review via unblock tasks', 'e2e mock review approved the unblock task after a blocked review'),
-        () => approvedReview('F002-T04', 'prototype resumes the original task after unblock recovery', 'e2e mock review approved the restored original task'),
+        () => approvedReview('F002-T04', 'prototype resumes the original task after doctor recovery', 'e2e mock review approved the restored original task'),
       ];
     case 'implementation-failed-recovery':
       return [
-        () => diagnosticPayload('002-configuration-model', 'plan_unblock_task', 'Recover the failed implementation through a bounded unblock task before retrying F002-T04.', 'implementation_failure', 'implementation-failed-f002-t04', 'agent', ['The implementation attempt for F002-T04 failed and needs bounded recovery.'], 'apply_in_unblock_task', 'Use the unblock task to restore task_ready for F002-T04.', ['src/doctor/projectState.ts', 'src/cli/main.ts']),
+        () => diagnosticPayload('002-configuration-model', 'plan_doctor_recovery', 'Recover the failed implementation through a bounded doctor recovery task before retrying F002-T04.', 'implementation_failure', 'implementation-failed-f002-t04', 'agent', ['The implementation attempt for F002-T04 failed and needs bounded recovery.'], 'apply_in_doctor_recovery', 'Use the doctor recovery task to restore task_ready for F002-T04.', ['src/doctor/projectState.ts', 'src/cli/main.ts']),
         () => plannerTask({
           task_id: 'F002-T05-U1',
           feature_id: '002-configuration-model',
           title: 'Recover the failed implementation for the configuration loader',
-          objective: 'Create a bounded unblock task that restores task readiness after the failed implementation of F002-T04.',
+          objective: 'Create a bounded doctor recovery task that restores task readiness after the failed implementation of F002-T04.',
           first_executable_step: 'Open src/doctor/projectState.ts and tighten the implementation-failed recovery path.',
           minimum_progress_evidence: [
             'src/doctor/projectState.ts records the recovery anchor for the failed implementation.',
-            'The unblock task restores the feature to task_ready for F002-T04.',
+            'The doctor recovery task restores the feature to task_ready for F002-T04.',
           ],
           trace: {
             roadmap_objective: 'Deterministic Orchestration',
@@ -960,53 +950,52 @@ function sequenceForScenario(scenario) {
             ],
           },
           constraints: [
-            'Keep the unblock task narrowly focused on restoring progress after implementation_failed.',
+            'Keep the doctor recovery task narrowly focused on restoring progress after implementation_failed.',
             'Do not broaden the feature scope.',
           ],
           development_policy: { mode: 'test_guided' },
           quality_gates: { before_review: ['git diff --check'] },
           acceptance_criteria: [
             'The failed implementation anchor is explicit and usable for restoration.',
-            'The unblock task keeps the feature narrow and reviewable.',
+            'The doctor recovery task keeps the feature narrow and bounded.',
           ],
           expected_deliverables: ['code', 'tests'],
         }),
-        () => approvedReview('F002-T05-U1', 'prototype can recover from implementation_failed via unblock tasks', 'e2e mock review approved the recovery unblock task'),
         () => approvedReview('F002-T04', 'prototype resumes the original task after implementation_failed recovery', 'e2e mock review approved the resumed implementation'),
       ];
     case 'unblock-doc-code-mismatch':
       return [
-        () => diagnosticPayload('002-configuration-model', 'plan_unblock_task', 'Plan an unblock task to repair the source-only/documentation-deliverable mismatch.', 'task_interface_gap', 'unblock-deliverable-mismatch', 'agent', ['The unblock task contract drifted on deliverable policy.'], 'apply_in_unblock_task', 'Repair the planner/task contract mismatch through an unblock task.', ['src/contracts/planner/unblock-task-planning-prompt.md']),
+        () => diagnosticPayload('002-configuration-model', 'plan_doctor_recovery', 'Plan a doctor recovery task to repair the mixed documentation/code deliverable mismatch.', 'task_interface_gap', 'doctor-deliverable-mismatch', 'agent', ['The doctor recovery contract now permits documentation when the recovery needs it.'], 'apply_in_doctor_recovery', 'Repair the planner/task contract mismatch through doctor recovery.', ['src/contracts/planner/doctor-recovery-planning-prompt.md']),
         () => plannerTask({
           task_id: 'F002-T05-U2',
           feature_id: '002-configuration-model',
-          title: 'Repair the unblock task interface for a source-only recovery',
-          objective: 'Demonstrate that a source-only unblock task cannot also deliver documentation.',
-          first_executable_step: 'Read src/contracts/planner/unblock-task-planning-prompt.md and confirm the deliverable policy.',
+          title: 'Repair the doctor recovery interface for mixed deliverables',
+          objective: 'Demonstrate that doctor recovery may carry documentation together with executable work when the recovery requires both.',
+          first_executable_step: 'Read src/contracts/planner/doctor-recovery-planning-prompt.md and confirm the deliverable policy.',
           minimum_progress_evidence: [
-            'The unblock planning contract forbids documentation deliverables for unblock tasks.',
-            'The prototype rejects the invalid unblock task before implementation starts.',
+            'The doctor recovery planning contract allows mixed documentation and executable deliverables when recovery requires them.',
+            'The prototype accepts the doctor recovery task and re-enters the deterministic loop.',
           ],
           trace: {
             roadmap_objective: 'Deterministic Orchestration',
-            feature_goal: 'Keep unblock planning consistent with source-only task deliverables.',
-            state_gap: 'The unblock planning contract allowed a documentation deliverable to drift into unblock planning.',
+            feature_goal: 'Keep doctor recovery planning consistent with its broader recovery surface.',
+            state_gap: 'The recovery planning contract must allow documentation together with executable work when the recovery needs both.',
           },
           context: {
-            summary: 'The unblock task should remain source-only and not carry documentation deliverables.',
+            summary: 'The doctor recovery task may carry documentation and code together when that is the smallest safe recovery.',
             relevant_paths: [
-              'src/contracts/planner/unblock-task-planning-prompt.md',
+              'src/contracts/planner/doctor-recovery-planning-prompt.md',
               'src/contracts/planner/output.md',
-              'src/contracts/task/unblock-task.md',
+              'src/contracts/task/doctor-recovery-task.md',
               'src/contracts/runtime/operation-loop.md',
             ],
-            relevant_modules: ['Planner output contract', 'Unblock task contract', 'Runtime operation loop'],
+            relevant_modules: ['Planner output contract', 'Doctor recovery task contract', 'Runtime operation loop'],
           },
           scope: {
             allowed_paths: [
-              'src/contracts/planner/unblock-task-planning-prompt.md',
+              'src/contracts/planner/doctor-recovery-planning-prompt.md',
               'src/contracts/planner/output.md',
-              'src/contracts/task/unblock-task.md',
+              'src/contracts/task/doctor-recovery-task.md',
               'src/contracts/runtime/operation-loop.md',
               'proto/unblock-doc-code-mismatch.txt',
             ],
@@ -1017,14 +1006,14 @@ function sequenceForScenario(scenario) {
             ],
           },
           constraints: [
-            'Keep the unblock task source-only.',
-            'Do not add documentation deliverables to unblock planning.',
+            'Keep the doctor recovery task bounded to the deliverable-policy mismatch.',
+            'Allow documentation only because this recovery explicitly needs contract and runtime changes together.',
           ],
           development_policy: { mode: 'test_guided' },
           quality_gates: { before_review: ['git diff --check'] },
           acceptance_criteria: [
-            'The unblock task contract and planner prompt agree on source-only deliverables.',
-            'The unblock task does not mix unblock planning with documentation deliverables.',
+            'The doctor recovery contract and planner prompt agree on mixed recovery deliverables.',
+            'The doctor recovery task does not pretend to be source-only when documentation is part of the bounded recovery.',
           ],
           expected_deliverables: ['documentation', 'code'],
         }),
@@ -1387,6 +1376,10 @@ function detectPromptKind(prompt) {
 
   if (prompt.includes('Act as the CompassRose Implementer.')) {
     return 'implementer';
+  }
+
+  if (prompt.includes('Act as the CompassRose Doctor.')) {
+    return 'doctor';
   }
 
   return 'unknown';

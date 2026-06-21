@@ -30,11 +30,11 @@ function runProtoScenario(
 }
 
 describe('proto blocker flows', () => {
-  test('continues from a recoverable blocked review into unblock planning', () => {
+  test('continues from a recoverable blocked review into doctor recovery planning', () => {
     const result = runProtoScenario('recoverable-review-blocked');
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('PASS: recoverable blocker created an unblock task');
+    expect(result.stdout).toContain('PASS: recoverable blocker created a doctor recovery task');
     expect(result.stdout).toContain('PASS: blocked review recorded a blocker profile');
     expect(result.stdout).toContain('PASS: run completed successfully');
     expect(result.stderr).not.toContain('FAIL:');
@@ -45,16 +45,16 @@ describe('proto blocker flows', () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('PASS: terminal blocker recorded a blocker profile');
-    expect(result.stdout).toContain('PASS: no unblock task was created');
+    expect(result.stdout).toContain('PASS: no doctor recovery task was created');
     expect(result.stdout).toContain('PASS: run stopped with a blocked status');
     expect(result.stderr).not.toContain('FAIL:');
   });
 
-  test('recovers from implementation_failed through unblock planning and resumes the original task', () => {
+  test('recovers from implementation_failed through doctor recovery planning and resumes the original task', () => {
     const result = runProtoScenario('implementation-failed-recovery');
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('PASS: implementation_failed recovery created an unblock task');
+    expect(result.stdout).toContain('PASS: implementation_failed recovery created a doctor recovery task');
     expect(result.stdout).toContain('PASS: implementation_failed recovery recorded a diagnostic artifact');
     expect(result.stdout).toContain('PASS: the original implementation task was resumed after recovery');
     expect(result.stdout).toContain('PASS: run completed successfully');
@@ -137,12 +137,12 @@ describe('proto blocker flows', () => {
     expect(result.stderr).not.toContain('FAIL:');
   });
 
-  test('rejects documentation-first unblock tasks that try to deliver code', () => {
+  test('accepts mixed deliverables for bounded doctor recovery tasks when recovery needs them', () => {
     const result = runProtoScenario('unblock-doc-code-mismatch');
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('PASS: run failed with a policy mismatch');
-    expect(result.stdout).toContain('PASS: the invalid unblock task was not materialized');
+    expect(result.stdout).toContain('PASS: doctor recovery task was materialized');
+    expect(result.stdout).toContain('PASS: run completed successfully');
     expect(result.stderr).not.toContain('FAIL:');
   });
 

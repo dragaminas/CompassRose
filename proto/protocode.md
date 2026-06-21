@@ -19,7 +19,7 @@ It is intentionally outside `src/` because it is a proving ground for orchestrat
 2. Ask `codex exec` for the next executable step.
 3. If the step is `plan_feature`, formalize the feature docs, update feature and project state, and commit.
 4. If the step is `plan_task`, generate exactly one task, update feature and project state, and commit.
-5. If the step is `unblock_task`, generate exactly one unblock task with the planner-grade `codex` role and its configured default model, update feature and project state, and commit.
+5. If the step is `doctor_recovery_task`, generate exactly one doctor recovery task with the planner-grade `codex` role and its configured default model, update feature and project state, and commit.
 6. If the step is `implement_task`, ask the configured implementer CLI to execute the task using TDD.
 7. Run quality gates from the task.
 8. If the step is `review_task`, ask `codex exec` to review the current Git diff plus quality-gate and implementation artifacts.
@@ -47,7 +47,7 @@ Controlled stop:
 The prototype stops when any of these is true:
 
 - there is no non-completed feature left to implement
-- the selected feature is blocked and no unblock task can repair it
+- the selected feature is blocked and no doctor recovery task can repair it
 - the selected feature is malformed and no state correction task can repair it
 - implementation fails after the retry budget is exhausted or no recoverable progress exists
 - a required quality gate fails
@@ -59,7 +59,7 @@ The prototype stops when any of these is true:
 The prototype enforces TDD for implementation work:
 
 - task planning requires `development_policy.mode = test_guided` whenever the task delivers code
-- unblock tasks are source-only; if they deliver code or tests they must be planned as `test_guided`
+- doctor recovery tasks may touch documentation, state, source, and tests when the bounded recovery needs them; if they deliver code or tests they must be planned as `test_guided`
 - state and documentation drift are handled by `correct_state` before the implementer is involved
 - implementation prompts instruct the implementer to add or adjust the smallest failing test first, then make it pass
 - review prompts explicitly check that `test_guided` tasks include meaningful test changes
@@ -83,7 +83,7 @@ When a run stops because of a blocker or failure, the prototype also writes a re
 
 When the runtime can repair malformed feature state, it writes and applies a state correction artifact instead of stopping immediately.
 
-When the runtime can recover a blocker, it writes a blocker profile artifact and an unblock task instead of stopping immediately.
+When the runtime can recover a blocker, it writes a blocker profile artifact and a doctor recovery task instead of stopping immediately.
 
 When a review diagnoses implementation problems, the prototype also writes a task-interface analysis artifact that distinguishes:
 
@@ -149,7 +149,7 @@ The prototype now encodes that philosophy directly:
 
 - each run writes a structured run summary
 - each failed or blocked run writes a refinement artifact
-- each recoverable blocker writes a blocker profile artifact and an unblock task
+- each recoverable blocker writes a blocker profile artifact and a doctor recovery task
 - each problematic review writes a task-interface analysis artifact
 - refinement artifacts connect concrete execution friction back to canonical contracts and docs
 - blocker profile artifacts connect observed blocker signatures to learned recovery patterns
