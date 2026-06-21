@@ -1150,7 +1150,7 @@ class PrototypeCompassRose {
       prompt,
       this.contracts.schema('feature_plan'),
       [],
-      `feature-plan:${featureId}`,
+      `planner:feature-plan:${featureId}`,
     );
     writeText(feature.featurePath, ensureTrailingNewline(planned.feature_md));
     writeText(feature.architecturePath, ensureTrailingNewline(planned.architecture_md));
@@ -1210,7 +1210,7 @@ class PrototypeCompassRose {
       prompt,
       this.contracts.schema('planner_output'),
       [],
-      `task-plan:${featureId}`,
+      `planner:task-plan:${featureId}`,
     );
     const task = planned.task;
     validateTaskDeliverables(task, 'task');
@@ -1297,7 +1297,7 @@ class PrototypeCompassRose {
       prompt,
       this.contracts.schema('planner_output'),
       [],
-      `unblock-plan:${featureId}`,
+      `planner:unblock-plan:${featureId}`,
     );
     const task = planned.task;
     validateTaskDeliverables(task, 'unblock task');
@@ -1443,7 +1443,7 @@ class PrototypeCompassRose {
         prompt,
         this.contracts.schema('diagnostic_autocorrection'),
         [],
-        `diagnostic:${feature.id}`,
+        `recover:diagnostic:${feature.id}`,
       );
       return this.ensureDiagnosticAutocorrectionDecision(feature, reason, decision);
     } catch (error) {
@@ -1697,7 +1697,7 @@ class PrototypeCompassRose {
       prompt,
       this.contracts.schema('reviewer_output'),
       [tempDir],
-      `review:${taskId}`,
+      `reviewer:review:${taskId}`,
     );
     this.artifacts.writeJson(join('reviews', `${taskId}.json`), review);
     const taskInterfaceAnalysis = this.shouldAnalyzeTaskInterface(review)
@@ -1894,7 +1894,7 @@ class PrototypeCompassRose {
       prompt,
       this.contracts.schema('task_interface_analysis'),
       [tempDir],
-      `task-interface:${task.taskId}`,
+      `recover:task-interface:${task.taskId}`,
     );
     this.artifacts.writeJson(join('task-interface-analysis', `${task.taskId}.json`), analysis);
     this.artifacts.writeText(
@@ -1918,7 +1918,9 @@ class PrototypeCompassRose {
     const attempts: ImplementationAttempt[] = [];
     let retriedAfterPartialChanges = false;
     let finalAttempt: ImplementationAttempt | null = null;
-    const baseLabel = correction ? `correction:${task.taskId}` : `implement:${task.taskId}`;
+    const baseLabel = correction
+      ? `implementer:correction:${task.taskId}`
+      : `implementer:implement:${task.taskId}`;
 
     for (let attemptIndex = 1; attemptIndex <= 2; attemptIndex += 1) {
       if (attemptIndex === 2) {

@@ -18,7 +18,7 @@ describe('proto controlled stop', () => {
       expect(result.exitCode === 130 || result.signal === 'SIGINT').toBe(true);
       expect(`${result.stdout}${result.stderr}`).toContain('Controlled stop requested');
       expect(result.stdout).toContain('Next step: implement_task');
-      expect(result.stdout).toContain('[opencode:implement:F002-T04:attempt-1] start');
+      expect(result.stdout).toContain('[opencode:implementer:implement:F002-T04:attempt-1] start');
       expect(result.stderr).not.toContain('failed; recovery will continue through unblock planning');
 
       const runSummary = JSON.parse(readFileSync(join(workspace.cloneRoot, '.git', 'proto-compassrose', 'latest-run.json'), 'utf8')) as {
