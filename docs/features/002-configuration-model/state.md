@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_failed
+unblock_pending
 
 ## Source Request
 
@@ -13,10 +13,10 @@ implementation_failed
 - formalization: complete
 - active_task: F002-T04-C3-U1-C1-U1
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F002-T04-C3-U1-C1-U1-U1
 - last_implementation_result: failed
 - last_quality_gate_result: unknown
-- last_review_result: not_run
+- last_review_result: blocked
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -70,7 +70,6 @@ The latest recovery work uncovered a stale recovery interface around `F002-T04-C
 - active_task: `F002-T04-C3-U1-C1-U1`
 - active_correction_task: `none`
 - active_unblock_task: `none`
-- recoverability: agent
 
 ## Last Approved Change
 
@@ -83,4 +82,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Plan a bounded unblock task for the failed implementation of `F002-T04-C3-U1-C1-U1` and restore task readiness before continuing.
+Execute unblock task `F002-T04-C3-U1-C1-U1-U1` next.

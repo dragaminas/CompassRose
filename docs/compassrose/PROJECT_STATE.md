@@ -15,6 +15,7 @@ In progress
 - Implementation failure evidence: Implementation for F002-T04-C3 did not include the required Implementation Notes justification and produced no diff, so the correction task `F002-T04-C3-U1-C1-U1` preserves that evidence while repairing the recovery path.
 - Latest hardening evidence: the edit attempt reported `Could not find oldString in the file` and `No changes to apply: oldString and newString are identical`, which is a stale preimage problem rather than a fresh repository defect.
 - Implementation failure evidence: Implementation for F002-T04-C3-U1-C1-C1 did not include the required Implementation Notes justification.
+- Feature `002-configuration-model` now has a planned unblock task, `F002-T04-C3-U1-C1-U1-U1`, to resolve a recoverable blocker and restore `task_ready`.
 
 ## Implemented
 - `docs/compassrose/CONFIG.md` and `docs/compassrose/PROJECT_STATE.md` are present as the project-local operational documents.
@@ -26,7 +27,7 @@ In progress
 
 ## Pending
 
-- Recover the failed implementation attempt for `F002-T04-C3-U1-C1-C1` before continuing.
+- Execute unblock task `F002-T04-C3-U1-C1-U1-U1` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -45,4 +46,4 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, but implementation of `F002-T04-C3-U1-C1-C1` failed; plan a bounded recovery unblock task before continuing.
+The active feature is `002-configuration-model`, and its next valid action is to execute unblock task `F002-T04-C3-U1-C1-U1-U1` from the captured `task_ready` state.
