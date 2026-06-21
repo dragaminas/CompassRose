@@ -76,6 +76,8 @@ interface TaskImplementer {
 }
 
 const DEFAULT_CODEX_IMPLEMENTER_MODEL = 'qwen3.6-35b-a3b';
+const DEFAULT_AGENT_HEARTBEAT_MS = 15_000;
+const HEARTBEAT_RUNNER_PATH = join(dirname(fileURLToPath(import.meta.url)), 'protoHeartbeatRunner.mjs');
 
 export function resolveCodexPlannerModel(): string | null {
   return normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_PLANNER_MODEL)
@@ -87,6 +89,27 @@ export function resolveCodexImplementerModel(): string {
     normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL)
     ?? DEFAULT_CODEX_IMPLEMENTER_MODEL
   );
+}
+
+function runCommandWithHeartbeat(config: HeartbeatRunConfig): { status: number | null; signal: string | null; error: Error | undefined } {
+  const result = spawnSync(process.execPath, [HEARTBEAT_RUNNER_PATH], {
+    cwd: config.cwd,
+    env: {
+      ...process.env,
+      PROTO_COMPASSROSE_HEARTBEAT_CONFIG: JSON.stringify(config),
+    },
+    stdio: 'inherit',
+  });
+
+  return {
+    status: result.status,
+    signal: result.signal,
+    error: result.error,
+  };
+}
+
+function readTextIfExists(path: string): string {
+  return existsSync(path) ? readFileSync(path, 'utf8') : '';
 }
 
 interface FeatureRecord {
@@ -105,6 +128,19 @@ interface ProtoOptions {
   readonly commit: boolean;
   readonly cwd: string;
   readonly implementer: ImplementerTool;
+}
+
+interface HeartbeatRunConfig {
+  readonly agent: 'codex' | 'opencode';
+  readonly label: string;
+  readonly command: string;
+  readonly args: readonly string[];
+  readonly cwd: string;
+  readonly promptPath: string;
+  readonly promptMode: 'stdin' | 'arg';
+  readonly stdoutPath: string;
+  readonly stderrPath: string;
+  readonly heartbeatIntervalMs: number;
 }
 
 interface StepExecutionResult {
@@ -410,7 +446,11 @@ class CodexCli implements TaskImplementer {
     const tempDir = mkdtempSync(join(tmpdir(), 'proto-compassrose-codex-'));
     const schemaPath = join(tempDir, 'schema.json');
     const outputPath = join(tempDir, 'output.json');
+    const promptPath = join(tempDir, 'prompt.txt');
+    const stdoutPath = join(tempDir, 'stdout.log');
+    const stderrPath = join(tempDir, 'stderr.log');
     writeFileSync(schemaPath, `${JSON.stringify(schema, null, 2)}\n`, 'utf8');
+    writeFileSync(promptPath, prompt, 'utf8');
 
     const args = [
       'exec',
@@ -439,16 +479,23 @@ class CodexCli implements TaskImplementer {
 
     logAgentStart('codex', label, this.command);
     const startedAt = Date.now();
-    const result = spawnSync(this.command, args, {
+    const result = runCommandWithHeartbeat({
+      agent: 'codex',
+      label,
+      command: this.command,
+      args,
       cwd: this.repositoryRoot,
-      input: prompt,
-      encoding: 'utf8',
-      maxBuffer: 10 * 1024 * 1024,
+      promptPath,
+      promptMode: 'stdin',
+      stdoutPath,
+      stderrPath,
+      heartbeatIntervalMs: DEFAULT_AGENT_HEARTBEAT_MS,
     });
     const elapsedMs = Date.now() - startedAt;
-
-    logAgentStream('codex', label, 'stdout', result.stdout ?? '');
-    logAgentStream('codex', label, 'stderr', result.stderr ?? '');
+    const stdout = readTextIfExists(stdoutPath);
+    const stderr = readTextIfExists(stderrPath);
+    logAgentStream('codex', label, 'stdout', stdout);
+    logAgentStream('codex', label, 'stderr', stderr);
     logAgentEnd('codex', label, elapsedMs, result.status, result.error?.message ?? null);
 
     if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
@@ -460,13 +507,19 @@ class CodexCli implements TaskImplementer {
     }
 
     if (result.status !== 0) {
-      throw new Error(`codex exec failed:\n${result.stderr || result.stdout}`);
+      throw new Error(`codex exec failed:\n${stderr || stdout}`);
     }
 
     return JSON.parse(readFileSync(outputPath, 'utf8')) as T;
   }
 
   run(prompt: string, label = 'implementer'): CommandExecution {
+    const tempDir = mkdtempSync(join(tmpdir(), 'proto-compassrose-codex-'));
+    const promptPath = join(tempDir, 'prompt.txt');
+    const stdoutPath = join(tempDir, 'stdout.log');
+    const stderrPath = join(tempDir, 'stderr.log');
+    writeFileSync(promptPath, prompt, 'utf8');
+
     const args = [
       'exec',
       '--ephemeral',
@@ -484,17 +537,22 @@ class CodexCli implements TaskImplementer {
 
     logAgentStart('codex', label, this.command);
     const startedAt = Date.now();
-    const result = spawnSync(this.command, args, {
+    const result = runCommandWithHeartbeat({
+      agent: 'codex',
+      label,
+      command: this.command,
+      args,
       cwd: this.repositoryRoot,
-      input: prompt,
-      encoding: 'utf8',
-      maxBuffer: 20 * 1024 * 1024,
+      promptPath,
+      promptMode: 'stdin',
+      stdoutPath,
+      stderrPath,
+      heartbeatIntervalMs: DEFAULT_AGENT_HEARTBEAT_MS,
     });
     const elapsedMs = Date.now() - startedAt;
 
-    const stdout = result.stdout ?? '';
-    const errorText = result.error ? `\n${result.error.message}` : '';
-    const stderr = `${result.stderr ?? ''}${errorText}`;
+    const stdout = readTextIfExists(stdoutPath);
+    const stderr = readTextIfExists(stderrPath);
     logAgentStream('codex', label, 'stdout', stdout);
     logAgentStream('codex', label, 'stderr', stderr);
     logAgentEnd('codex', label, elapsedMs, result.status, result.error?.message ?? null);
@@ -526,26 +584,36 @@ class OpenCodeCli {
   ) {}
 
   run(prompt: string, label = 'implementer'): CommandExecution {
+    const tempDir = mkdtempSync(join(tmpdir(), 'proto-compassrose-opencode-'));
+    const promptPath = join(tempDir, 'prompt.txt');
+    const stdoutPath = join(tempDir, 'stdout.log');
+    const stderrPath = join(tempDir, 'stderr.log');
+    writeFileSync(promptPath, prompt, 'utf8');
+
     const args = ['run', '--dir', this.repositoryRoot, '--dangerously-skip-permissions'];
     const model = process.env.PROTO_COMPASSROSE_OPENCODE_MODEL;
     if (model) {
       args.push('-m', model);
     }
 
-    args.push(prompt);
-
     logAgentStart('opencode', label, this.command);
     const startedAt = Date.now();
-    const result = spawnSync(this.command, args, {
+    const result = runCommandWithHeartbeat({
+      agent: 'opencode',
+      label,
+      command: this.command,
+      args,
       cwd: this.repositoryRoot,
-      encoding: 'utf8',
-      maxBuffer: 20 * 1024 * 1024,
+      promptPath,
+      promptMode: 'arg',
+      stdoutPath,
+      stderrPath,
+      heartbeatIntervalMs: DEFAULT_AGENT_HEARTBEAT_MS,
     });
     const elapsedMs = Date.now() - startedAt;
 
-    const errorText = result.error ? `\n${result.error.message}` : '';
-    const stdout = result.stdout ?? '';
-    const stderr = `${result.stderr ?? ''}${errorText}`;
+    const stdout = readTextIfExists(stdoutPath);
+    const stderr = readTextIfExists(stderrPath);
     logAgentStream('opencode', label, 'stdout', stdout);
     logAgentStream('opencode', label, 'stderr', stderr);
     logAgentEnd('opencode', label, elapsedMs, result.status, result.error?.message ?? null);

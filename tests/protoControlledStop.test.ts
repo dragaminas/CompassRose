@@ -111,6 +111,11 @@ function syncPrototypeRuntime(sourceRoot: string, targetRoot: string): void {
     readFileSync(join(sourceRoot, 'proto', 'protoCompassRose.ts'), 'utf8'),
     'utf8',
   );
+  writeFileSync(
+    join(targetRoot, 'proto', 'protoHeartbeatRunner.mjs'),
+    readFileSync(join(sourceRoot, 'proto', 'protoHeartbeatRunner.mjs'), 'utf8'),
+    'utf8',
+  );
 }
 
 function seedTaskReadyState(cloneRoot: string): void {

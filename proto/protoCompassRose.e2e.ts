@@ -535,6 +535,10 @@ function syncPrototypeRuntime(repoRoot: string, cloneRoot: string): void {
   const sourcePath = join(repoRoot, 'proto', 'protoCompassRose.ts');
   const targetPath = join(cloneRoot, 'proto', 'protoCompassRose.ts');
   writeFileSync(targetPath, readFileSync(sourcePath, 'utf8'), 'utf8');
+
+  const helperSourcePath = join(repoRoot, 'proto', 'protoHeartbeatRunner.mjs');
+  const helperTargetPath = join(cloneRoot, 'proto', 'protoHeartbeatRunner.mjs');
+  writeFileSync(helperTargetPath, readFileSync(helperSourcePath, 'utf8'), 'utf8');
 }
 
 function syncContractFiles(repoRoot: string, cloneRoot: string): void {
