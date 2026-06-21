@@ -123,8 +123,12 @@ Optional environment variables:
 
 - `PROTO_COMPASSROSE_CODEX_COMMAND`
 - `PROTO_COMPASSROSE_CODEX_MODEL`
+- `PROTO_COMPASSROSE_CODEX_PLANNER_MODEL`
+- `PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL`
 - `PROTO_COMPASSROSE_OPENCODE_COMMAND`
 - `PROTO_COMPASSROSE_OPENCODE_MODEL`
+
+If no implementer override is provided, the Codex implementer defaults to the local `qwen3.6-35b-a3b` model. `PROTO_COMPASSROSE_CODEX_MODEL` remains the shared fallback for planner/reviewer passes, and `PROTO_COMPASSROSE_CODEX_PLANNER_MODEL` lets those passes use a different Codex model from the implementer.
 
 ## Current Limits
 

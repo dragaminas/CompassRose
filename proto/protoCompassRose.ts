@@ -75,6 +75,20 @@ interface TaskImplementer {
   run(prompt: string, label?: string): CommandExecution;
 }
 
+const DEFAULT_CODEX_IMPLEMENTER_MODEL = 'qwen3.6-35b-a3b';
+
+export function resolveCodexPlannerModel(): string | null {
+  return normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_PLANNER_MODEL)
+    ?? normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_MODEL);
+}
+
+export function resolveCodexImplementerModel(): string {
+  return (
+    normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL)
+    ?? DEFAULT_CODEX_IMPLEMENTER_MODEL
+  );
+}
+
 interface FeatureRecord {
   readonly id: string;
   readonly name: string;
@@ -416,7 +430,7 @@ class CodexCli implements TaskImplementer {
       args.push('--add-dir', dir);
     }
 
-    const model = process.env.PROTO_COMPASSROSE_CODEX_MODEL;
+    const model = resolveCodexPlannerModel();
     if (model) {
       args.push('-m', model);
     }
@@ -461,7 +475,7 @@ class CodexCli implements TaskImplementer {
       '--dangerously-bypass-approvals-and-sandbox',
     ];
 
-    const model = process.env.PROTO_COMPASSROSE_CODEX_MODEL;
+    const model = resolveCodexImplementerModel();
     if (model) {
       args.push('-m', model);
     }
@@ -5011,6 +5025,15 @@ function ensureTrailingNewline(text: string): string {
 
 function stripTicks(text: string): string {
   return text.replace(/^`+|`+$/g, '');
+}
+
+function normalizeModelName(value: string | undefined | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function extractTaskIdHint(text: string | null): string | null {
