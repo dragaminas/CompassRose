@@ -14,7 +14,7 @@ In progress
 - Feature `002-configuration-model` still has a recovery path back to `task_ready` for `F002-T04-C3` once the stale recovery interface is repaired.
 - Implementation failure evidence: Implementation for F002-T04-C3 did not include the required Implementation Notes justification and produced no diff.
 - Latest hardening evidence: the edit attempt reported `Could not find oldString in the file` and `No changes to apply: oldString and newString are identical`, which is a stale preimage problem rather than a fresh repository defect.
-- Feature `002-configuration-model` now has a planned unblock task, `F002-T04-C3-U1-C1-U1`, to resolve a recoverable blocker and restore `task_ready`.
+- Feature `002-configuration-model` now has a planned unblock task, `F002-T04-C3-U1-C1`, to resolve a recoverable blocker and restore `quality_failed`.
 
 ## Implemented
 
@@ -27,7 +27,7 @@ In progress
 
 ## Pending
 
-- Investigate failed quality gates for `F002-T04-C3-U1-C1-U1`.
+- Execute unblock task `F002-T04-C3-U1-C1` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -46,4 +46,4 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, but quality gates for `F002-T04-C3-U1-C1-U1` failed and the run should stop.
+The active feature is `002-configuration-model`, and its next valid action is to execute unblock task `F002-T04-C3-U1-C1` from the captured `quality_failed` state.

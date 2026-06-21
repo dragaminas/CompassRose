@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-quality_failed
+unblock_pending
 
 ## Source Request
 
@@ -13,10 +13,10 @@ quality_failed
 - formalization: complete
 - active_task: F002-T04-C3-U1-C1-U1
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F002-T04-C3-U1-C1
 - last_implementation_result: passed
 - last_quality_gate_result: failed
-- last_review_result: not_run
+- last_review_result: blocked
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -68,10 +68,10 @@ The latest hardening attempt then failed on a stale exact-string preimage, repor
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `quality_failed`
+- active_task: `F002-T04-C3-U1-C1-U1`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -85,4 +85,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Quality gates for `F002-T04-C3-U1-C1-U1` failed; stop and recover before continuing.
+Execute unblock task `F002-T04-C3-U1-C1` next.
