@@ -1,0 +1,97 @@
+# Doctor Recovery Task Contract
+
+## Purpose
+
+Defines the bounded recovery task executed by the `doctor` role when deterministic orchestration cannot safely continue on its own.
+
+A doctor recovery task may repair repository documentation, state, implementation code, tests, or task interfaces when that is the smallest safe change required to re-enter the deterministic loop.
+
+It is not a backlog-planning task, and it does not open a second review loop for the recovery itself.
+
+Pure documentation or state drift that can be repaired directly by the runtime still belongs to `src/contracts/task/state-correction-task.md`.
+
+---
+
+## Responsibility
+
+A doctor recovery task resolves a named blocker without silently redefining the feature backlog.
+
+It must preserve blocker evidence, task lineage, and the restoration target that tells the runtime where deterministic execution resumes after the recovery passes its own quality gates.
+
+---
+
+## Required Shape
+
+The task reuses the base task shape from `src/contracts/planner/output.md` and adds these recovery sections in the task document:
+
+```yaml
+doctor_recovery:
+  executor_role: doctor
+  review_policy: no_review_loop
+
+blocker:
+  kind: state_corruption | task_interface_gap | cli_mismatch | environment | review_failure | implementation_failure | unknown
+  signature: string
+  evidence:
+    - string
+  recoverability: auto | agent | human | terminal
+  observed_state: string
+
+restoration_target:
+  lifecycle_state: string
+  active_task: string
+  active_correction_task: string
+  active_unblock_task: string
+```
+
+The task's `quality_gates.before_review` list is interpreted as the doctor recovery's re-entry gates.
+
+---
+
+## Rules
+
+A doctor recovery task must:
+
+- name the blocker explicitly
+- preserve the current task lineage when the failed task must be superseded
+- preserve recovery evidence instead of rewriting history
+- keep the scope bounded to the blocker and re-entry point
+- include a concrete `first_executable_step`
+- include `minimum_progress_evidence` that requires real repository change
+- make the restoration target explicit
+- state the doctor executor and `no_review_loop` policy in the task document
+- use quality gates that validate re-entry readiness, not reviewer convenience
+- keep architecture redesign out of scope unless the diagnostic explicitly says the blocker cannot be repaired otherwise
+- use `test_guided` when the recovery changes code or tests
+
+A doctor recovery task may:
+
+- touch `docs/`, repository state files, `src/`, and tests when needed for the recovery
+- revise the failed task interface when that is the actual blocker
+- emit a later-version task that points back to the earlier task with `previous_task_id`
+
+A doctor recovery task must not:
+
+- widen into unrelated backlog work
+- reopen a normal reviewer loop for the recovery itself
+- hide stale recovery evidence
+- delete or rewrite the earlier failed task instead of linking back to it
+- choose a different restoration target without explicit blocker evidence
+
+---
+
+## Lifecycle
+
+```text
+Broken Deterministic Flow
+    ↓
+Diagnostic / Planning
+    ↓
+Doctor Recovery Task
+    ↓
+Doctor Execution
+    ↓
+Doctor Quality Gates
+    ↓
+Deterministic Re-entry
+```

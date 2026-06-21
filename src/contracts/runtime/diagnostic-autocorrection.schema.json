@@ -49,7 +49,7 @@
       "type": "string",
       "enum": [
         "correct_state",
-        "plan_unblock_task",
+        "plan_doctor_recovery",
         "stop_with_diagnostic"
       ]
     },
@@ -65,7 +65,7 @@
       "properties": {
         "mode": {
           "type": "string",
-          "enum": ["none", "apply_in_unblock_task", "manual_review"]
+          "enum": ["none", "apply_in_doctor_recovery", "manual_review"]
         },
         "summary": { "type": "string" },
         "target_paths": {

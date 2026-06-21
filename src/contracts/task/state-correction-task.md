@@ -17,7 +17,7 @@ It is a runtime-applied repair artifact, not an external implementer handoff.
 A state correction task restores canonical state without widening scope.
 
 It preserves the feature's active task pointer and only repairs the state needed for deterministic selection.
-It does not route the repair through the implementer; if the interface itself is broken, that is an unblock task.
+It does not route the repair through the implementer; if the interface itself is broken, that belongs to doctor recovery.
 
 ---
 
@@ -87,7 +87,7 @@ A state correction task must:
 - Restore the documented lifecycle state and operational status instead of inventing a new one.
 - Preserve the current active task pointer when the active task is still the intended work target.
 - If the feature state lost `active_task`, derive the intended repair anchor from project-state hints or another documented repository source before generating the task, but still restore a canonical active task pointer.
-- If the recovery interface itself is stale or contradictory, generate an unblock task with `blocker.kind: task_interface_gap` instead of a state correction task.
+- If the recovery interface itself is stale or contradictory, generate a doctor recovery task with `blocker.kind: task_interface_gap` instead of a state correction task.
 - Never invent a synthetic active task identifier when the active task anchor is already known; copy the anchor verbatim from the observed state or the documented recovery target.
 - When the previous attempt produced no diff or omitted required `Implementation Notes`, include that evidence in `detected_issue` so the next diagnostic pass does not need to infer the failure mode.
 - Stay within state-document scope.

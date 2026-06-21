@@ -181,7 +181,7 @@ A controlled stop does not convert the feature to `implementation_failed` or `bl
 
 ### implementation_failed
 
-The last implementation attempt failed and the runtime must either plan a bounded unblock task that restores the recorded active task or require explicit recovery before continuing.
+The last implementation attempt failed and the runtime must either plan a bounded doctor recovery task that restores the recorded active task or require explicit recovery before continuing.
 
 ### quality_gates_pending
 
@@ -205,8 +205,8 @@ A reviewer requested a bounded correction task, or the runtime generated a state
 
 ### unblock_pending
 
-The feature has a bounded unblock task that is now the active execution target.
-After approval, the runtime restores the captured lifecycle state and clears `active_unblock_task`.
+This compatibility state records that a bounded doctor recovery task is now the active execution target.
+After the doctor quality gates pass, the runtime restores the captured lifecycle state and clears `active_unblock_task`.
 
 ### blocked
 
@@ -308,11 +308,11 @@ Recovery rules:
 - `implementation_running`: inspect execution artifacts and either resume the implementation step or transition explicitly to `implementation_failed` or `blocked`
 - `implementation_running`: inspect execution artifacts first; if the latest attempt left partial repository changes, retry the same active task once before deciding whether to stop
 - `operator-requested stop`: preserve the recorded lifecycle state and active task pointer; do not infer a failure transition from the interrupt alone
-- `implementation_failed`: inspect execution artifacts first; if the failed task can be recovered, plan a bounded unblock task and transition to `unblock_pending`
+- `implementation_failed`: inspect execution artifacts first; if the failed task can be recovered, plan a bounded doctor recovery task and transition to `unblock_pending`
 - `quality_gates_pending`: re-run or resume quality gates instead of planning a new task
 - `review_pending`: re-run or resume review instead of planning a new task
 - `correction_pending`: continue with the recorded correction task instead of generating a broader replacement task
-- `unblock_pending`: continue with the recorded unblock task instead of generating a broader replacement task
+- `unblock_pending`: continue with the recorded doctor recovery task instead of generating a broader replacement task
 - `blocked`: recover the blocker explicitly before generating new planning work
 
 CompassRose must prefer explicit recovery over silent state rewriting.

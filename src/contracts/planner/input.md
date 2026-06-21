@@ -150,6 +150,7 @@ The Planner must:
 - Treat roadmap and feature definitions as intent.
 - Use lifecycle state plus feature deliverables, remaining deliverables, and outline progress to choose the next meaningful gap.
 - Produce a task traceable to a roadmap objective and feature.
+- Treat `unblock_pending` as the persisted doctor-recovery checkpoint when recovery work is active.
 
 The Planner must not:
 

@@ -60,7 +60,7 @@ The runtime must load:
 - project state from `docs/compassrose/PROJECT_STATE.md`
 - feature folders from `docs/features/`
 - feature state using `src/contracts/state/feature-state.md`
-- planner, implementer, reviewer, task, correction-task, state-correction-task, and unblock-task contracts from `src/contracts/`
+- planner, implementer, reviewer, task, correction-task, state-correction-task, and doctor-recovery-task contracts from `src/contracts/`
 
 ---
 
@@ -111,7 +111,7 @@ Contracts own:
 - lifecycle states and their meanings
 - step ordering and recovery semantics
 - task and review artifact shapes
-- blocker, correction, and unblock semantics
+- blocker, correction, and doctor-recovery semantics
 - stop conditions that protect deterministic execution
 
 Configuration owns:
@@ -150,7 +150,7 @@ Rules:
 2. Ignore features in `completed`.
 3. Select the first feature that is not `completed`.
 4. If the selected feature's state is malformed but repairable, generate a state correction artifact, apply the repair directly, and continue from the restored lifecycle state.
-5. If the selected feature is `blocked` for a recoverable reason, generate an unblock task with the planner-grade role and transition the feature to `unblock_pending`.
+5. If the selected feature is `blocked` for a recoverable reason, generate a doctor recovery task and transition the feature to `unblock_pending`.
 6. If the selected feature is `blocked` for an unrecoverable reason, stop the run and report the blocker.
 7. Do not skip an earlier pending feature to work on a later one.
 
@@ -208,11 +208,15 @@ Next state:
 
 Action:
 
-- execute the recorded unblock task if the execution mode allows it
+- execute the recorded doctor recovery task if the execution mode allows it
+- run its doctor quality gates directly
+- restore the captured lifecycle state when those gates pass
+- stop with a diagnostic when they fail
 
 Next state:
 
-- `implementation_running`
+- restored captured state
+- `blocked`
 
 ### implementation_running
 
@@ -236,10 +240,9 @@ Next state:
 Action:
 
 - run effective quality gates in deterministic order
-- if a required gate fails on a correction or unblock task, preserve the recorded task and carry the failure into `quality_failed` instead of inventing a fresh normal task
+- if a required gate fails on a correction task, preserve the recorded task and carry the failure into `quality_failed` instead of inventing a fresh normal task
 - if the failure exposes a stale recovery interface, classify it as `task_interface_gap` and invoke diagnostic/autocorrection before planning any broader recovery change
-- if that interface gap is an implementation or design issue, keep the resulting unblock task source-only and out of repository documentation, contract markdown, and state paths
-- if the blocker is pure documentation or state drift, route it through `correct_state` instead of unblock planning
+- if the blocker is pure documentation or state drift, route it through `correct_state` instead of doctor recovery planning
 
 Next state:
 
@@ -279,18 +282,18 @@ Next state:
 
 Action:
 
-- if the failed implementation is recoverable, generate a bounded unblock task with the planner-grade role and transition the feature to `unblock_pending`
-- if the quality failure is on a correction or unblock task and it exposes a stale recovery interface, continue from the recorded task, classify the blocker as `task_interface_gap`, and plan a bounded unblock task that preserves the current active task anchor
+- if the failed implementation is recoverable, generate a bounded doctor recovery task and transition the feature to `unblock_pending`
+- if the quality failure is on a correction task and it exposes a stale recovery interface, continue from the recorded task, classify the blocker as `task_interface_gap`, and plan a bounded doctor recovery task that preserves the current active task anchor
 - otherwise stop the run unless an explicit recovery policy transitions the feature back into a valid pending state
-- unblock tasks are source-only; if they deliver code or tests they must be planned as `test_guided`
-- if the blocker is pure documentation or state drift, route it through `correct_state` instead of unblock planning
+- doctor recovery does not enter the normal reviewer loop; it must pass its own re-entry quality gates before deterministic execution resumes
+- if the blocker is pure documentation or state drift, route it through `correct_state` instead of doctor recovery planning
 
 ### blocked
 
 Action:
 
 - surface the blocker
-- if the blocker is recoverable, generate an unblock task with the planner-grade role and transition to `unblock_pending`
+- if the blocker is recoverable, generate a doctor recovery task and transition to `unblock_pending`
 
 Next state:
 
@@ -319,9 +322,9 @@ When planning:
 
 If a correction task is active, the runtime must prefer it over generating a new normal task.
 
-If an unblock task is active, the runtime must prefer it over generating a new normal task.
+If a doctor recovery task is active, the runtime must prefer it over generating a new normal task.
 
-If the selected feature is blocked for a recoverable reason, the runtime must prefer unblock task planning over a normal feature task.
+If the selected feature is blocked for a recoverable reason, the runtime must prefer doctor recovery planning over a normal feature task.
 
 ---
 
@@ -388,7 +391,7 @@ The runtime owns the resulting lifecycle transition.
 
 If the reviewer reports `blocked`, the runtime must classify whether the blocker is recoverable or terminal:
 
-- recoverable blockers must be persisted as explicit blocker state and may continue into `unblock_pending` planning
+- recoverable blockers must be persisted as explicit blocker state and may continue into `unblock_pending` doctor recovery planning
 - blockers that require human intervention or are terminal must be persisted as explicit blocker state and stop the run
 - the blocker record must preserve enough evidence to decide whether the task interface should be tightened or the limitation should be documented
 
@@ -424,7 +427,7 @@ The runtime must stop when:
 
 - configuration preconditions fail
 - the selected feature is malformed and no state correction task can repair it
-- the selected feature is blocked and no unblock task can repair it
+- the selected feature is blocked and no doctor recovery task can repair it
 - the reviewer reports a blocked result that is terminal or requires human intervention
 - formalization fails
 - task planning fails
@@ -463,8 +466,8 @@ Implementation recovery rules:
 - if the retry succeeds, continue to quality gates
 - if the retry also fails or no recoverable progress exists, transition explicitly to `implementation_failed` or `blocked`
 - preserve raw output, diff, and diagnostics for both the failed attempt and the retry so the operator can distinguish a transient collapse from a terminal stop
-- `implementation_failed`: inspect the latest implementation artifacts first and, when the active task anchor is still recoverable, plan a bounded unblock task that restores task readiness before retrying implementation
-- if the failed implementation exposed an implementation or design interface gap, keep that unblock task source-only and do not route it through repository documentation, contract markdown, or state edits
+- `implementation_failed`: inspect the latest implementation artifacts first and, when the active task anchor is still recoverable, plan a bounded doctor recovery task that restores task readiness before retrying implementation
+- doctor recovery may touch repository documentation, contract markdown, state, source, and tests when that is the smallest safe change required for deterministic re-entry
 - controlled stop is not a failure transition: if the operator interrupts the runtime, keep the current lifecycle state and active task pointers intact so the next run can resume from the recorded checkpoint
 - a failed quality gate result
 - a recorded blocker

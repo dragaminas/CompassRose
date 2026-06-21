@@ -27,4 +27,4 @@ Return JSON that conforms to `src/contracts/runtime/task-interface-analysis.sche
 - Prefer concrete adjustments to `first_executable_step`, `minimum_progress_evidence`, context, scope, acceptance criteria, and quality gates.
 - If the failure is mostly an implementer limitation, say so explicitly.
 - If both are true, record both.
-- Keep recommendations bounded enough to feed future unblock or correction planning.
+- Keep recommendations bounded enough to feed future doctor-recovery or correction planning.

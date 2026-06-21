@@ -81,7 +81,7 @@ Instructions:
 - If the live worktree diff is missing and the provided diff is only fallback evidence from a committed-away change, do not approve the attempt; require a narrower recovery or correction path.
 - Use `approved`, `changes_required`, `blocked`, or `failed` exactly as defined in the contract.
 - If the result is `changes_required`, include a correction task that is narrower than the original task and conforms to the correction-task contract.
-- If the result is `blocked`, describe the blocker with enough specificity for the orchestrator to decide whether it can become an unblock task.
+- If the result is `blocked`, describe the blocker with enough specificity for the orchestrator to decide whether it can become a doctor recovery task.
 - If the result is `blocked`, also say whether the blocker appears perfectible by tightening the task interface or whether it should be documented as a limitation of the implementer.
 - If the result is `approved`, set `correction_task` to `null`.
 - Do not modify files.

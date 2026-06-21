@@ -2,6 +2,7 @@ export type StepKind =
   | 'plan_feature'
   | 'plan_task'
   | 'correct_state'
+  | 'doctor_recovery_task'
   | 'unblock_task'
   | 'diagnose_autocorrect'
   | 'implement_task'
@@ -164,11 +165,16 @@ export interface BlockerProfile {
 export interface UnblockTaskMetadata {
   readonly blocker: BlockerProfile;
   readonly restoration_target: RestorationTarget;
+  readonly executor_role?: 'doctor';
+  readonly review_policy?: 'no_review_loop';
 }
+
+export type DoctorRecoveryTaskMetadata = UnblockTaskMetadata;
 
 export interface StoredTaskArtifact {
   readonly task: PlannedTask;
   readonly state_correction?: StateCorrectionTask;
+  readonly doctor_recovery?: DoctorRecoveryTaskMetadata;
   readonly unblock?: UnblockTaskMetadata;
 }
 
@@ -234,10 +240,10 @@ export interface DiagnosticAutocorrectionDecision {
     readonly recoverability: BlockerRecoverability;
     readonly evidence: readonly string[];
   };
-  readonly next_step: 'correct_state' | 'plan_unblock_task' | 'stop_with_diagnostic';
+  readonly next_step: 'correct_state' | 'plan_doctor_recovery' | 'stop_with_diagnostic';
   readonly next_step_reason: string;
   readonly interface_response: {
-    readonly mode: 'none' | 'apply_in_unblock_task' | 'manual_review';
+    readonly mode: 'none' | 'apply_in_doctor_recovery' | 'manual_review';
     readonly summary: string;
     readonly target_paths: readonly string[];
   };
@@ -287,6 +293,7 @@ export interface ParsedTaskDocument {
   readonly context: TaskContext;
   readonly expectedDeliverables: readonly ExpectedDeliverable[];
   readonly stateCorrection: StateCorrectionTask | null;
+  readonly doctorRecovery: DoctorRecoveryTaskMetadata | null;
   readonly unblock: UnblockTaskMetadata | null;
   readonly reviewableDiffHandoff: ReviewableDiffHandoff;
   readonly path: string;
