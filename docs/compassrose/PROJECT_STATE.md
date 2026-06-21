@@ -10,14 +10,12 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is currently in a `quality_failed` state for task `F002-T04-C3-U1-C1`.
-- Feature `002-configuration-model` still has a recovery path back to `task_ready` for `F002-T04-C3` once the stale recovery interface is repaired.
-- Implementation failure evidence: Implementation for F002-T04-C3 did not include the required Implementation Notes justification and produced no diff.
+- Feature `002-configuration-model` is currently in an `implementation_failed` state for `F002-T04-C3` with an explicit recovery path back to `task_ready` once the stale recovery interface is repaired.
+- Feature `002-configuration-model` has a planned unblock task, `F002-T04-C3-U1-C1-U1`, to resolve the recoverable blocker and restore `task_ready`.
+- Implementation failure evidence: Implementation for F002-T04-C3 did not include the required Implementation Notes justification and produced no diff, so the correction task `F002-T04-C3-U1-C1-U1` preserves that evidence while repairing the recovery path.
 - Latest hardening evidence: the edit attempt reported `Could not find oldString in the file` and `No changes to apply: oldString and newString are identical`, which is a stale preimage problem rather than a fresh repository defect.
-- Feature `002-configuration-model` now has a planned unblock task, `F002-T04-C3-U1-C1`, to resolve a recoverable blocker and restore `quality_failed`.
 
 ## Implemented
-
 - `docs/compassrose/CONFIG.md` and `docs/compassrose/PROJECT_STATE.md` are present as the project-local operational documents.
 - The feature-001 foundation documents are formalized under `docs/features/001-project-identity-and-foundation/`.
 - The feature-002 configuration documents are formalized under `docs/features/002-configuration-model/`.
@@ -27,7 +25,7 @@ In progress
 
 ## Pending
 
-- Execute unblock task `F002-T04-C3-U1-C1` for the active feature.
+- Execute correction task `F002-T04-C3-U1-C1-C1` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -46,4 +44,4 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute unblock task `F002-T04-C3-U1-C1` from the captured `quality_failed` state.
+The active feature is `002-configuration-model`, and its next valid action is to execute correction task `F002-T04-C3-U1-C1-C1`.
