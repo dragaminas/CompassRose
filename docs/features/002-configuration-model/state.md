@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+blocked
 
 ## Source Request
 
@@ -13,7 +13,7 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T04-C3-U1-C1-U1
 - active_correction_task: none
-- active_unblock_task: F002-T04-C3-U1-C1-U1-U1
+- active_unblock_task: none
 - last_implementation_result: failed
 - last_quality_gate_result: unknown
 - last_review_result: blocked
@@ -58,11 +58,16 @@ The latest recovery work uncovered a stale recovery interface around `F002-T04-C
 
 ## Blocked By
 
-- - kind: task_interface_gap
-- - signature: stale-recovery-interface-F002-T04-C3-implementation_failed-to-task_ready
+- - kind: state_corruption
+- - signature: state-corruption-unblock-pending-implementation-for-f002-t04-c3-u1-c1-u1-u1-failed-with-exit-cod
 - - recoverability: agent
-- - observed_state: lifecycle=implementation_failed; active_task=F002-T04-C3; active_correction_task=none; active_unblock_task=none
-- - evidence: A bounded unblock task can repair the stale recovery interface, preserve the current `F002-T04-C3` anchor with its no-diff / missing Implementation Notes failure evidence, and align the task/state/project narratives on the `implementation_failed` -> `task_ready` recovery path. A plain `correct_state` pass would not fix the interface mismatch, and no human architectural decision is required yet.
+- - observed_state: lifecycle=unblock_pending; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=F002-T04-C3-U1-C1-U1-U1
+- - evidence: Implementation for F002-T04-C3-U1-C1-U1-U1 failed with exit code 1 (context_overflow).
+- - evidence: - kind: task_interface_gap
+- - evidence: - signature: stale-recovery-interface-F002-T04-C3-implementation_failed-to-task_ready
+- - evidence: - recoverability: agent
+- - evidence: lifecycle=unblock_pending
+- - reason: Implementation for F002-T04-C3-U1-C1-U1-U1 failed with exit code 1 (context_overflow).
 
 ## Blocked From
 
@@ -70,6 +75,7 @@ The latest recovery work uncovered a stale recovery interface around `F002-T04-C
 - active_task: `F002-T04-C3-U1-C1-U1`
 - active_correction_task: `none`
 - active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -82,4 +88,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Execute unblock task `F002-T04-C3-U1-C1-U1-U1` next.
+Plan a doctor recovery task for blocker `state-corruption-unblock-pending-implementation-for-f002-t04-c3-u1-c1-u1-u1-failed-with-exit-cod` and then restore `task_ready`.

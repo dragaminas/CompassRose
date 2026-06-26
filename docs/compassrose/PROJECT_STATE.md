@@ -10,12 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` was previously in a `quality_failed` state for task `F002-T04-C3-U1-C1`, which evolved to the current `implementation_failed` state for `F002-T04-C3` with an explicit recovery path back to `task_ready` once the stale recovery interface is repaired.
-- Feature `002-configuration-model` has a planned unblock task, `F002-T04-C3-U1-C1-U1`, to resolve the recoverable blocker and restore `task_ready`.
-- Implementation failure evidence: Implementation for F002-T04-C3 did not include the required Implementation Notes justification and produced no diff, so the correction task `F002-T04-C3-U1-C1-U1` preserves that evidence while repairing the recovery path.
-- Latest hardening evidence: the edit attempt reported `Could not find oldString in the file` and `No changes to apply: oldString and newString are identical`, which is a stale preimage problem rather than a fresh repository defect.
-- Implementation failure evidence: Implementation for F002-T04-C3-U1-C1-C1 did not include the required Implementation Notes justification.
-- Feature `002-configuration-model` now has a planned unblock task, `F002-T04-C3-U1-C1-U1-U1`, to resolve a recoverable blocker and restore `task_ready`.
+- Feature `002-configuration-model` is blocked by `state-corruption-unblock-pending-implementation-for-f002-t04-c3-u1-c1-u1-u1-failed-with-exit-cod`.
+- Blocker recoverability: agent.
+- Feature `002-configuration-model` was suspended from `task_ready`; the active task pointer remains `F002-T04-C3-U1-C1-U1`.
+- Blocking task context: `F002-T04-C3-U1-C1-U1-U1`
 
 ## Implemented
 - `docs/compassrose/CONFIG.md` and `docs/compassrose/PROJECT_STATE.md` are present as the project-local operational documents.
@@ -27,7 +25,8 @@ In progress
 
 ## Pending
 
-- Execute unblock task `F002-T04-C3-U1-C1-U1-U1` for the active feature.
+- Plan a doctor recovery task for the active feature.
+- Restore the captured `task_ready` state after the blocker is resolved.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -46,4 +45,4 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute unblock task `F002-T04-C3-U1-C1-U1-U1` from the captured `task_ready` state.
+Plan a doctor recovery task for blocker `state-corruption-unblock-pending-implementation-for-f002-t04-c3-u1-c1-u1-u1-failed-with-exit-cod` and then restore `task_ready`.
