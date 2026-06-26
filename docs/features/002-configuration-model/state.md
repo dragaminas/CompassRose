@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+blocked
 
 ## Source Request
 
@@ -13,7 +13,7 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T04-C3-U1-C1-U1
 - active_correction_task: none
-- active_unblock_task: F002-T04-C3-U1-C1-U1-U1
+- active_unblock_task: none
 - last_implementation_result: failed
 - last_quality_gate_result: unknown
 - last_review_result: blocked
@@ -31,7 +31,7 @@ This feature is now formalized under `docs/features/002-configuration-model/`, a
 
 Task `F002-T04` was approved, extending the typed config loader to validate and expose `execution`, `roles`, and `git_policy` data from the canonical project config.
 
-The latest recovery work uncovered a stale recovery interface around `F002-T04-C3`: the implementation attempt produced no diff and omitted the required `Implementation Notes`, so the current correction task `F002-T04-C3-U1-C1-U1` preserves that evidence while repairing the path back to `task_ready`. This feature is now in an `implementation_failed` state for `F002-T04-C3` with a documented recovery path back to `task_ready` once the stale recovery interface is repaired.
+The latest recovery work repaired the stale recovery interface around `F002-T04-C3`: the earlier `implementation_failed` attempt produced no diff and omitted the required `Implementation Notes`, and the bounded doctor successor reissued the task interface under `task-interface-gap-F002-T04-C3-stale-preimage-mismatch` before restoring the feature to `task_ready` with `active_task: F002-T04-C3-U1-C1-U1`.
 
 ## Implemented Deliverables
 
@@ -59,15 +59,14 @@ The latest recovery work uncovered a stale recovery interface around `F002-T04-C
 ## Blocked By
 
 - - kind: state_corruption
-- - signature: state-corruption-blocked-diagnostic-autocorrection-returned-malformed-or-incomplete-structured-o
+- - signature: state-corruption-task-ready-doctor-recovery-f002-t04-c3-u1-c1-u1-u1-failed-its-re-entry-quality-
 - - recoverability: agent
-- - observed_state: lifecycle=blocked; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
-- - evidence: Diagnostic/autocorrection returned malformed or incomplete structured output, so the runtime is stopping with a diagnostic artifact for manual follow-up.
-- - evidence: - kind: state_corruption
-- - evidence: - signature: state-corruption-unblock-pending-implementation-for-f002-t04-c3-u1-c1-u1-u1-failed-with-exit-cod
-- - evidence: - recoverability: agent
-- - evidence: lifecycle=blocked
-- - reason: Diagnostic/autocorrection returned malformed or incomplete structured output, so the runtime is stopping with a diagnostic artifact for manual follow-up.
+- - observed_state: lifecycle=task_ready; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
+- - evidence: Doctor recovery F002-T04-C3-U1-C1-U1-U1 failed its re-entry quality gates.
+for f in docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md; do grep -q 'F002-T04-C3-U1-C1-U1' "$f" && grep -q 'task-interface-gap-F002-T04-C3-stale-preimage-mismatch' "$f" && grep -q 'task_interface_gap' "$f" && grep -q 'implementation_failed' "$f" && grep -q 'task_ready' "$f" && ! grep -q 'review_pending' "$f" && ! grep -q 'F002-T04-C1' "$f"; done: No output.
+- - evidence: None
+- - evidence: lifecycle=task_ready
+- - reason: Doctor recovery F002-T04-C3-U1-C1-U1-U1 failed its re-entry quality gates. | for f in docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md; do grep -q 'F002-T04-C3-U1-C1-U1' "$f" && grep -q 'task-interface-gap-F002-T04-C3-stale-preimage-mismatch' "$f" && grep -q 'task_interface_gap' "$f" && grep -q 'implementation_failed' "$f" && grep -q 'task_ready' "$f" && ! grep -q 'review_pending' "$f" && ! grep -q 'F002-T04-C1' "$f"; done: No output.
 
 ## Blocked From
 
@@ -75,6 +74,7 @@ The latest recovery work uncovered a stale recovery interface around `F002-T04-C
 - active_task: `F002-T04-C3-U1-C1-U1`
 - active_correction_task: `none`
 - active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -83,8 +83,7 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 ## Known Gaps
 
 - The project-local configuration flow still needs a runtime consumer that uses the validated `execution`, `roles`, and `git_policy` data during orchestration.
-- The root `F002-T04-C3` attempt has a partial implementation attempt (no diff) and omitted the required Implementation Notes justification, so recovery must resume from the current repository state instead of assuming a fresh task start.
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T04-C3-U1-C1-U1-U1` next.
+Plan a doctor recovery task for blocker `state-corruption-task-ready-doctor-recovery-f002-t04-c3-u1-c1-u1-u1-failed-its-re-entry-quality-` and then restore `task_ready`.

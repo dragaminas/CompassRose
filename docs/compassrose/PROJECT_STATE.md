@@ -10,11 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `state-corruption-blocked-diagnostic-autocorrection-returned-malformed-or-incomplete-structured-o`.
+- Feature `002-configuration-model` is blocked by `state-corruption-task-ready-doctor-recovery-f002-t04-c3-u1-c1-u1-u1-failed-its-re-entry-quality-`.
 - Blocker recoverability: agent.
 - Feature `002-configuration-model` was suspended from `task_ready`; the active task pointer remains `F002-T04-C3-U1-C1-U1`.
-- Blocking task context: `F002-T04-C3-U1-C1-U1`
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T04-C3-U1-C1-U1-U1`, to resolve a recoverable blocker and restore `task_ready`.
+- Blocking task context: `F002-T04-C3-U1-C1-U1-U1`
 
 ## Implemented
 - `docs/compassrose/CONFIG.md` and `docs/compassrose/PROJECT_STATE.md` are present as the project-local operational documents.
@@ -26,7 +25,8 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T04-C3-U1-C1-U1-U1` for the active feature.
+- Plan a doctor recovery task for the active feature.
+- Restore the captured `task_ready` state after the blocker is resolved.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -40,9 +40,7 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 ## Known Gaps
 
 - Feature `002-configuration-model` now has validated runtime-precondition policy data in the config loader, but the broader runtime loop still needs to consume that data in a concrete orchestration entrypoint.
-- The root `F002-T04-C3` attempt has a partial implementation attempt (no diff) and omitted the required Implementation Notes justification, so the current correction task must keep that evidence visible instead of inferring a fresh retry.
-- The latest hardening attempt also failed against a stale edit preimage, so the next run needs an explicit diagnostic before any retry instead of silently attempting the same replacement again.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T04-C3-U1-C1-U1-U1` from the captured `task_ready` state.
+Plan a doctor recovery task for blocker `state-corruption-task-ready-doctor-recovery-f002-t04-c3-u1-c1-u1-u1-failed-its-re-entry-quality-` and then restore `task_ready`.
