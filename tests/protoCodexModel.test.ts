@@ -9,8 +9,8 @@ describe('proto codex model resolution', () => {
     vi.unstubAllEnvs();
   });
 
-  test('defaults the codex implementer to the local qwen model', () => {
-    expect(resolveCodexImplementerModel()).toBe('qwen3.6-35b-a3b');
+  test('does not force a codex implementer model by default', () => {
+    expect(resolveCodexImplementerModel()).toBeNull();
   });
 
   test('allows the codex implementer model to be overridden explicitly', () => {
@@ -31,9 +31,9 @@ describe('proto codex model resolution', () => {
     expect(resolveCodexPlannerModel()).toBe('gpt-5.5');
   });
 
-  test('does not let the shared codex model override the local implementer default', () => {
+  test('does not let the shared codex model set the implementer model', () => {
     vi.stubEnv('PROTO_COMPASSROSE_CODEX_MODEL', 'gpt-5.4-mini');
 
-    expect(resolveCodexImplementerModel()).toBe('qwen3.6-35b-a3b');
+    expect(resolveCodexImplementerModel()).toBeNull();
   });
 });

@@ -24,7 +24,7 @@ npm run proto -- run
 - `--loop`: keep running additional passes until the prototype stops.
 - `--no-commit`: do not create git commits after planning, recovery checkpoints, or approved review.
 - `--cwd <path>`: start from a different working directory inside the repo.
-- `--implementer <codex|opencode>`: choose which CLI implements tasks. `opencode` remains the default. When you choose `codex`, the implementer defaults to the local `qwen3.6-35b-a3b` model unless you override `PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL`.
+- `--implementer <codex|opencode>`: choose which CLI implements tasks. `opencode` remains the default. When you choose `codex`, CompassRose leaves the model unset unless you override `PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL`, so the backend can use its active default.
 - `Ctrl-C`, `SIGINT`, or `SIGTERM`: request a controlled stop. The prototype writes a stopped run summary and preserves the current task or state checkpoint for the next pass.
 
 If you want to compare behavior with the Codex CLI instead of OpenCode, run `npm run proto:loop:codex` or pass `--implementer codex`. The planner/reviewer side still honors `PROTO_COMPASSROSE_CODEX_MODEL`, and the implementer can be pinned independently with `PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL`. Set `PROTO_COMPASSROSE_CODEX_PLANNER_MODEL` if you want the planner/reviewer pass to use a different Codex model.

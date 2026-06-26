@@ -10,10 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `state-corruption-unblock-pending-implementation-for-f002-t04-c3-u1-c1-u1-u1-failed-with-exit-cod`.
+- Feature `002-configuration-model` is blocked by `state-corruption-blocked-diagnostic-autocorrection-returned-malformed-or-incomplete-structured-o`.
 - Blocker recoverability: agent.
 - Feature `002-configuration-model` was suspended from `task_ready`; the active task pointer remains `F002-T04-C3-U1-C1-U1`.
-- Blocking task context: `F002-T04-C3-U1-C1-U1-U1`
+- Blocking task context: `F002-T04-C3-U1-C1-U1`
 
 ## Implemented
 - `docs/compassrose/CONFIG.md` and `docs/compassrose/PROJECT_STATE.md` are present as the project-local operational documents.
@@ -45,4 +45,4 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-unblock-pending-implementation-for-f002-t04-c3-u1-c1-u1-u1-failed-with-exit-cod` and then restore `task_ready`.
+Plan a doctor recovery task for blocker `state-corruption-blocked-diagnostic-autocorrection-returned-malformed-or-incomplete-structured-o` and then restore `task_ready`.

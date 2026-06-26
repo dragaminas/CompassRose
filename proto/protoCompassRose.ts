@@ -76,7 +76,6 @@ interface TaskImplementer {
   run(prompt: string, label?: string): CommandExecution;
 }
 
-const DEFAULT_CODEX_IMPLEMENTER_MODEL = 'qwen3.6-35b-a3b';
 const DEFAULT_AGENT_HEARTBEAT_MS = 15_000;
 const HEARTBEAT_RUNNER_PATH = join(dirname(fileURLToPath(import.meta.url)), 'protoHeartbeatRunner.mjs');
 
@@ -85,11 +84,9 @@ export function resolveCodexPlannerModel(): string | null {
     ?? normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_MODEL);
 }
 
-export function resolveCodexImplementerModel(): string {
-  return (
-    normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL)
-    ?? DEFAULT_CODEX_IMPLEMENTER_MODEL
-  );
+// Only return an explicit override; otherwise let the backend use its active default.
+export function resolveCodexImplementerModel(): string | null {
+  return normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL);
 }
 
 function runCommandWithHeartbeat(config: HeartbeatRunConfig): { status: number | null; signal: string | null; error: Error | undefined } {

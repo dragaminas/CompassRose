@@ -59,15 +59,15 @@ The latest recovery work uncovered a stale recovery interface around `F002-T04-C
 ## Blocked By
 
 - - kind: state_corruption
-- - signature: state-corruption-unblock-pending-implementation-for-f002-t04-c3-u1-c1-u1-u1-failed-with-exit-cod
+- - signature: state-corruption-blocked-diagnostic-autocorrection-returned-malformed-or-incomplete-structured-o
 - - recoverability: agent
-- - observed_state: lifecycle=unblock_pending; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=F002-T04-C3-U1-C1-U1-U1
-- - evidence: Implementation for F002-T04-C3-U1-C1-U1-U1 failed with exit code 1 (context_overflow).
-- - evidence: - kind: task_interface_gap
-- - evidence: - signature: stale-recovery-interface-F002-T04-C3-implementation_failed-to-task_ready
+- - observed_state: lifecycle=blocked; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
+- - evidence: Diagnostic/autocorrection returned malformed or incomplete structured output, so the runtime is stopping with a diagnostic artifact for manual follow-up.
+- - evidence: - kind: state_corruption
+- - evidence: - signature: state-corruption-unblock-pending-implementation-for-f002-t04-c3-u1-c1-u1-u1-failed-with-exit-cod
 - - evidence: - recoverability: agent
-- - evidence: lifecycle=unblock_pending
-- - reason: Implementation for F002-T04-C3-U1-C1-U1-U1 failed with exit code 1 (context_overflow).
+- - evidence: lifecycle=blocked
+- - reason: Diagnostic/autocorrection returned malformed or incomplete structured output, so the runtime is stopping with a diagnostic artifact for manual follow-up.
 
 ## Blocked From
 
@@ -88,4 +88,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-unblock-pending-implementation-for-f002-t04-c3-u1-c1-u1-u1-failed-with-exit-cod` and then restore `task_ready`.
+Plan a doctor recovery task for blocker `state-corruption-blocked-diagnostic-autocorrection-returned-malformed-or-incomplete-structured-o` and then restore `task_ready`.
