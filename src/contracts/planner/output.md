@@ -22,7 +22,7 @@ The output must be specific enough for implementation and review.
 planner_output:
   task:
     task_id: string
-    previous_task_id?: string | null
+    previous_task_id: string | null
     feature_id: string
     title: string
     objective: string
@@ -74,6 +74,7 @@ planner_output:
 Every task must include:
 
 - `task_id`
+- `previous_task_id`
 - `feature_id`
 - `title`
 - `objective`
@@ -97,7 +98,7 @@ The task must:
 - Include enough context to avoid repository-wide exploration.
 - Include a concrete first executable step that can begin the task without interpretation.
 - Include minimum progress evidence that proves the implementation moved beyond reading.
-- If the task is a later version of a previous task, include `previous_task_id`; otherwise omit it.
+- If the task is a later version of a previous task, set `previous_task_id` to the earlier task; otherwise set it to `null`.
 - Keep `expected_deliverables` aligned with `development_policy.mode`.
 - If `development_policy.mode` is `documentation_first`, `expected_deliverables` must not include `code` or `tests`.
 - If `expected_deliverables` includes `code` or `tests`, `development_policy.mode` must be `test_guided`.

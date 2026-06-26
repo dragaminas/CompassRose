@@ -50,6 +50,7 @@ The Planner must:
 - make it explicit that the task is executed by the `doctor` role with `no_review_loop`
 - allow documentation, state, source, and tests only when they are truly required by the recovery
 - use `test_guided` whenever the recovery changes code or tests
+- if this recovery task is a later version of a previous task, set `previous_task_id` to the earlier task and preserve the earlier task as history; otherwise set it to `null`
 - route pure state/documentation drift through `correct_state` instead of a doctor recovery task
 
 The Planner must not:

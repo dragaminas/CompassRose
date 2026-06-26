@@ -45,7 +45,7 @@ The planner must:
 - define minimum progress evidence that cannot be satisfied by reading alone
 - include enough context to avoid repository-wide exploration
 - derive the task from current repository reality
-- if this task is a later version of a previous task, set `previous_task_id` to the earlier task and preserve the earlier task as history
+- if this task is a later version of a previous task, set `previous_task_id` to the earlier task and preserve the earlier task as history; otherwise set it to `null`
 - reuse recent recovery lessons to tighten the first executable step, minimum progress evidence, or acceptance criteria when the feature has already learned from a blocked or corrected run
 - treat `lifecycle_state` as the primary operational decision input
 

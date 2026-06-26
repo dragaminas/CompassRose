@@ -8,6 +8,7 @@
       "additionalProperties": false,
       "required": [
         "task_id",
+        "previous_task_id",
         "feature_id",
         "title",
         "objective",
