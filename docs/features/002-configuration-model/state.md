@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+unblock_pending
 
 ## Source Request
 
@@ -13,7 +13,7 @@ blocked
 - formalization: complete
 - active_task: F002-T04-C3-U1-C1-U1
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F002-T04-C3-U1-C1-U1-U1
 - last_implementation_result: failed
 - last_quality_gate_result: unknown
 - last_review_result: blocked
@@ -75,7 +75,6 @@ The latest recovery work uncovered a stale recovery interface around `F002-T04-C
 - active_task: `F002-T04-C3-U1-C1-U1`
 - active_correction_task: `none`
 - active_unblock_task: `none`
-- recoverability: agent
 
 ## Last Approved Change
 
@@ -88,4 +87,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-blocked-diagnostic-autocorrection-returned-malformed-or-incomplete-structured-o` and then restore `task_ready`.
+Execute doctor recovery task `F002-T04-C3-U1-C1-U1-U1` next.
