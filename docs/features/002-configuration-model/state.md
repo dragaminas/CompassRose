@@ -58,15 +58,12 @@ The latest recovery work repaired the stale recovery interface around `F002-T04-
 
 ## Blocked By
 
-- - kind: state_corruption
-- - signature: state-corruption-task-ready-doctor-recovery-f002-t04-c3-u1-c1-u1-u1-failed-its-re-entry-quality-
-- - recoverability: agent
-- - observed_state: lifecycle=task_ready; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
-- - evidence: Doctor recovery F002-T04-C3-U1-C1-U1-U1 failed its re-entry quality gates.
-for f in docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md; do grep -q 'F002-T04-C3-U1-C1-U1' "$f" && grep -q 'task-interface-gap-F002-T04-C3-stale-preimage-mismatch' "$f" && grep -q 'task_interface_gap' "$f" && grep -q 'implementation_failed' "$f" && grep -q 'task_ready' "$f" && ! grep -q 'review_pending' "$f" && ! grep -q 'F002-T04-C1' "$f"; done: No output.
-- - evidence: None
-- - evidence: lifecycle=task_ready
-- - reason: Doctor recovery F002-T04-C3-U1-C1-U1-U1 failed its re-entry quality gates. | for f in docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md; do grep -q 'F002-T04-C3-U1-C1-U1' "$f" && grep -q 'task-interface-gap-F002-T04-C3-stale-preimage-mismatch' "$f" && grep -q 'task_interface_gap' "$f" && grep -q 'implementation_failed' "$f" && grep -q 'task_ready' "$f" && ! grep -q 'review_pending' "$f" && ! grep -q 'F002-T04-C1' "$f"; done: No output.
+- kind: task_interface_gap
+- signature: task-interface-gap-F002-T04-C3-stale-preimage-mismatch
+- recoverability: agent
+- observed_state: lifecycle=task_ready; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
+- evidence: The latest recovery work repaired the stale recovery interface around `F002-T04-C3`: the earlier `implementation_failed` attempt produced no diff and omitted the required `Implementation Notes`, and the bounded doctor successor reissued the task interface under `task-interface-gap-F002-T04-C3-stale-preimage-mismatch` before restoring the feature to `task_ready` with `active_task: F002-T04-C3-U1-C1-U1`.
+- evidence: The earlier `F002-T04-C3` attempt still produced no diff and omitted the required `Implementation Notes`.
 
 ## Blocked From
 
@@ -86,4 +83,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-task-ready-doctor-recovery-f002-t04-c3-u1-c1-u1-u1-failed-its-re-entry-quality-` and then restore `task_ready`.
+Plan a doctor recovery task for blocker `task-interface-gap-F002-T04-C3-stale-preimage-mismatch` and then restore `task_ready`.
