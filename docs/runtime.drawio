@@ -1,6 +1,6 @@
 <mxfile host="Electron" agent="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/28.2.5 Chrome/138.0.7204.251 Electron/37.6.1 Safari/537.36" version="28.2.5">
   <diagram name="Page-1" id="PzZvyjd8KHS-Wk0zNd1R">
-    <mxGraphModel dx="3132" dy="887" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="3643" dy="1204" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -143,7 +143,7 @@
           <mxGeometry x="198" y="1205" width="220" height="60" as="geometry" />
         </mxCell>
         <mxCell id="BhB9ykIoYgxXmJzZVWLg-52" value="Doctor recovery lane" style="swimlane;whiteSpace=wrap;html=1;" parent="1" vertex="1">
-          <mxGeometry x="-820" y="50" width="630" height="955" as="geometry" />
+          <mxGeometry x="-820" y="50" width="630" height="980" as="geometry" />
         </mxCell>
         <mxCell id="BhB9ykIoYgxXmJzZVWLg-53" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="BhB9ykIoYgxXmJzZVWLg-52" source="BhB9ykIoYgxXmJzZVWLg-54" target="BhB9ykIoYgxXmJzZVWLg-78" edge="1">
           <mxGeometry relative="1" as="geometry" />
@@ -166,7 +166,7 @@
         <mxCell id="BhB9ykIoYgxXmJzZVWLg-102" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="BhB9ykIoYgxXmJzZVWLg-52" source="BhB9ykIoYgxXmJzZVWLg-89" target="BhB9ykIoYgxXmJzZVWLg-100" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="klTe3rU7b3w4PeOQ0Nts-2" value="yes" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="BhB9ykIoYgxXmJzZVWLg-102">
+        <mxCell id="klTe3rU7b3w4PeOQ0Nts-2" value="yes" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="BhB9ykIoYgxXmJzZVWLg-102" vertex="1" connectable="0">
           <mxGeometry x="-0.4519" y="-1" relative="1" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
@@ -184,7 +184,7 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="BhB9ykIoYgxXmJzZVWLg-103" value="&lt;b&gt;Doctor recovery changes&lt;/b&gt;&lt;div&gt;May touch docs, state, src, and tests as needed&lt;/div&gt;&lt;div&gt;Must not widen into feature backlog&lt;/div&gt;&lt;div&gt;Must preserve task lineage and recovery evidence&lt;/div&gt;&lt;div&gt;No review loop on unblock&lt;/div&gt;" style="whiteSpace=wrap;html=1;rounded=1;" parent="BhB9ykIoYgxXmJzZVWLg-52" vertex="1">
-          <mxGeometry x="144" y="705" width="326" height="60" as="geometry" />
+          <mxGeometry x="144" y="690" width="326" height="90" as="geometry" />
         </mxCell>
         <mxCell id="BhB9ykIoYgxXmJzZVWLg-105" value="&lt;b&gt;Doctor quality gates&lt;/b&gt;&lt;div&gt;repo state is coherent&lt;/div&gt;&lt;div&gt;no stale recovery markers remain&lt;/div&gt;&lt;div&gt;re-entry point is valid&lt;/div&gt;&lt;div&gt;if gates fail, stop with diagnostic&lt;/div&gt;&lt;div&gt;if gates pass, re-enter deterministic loop&lt;/div&gt;" style="whiteSpace=wrap;html=1;rounded=1;" parent="BhB9ykIoYgxXmJzZVWLg-52" vertex="1">
           <mxGeometry x="150" y="845" width="314" height="110" as="geometry" />
@@ -218,7 +218,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="klTe3rU7b3w4PeOQ0Nts-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="BhB9ykIoYgxXmJzZVWLg-89" target="BhB9ykIoYgxXmJzZVWLg-13">
+        <mxCell id="klTe3rU7b3w4PeOQ0Nts-1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="BhB9ykIoYgxXmJzZVWLg-89" target="BhB9ykIoYgxXmJzZVWLg-13" edge="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
               <mxPoint x="-310" y="495" />
@@ -226,7 +226,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="klTe3rU7b3w4PeOQ0Nts-3" value="no" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="klTe3rU7b3w4PeOQ0Nts-1">
+        <mxCell id="klTe3rU7b3w4PeOQ0Nts-3" value="no" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="klTe3rU7b3w4PeOQ0Nts-1" vertex="1" connectable="0">
           <mxGeometry x="-0.7658" y="-2" relative="1" as="geometry">
             <mxPoint as="offset" />
           </mxGeometry>
