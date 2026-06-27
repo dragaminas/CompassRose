@@ -1,0 +1,261 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1320" viewBox="0 0 1800 1320" role="img" aria-labelledby="title desc">
+  <title id="title">Current protoCompassRose flow</title>
+  <desc id="desc">Flowchart of the current protoCompassRose implementation, including lifecycle selection, diagnose_autocorrect, doctor recovery, and the current stop path.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#405261"/>
+    </marker>
+    <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#b42318"/>
+    </marker>
+    <style>
+      .bg { fill: #f7f5ef; }
+      .lane { fill: #fcfbf7; stroke: #d8d2c4; stroke-width: 2; rx: 18; }
+      .title { font: 700 28px ui-sans-serif, system-ui, sans-serif; fill: #14212b; }
+      .subtitle { font: 400 15px ui-sans-serif, system-ui, sans-serif; fill: #44525f; }
+      .lane-title { font: 700 20px ui-sans-serif, system-ui, sans-serif; fill: #20303c; }
+      .box { fill: #ffffff; stroke: #6d7c8a; stroke-width: 2; rx: 16; }
+      .box-blue { fill: #eef6ff; stroke: #4f77a3; stroke-width: 2; rx: 16; }
+      .box-amber { fill: #fff5df; stroke: #c18400; stroke-width: 2; rx: 16; }
+      .box-violet { fill: #f5efff; stroke: #7a57c2; stroke-width: 2; rx: 16; }
+      .box-red { fill: #fff0ed; stroke: #c2412d; stroke-width: 3; rx: 16; }
+      .box-green { fill: #eefbf2; stroke: #3b8a57; stroke-width: 2; rx: 16; }
+      .decision { fill: #fff; stroke: #6d7c8a; stroke-width: 2; }
+      .decision-amber { fill: #fff7e8; stroke: #c18400; stroke-width: 2; }
+      .decision-violet { fill: #f8f2ff; stroke: #7a57c2; stroke-width: 2; }
+      .text { font: 600 16px ui-sans-serif, system-ui, sans-serif; fill: #13212d; }
+      .small { font: 400 13px ui-sans-serif, system-ui, sans-serif; fill: #43515e; }
+      .tiny { font: 400 12px ui-sans-serif, system-ui, sans-serif; fill: #5b6874; }
+      .mono { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #223140; }
+      .line { stroke: #405261; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .line-red { stroke: #b42318; stroke-width: 3.5; fill: none; marker-end: url(#arrow-red); }
+      .line-dash { stroke: #5b6874; stroke-width: 2.5; fill: none; stroke-dasharray: 8 7; marker-end: url(#arrow); }
+      .label { font: 700 13px ui-sans-serif, system-ui, sans-serif; fill: #334250; }
+      .label-red { font: 700 13px ui-sans-serif, system-ui, sans-serif; fill: #9f1d16; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1800" height="1320" />
+
+  <text class="title" x="50" y="52">Current proto flow implemented by protoCompassRose.ts</text>
+  <text class="subtitle" x="50" y="80">This reflects the code path today, not the idealized runtime.drawio path.</text>
+
+  <rect class="box-red" x="1280" y="28" width="470" height="118" />
+  <text class="text" x="1305" y="58">Current exit observed now</text>
+  <text class="small" x="1305" y="84">Feature is already <tspan class="mono">blocked</tspan>, selector sends it to</text>
+  <text class="small" x="1305" y="103"><tspan class="mono">diagnose_autocorrect</tspan>, and diagnostic returns</text>
+  <text class="small" x="1305" y="122"><tspan class="mono">stop_with_diagnostic</tspan> with <tspan class="mono">manual_review</tspan>.</text>
+
+  <rect class="lane" x="40" y="120" width="520" height="1120" />
+  <rect class="lane" x="610" y="120" width="540" height="1120" />
+  <rect class="lane" x="1200" y="120" width="560" height="1120" />
+
+  <text class="lane-title" x="65" y="160">1. Selection by lifecycle state</text>
+  <text class="lane-title" x="635" y="160">2. Runtime actions</text>
+  <text class="lane-title" x="1225" y="160">3. Recovery, diagnostic, and exits</text>
+
+  <rect class="box-blue" x="80" y="195" width="440" height="74" />
+  <text class="text" x="105" y="225">Load config, project state, features, and contracts</text>
+  <text class="small" x="105" y="248">Then inspect the first non-completed feature and classify its state.</text>
+
+  <polygon class="decision" points="300,305 430,390 300,475 170,390" />
+  <text class="text" x="223" y="382">What lifecycle</text>
+  <text class="text" x="248" y="405">bucket?</text>
+
+  <rect class="box" x="75" y="540" width="205" height="88" />
+  <text class="text" x="95" y="568">request_pending</text>
+  <text class="small" x="95" y="592">formalization_pending</text>
+  <text class="small" x="95" y="612">-&gt; plan_feature</text>
+
+  <rect class="box" x="310" y="540" width="205" height="88" />
+  <text class="text" x="330" y="568">formalized</text>
+  <text class="small" x="330" y="592">task_planning_pending</text>
+  <text class="small" x="330" y="612">-&gt; plan_task</text>
+
+  <rect class="box" x="75" y="670" width="205" height="88" />
+  <text class="text" x="95" y="698">task_ready</text>
+  <text class="small" x="95" y="722">implementation_running</text>
+  <text class="small" x="95" y="742">-&gt; implement_task</text>
+
+  <rect class="box" x="310" y="670" width="205" height="88" />
+  <text class="text" x="330" y="698">quality_gates_pending</text>
+  <text class="small" x="330" y="722">review_pending</text>
+  <text class="small" x="330" y="742">-&gt; review_task</text>
+
+  <rect class="box" x="75" y="800" width="205" height="88" />
+  <text class="text" x="95" y="828">correction_pending</text>
+  <text class="small" x="95" y="852">-&gt; correct_task</text>
+
+  <rect class="box-violet" x="310" y="800" width="205" height="88" />
+  <text class="text" x="330" y="828">unblock_pending</text>
+  <text class="small" x="330" y="852">-&gt; doctor_recovery_task</text>
+
+  <rect class="box-amber" x="75" y="930" width="440" height="118" />
+  <text class="text" x="96" y="958">implementation_failed, quality_failed, review_failed, blocked, malformed</text>
+  <text class="small" x="96" y="985">All of these skip the normal path and go straight to</text>
+  <text class="small" x="96" y="1006"><tspan class="mono">diagnose_autocorrect</tspan>.</text>
+  <text class="small" x="96" y="1027">This is one of the biggest differences vs runtime.drawio.</text>
+
+  <rect class="box" x="140" y="1095" width="305" height="92" />
+  <text class="text" x="165" y="1124">completed</text>
+  <text class="small" x="165" y="1148">Selector returns null for this feature.</text>
+  <text class="small" x="165" y="1168">If no feature remains, runtime stops cleanly.</text>
+
+  <path class="line" d="M 300 269 L 300 305" />
+  <path class="line" d="M 220 475 L 180 540" />
+  <path class="line" d="M 380 475 L 410 540" />
+  <path class="line" d="M 205 475 L 180 670" />
+  <path class="line" d="M 395 475 L 410 670" />
+  <path class="line" d="M 245 475 L 180 800" />
+  <path class="line" d="M 355 475 L 410 800" />
+  <path class="line" d="M 300 475 L 300 930" />
+  <path class="line-dash" d="M 300 475 L 300 1095" />
+
+  <text class="label" x="186" y="518">request / formalize</text>
+  <text class="label" x="392" y="518">plan next task</text>
+  <text class="label" x="120" y="646">execute work</text>
+  <text class="label" x="420" y="646">review / approve</text>
+  <text class="label" x="118" y="778">correction</text>
+  <text class="label" x="402" y="778">doctor</text>
+  <text class="label" x="320" y="905">diagnose</text>
+
+  <rect class="box-blue" x="660" y="195" width="440" height="84" />
+  <text class="text" x="685" y="224">plan_feature / plan_task</text>
+  <text class="small" x="685" y="248">Write docs/task artifact, persist state, optionally commit, then loop again.</text>
+
+  <rect class="box-blue" x="660" y="335" width="440" height="84" />
+  <text class="text" x="685" y="364">implement_task or correct_task</text>
+  <text class="small" x="685" y="388">Run implementer prompt and capture diff, notes, and diagnostics.</text>
+
+  <polygon class="decision" points="880,460 1015,545 880,630 745,545" />
+  <text class="text" x="824" y="538">Implementation</text>
+  <text class="text" x="845" y="561">success?</text>
+
+  <rect class="box-green" x="665" y="690" width="220" height="94" />
+  <text class="text" x="690" y="719">Yes</text>
+  <text class="small" x="690" y="743">Persist implementation attempt.</text>
+  <text class="small" x="690" y="763">Next loop sees</text>
+  <text class="small" x="690" y="780"><tspan class="mono">quality_gates_pending</tspan> / <tspan class="mono">review_pending</tspan>.</text>
+
+  <rect class="box-amber" x="920" y="690" width="205" height="94" />
+  <text class="text" x="945" y="719">No</text>
+  <text class="small" x="945" y="743">Method still returns</text>
+  <text class="small" x="945" y="763"><tspan class="mono">continueLoop = true</tspan>.</text>
+  <text class="small" x="945" y="780">Recovery planning happens next loop.</text>
+
+  <rect class="box-blue" x="660" y="840" width="440" height="90" />
+  <text class="text" x="685" y="869">review_task</text>
+  <text class="small" x="685" y="893">Uses quality results + reviewable diff + implementation notes.</text>
+  <text class="small" x="685" y="913">This one can approve, request correction, or record a blocker.</text>
+
+  <polygon class="decision" points="880,970 1015,1055 880,1140 745,1055" />
+  <text class="text" x="836" y="1048">Review</text>
+  <text class="text" x="816" y="1071">status?</text>
+
+  <rect class="box-green" x="615" y="1168" width="180" height="58" />
+  <text class="small" x="638" y="1203">approved -&gt; update state and loop</text>
+
+  <rect class="box" x="815" y="1168" width="205" height="58" />
+  <text class="small" x="838" y="1203">changes_required -&gt; correction_pending</text>
+
+  <rect class="box-amber" x="1040" y="1168" width="180" height="58" />
+  <text class="small" x="1063" y="1203">blocked -&gt; loop into diagnostic</text>
+
+  <path class="line" d="M 520 584 L 660 237" />
+  <path class="line" d="M 520 714 L 660 377" />
+  <path class="line" d="M 280 844 L 660 377" />
+  <path class="line" d="M 515 714 L 660 885" />
+  <path class="line" d="M 880 419 L 880 460" />
+  <path class="line" d="M 815 605 L 775 690" />
+  <path class="line" d="M 945 605 L 1020 690" />
+  <path class="line" d="M 775 784 L 775 840" />
+  <path class="line-dash" d="M 1020 784 L 1020 910 L 1235 910" />
+  <path class="line" d="M 880 930 L 880 970" />
+  <path class="line" d="M 792 1118 L 705 1168" />
+  <path class="line" d="M 880 1140 L 917 1168" />
+  <path class="line-dash" d="M 968 1118 L 1130 1168" />
+
+  <text class="label" x="770" y="653">yes</text>
+  <text class="label" x="978" y="653">no</text>
+  <text class="label" x="690" y="1150">approved</text>
+  <text class="label" x="884" y="1154">changes_required</text>
+  <text class="label" x="1063" y="1152">blocked</text>
+
+  <rect class="box-amber" x="1260" y="195" width="455" height="110" />
+  <text class="text" x="1285" y="224">diagnose_autocorrect</text>
+  <text class="small" x="1285" y="248">Reads contracts, state, task artifacts, attempts, quality gates, and recent recovery lessons.</text>
+  <text class="small" x="1285" y="270">It chooses one of three next steps.</text>
+
+  <polygon class="decision-amber" points="1485,345 1620,430 1485,515 1350,430" />
+  <text class="text" x="1443" y="423">Diagnostic</text>
+  <text class="text" x="1420" y="446">next_step?</text>
+
+  <rect class="box-green" x="1225" y="575" width="180" height="88" />
+  <text class="text" x="1250" y="604">correct_state</text>
+  <text class="small" x="1250" y="628">Apply direct doc/state repair.</text>
+  <text class="small" x="1250" y="648">Then continue loop.</text>
+
+  <rect class="box-violet" x="1420" y="575" width="190" height="88" />
+  <text class="text" x="1445" y="604">plan_doctor_recovery</text>
+  <text class="small" x="1445" y="628">Write doctor recovery task.</text>
+  <text class="small" x="1445" y="648">Set feature to <tspan class="mono">unblock_pending</tspan>.</text>
+
+  <rect class="box-red" x="1625" y="565" width="110" height="108" />
+  <text class="text" x="1644" y="600">stop_with_</text>
+  <text class="text" x="1646" y="623">diagnostic</text>
+  <text class="small" x="1642" y="646">manual_review</text>
+
+  <rect class="box-violet" x="1260" y="740" width="455" height="102" />
+  <text class="text" x="1285" y="770">doctor_recovery_task</text>
+  <text class="small" x="1285" y="794">Run doctor prompt, capture implementation attempt, then run re-entry quality gates directly.</text>
+  <text class="small" x="1285" y="816">There is no normal reviewer loop for this recovery path.</text>
+
+  <polygon class="decision-violet" points="1485,885 1620,970 1485,1055 1350,970" />
+  <text class="text" x="1458" y="963">Recovery</text>
+  <text class="text" x="1430" y="986">successful?</text>
+
+  <rect class="box-green" x="1230" y="1110" width="210" height="88" />
+  <text class="text" x="1255" y="1139">Yes</text>
+  <text class="small" x="1255" y="1163">Restore captured lifecycle state</text>
+  <text class="small" x="1255" y="1183">and re-enter deterministic loop.</text>
+
+  <rect class="box-red" x="1510" y="1110" width="210" height="88" />
+  <text class="text" x="1535" y="1139">No</text>
+  <text class="small" x="1535" y="1163">Record blocked feature, write diagnostic,</text>
+  <text class="small" x="1535" y="1183">and stop the run.</text>
+
+  <path class="line" d="M 515 989 L 1260 250" />
+  <path class="line-dash" d="M 1130 1197 L 1260 970" />
+  <path class="line" d="M 1485 305 L 1485 345" />
+  <path class="line" d="M 1415 490 L 1315 575" />
+  <path class="line" d="M 1485 515 L 1515 575" />
+  <path class="line-red" d="M 1555 490 L 1680 565" />
+  <path class="line" d="M 1515 663 L 1515 740" />
+  <path class="line" d="M 1485 842 L 1485 885" />
+  <path class="line" d="M 1410 1032 L 1335 1110" />
+  <path class="line-red" d="M 1560 1032 L 1615 1110" />
+  <path class="line-dash" d="M 1335 1110 L 1335 1260 L 300 1260 L 300 1187" />
+
+  <text class="label" x="1320" y="544">correct_state</text>
+  <text class="label" x="1514" y="548">plan_doctor_recovery</text>
+  <text class="label-red" x="1632" y="544">stop_with_diagnostic</text>
+  <text class="label" x="1305" y="1087">yes</text>
+  <text class="label-red" x="1600" y="1087">no</text>
+
+  <rect class="box-red" x="1225" y="907" width="95" height="72" />
+  <text class="text" x="1248" y="937">Today</text>
+  <text class="small" x="1242" y="959">we are not</text>
+  <text class="small" x="1239" y="975">here anymore</text>
+
+  <path class="line-red" d="M 1280 907 L 1280 730 L 1700 730 L 1700 673" />
+  <text class="label-red" x="1330" y="720">Previous stop that created the current blocked state:</text>
+  <text class="label-red" x="1330" y="738">doctor recovery failed its re-entry gates.</text>
+
+  <rect class="box-red" x="1260" y="1015" width="210" height="80" />
+  <text class="text" x="1285" y="1044">Actual exit on the latest run</text>
+  <text class="small" x="1285" y="1068"><tspan class="mono">blocked</tspan> -&gt; <tspan class="mono">diagnose_autocorrect</tspan></text>
+  <text class="small" x="1285" y="1088">-&gt; <tspan class="mono">stop_with_diagnostic</tspan></text>
+
+  <rect class="box" x="50" y="1255" width="1700" height="40" />
+  <text class="tiny" x="72" y="1280">Code anchors: determineNextStep / selectStepForFeature / inspectFeature / diagnoseAndAutocorrect / executeDoctorRecoveryTask / stopAfterDoctorRecoveryFailure in proto/protoCompassRose.ts</text>
+</svg>

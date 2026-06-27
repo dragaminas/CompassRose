@@ -58,12 +58,16 @@ The latest recovery work repaired the stale recovery interface around `F002-T04-
 
 ## Blocked By
 
-- kind: task_interface_gap
-- signature: task-interface-gap-F002-T04-C3-stale-preimage-mismatch
-- recoverability: agent
-- observed_state: lifecycle=task_ready; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
-- evidence: The latest recovery work repaired the stale recovery interface around `F002-T04-C3`: the earlier `implementation_failed` attempt produced no diff and omitted the required `Implementation Notes`, and the bounded doctor successor reissued the task interface under `task-interface-gap-F002-T04-C3-stale-preimage-mismatch` before restoring the feature to `task_ready` with `active_task: F002-T04-C3-U1-C1-U1`.
-- evidence: The earlier `F002-T04-C3` attempt still produced no diff and omitted the required `Implementation Notes`.
+- - kind: state_corruption
+- - signature: state-corruption-blocked-the-bounded-doctor-recovery-already-failed-to-prove-deterministic-re-en
+- - recoverability: agent
+- - observed_state: lifecycle=blocked; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
+- - evidence: The bounded doctor recovery already failed to prove deterministic re-entry readiness, and the remaining mismatch needs manual review before any successor task is planned or applied.
+- - evidence: kind: task_interface_gap
+- - evidence: signature: task-interface-gap-F002-T04-C3-stale-preimage-mismatch
+- - evidence: recoverability: agent
+- - evidence: lifecycle=blocked
+- - reason: The bounded doctor recovery already failed to prove deterministic re-entry readiness, and the remaining mismatch needs manual review before any successor task is planned or applied.
 
 ## Blocked From
 
@@ -83,4 +87,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `task-interface-gap-F002-T04-C3-stale-preimage-mismatch` and then restore `task_ready`.
+Plan a doctor recovery task for blocker `state-corruption-blocked-the-bounded-doctor-recovery-already-failed-to-prove-deterministic-re-en` and then restore `task_ready`.

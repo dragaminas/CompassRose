@@ -10,11 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `task-interface-gap-F002-T04-C3-stale-preimage-mismatch`.
+- Feature `002-configuration-model` is blocked by `state-corruption-blocked-the-bounded-doctor-recovery-already-failed-to-prove-deterministic-re-en`.
 - Blocker recoverability: agent.
 - Feature `002-configuration-model` was suspended from `task_ready`; the active task pointer remains `F002-T04-C3-U1-C1-U1`.
-- Blocking task context: `F002-T04-C3-U1-C1-U1-U1`
-- The latest recovery work repaired the stale recovery interface around `F002-T04-C3` through one explicit `task_interface_gap` path: the earlier `implementation_failed` attempt produced no diff and omitted the required `Implementation Notes`, and the bounded doctor successor reissued the task interface under `task-interface-gap-F002-T04-C3-stale-preimage-mismatch` before restoring the feature to `task_ready` with `active_task: F002-T04-C3-U1-C1-U1`.
+- Blocking task context: `F002-T04-C3-U1-C1-U1`
 
 ## Implemented
 - `docs/compassrose/CONFIG.md` and `docs/compassrose/PROJECT_STATE.md` are present as the project-local operational documents.
@@ -44,4 +43,4 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `task-interface-gap-F002-T04-C3-stale-preimage-mismatch` and then restore `task_ready`.
+Plan a doctor recovery task for blocker `state-corruption-blocked-the-bounded-doctor-recovery-already-failed-to-prove-deterministic-re-en` and then restore `task_ready`.
