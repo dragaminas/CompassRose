@@ -1,25 +1,15 @@
 import { Runner, RunType, type RunnerInterface } from "./contracts/runtime/runner.js";
-import type { State } from "./contracts/state/systemState.js";
+import type { StateHandlerInterface } from "./contracts/state/stateHandler.js";
+import type { SystemState } from "./contracts/state/systemState.js";
 
 class SystemRunner extends Runner {
-    constructor(runType: RunType) {
-        super(runType);
-    }
+    stateHandler!: StateHandlerInterface;
 
-    async createState(): Promise<void> {
-        // Implementation for creating state
+    prepareNextChild(state: SystemState): RunnerInterface | undefined {
+        throw new Error("Method not implemented.");
     }
-
-    async loadState(): Promise<void> {
-        // Implementation for loading state
-    }
-
-    async updateState(state: State): Promise<void> {
-        // Implementation for updating state
-    }
-
-    async findNextChild(): Promise<RunnerInterface | undefined> {
-        // Implementation for finding the next child
-        return undefined;
+    
+    executeStateAction(state: SystemState): SystemState {
+        throw new Error("Method not implemented.");
     }
 }
