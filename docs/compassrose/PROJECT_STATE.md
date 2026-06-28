@@ -1886,6 +1886,7 @@ In progress
 - Feature `002-configuration-model` state was canonicalized; the active task pointer remains `F002-T04-C3-U1-C1-U1`.
 - Feature `002-configuration-model` state was canonicalized; the active task pointer remains `F002-T04-C3-U1-C1-U1`.
 - Feature `002-configuration-model` state was canonicalized; the active task pointer remains `F002-T04-C3-U1-C1-U1`.
+- Feature `002-configuration-model` state was canonicalized; the active task pointer remains `F002-T04-C3-U1-C1-U1`.
 
 ## Implemented
 - `docs/compassrose/CONFIG.md` and `docs/compassrose/PROJECT_STATE.md` are present as the project-local operational documents.
@@ -1906,7 +1907,7 @@ In progress
 
 ## Last Approved Change
 
-State correction artifact `F002-T04-C3-U1-C1-U1-C1872` was applied by the prototype orchestrator.
+State correction artifact `F002-T04-C3-U1-C1-U1-C1873` was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -1914,4 +1915,4 @@ State correction artifact `F002-T04-C3-U1-C1-U1-C1872` was applied by the protot
 
 ## Next Planning Hint
 
-Continue from the repaired `blocked` state for `F002-T04-C3-U1-C1-U1-C1872`.
+Continue from the repaired `blocked` state for `F002-T04-C3-U1-C1-U1-C1873`.
