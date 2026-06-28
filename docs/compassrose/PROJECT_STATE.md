@@ -14,6 +14,7 @@ In progress
 - Blocker recoverability: agent.
 - The active task pointer remains `F002-T04-C3-U1-C1-U1`.
 - Blocking task context: `F002-T04-C3-U1-C1-U1`
+- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T04-C3-U1-C1-U1-U1-U1`, to resolve the recoverable blocker and restore `blocked`.
 
 ## Implemented
 
@@ -26,7 +27,7 @@ In progress
 
 ## Pending
 
-- Plan a doctor recovery task for the active feature.
+- Execute doctor recovery task `F002-T04-C3-U1-C1-U1-U1-U1` for the active feature.
 - Restore the captured `blocked` state after the blocker is resolved.
 - Continue updating this file with approved repository facts as feature work lands.
 
@@ -44,4 +45,4 @@ State correction artifact `F002-T04-C3-U1-C1-U1-C2802` was applied by the protot
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr` and then restore `blocked`.
+The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T04-C3-U1-C1-U1-U1-U1` from the captured `blocked` state.

@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+unblock_pending
 
 ## Source Request
 
@@ -13,7 +13,7 @@ blocked
 - formalization: complete
 - active_task: F002-T04-C3-U1-C1-U1
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F002-T04-C3-U1-C1-U1-U1-U1
 - last_implementation_result: passed
 - last_quality_gate_result: passed
 - last_review_result: blocked
@@ -31,7 +31,7 @@ This feature is formalized under `docs/features/002-configuration-model/`, and t
 
 Task `F002-T04` was approved, extending the typed config loader to validate and expose `execution`, `roles`, and `git_policy` data from the canonical project config.
 
-The current recovery work keeps `F002-T04-C3` blocked under the recoverable `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr` condition. The active anchor remains `F002-T04-C3-U1-C1-U1`, and the restoration target is `blocked` with `active_correction_task: none` and `active_unblock_task: none`.
+The current recovery work keeps `F002-T04-C3` on the recoverable `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr` path. The active anchor remains `F002-T04-C3-U1-C1-U1`, and the planned doctor recovery task `F002-T04-C3-U1-C1-U1-U1-U1` is now the active unblock target that will restore the captured `blocked` state after its own quality gates pass.
 
 ## Implemented Deliverables
 
@@ -87,4 +87,4 @@ State correction artifact `F002-T04-C3-U1-C1-U1-C2802` was applied by the protot
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr` and then restore `blocked`.
+Execute doctor recovery task `F002-T04-C3-U1-C1-U1-U1-U1` next.
