@@ -14,9 +14,9 @@ blocked
 - active_task: F002-T04-C3-U1-C1-U1
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: failed
-- last_quality_gate_result: unknown
-- last_review_result: blocked
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: approved
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -71,15 +71,14 @@ The latest recovery work repaired the stale recovery interface around `F002-T04-
 
 ## Blocked From
 
-- lifecycle_state: `task_ready`
-- active_task: `F002-T04-C3-U1-C1-U1`
-- active_correction_task: `none`
-- active_unblock_task: `none`
-- recoverability: agent
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Task `F002-T04` was approved, extending the typed config loader and its tests to validate the first runtime-precondition policy fields from `docs/compassrose/CONFIG.md`.
+State correction artifact `F002-T04-C3-U1-C1-U1-C1` was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -87,4 +86,4 @@ Task `F002-T04` was approved, extending the typed config loader and its tests to
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-blocked-the-bounded-doctor-recovery-already-failed-to-prove-deterministic-re-en` and then restore `task_ready`.
+Continue from the repaired `blocked` state for `F002-T04-C3-U1-C1-U1-C1`.

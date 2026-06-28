@@ -14,6 +14,7 @@ In progress
 - Blocker recoverability: agent.
 - Feature `002-configuration-model` was suspended from `task_ready`; the active task pointer remains `F002-T04-C3-U1-C1-U1`.
 - Blocking task context: `F002-T04-C3-U1-C1-U1`
+- Feature `002-configuration-model` state was canonicalized; the active task pointer remains `F002-T04-C3-U1-C1-U1`.
 
 ## Implemented
 - `docs/compassrose/CONFIG.md` and `docs/compassrose/PROJECT_STATE.md` are present as the project-local operational documents.
@@ -25,8 +26,7 @@ In progress
 
 ## Pending
 
-- Plan a doctor recovery task for the active feature.
-- Restore the captured `task_ready` state after the blocker is resolved.
+- Continue from the repaired `blocked` state for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -35,7 +35,7 @@ In progress
 
 ## Last Approved Change
 
-Task `F002-T04` was approved, extending the typed config loader to validate and expose `execution`, `roles`, and `git_policy` data from the canonical project config.
+State correction artifact `F002-T04-C3-U1-C1-U1-C1` was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -43,4 +43,4 @@ Task `F002-T04` was approved, extending the typed config loader to validate and 
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-blocked-the-bounded-doctor-recovery-already-failed-to-prove-deterministic-re-en` and then restore `task_ready`.
+Continue from the repaired `blocked` state for `F002-T04-C3-U1-C1-U1-C1`.
