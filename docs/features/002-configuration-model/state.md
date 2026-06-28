@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+blocked
 
 ## Source Request
 
@@ -13,7 +13,7 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T04-C3-U1-C1-U1
 - active_correction_task: none
-- active_unblock_task: F002-T04-C3-U1-C1-U1-U1-U1
+- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
 - last_review_result: blocked
@@ -31,7 +31,7 @@ This feature is now formalized under `docs/features/002-configuration-model/`, a
 
 Task `F002-T04` was approved, extending the typed config loader to validate and expose `execution`, `roles`, and `git_policy` data from the canonical project config.
 
-The latest recovery work repaired the stale recovery interface around `F002-T04-C3`: the earlier `implementation_failed` attempt produced no diff and omitted the required `Implementation Notes`, and the bounded doctor successor reissued the task interface under `task-interface-gap-F002-T04-C3-stale-preimage-mismatch` before restoring the feature to `task_ready` with `active_task: F002-T04-C3-U1-C1-U1`.
+The current recovery work keeps `F002-T04-C3` blocked under the recoverable `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr` condition. The active anchor remains `F002-T04-C3-U1-C1-U1`, and the restoration target is `blocked` with `active_correction_task: none` and `active_unblock_task: none`.
 
 ## Implemented Deliverables
 
@@ -59,15 +59,26 @@ The latest recovery work repaired the stale recovery interface around `F002-T04-
 ## Blocked By
 
 - - kind: state_corruption
-- - signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr
+- - signature: state-corruption-blocked-doctor-recovery-f002-t04-c3-u1-c1-u1-u1-u1-failed-its-re-entry-quality-
 - - recoverability: agent
 - - observed_state: lifecycle=blocked; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
-- - evidence: Feature 002-configuration-model is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.
-- - evidence: - kind: state_corruption
-- - evidence: - signature: state-corruption-blocked-the-bounded-doctor-recovery-already-failed-to-prove-deterministic-re-en
-- - evidence: - recoverability: agent
+- - evidence: Doctor recovery F002-T04-C3-U1-C1-U1-U1-U1 failed its re-entry quality gates.
+for f in docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md; do grep -F 'active_task: F002-T04-C3-U1-C1-U1' "$f" && grep -F 'state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr' "$f" && grep -F 'blocked' "$f"; done: - signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr
+- evidence: - signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr
+blocked
+- last_review_result: blocked
+The current recovery work keeps `F002-T04-C3` blocked under the recoverable `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr` condition. The active anchor remains `F002-T04-C3-U1-C1-U1`, and the restoration target is `blocked` with `active_correction_task: none` and `active_unblock_task: none`.
+- signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr
+- observed_state: lifecycle=blocked; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
+- evidence: Feature 002-configuration-model is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.
+- evidence: - signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr
+- evidence: lifecycle=blocked
+- reason: Feature 002-configuration-model is blocked and nee...
+- - evidence: kind: state_corruption
+- - evidence: signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr
+- - evidence: recoverability: agent
 - - evidence: lifecycle=blocked
-- - reason: Feature 002-configuration-model is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.
+- - reason: Doctor recovery F002-T04-C3-U1-C1-U1-U1-U1 failed its re-entry quality gates. | for f in docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md; do grep -F 'active_task: F002-T04-C3-U1-C1-U1' "$f" && grep -F 'state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr' "$f" && grep -F 'blocked' "$f"; done: - signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr | - evidence: - signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr | blocked | - last_review_result: blocked | The current recovery work keeps `F002-T04-C3` blocked under the recoverable `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr` condition. The active anchor remains `F002-T04-C3-U1-C1-U1`, and the restoration target is `blocked` with `active_correction_task: none` and `active_unblock_task: none`. | - signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr | - observed_state: lifecycle=blocked; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none | - evidence: Feature 002-configuration-model is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop. | - evidence: - signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr | - evidence: lifecycle=blocked | - reason: Feature 002-configuration-model is blocked and nee...
 
 ## Blocked From
 
@@ -75,6 +86,7 @@ The latest recovery work repaired the stale recovery interface around `F002-T04-
 - active_task: `F002-T04-C3-U1-C1-U1`
 - active_correction_task: `none`
 - active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -86,4 +98,4 @@ State correction artifact `F002-T04-C3-U1-C1-U1-C2802` was applied by the protot
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T04-C3-U1-C1-U1-U1-U1` next.
+Plan a doctor recovery task for blocker `state-corruption-blocked-doctor-recovery-f002-t04-c3-u1-c1-u1-u1-u1-failed-its-re-entry-quality-` and then restore `blocked`.
