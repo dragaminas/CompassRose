@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
+import { selectImplementationContextArtifactNames } from '../src/contracts/runtime/agentContext.js';
 import { classifyImplementation, parseTaskDocument, selectReviewableDiffForReview } from '../proto/protoCompassRose.js';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -142,6 +143,51 @@ describe('proto reviewable diff handoff', () => {
     );
 
     expect(classification).toBe('reviewable_diff_lost');
+  });
+
+  test('classifies no-diff attempts as already_complete when implementation notes prove the behavior already existed', () => {
+    const notes = [
+      '## Implementation Notes',
+      '',
+      '- status: already_complete',
+      '- reason: the requested behavior already exists in src/config/configReader.ts',
+      '- evidence: src/config/configReader.ts, tests/configReader.test.ts',
+    ].join('\n');
+
+    const classification = classifyImplementation(
+      {
+        ok: true,
+        stdout: notes,
+        stderr: '',
+        exitCode: 0,
+        signal: null,
+        timedOut: false,
+        commandInvoked: 'opencode run ...',
+      },
+      notes,
+      false,
+      notes,
+      'abc1234',
+      'abc1234',
+      null,
+    );
+
+    expect(classification).toBe('already_complete');
+  });
+
+  test('selects implementer context artifacts for the task from the agent-context log file names', () => {
+    const names = selectImplementationContextArtifactNames([
+      '001-feature_planning-planner-feature-plan-002-configuration-model.json',
+      '002-subtask_execution-implementer-subtask-f002-t04-attempt-1.json',
+      '002-subtask_execution-implementer-subtask-f002-t04-attempt-1.prompt.txt',
+      '003-subtask_review-reviewer-subtask-f002-t04.json',
+      '004-subtask_execution-doctor-subtask-f002-t04.json',
+    ], 'F002-T04');
+
+    expect(names).toEqual([
+      '002-subtask_execution-implementer-subtask-f002-t04-attempt-1.json',
+      '002-subtask_execution-implementer-subtask-f002-t04-attempt-1.prompt.txt',
+    ]);
   });
 
   test('falls back to the committed diff for review when the live worktree diff was lost', () => {

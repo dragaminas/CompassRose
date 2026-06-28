@@ -1,0 +1,154 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1600" viewBox="0 0 2400 1600" role="img" aria-labelledby="title desc">
+  <title id="title">CompassRose contract mind map</title>
+  <desc id="desc">Mind-map view of the TypeScript contract layer, showing the main interfaces, the contracts they consume, and the modules they connect to.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f8f6ef" />
+      <stop offset="100%" stop-color="#eef4f8" />
+    </linearGradient>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#5c6b78" />
+    </marker>
+    <style>
+      .bg { fill: url(#bg); }
+      .title { font: 700 30px ui-sans-serif, system-ui, sans-serif; fill: #15212b; }
+      .subtitle { font: 400 15px ui-sans-serif, system-ui, sans-serif; fill: #4b5a66; }
+      .center { fill: #1f3342; stroke: #12202c; stroke-width: 2; rx: 24; }
+      .center-text { font: 700 20px ui-sans-serif, system-ui, sans-serif; fill: #ffffff; }
+      .center-small { font: 400 13px ui-sans-serif, system-ui, sans-serif; fill: #d7e2ea; }
+      .card { fill: rgba(255,255,255,0.92); stroke: #c6d0d8; stroke-width: 2; rx: 22; }
+      .card-header { font: 700 17px ui-sans-serif, system-ui, sans-serif; fill: #182633; }
+      .card-note { font: 400 13px ui-sans-serif, system-ui, sans-serif; fill: #52616d; }
+      .line { stroke: #60707d; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .tag { font: 700 12px ui-sans-serif, system-ui, sans-serif; fill: #496170; }
+      .mono { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #243744; }
+      .mini { font: 400 13px ui-sans-serif, system-ui, sans-serif; fill: #26333f; }
+      .mono-dim { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #4a5864; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="2400" height="1600" />
+
+  <text class="title" x="60" y="56">CompassRose contract mind map</text>
+  <text class="subtitle" x="60" y="84">This shows the contract-level architecture, not the current proto implementation.</text>
+
+  <rect class="center" x="995" y="178" width="410" height="122" />
+  <text class="center-text" x="1190" y="218" text-anchor="middle">CompassRose application</text>
+  <text class="center-small" x="1190" y="244" text-anchor="middle">contracts, records, and workflow state</text>
+  <text class="center-small" x="1190" y="264" text-anchor="middle">flow from state selection to action execution</text>
+
+  <!-- Orchestration core -->
+  <rect class="card" x="70" y="170" width="700" height="330" />
+  <text class="card-header" x="96" y="204">Orchestration core</text>
+  <text class="card-note" x="96" y="228">`src/contracts/runtime/orchestrator.ts`, `runner.ts`, and `state/stateHandler.ts`</text>
+  <text class="mini" x="96" y="262">`OrchestratorInterface` composes `StateStoreInterface`, `StateMachineInterface`,</text>
+  <text class="mini" x="96" y="284">`ActionSelectorInterface`, `ActionContextFactoryInterface`, `ActionDispatcherInterface`,</text>
+  <text class="mini" x="96" y="306">and `ActionExecutorInterface`.</text>
+  <text class="mini" x="96" y="340">`RunnerInterface` wraps `StateHandlerInterface` and keeps the loop bounded.</text>
+  <text class="mini" x="96" y="372">`StateHandlerInterface` is the narrow state entry point: create, load, update, handle.</text>
+  <text class="mini" x="96" y="404">This layer uses `SystemState` and depends on the action/state contracts below.</text>
+
+  <!-- Action layer -->
+  <rect class="card" x="840" y="170" width="720" height="330" />
+  <text class="card-header" x="866" y="204">Action layer</text>
+  <text class="card-note" x="866" y="228">`src/contracts/actions/actionContracts.ts`</text>
+  <text class="mini" x="866" y="262">`ActionType` is the command vocabulary of the application.</text>
+  <text class="mini" x="866" y="284">`ActionContextByType` binds each action to the smallest context it needs.</text>
+  <text class="mini" x="866" y="306">`SystemAction&lt;T&gt;` pairs `actionType` with `actionContext`.</text>
+  <text class="mini" x="866" y="340">`ActionFactory` creates typed actions, and `ActionExecutor` consumes them.</text>
+  <text class="mini" x="866" y="372">Context types fan out to planner, reviewer, diagnostic, and task contracts.</text>
+  <text class="mini" x="866" y="404">This is where `ActionContextBase` prevents a giant bag of optionals.</text>
+
+  <!-- State model -->
+  <rect class="card" x="1610" y="170" width="720" height="360" />
+  <text class="card-header" x="1636" y="204">State model</text>
+  <text class="card-note" x="1636" y="228">`src/contracts/state/*.ts`</text>
+  <text class="mini" x="1636" y="262">`SystemState` nests `FeatureState`, `TaskState`, and `SubtaskState`.</text>
+  <text class="mini" x="1636" y="284">`ImplementationState` declares where the repository can be.</text>
+  <text class="mini" x="1636" y="306">`ImplementationEvent` declares what can move it forward.</text>
+  <text class="mini" x="1636" y="340">`FeatureStateSnapshot` and `ProjectStateSnapshot` are read models.</text>
+  <text class="mini" x="1636" y="372">`ProjectStateReport` validates the project-state document.</text>
+  <text class="mini" x="1636" y="404">`FeatureStateSnapshot` depends on `RestorationTarget` from task contracts.</text>
+  <text class="mini" x="1636" y="436">`ImplementationState` maps allowed actions and `ImplementationEvent` maps next state.</text>
+
+  <!-- Task / planning -->
+  <rect class="card" x="70" y="560" width="760" height="390" />
+  <text class="card-header" x="96" y="594">Task and planning contracts</text>
+  <text class="card-note" x="96" y="618">`src/contracts/planner/*.ts`, `src/contracts/task/*.ts`, and `src/contracts/task/workItem.ts`</text>
+  <text class="mini" x="96" y="652">`PlannedFeatureDocs` and `PlannedTask` are the planner outputs.</text>
+  <text class="mini" x="96" y="674">`PlannerInput` collects roadmap, feature, architecture, state, project, config, and repository context.</text>
+  <text class="mini" x="96" y="696">`TaskScope`, `TaskContext`, `TaskTrace`, `TaskDevelopmentPolicy`, and `TaskQualityGates` shape work items.</text>
+  <text class="mini" x="96" y="730">`ParsedTaskDocument` is the runtime view of a task document.</text>
+  <text class="mini" x="96" y="752">`CorrectionTask`, `StateCorrectionTask`, `RestorationTarget`, and `DoctorRecoveryTaskMetadata` model recovery work.</text>
+  <text class="mini" x="96" y="784">`ReviewableDiffHandoff` keeps review anchored to evidence instead of intention.</text>
+  <text class="mini" x="96" y="816">`PlannedTask` feeds implementer and reviewer contracts directly.</text>
+  <text class="mini" x="96" y="848">The planner is intentionally narrow: one next task at a time.</text>
+
+  <!-- Review / recovery -->
+  <rect class="card" x="870" y="560" width="700" height="390" />
+  <text class="card-header" x="896" y="594">Review and recovery contracts</text>
+  <text class="card-note" x="896" y="618">`src/contracts/reviewer/*.ts`, `runtime/attempts.ts`, `runtime/taskInterfaceAnalysis.ts`, `runtime/diagnosticAutocorrection.ts`, `runtime/diagnostic-autocorrection.md`</text>
+  <text class="mini" x="896" y="652">`ReviewerInput` consumes task, implementation, validation, feature context, and policy.</text>
+  <text class="mini" x="896" y="674">`ReviewerOutput` can approve, request correction, or produce a `CorrectionTask`.</text>
+  <text class="mini" x="896" y="696">`ImplementationAttempt` and `ImplementationDiagnostics` explain what happened during execution.</text>
+  <text class="mini" x="896" y="730">`QualityGateResult` records gate-by-gate outcomes.</text>
+  <text class="mini" x="896" y="752">`TaskInterfaceAnalysis` and `RecoveryLesson` capture what should tighten next time.</text>
+  <text class="mini" x="896" y="784">`DiagnosticAutocorrectionDecision` chooses `correct_state`, `plan_doctor_recovery`, or `stop_with_diagnostic`.</text>
+  <text class="mini" x="896" y="816">`DiagnosticBlocker` and `BlockerProfile` keep recoverability explicit.</text>
+  <text class="mini" x="896" y="848">This layer is the safety net when the normal task loop cannot continue cleanly.</text>
+
+  <!-- Runtime records -->
+  <rect class="card" x="1610" y="560" width="720" height="390" />
+  <text class="card-header" x="1636" y="594">Runtime records and logging</text>
+  <text class="card-note" x="1636" y="618">`src/contracts/runtime/protoRuntime.ts`, `agentContext.ts`, `stepDecision.ts`, `attempts.ts`, `taskInterfaceAnalysis.ts`</text>
+  <text class="mini" x="1636" y="652">`AgentInvocationContext` stores the exact prompt, tool, workspace, and configuration sent to an agent.</text>
+  <text class="mini" x="1636" y="674">`AgentToolContext`, `AgentWorkspaceContext`, and `AgentConfigurationContext` make the log inspectable.</text>
+  <text class="mini" x="1636" y="696">`ProtoOptions`, `FeatureRecord`, `FeatureInspection`, `StepDecision`, `StepRunRecord`, and `RunSummary` describe runtime artifacts.</text>
+  <text class="mini" x="1636" y="730">`StepExecutionResult` is the compact result of one selected action.</text>
+  <text class="mini" x="1636" y="752">`ContractRefreshResult` says whether runtime-critical files require a restart.</text>
+  <text class="mini" x="1636" y="784">`RefinementFeedback` keeps failures reviewable after the run finishes.</text>
+  <text class="mini" x="1636" y="816">This layer is evidence, not orchestration.</text>
+
+  <!-- Shared primitives -->
+  <rect class="card" x="650" y="1000" width="1100" height="220" />
+  <text class="card-header" x="676" y="1034">Shared primitives</text>
+  <text class="card-note" x="676" y="1058">These are the base types that several higher-level contracts reuse.</text>
+  <text class="mini" x="676" y="1092">`TaskTrace`, `TaskContext`, `TaskScope`, `TaskDevelopmentPolicy`, and `TaskQualityGates` live in `task/workItem.ts`.</text>
+  <text class="mini" x="676" y="1114">`ReviewerStatus` is shared by review output and task-interface analysis.</text>
+  <text class="mini" x="676" y="1136">`AgentToolName` is shared by runtime options and agent invocation logs.</text>
+  <text class="mini" x="676" y="1158">`StepDecision` links the state selector, the runtime records, and the action flow.</text>
+  <text class="mini" x="676" y="1180">`ProjectConfiguration` is the external config shape consumed by `AgentInvocationContext`.</text>
+
+  <!-- Branch connectors -->
+  <path class="line" d="M 995 239 L 770 239" />
+  <text class="tag" x="820" y="228">uses</text>
+
+  <path class="line" d="M 1405 239 L 1610 239" />
+  <text class="tag" x="1464" y="228">uses</text>
+
+  <path class="line" d="M 1140 300 L 1140 560" />
+  <text class="tag" x="1150" y="444">produces</text>
+
+  <path class="line" d="M 1180 300 L 1180 560" />
+  <text class="tag" x="1190" y="444">feeds</text>
+
+  <path class="line" d="M 1005 430 L 830 560" />
+  <text class="tag" x="930" y="520">task artifacts</text>
+
+  <path class="line" d="M 1395 430 L 1560 560" />
+  <text class="tag" x="1436" y="520">review / recovery</text>
+
+  <path class="line" d="M 1660 430 L 1740 560" />
+  <text class="tag" x="1704" y="520">records</text>
+
+  <path class="line" d="M 1200 1220 L 1200 1000" />
+  <text class="tag" x="1210" y="968">shared base types</text>
+
+  <!-- Small module tags under each card -->
+  <text class="mono-dim" x="96" y="454">orchestrator.ts / runner.ts / stateHandler.ts</text>
+  <text class="mono-dim" x="866" y="454">actionContracts.ts</text>
+  <text class="mono-dim" x="1636" y="482">workflowState.ts / implementationMachine.ts / snapshots</text>
+  <text class="mono-dim" x="96" y="886">plannerContracts.ts / taskContracts.ts</text>
+  <text class="mono-dim" x="896" y="886">reviewerContracts.ts / attempts.ts / recovery</text>
+  <text class="mono-dim" x="1636" y="886">agentContext.ts / protoRuntime.ts / stepDecision.ts</text>
+</svg>

@@ -1,5 +1,7 @@
 # Planner Adapter Contract
 
+TypeScript contract: `src/contracts/adapters/plannerAdapterContracts.ts`.
+
 ## Purpose
 
 Defines how CompassRose communicates with a Planner implementation.

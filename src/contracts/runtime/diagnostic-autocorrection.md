@@ -10,6 +10,8 @@ It reads current implementation artifacts, feature and project documentation, an
 
 If docs or state are broken, it selects `correct_state` so the runtime applies the repair directly; if the blocker requires bounded repository recovery, it selects `plan_doctor_recovery`.
 
+TypeScript contract: `src/contracts/runtime/diagnosticAutocorrection.ts`.
+
 ---
 
 ## Responsibility
@@ -28,7 +30,7 @@ Diagnostic Autocorrection must not:
 
 - approve work
 - invent repository state that cannot be justified from current artifacts
-- broaden a narrow blocker into a new feature backlog
+- broaden a narrow blocker into a new feature plan
 - silently hand recovery documentation or state repair to the normal implementer loop
 
 ---

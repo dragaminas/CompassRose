@@ -1,8 +1,9 @@
 import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import type { AgentToolName } from '../src/contracts/runtime/agentContext.js';
 
 function main(): number {
   const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -168,8 +169,15 @@ function main(): number {
     .filter((line) => line.length > 0)
     .filter((line) => !ignoredWorktreePaths.has(line.slice(3).trim()));
   const worktreeClean = worktreeDirtyLines.length === 0;
+  const agentContextsRoot = join(cloneRoot, '.git', 'proto-compassrose', 'logs', 'agent-contexts');
+  const agentContextsRecorded = existsSync(agentContextsRoot) && readdirSync(agentContextsRoot).some((entry) => {
+    const entryPath = join(agentContextsRoot, entry);
+    return statSync(entryPath).isDirectory() && readdirSync(entryPath).some((name) => name.endsWith('.json'));
+  });
 
-  const checks = buildScenarioChecks({
+  const checks = [
+    { name: 'agent contexts were recorded', ok: agentContextsRecorded },
+    ...buildScenarioChecks({
     scenario,
     commitEnabled,
     codexCalls,
@@ -192,7 +200,8 @@ function main(): number {
     malformedFeatureStatePath,
     implementerTool,
     worktreeClean,
-  });
+  }),
+  ];
 
   for (const check of checks) {
     console.log(`${check.ok ? 'PASS' : 'FAIL'}: ${check.name}`);
@@ -241,7 +250,7 @@ function buildScenarioChecks(input: {
   featureTasksDirectory: string;
   protoTasksDirectory: string;
   malformedFeatureStatePath: string;
-  implementerTool: 'codex' | 'opencode';
+  implementerTool: AgentToolName;
   worktreeClean: boolean;
 }): Array<{ name: string; ok: boolean }> {
   const {
@@ -270,9 +279,9 @@ function buildScenarioChecks(input: {
   } = input;
 
   if (scenario === 'recoverable-review-blocked') {
-    const resumedReview = runSummary.steps?.some((step) => step.decision?.kind === 'review_task' && step.decision?.task_id === 'F002-T04') === true;
+    const resumedReview = runSummary.steps?.some((step) => step.decision?.kind === 'review_subtask' && step.decision?.task_id === 'F002-T04') === true;
     return [
-      { name: 'codex was called enough times to diagnose, analyze, doctor, and resume the blocked task', ok: codexCalls >= 6 },
+      { name: 'codex was called enough times to diagnose, doctor, and resume the blocked task', ok: codexCalls >= 3 },
       { name: 'opencode was called once for the original task before doctor recovery resumed review', ok: opencodeCalls === 1 },
       { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
       { name: 'recoverable blocker created a doctor recovery task', ok: existsSync(unblockTaskPath) },
@@ -284,7 +293,7 @@ function buildScenarioChecks(input: {
 
   if (scenario === 'terminal-review-blocked') {
     return [
-      { name: 'codex was called enough times to analyze the blocked review and stop with a diagnostic', ok: codexCalls >= 3 },
+      { name: 'codex was called enough times to analyze the blocked review and stop with a diagnostic', ok: codexCalls >= 1 },
       { name: 'opencode was called exactly once', ok: opencodeCalls === 1 },
       { name: 'run stopped with a blocked status', ok: runSummary.status === 'stopped' && runSummary.exit_code === 2 },
       { name: 'terminal blocker recorded a blocker profile', ok: existsSync(blockerProfilePath) },
@@ -361,10 +370,10 @@ function buildScenarioChecks(input: {
   if (scenario === 'implementation-failed-recovery') {
     const diagnostic = readJsonIfExists(diagnosticPath);
     const implementationFailedUnblockTaskPath = join(protoTasksDirectory, 'F002-T05-U1.json');
-    const resumedImplementation = runSummary.steps?.some((step) => step.decision?.kind === 'implement_task' && step.decision?.task_id === 'F002-T04') === true;
+    const resumedImplementation = runSummary.steps?.some((step) => step.decision?.kind === 'implement_subtask' && step.decision?.task_id === 'F002-T04') === true;
 
     return [
-      { name: 'codex was called enough times to diagnose implementation_failed, plan doctor recovery, execute it, and review the resumed task', ok: codexCalls >= 4 },
+      { name: 'codex was called enough times to diagnose implementation_failed, plan doctor recovery, execute it, and review the resumed task', ok: codexCalls >= 2 },
       { name: 'opencode was called once for the resumed implementation after doctor recovery', ok: opencodeCalls === 1 },
       { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
       { name: 'implementation_failed recovery created a doctor recovery task', ok: existsSync(implementationFailedUnblockTaskPath) },
@@ -383,7 +392,8 @@ function buildScenarioChecks(input: {
       : 0;
     const recoveryLesson = readJsonIfExists(recoveryLessonPath);
     const recoveryLessonScopeCount = Array.isArray(recoveryLesson?.scope_isolation_notes) ? recoveryLesson.scope_isolation_notes.length : 0;
-    const correctedTaskExecuted = runSummary.steps?.some((step) => step.decision?.kind === 'correct_task') === true;
+    const correctionTaskId = basename(correctionTaskPath, '.json');
+    const correctedTaskExecuted = runSummary.steps?.some((step) => step.decision?.kind === 'implement_subtask' && step.decision?.task_id === correctionTaskId) === true;
 
     return [
       { name: 'codex was called enough times for review analysis and correction recovery', ok: codexCalls >= 3 },
@@ -434,7 +444,7 @@ function buildScenarioChecks(input: {
     const stateRepairApplied = runSummary.steps?.some((step) => typeof step.summary === 'string' && step.summary.includes('applied a state correction')) === true;
 
     return [
-      { name: 'codex was called enough times to diagnose malformed state and review the resumed task', ok: codexCalls >= 2 },
+      { name: 'codex was called enough times to diagnose malformed state and review the resumed task', ok: codexCalls >= 1 },
       { name: 'opencode was called once for the restored original task', ok: opencodeCalls === 1 },
       { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
       { name: 'state correction artifact was recorded', ok: stateCorrectionArtifactExists },
@@ -447,7 +457,7 @@ function buildScenarioChecks(input: {
 
   if (scenario === 'unblock') {
     return [
-      { name: 'codex was called enough times to diagnose, plan, execute doctor recovery, and review the restored task', ok: codexCalls >= 4 },
+      { name: 'codex was called enough times to plan, execute doctor recovery, and review the restored task', ok: codexCalls >= 3 },
       { name: 'opencode was called once for the restored task after doctor recovery', ok: opencodeCalls === 1 },
       { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
       { name: 'opencode touched the repo', ok: markerExists },
@@ -791,7 +801,6 @@ function sequenceForScenario(scenario) {
   switch (scenario) {
     case 'unblock':
       return [
-        () => diagnosticPayload('002-configuration-model', 'plan_doctor_recovery', 'Recover the blocked feature through a bounded doctor recovery task.', 'state_corruption', 'blocked-feature', 'agent', ['Blocked feature state recorded a restoration target.'], 'apply_in_doctor_recovery', 'Keep the doctor recovery task focused on restoring task readiness.', ['src/doctor/projectState.ts', 'src/cli/main.ts']),
         () => plannerTask({
           task_id: 'F002-T05-U1',
           feature_id: '002-configuration-model',
@@ -847,15 +856,6 @@ function sequenceForScenario(scenario) {
     case 'recoverable-review-blocked':
       return [
         () => blockedReview('F002-T04', 'recoverable blocker: the task needs a doctor recovery pass before review can proceed', 'The blocker is recoverable by planning a focused doctor recovery task.', 'passed'),
-        () => taskInterfaceAnalysis('F002-T04', 'blocked', 'A focused doctor recovery task should tighten the interface before the task continues.', 'both', true, ['The current task interface leaves too much room for interpretation once a review reports a blocker.'], {
-          first_executable_step: 'Make the doctor recovery opening step a single concrete file or command.',
-          minimum_progress_evidence: ['The doctor recovery task shows a narrower first executable step.'],
-          context_additions: ['Call out the exact blocker signature that the doctor recovery task must address.'],
-          scope_adjustments: ['Keep the doctor recovery task focused on the blocker and the task interface only.'],
-          acceptance_criteria_adjustments: ['Require the doctor recovery task to state the restoration target explicitly.'],
-          quality_gate_adjustments: ['Keep the quick diff check as the only gate.'],
-        }, ['Review-blocked recovery should record whether the task interface can be tightened for future runs.']),
-        () => diagnosticPayload('002-configuration-model', 'plan_doctor_recovery', 'Plan a focused doctor recovery task before retrying the blocked review target.', 'task_interface_gap', 'recoverable-review-blocker', 'agent', ['The blocked review can be recovered through a narrower doctor recovery task.'], 'apply_in_doctor_recovery', 'Use the doctor recovery task to tighten the interface and restore review_pending.', ['src/doctor/projectState.ts', 'src/cli/main.ts']),
         () => plannerTask({
           task_id: 'F002-T04-U1',
           feature_id: '002-configuration-model',
@@ -906,11 +906,11 @@ function sequenceForScenario(scenario) {
           ],
           expected_deliverables: ['code', 'tests'],
         }),
-        () => approvedReview('F002-T04', 'prototype resumes the original task after doctor recovery', 'e2e mock review approved the restored original task'),
+        (prompt) => approvedReview(extractTaskIdFromPrompt(prompt), 'prototype resumes the original task after doctor recovery', 'e2e mock review approved the restored original task'),
+        (prompt) => approvedReview(extractTaskIdFromPrompt(prompt), 'prototype resumes the original task after doctor recovery', 'e2e mock review approved the restored original task'),
       ];
     case 'implementation-failed-recovery':
       return [
-        () => diagnosticPayload('002-configuration-model', 'plan_doctor_recovery', 'Recover the failed implementation through a bounded doctor recovery task before retrying F002-T04.', 'implementation_failure', 'implementation-failed-f002-t04', 'agent', ['The implementation attempt for F002-T04 failed and needs bounded recovery.'], 'apply_in_doctor_recovery', 'Use the doctor recovery task to restore task_ready for F002-T04.', ['src/doctor/projectState.ts', 'src/cli/main.ts']),
         () => plannerTask({
           task_id: 'F002-T05-U1',
           feature_id: '002-configuration-model',
@@ -961,11 +961,11 @@ function sequenceForScenario(scenario) {
           ],
           expected_deliverables: ['code', 'tests'],
         }),
-        () => approvedReview('F002-T04', 'prototype resumes the original task after implementation_failed recovery', 'e2e mock review approved the resumed implementation'),
+        (prompt) => approvedReview(extractTaskIdFromPrompt(prompt), 'prototype resumes the original task after implementation_failed recovery', 'e2e mock review approved the resumed implementation'),
+        (prompt) => approvedReview(extractTaskIdFromPrompt(prompt), 'prototype resumes the original task after implementation_failed recovery', 'e2e mock review approved the resumed implementation'),
       ];
     case 'unblock-doc-code-mismatch':
       return [
-        () => diagnosticPayload('002-configuration-model', 'plan_doctor_recovery', 'Plan a doctor recovery task to repair the mixed documentation/code deliverable mismatch.', 'task_interface_gap', 'doctor-deliverable-mismatch', 'agent', ['The doctor recovery contract now permits documentation when the recovery needs it.'], 'apply_in_doctor_recovery', 'Repair the planner/task contract mismatch through doctor recovery.', ['src/contracts/planner/doctor-recovery-planning-prompt.md']),
         () => plannerTask({
           task_id: 'F002-T05-U2',
           feature_id: '002-configuration-model',
@@ -1017,19 +1017,11 @@ function sequenceForScenario(scenario) {
           ],
           expected_deliverables: ['documentation', 'code'],
         }),
+        (prompt) => approvedReview(extractTaskIdFromPrompt(prompt), 'prototype approves the mixed-deliverable doctor recovery task', 'e2e mock review approved the mixed-deliverable doctor recovery task'),
       ];
     case 'terminal-review-blocked':
       return [
         () => blockedReview('F002-T04', 'terminal blocker: the environment cannot recover without human intervention', 'The environment is unavailable and the failure is terminal.', 'skipped'),
-        () => taskInterfaceAnalysis('F002-T04', 'blocked', 'The blocker is terminal and should be documented as a limitation of the implementer or environment.', 'document_implementer_limitation', false, ['The failure is terminal and cannot be resolved by tightening the task interface alone.'], {
-          first_executable_step: null,
-          minimum_progress_evidence: [],
-          context_additions: [],
-          scope_adjustments: [],
-          acceptance_criteria_adjustments: [],
-          quality_gate_adjustments: [],
-        }, ['Terminal blockers should stop the loop and be preserved for human follow-up.']),
-        () => diagnosticPayload('002-configuration-model', 'stop_with_diagnostic', 'Stop with a terminal diagnostic because the blocker requires human intervention.', 'environment', 'terminal-environment-blocker', 'human', ['The environment is unavailable and cannot be recovered automatically.'], 'manual_review', 'Document the limitation and wait for human intervention.', ['docs/compassrose/PROJECT_STATE.md']),
       ];
     case 'interface-gap':
       return [
@@ -1114,13 +1106,59 @@ function sequenceForScenario(scenario) {
       ];
     case 'state-correction-missing-active-task':
       return [
-        () => diagnosticPayload('002-configuration-model', 'correct_state', 'Repair the malformed feature state first because active_task is missing.', 'state_corruption', 'missing-active-task', 'auto', ['task_ready state is missing active_task.'], 'none', 'The state-correction contract is sufficient for this repair.', ['src/contracts/task/state-correction-task.md']),
         (prompt) => approvedReview(extractTaskIdFromPrompt(prompt), 'prototype approved the resumed task after direct state repair', 'e2e mock review approved the resumed task after state correction'),
-        () => approvedReview('F002-T04', 'prototype resumed the original task after state correction', 'e2e mock review approved the restored original task'),
+        (prompt) => approvedReview(extractTaskIdFromPrompt(prompt), 'prototype resumed the original task after state correction', 'e2e mock review approved the restored original task'),
       ];
     case 'implementation-missing-notes':
       return [
-        () => diagnosticPayload('002-configuration-model', 'stop_with_diagnostic', 'Stop with a diagnostic because the implementation omitted the required Implementation Notes justification.', 'task_interface_gap', 'missing-implementation-notes', 'human', ['The implementation artifact is missing Implementation Notes.'], 'manual_review', 'Require an explicit justification before retrying the task.', ['src/contracts/implementer/task-execution-prompt.md']),
+        () => plannerTask({
+          task_id: 'F002-T05-U3',
+          feature_id: '002-configuration-model',
+          title: 'Recover from a missing implementation note',
+          objective: 'Create a bounded doctor recovery task that explains the missing Implementation Notes requirement before retrying the implementation path.',
+          first_executable_step: 'Read src/contracts/implementer/task-execution-prompt.md and tighten the note requirement.',
+          minimum_progress_evidence: [
+            'The recovery task points at the missing Implementation Notes requirement.',
+            'The diagnostic path remains bounded instead of guessing.',
+          ],
+          trace: {
+            roadmap_objective: 'Deterministic Orchestration',
+            feature_goal: 'Recover from an implementation that omitted the required justification notes.',
+            state_gap: 'The implementation path needs a bounded recovery task after missing notes.',
+          },
+          context: {
+            summary: 'The implementer omitted the required Implementation Notes, so the runtime must plan a bounded recovery task.',
+            relevant_paths: [
+              'src/contracts/implementer/task-execution-prompt.md',
+              'src/contracts/runtime/operation-loop.md',
+              'src/contracts/task/doctor-recovery-task.md',
+            ],
+            relevant_modules: ['Implementer prompt', 'Runtime operation loop', 'Doctor recovery task'],
+          },
+          scope: {
+            allowed_paths: [
+              'src/contracts/implementer/task-execution-prompt.md',
+              'src/contracts/runtime/operation-loop.md',
+              'src/contracts/task/doctor-recovery-task.md',
+            ],
+            forbidden_paths: [
+              'src/cli/main.ts',
+              'src/config/configReader.ts',
+              'docs/compassrose/PROJECT_STATE.md',
+            ],
+          },
+          constraints: [
+            'Keep the recovery task focused on the missing Implementation Notes requirement.',
+            'Do not broaden the implementation scope.',
+          ],
+          development_policy: { mode: 'documentation_first' },
+          quality_gates: { before_review: ['git diff --check'] },
+          acceptance_criteria: [
+            'The recovery task makes the missing justification explicit.',
+            'The recovery stays bounded and does not expand the implementation scope.',
+          ],
+          expected_deliverables: ['documentation'],
+        }),
       ];
     case 'implementation-notes':
     case 'implementation-retry':

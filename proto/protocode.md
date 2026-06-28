@@ -8,7 +8,7 @@ It is intentionally outside `src/` because it is a proving ground for orchestrat
 
 ## Tools
 
-- `codex exec` determines the next step, plans features, plans tasks, and reviews implementations
+- `codex exec` determines the next step, plans features and tasks, and reviews subtask implementations
 - the configured implementer CLI implements tasks and correction tasks
 - local shell commands run quality gates
 - local Git commands collect changed files, diffs, and commits
@@ -20,13 +20,14 @@ It is intentionally outside `src/` because it is a proving ground for orchestrat
 3. If the step is `plan_feature`, formalize the feature docs, update feature and project state, and commit.
 4. If the step is `plan_task`, generate exactly one task, update feature and project state, and commit.
 5. If the step is `doctor_recovery_task`, generate exactly one doctor recovery task with the planner-grade `codex` role and its configured default model, update feature and project state, and commit.
-6. If the step is `implement_task`, ask the configured implementer CLI to execute the task using TDD.
-7. Run quality gates from the task.
-8. If the step is `review_task`, ask `codex exec` to review the current Git diff plus quality-gate and implementation artifacts.
-9. If the review is `approved`, update feature and project state and commit.
-10. If the review is `changes_required`, create a correction task, update state, return rejected, and stop.
-11. If the selected feature's state is malformed but repairable, create a state correction artifact from project/feature hints or recorded task artifacts, apply the repaired state directly, update state, and continue.
-12. If the step is `correct_task`, ask the configured implementer CLI to execute the correction task using TDD.
+6. If the step is `plan_subtask`, prepare the current task iteration so implementation can start from a concrete, reviewable checkpoint.
+7. If the step is `implement_subtask`, ask the configured implementer CLI to execute the subtask using TDD.
+8. Run quality gates from the task.
+9. If the step is `review_subtask`, ask `codex exec` to review the current Git diff plus quality-gate and implementation artifacts.
+10. If the review is `approved`, update feature and project state and commit.
+11. If the review is `changes_required`, create a correction task, update state, return rejected, and stop.
+12. If the selected feature's state is malformed but repairable, create a state correction artifact from project/feature hints or recorded task artifacts, apply the repaired state directly, update state, and continue.
+13. If the step is `correct_task`, ask the configured implementer CLI to execute the correction task using TDD.
 
 Implementation recovery:
 
@@ -75,6 +76,7 @@ Run artifacts are written under `.git/proto-compassrose/` so they do not dirty t
 - `quality-gates/`
 - `reviews/`
 - `task-interface-analysis/`
+- `logs/agent-contexts/`
 - `blockers/`
 - `runs/`
 - `refinement/`
@@ -91,6 +93,8 @@ When a review diagnoses implementation problems, the prototype also writes a tas
 - what should be documented as an implementer limitation
 
 Implementation attempts may also emit concise `Implementation Notes`; the prototype stores them in the implementation artifact and reuses them as reviewer context when the implementer reports that no code changes were needed or that the task was already satisfied.
+
+Each external-agent invocation also records a self-contained context artifact under `logs/agent-contexts/` so prompt, config, model, and workspace drift can be inspected after a failure.
 
 ## State Updates
 

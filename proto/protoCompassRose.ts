@@ -35,11 +35,22 @@ import type {
   ExpectedDeliverable,
   UnblockTaskMetadata,
 } from '../src/contracts/types.js';
+import { selectImplementationContextArtifactNames } from '../src/contracts/runtime/agentContext.js';
+import type { AgentInvocationContext, AgentToolName } from '../src/contracts/runtime/agentContext.js';
+import type {
+  ContractRefreshResult,
+  FeatureInspection,
+  FeatureRecord,
+  ProtoOptions,
+  RunSummary,
+  StepExecutionResult,
+  StepRunRecord,
+} from '../src/contracts/runtime/protoRuntime.js';
+import type { ProjectConfiguration } from '../src/config/configTypes.js';
 import { readProjectConfiguration } from '../src/config/configReader.js';
 import { resolveRepositoryRelativePath } from '../src/filesystem/pathResolver.js';
 import { findGitRepositoryRoot } from '../src/git/gitStatus.js';
 
-type ImplementerTool = 'codex' | 'opencode';
 type StructuredSchemaId =
   | 'feature_plan'
   | 'planner_output'
@@ -89,6 +100,10 @@ export function resolveCodexImplementerModel(): string | null {
   return normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL);
 }
 
+export function resolveOpenCodeModel(): string | null {
+  return normalizeModelName(process.env.PROTO_COMPASSROSE_OPENCODE_MODEL);
+}
+
 function runCommandWithHeartbeat(config: HeartbeatRunConfig): { status: number | null; signal: string | null; error: Error | undefined } {
   const result = spawnSync(process.execPath, [HEARTBEAT_RUNNER_PATH], {
     cwd: config.cwd,
@@ -110,26 +125,8 @@ function readTextIfExists(path: string): string {
   return existsSync(path) ? readFileSync(path, 'utf8') : '';
 }
 
-interface FeatureRecord {
-  readonly id: string;
-  readonly name: string;
-  readonly directory: string;
-  readonly requestPath: string;
-  readonly featurePath: string;
-  readonly architecturePath: string;
-  readonly statePath: string;
-  readonly tasksDirectory: string;
-}
-
-interface ProtoOptions {
-  readonly loop: boolean;
-  readonly commit: boolean;
-  readonly cwd: string;
-  readonly implementer: ImplementerTool;
-}
-
 interface HeartbeatRunConfig {
-  readonly agent: 'codex' | 'opencode';
+  readonly agent: AgentToolName;
   readonly label: string;
   readonly command: string;
   readonly args: readonly string[];
@@ -141,63 +138,10 @@ interface HeartbeatRunConfig {
   readonly heartbeatIntervalMs: number;
 }
 
-interface StepExecutionResult {
-  readonly exitCode: number;
-  readonly continueLoop: boolean;
-  readonly summary: string;
-}
-
-interface StepRunRecord {
-  readonly decided_at: string;
-  readonly decision: StepDecision;
-  readonly exit_code: number;
-  readonly continue_loop: boolean;
-  readonly summary: string;
-}
-
-interface RunSummary {
-  readonly run_id: string;
-  readonly started_at: string;
-  readonly finished_at: string;
-  readonly status: 'completed' | 'stopped' | 'failed';
-  readonly exit_code: number;
-  readonly options: ProtoOptions;
-  readonly steps: readonly StepRunRecord[];
-  readonly error: string | null;
-}
-
 interface FileFingerprint {
   readonly exists: boolean;
   readonly mtimeMs: number;
   readonly size: number;
-}
-
-interface ContractRefreshResult {
-  readonly reloadedSchemas: readonly string[];
-  readonly restartRequired: boolean;
-  readonly restartReasons: readonly string[];
-}
-
-interface FeatureInspection {
-  readonly kind:
-    | 'request_pending'
-    | 'formalization_pending'
-    | 'formalized'
-    | 'task_planning_pending'
-    | 'task_ready'
-    | 'unblock_pending'
-    | 'implementation_running'
-    | 'quality_gates_pending'
-    | 'review_pending'
-    | 'correction_pending'
-    | 'implementation_failed'
-    | 'quality_failed'
-    | 'review_failed'
-    | 'blocked'
-    | 'completed'
-    | 'malformed';
-  readonly reason: string;
-  readonly snapshot: FeatureStateSnapshot | null;
 }
 
 class GitClient {
@@ -349,6 +293,13 @@ class ArtifactStore {
     const targetPath = join(this.root, relativePath);
     mkdirSync(dirname(targetPath), { recursive: true });
     writeFileSync(targetPath, normalizeTextForWrite(value), 'utf8');
+    return targetPath;
+  }
+
+  writeRawText(relativePath: string, value: string): string {
+    const targetPath = join(this.root, relativePath);
+    mkdirSync(dirname(targetPath), { recursive: true });
+    writeFileSync(targetPath, value, 'utf8');
     return targetPath;
   }
 }
@@ -589,7 +540,7 @@ class OpenCodeCli {
     writeFileSync(promptPath, prompt, 'utf8');
 
     const args = ['run', '--dir', this.repositoryRoot, '--dangerously-skip-permissions'];
-    const model = process.env.PROTO_COMPASSROSE_OPENCODE_MODEL;
+    const model = resolveOpenCodeModel();
     if (model) {
       args.push('-m', model);
     }
@@ -645,14 +596,18 @@ class PrototypeCompassRose {
   private readonly opencode: OpenCodeCli;
   private readonly implementer: TaskImplementer;
   private readonly skipCleanWorktreeCheck: boolean;
+  private readonly projectConfiguration: ProjectConfiguration;
   private readonly configurationPath: string;
   private readonly projectStatePath: string;
   private readonly featuresRoot: string;
   private readonly maxTasksPerRun: number;
   private readonly runId: string;
+  private readonly codexCommand: string;
+  private readonly opencodeCommand: string;
   private readonly startedAt: string;
   private readonly stepRecords: StepRunRecord[] = [];
   private readonly completedPrimaryTaskAnchors = new Set<string>();
+  private agentInvocationCount = 0;
   private stopRequested = false;
   private stopReason: string | null = null;
   private stopExitCode = 130;
@@ -668,8 +623,10 @@ class PrototypeCompassRose {
     this.git = new GitClient(repositoryRoot);
     this.artifacts = new ArtifactStore(repositoryRoot);
     this.contracts = new ContractRegistry(repositoryRoot);
-    this.codex = new CodexCli(repositoryRoot, process.env.PROTO_COMPASSROSE_CODEX_COMMAND ?? 'codex');
-    this.opencode = new OpenCodeCli(repositoryRoot, process.env.PROTO_COMPASSROSE_OPENCODE_COMMAND ?? 'opencode');
+    this.codexCommand = process.env.PROTO_COMPASSROSE_CODEX_COMMAND ?? 'codex';
+    this.opencodeCommand = process.env.PROTO_COMPASSROSE_OPENCODE_COMMAND ?? 'opencode';
+    this.codex = new CodexCli(repositoryRoot, this.codexCommand);
+    this.opencode = new OpenCodeCli(repositoryRoot, this.opencodeCommand);
     this.implementer = options.implementer === 'codex' ? this.codex : this.opencode;
     this.skipCleanWorktreeCheck = process.env.PROTO_COMPASSROSE_SKIP_CLEAN_CHECK === '1';
 
@@ -679,10 +636,13 @@ class PrototypeCompassRose {
       throw new Error(`Unable to load project configuration from ${configurationPath}.`);
     }
 
+    this.projectConfiguration = configuration.value;
     this.configurationPath = configurationPath;
-    const documentation = configuration.value.documentation as Record<string, unknown>;
-    const limits = isRecord(configuration.value.limits) ? configuration.value.limits : {};
-    const projectStatePath = resolveRepositoryRelativePath(repositoryRoot, configuration.value.documentation.project_state);
+    const projectConfiguration = this.projectConfiguration;
+    const documentation = projectConfiguration.documentation as Record<string, unknown>;
+    const limitsCandidate = projectConfiguration.limits;
+    const limits = isRecord(limitsCandidate) ? limitsCandidate : {};
+    const projectStatePath = resolveRepositoryRelativePath(repositoryRoot, projectConfiguration.documentation.project_state);
     const featuresRoot = resolveRepositoryRelativePath(
       repositoryRoot,
       readRecordString(documentation, 'features_root') ?? 'docs/features',
@@ -697,6 +657,60 @@ class PrototypeCompassRose {
     this.maxTasksPerRun = readPositiveInteger(limits, 'max_tasks_per_run') ?? Number.POSITIVE_INFINITY;
     this.runId = createRunId();
     this.startedAt = new Date().toISOString();
+  }
+
+  private buildAgentConfigurationSnapshot(): AgentInvocationContext['configuration'] {
+    return {
+      configuration_path: this.configurationPath,
+      project_state_path: this.projectStatePath,
+      features_root: this.featuresRoot,
+      project_configuration: this.projectConfiguration,
+      runtime_options: {
+        loop: this.options.loop,
+        commit: this.options.commit,
+        implementer: this.options.implementer,
+      },
+      model_overrides: {
+        codex_model: normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_MODEL),
+        codex_planner_model: normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_PLANNER_MODEL),
+        codex_implementer_model: normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL),
+        opencode_model: resolveOpenCodeModel(),
+      },
+    };
+  }
+
+  private buildAgentWorkspaceSnapshot(): AgentInvocationContext['workspace'] {
+    return {
+      repository_root: this.repositoryRoot,
+      head_commit: this.git.headCommit(),
+      dirty_paths: this.git.dirtyPaths(),
+    };
+  }
+
+  private buildAgentInvocationContext(
+    context: Omit<AgentInvocationContext, 'run_id' | 'recorded_at' | 'configuration' | 'workspace'>,
+  ): AgentInvocationContext {
+    return {
+      ...context,
+      run_id: this.runId,
+      recorded_at: new Date().toISOString(),
+      configuration: this.buildAgentConfigurationSnapshot(),
+      workspace: this.buildAgentWorkspaceSnapshot(),
+    };
+  }
+
+  private recordAgentInvocationContext(context: AgentInvocationContext): void {
+    const baseName = [
+      String(++this.agentInvocationCount).padStart(3, '0'),
+      slugify(context.kind) || 'agent',
+      slugify(context.label) || 'invocation',
+    ].join('-');
+    const root = join('logs', 'agent-contexts', this.runId);
+    this.artifacts.writeJson(join(root, `${baseName}.json`), context);
+    this.artifacts.writeRawText(join(root, `${baseName}.prompt.txt`), context.prompt);
+    console.log(
+      `[${context.role}:${context.kind}] agent context saved at ${relativePath(this.repositoryRoot, join(root, `${baseName}.json`))}`,
+    );
   }
 
   run(): number {
@@ -904,7 +918,7 @@ class PrototypeCompassRose {
         };
       case 'task_ready':
         return {
-          kind: 'implement_task',
+          kind: 'plan_subtask',
           feature_id: feature.id,
           task_id: requireNonNoneValue(inspection.snapshot?.activeTask, `Feature ${feature.id} requires active_task for task_ready.`),
           correction_task_id: null,
@@ -920,7 +934,7 @@ class PrototypeCompassRose {
         };
       case 'implementation_running':
         return {
-          kind: 'implement_task',
+          kind: 'implement_subtask',
           feature_id: feature.id,
           task_id: requireNonNoneValue(inspection.snapshot?.activeTask, `Feature ${feature.id} requires active_task for implementation_running.`),
           correction_task_id: null,
@@ -929,7 +943,7 @@ class PrototypeCompassRose {
       case 'quality_gates_pending':
       case 'review_pending':
         return {
-          kind: 'review_task',
+          kind: 'review_subtask',
           feature_id: feature.id,
           task_id: requireNonNoneValue(inspection.snapshot?.activeTask, `Feature ${feature.id} requires active_task for review.`),
           correction_task_id: null,
@@ -937,13 +951,13 @@ class PrototypeCompassRose {
         };
       case 'correction_pending':
         return {
-          kind: 'correct_task',
+          kind: 'plan_subtask',
           feature_id: feature.id,
-          task_id: null,
-          correction_task_id: requireNonNoneValue(
+          task_id: requireNonNoneValue(
             inspection.snapshot?.activeCorrectionTask,
             `Feature ${feature.id} requires active_correction_task for correction_pending.`,
           ),
+          correction_task_id: null,
           reason: inspection.reason,
         };
       case 'implementation_failed':
@@ -1148,6 +1162,9 @@ class PrototypeCompassRose {
       case 'plan_task':
         this.planTask(requireString(decision.feature_id, 'feature_id'));
         return { exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${requireString(decision.feature_id, 'feature_id')}.` };
+      case 'plan_subtask':
+        this.planSubtask(requireString(decision.task_id, 'task_id'));
+        return { exitCode: 0, continueLoop: true, summary: `Subtask prepared for ${requireString(decision.task_id, 'task_id')}.` };
       case 'correct_state':
         this.correctState(requireString(decision.feature_id, 'feature_id'), decision.reason);
         return { exitCode: 0, continueLoop: true, summary: `State correction task created for feature ${requireString(decision.feature_id, 'feature_id')}.` };
@@ -1159,10 +1176,12 @@ class PrototypeCompassRose {
       case 'diagnose_autocorrect':
         return this.diagnoseAndAutocorrect(requireString(decision.feature_id, 'feature_id'), decision.reason);
       case 'implement_task':
+      case 'implement_subtask':
         return this.implementTask(requireString(decision.task_id, 'task_id'));
       case 'correct_task':
         return this.correctTask(requireString(decision.correction_task_id, 'correction_task_id'));
       case 'review_task':
+      case 'review_subtask':
         return this.reviewTask(requireString(decision.task_id, 'task_id'));
       case 'blocked':
         console.error(`Blocked: ${decision.reason}`);
@@ -1190,6 +1209,21 @@ class PrototypeCompassRose {
   private planFeature(featureId: string): void {
     this.ensureCleanWorktreeIfRequired(featureId);
     const feature = this.loadFeature(featureId);
+    const sourcePaths = [
+      'src/contracts/planner/feature-planning-prompt.md',
+      relativePath(this.repositoryRoot, feature.requestPath),
+      'docs/compassrose/PROJECT_STATE.md',
+      'docs/compassrose/CONFIG.md',
+      'docs/features/README.md',
+      'docs/templates/feature.md',
+      'docs/templates/architecture.md',
+      'docs/templates/state.md',
+      'src/contracts/state/feature-state.md',
+      'docs/ROADMAP.md',
+      'docs/SAD.md',
+      'docs/ADR.md',
+      'docs/DMS.md',
+    ];
     const prompt = [
       'Act as the CompassRose Planner.',
       '',
@@ -1213,6 +1247,22 @@ class PrototypeCompassRose {
       'Return JSON with complete Markdown for `feature.md`, `architecture.md`, and `state.md`.',
       'Do not modify files.',
     ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'planner',
+      kind: 'feature_planning',
+      label: `planner:feature-plan:${featureId}`,
+      feature_id: featureId,
+      task_id: null,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'feature_plan',
+      },
+    }));
 
     const planned = this.codex.runStructured<PlannedFeatureDocs>(
       prompt,
@@ -1243,6 +1293,23 @@ class PrototypeCompassRose {
   private planTask(featureId: string): void {
     this.ensureCleanWorktreeIfRequired(featureId);
     const feature = this.loadFeature(featureId);
+    const sourcePaths = [
+      'src/contracts/planner/task-planning-prompt.md',
+      'src/contracts/planner/input.md',
+      'src/contracts/planner/output.md',
+      'src/contracts/state/feature-state.md',
+      'src/contracts/task/task.md',
+      relativePath(this.repositoryRoot, feature.featurePath),
+      relativePath(this.repositoryRoot, feature.architecturePath),
+      relativePath(this.repositoryRoot, feature.statePath),
+      'docs/compassrose/PROJECT_STATE.md',
+      'docs/compassrose/CONFIG.md',
+      'src/contracts/runtime/operation-loop.md',
+      'src/config/',
+      'src/doctor/',
+      'src/cli/main.ts',
+      'tests/',
+    ];
     const prompt = [
       'Act as the CompassRose Planner.',
       '',
@@ -1274,6 +1341,22 @@ class PrototypeCompassRose {
       '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
       '- Return JSON only and do not modify files.',
     ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'planner',
+      kind: 'task_planning',
+      label: `planner:task-plan:${featureId}`,
+      feature_id: featureId,
+      task_id: null,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'planner_output',
+      },
+    }));
 
     const planned = this.codex.runStructured<PlannerOutput>(
       prompt,
@@ -1308,6 +1391,25 @@ class PrototypeCompassRose {
     }
   }
 
+  private planSubtask(taskId: string): void {
+    const task = this.loadTask(taskId);
+    this.ensureCleanWorktreeIfRequired(task.featureId);
+    const feature = this.loadFeature(task.featureId);
+
+    writeText(feature.statePath, this.updateFeatureStateDuringImplementation(feature.statePath, task.taskId));
+    writeText(this.projectStatePath, this.updateProjectStateDuringImplementation(task.featureId, task.taskId));
+
+    if (this.options.commit) {
+      this.git.commit(
+        [
+          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+        ],
+        `proto: prepare subtask ${task.taskId}`,
+      );
+    }
+  }
+
   private planDoctorRecoveryTask(featureId: string, reason: string): void {
     const feature = this.loadFeature(featureId);
     const snapshot = this.readFeatureStateSnapshot(feature);
@@ -1318,6 +1420,21 @@ class PrototypeCompassRose {
     const restorationTarget = snapshot.lifecycleState === 'implementation_failed'
       ? this.buildImplementationFailureRestorationTarget(feature, snapshot)
       : this.preferredRestorationTarget(snapshot);
+    const sourcePaths = [
+      'src/contracts/planner/doctor-recovery-planning-prompt.md',
+      'src/contracts/planner/input.md',
+      'src/contracts/planner/output.md',
+      'src/contracts/state/feature-state.md',
+      'src/contracts/task/doctor-recovery-task.md',
+      'src/contracts/task/state-correction-task.md',
+      relativePath(this.repositoryRoot, feature.featurePath),
+      relativePath(this.repositoryRoot, feature.architecturePath),
+      relativePath(this.repositoryRoot, feature.statePath),
+      ...(recoveryActiveTask ? [`.git/proto-compassrose/implementation-attempts/${recoveryActiveTask}.json`] : []),
+      'docs/compassrose/PROJECT_STATE.md',
+      'docs/compassrose/CONFIG.md',
+      'src/contracts/runtime/operation-loop.md',
+    ];
     const prompt = [
       'Act as the CompassRose Planner.',
       '',
@@ -1365,6 +1482,22 @@ class PrototypeCompassRose {
       '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
       '- Return JSON only and do not modify files.',
     ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'planner',
+      kind: 'doctor_recovery_planning',
+      label: `planner:doctor-recovery:${featureId}`,
+      feature_id: featureId,
+      task_id: recoveryActiveTask,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'planner_output',
+      },
+    }));
 
     const planned = this.codex.runStructured<PlannerOutput>(
       prompt,
@@ -1479,7 +1612,7 @@ class PrototypeCompassRose {
       }
     }
 
-    console.error(decision.next_step_reason);
+    console.error(decision.diagnosis_summary);
     return {
       exitCode: 2,
       continueLoop: false,
@@ -1488,47 +1621,282 @@ class PrototypeCompassRose {
   }
 
   private runDiagnosticAutocorrection(feature: FeatureRecord, reason: string): DiagnosticAutocorrectionDecision {
-    const prompt = [
-      'Act as the CompassRose Diagnostic/Autocorrection role.',
-      '',
-      `Diagnose feature \`${feature.id}\` and choose the next safe recovery action.`,
-      '',
-      'Read only:',
-      '- `src/contracts/runtime/diagnostic-autocorrection.md`',
-      '- `src/contracts/runtime/operation-loop.md`',
-      '- `src/contracts/state/feature-state.md`',
-      '- `src/contracts/task/doctor-recovery-task.md`',
-      '- `src/contracts/task/state-correction-task.md`',
-      '- `src/contracts/task/task.md`',
-      `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
-      statSafeIsFile(feature.statePath) ? `- \`${relativePath(this.repositoryRoot, feature.statePath)}\`` : `- Feature state is missing at \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
-      '- `docs/compassrose/PROJECT_STATE.md`',
-      '- `docs/compassrose/CONFIG.md`',
-      ...this.buildDiagnosticArtifactPromptLines(feature),
-      '',
-      'Observed issue:',
-      `- ${reason}`,
-      '',
-      'Rules:',
-      '- Use `correct_state` only when the existing state-correction contract is sufficient, the runtime can apply the repair directly, and no broader interface hardening is needed first.',
-      '- Use `plan_doctor_recovery` when a bounded doctor recovery task can remove the blocker or tighten the interface that caused it.',
-      '- If the blocker is pure documentation or state drift, choose `correct_state` instead of planning doctor recovery.',
-      '- Use `stop_with_diagnostic` when the best fix needs architectural review, human judgment, or a non-obvious tradeoff.',
-      '- Return JSON only.',
-    ].join('\n');
+    const stateExists = statSafeIsFile(feature.statePath);
+    const snapshot = stateExists ? this.tryReadFeatureStateSnapshot(feature) : null;
 
-    try {
-      const decision = this.codex.runStructured<DiagnosticAutocorrectionDecision>(
-        prompt,
-        this.contracts.schema('diagnostic_autocorrection'),
-        [],
-        `recover:diagnostic:${feature.id}`,
+    if (!snapshot) {
+      return this.buildDeterministicStopDiagnosticDecision(
+        this.buildMissingStateBlocker(feature, reason),
+        feature,
+        [
+        relativePath(this.repositoryRoot, feature.statePath),
+        relativePath(this.repositoryRoot, this.projectStatePath),
+        'src/contracts/runtime/diagnostic-autocorrection.md',
+        'src/contracts/runtime/operation-loop.md',
+        ],
+        reason,
+        'The feature state is missing or unreadable, so the runtime cannot derive a trustworthy recovery target without guessing.',
       );
-      return this.ensureDiagnosticAutocorrectionDecision(feature, reason, decision);
-    } catch (error) {
-      return this.buildDiagnosticFallbackDecision(feature, reason, errorMessage(error));
     }
+
+    const recordedBlocker = this.readRecordedBlockerProfile(snapshot);
+    const blocker = recordedBlocker ?? this.buildBlockerProfile(snapshot, reason);
+
+    if (blocker.kind === 'state_corruption') {
+      if (snapshot.lifecycleState === 'blocked') {
+        const blockedFrom = snapshot.blockedFrom?.lifecycle_state && snapshot.blockedFrom.lifecycle_state !== 'none'
+          ? snapshot.blockedFrom
+          : null;
+
+        if (blockedFrom) {
+          const recoveryAnchor = snapshot.blockedFrom?.active_task && snapshot.blockedFrom.active_task !== 'none'
+            ? snapshot.blockedFrom.active_task
+            : snapshot.activeTask !== 'none'
+              ? snapshot.activeTask
+              : this.resolveStateCorrectionActiveTaskFromArtifacts(feature.id);
+          const taskPath = recoveryAnchor ? this.tryFindTaskDocumentPath(recoveryAnchor, feature.tasksDirectory) : null;
+
+          return this.buildDeterministicDoctorRecoveryDecision(feature, snapshot, blocker, reason, [
+            relativePath(this.repositoryRoot, feature.statePath),
+            relativePath(this.repositoryRoot, this.projectStatePath),
+            'src/contracts/task/doctor-recovery-task.md',
+            'src/contracts/runtime/operation-loop.md',
+            taskPath ? relativePath(this.repositoryRoot, taskPath) : null,
+          ]);
+        }
+
+        return this.buildDeterministicStopDiagnosticDecision(
+          blocker,
+          feature,
+          [
+            relativePath(this.repositoryRoot, feature.statePath),
+            relativePath(this.repositoryRoot, this.projectStatePath),
+            'src/contracts/runtime/diagnostic-autocorrection.md',
+            'src/contracts/runtime/operation-loop.md',
+          ],
+          reason,
+          'The feature is already blocked with recorded state-corruption evidence, so the runtime stops instead of generating another correction loop.',
+        );
+      }
+
+      return this.buildDeterministicStateCorrectionDecision(feature, blocker, reason);
+    }
+
+    if (snapshot.lifecycleState === 'implementation_failed') {
+      const activeTask = this.resolveImplementationFailureActiveTask(feature, snapshot);
+      if (activeTask) {
+        return this.buildDeterministicDoctorRecoveryDecision(feature, snapshot, blocker, reason, [
+          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+          'src/contracts/task/doctor-recovery-task.md',
+          'src/contracts/runtime/operation-loop.md',
+          this.tryFindTaskDocumentPath(activeTask, feature.tasksDirectory)
+            ? relativePath(this.repositoryRoot, this.tryFindTaskDocumentPath(activeTask, feature.tasksDirectory) as string)
+            : null,
+        ]);
+      }
+
+      return this.buildDeterministicStopDiagnosticDecision(
+        blocker,
+        feature,
+        [
+        relativePath(this.repositoryRoot, feature.statePath),
+        relativePath(this.repositoryRoot, this.projectStatePath),
+        'src/contracts/runtime/diagnostic-autocorrection.md',
+        'src/contracts/runtime/operation-loop.md',
+        ],
+        reason,
+        'The implementation failed, but the runtime could not recover a trusted active task anchor for bounded doctor recovery.',
+      );
+    }
+
+    if (snapshot.lifecycleState === 'quality_failed' || snapshot.lifecycleState === 'review_failed' || snapshot.lifecycleState === 'blocked') {
+      if (blocker.recoverability === 'terminal' || blocker.recoverability === 'human') {
+        return this.buildDeterministicStopDiagnosticDecision(
+          blocker,
+          feature,
+          [
+          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+          'src/contracts/runtime/diagnostic-autocorrection.md',
+          'src/contracts/runtime/operation-loop.md',
+          ],
+          reason,
+          'The blocker is terminal or requires human intervention, so deterministic recovery stops here.',
+        );
+      }
+
+      const recoveryAnchor = snapshot.activeTask !== 'none'
+        ? snapshot.activeTask
+        : snapshot.blockedFrom?.active_task && snapshot.blockedFrom.active_task !== 'none'
+          ? snapshot.blockedFrom.active_task
+          : this.resolveStateCorrectionActiveTaskFromArtifacts(feature.id);
+
+      if (recoveryAnchor) {
+        const taskPath = this.tryFindTaskDocumentPath(recoveryAnchor, feature.tasksDirectory);
+        return this.buildDeterministicDoctorRecoveryDecision(feature, snapshot, blocker, reason, [
+          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+          'src/contracts/task/doctor-recovery-task.md',
+          'src/contracts/runtime/operation-loop.md',
+          taskPath ? relativePath(this.repositoryRoot, taskPath) : null,
+        ]);
+      }
+
+      return this.buildDeterministicStopDiagnosticDecision(
+        blocker,
+        feature,
+        [
+        relativePath(this.repositoryRoot, feature.statePath),
+        relativePath(this.repositoryRoot, this.projectStatePath),
+        'src/contracts/runtime/diagnostic-autocorrection.md',
+        'src/contracts/runtime/operation-loop.md',
+        ],
+        reason,
+        'The blocker looks recoverable, but the runtime could not recover a safe task anchor from state or recorded artifacts.',
+      );
+    }
+
+    return this.buildDeterministicStopDiagnosticDecision(
+      blocker,
+      feature,
+      [
+      relativePath(this.repositoryRoot, feature.statePath),
+      relativePath(this.repositoryRoot, this.projectStatePath),
+      'src/contracts/runtime/diagnostic-autocorrection.md',
+      'src/contracts/runtime/operation-loop.md',
+      ],
+      reason,
+      'The runtime could not prove a safer deterministic recovery path, so it stops with a diagnostic instead of consulting an agent.',
+    );
+  }
+
+  private readRecordedBlockerProfile(snapshot: FeatureStateSnapshot): BlockerProfile | null {
+    const entries = snapshot.blockedBy
+      .map((line) => line.replace(/^(?:-\s*)+/, '').trim())
+      .filter((line) => line.length > 0);
+
+    const kind = readValueFromStructuredLines(entries, 'kind');
+    const signature = readValueFromStructuredLines(entries, 'signature');
+    const recoverability = readValueFromStructuredLines(entries, 'recoverability');
+    const observedState = readValueFromStructuredLines(entries, 'observed_state');
+    const evidence = entries
+      .filter((line) => line.startsWith('evidence:'))
+      .map((line) => line.slice('evidence:'.length).trim())
+      .filter((line) => line.length > 0);
+
+    if (!kind || !signature || !recoverability) {
+      return null;
+    }
+
+    if (!isBlockerKind(kind) || !isBlockerRecoverability(recoverability)) {
+      return null;
+    }
+
+    return {
+      kind,
+      signature,
+      recoverability,
+      evidence: uniqueStrings([
+        ...evidence,
+        observedState ? `observed_state: ${observedState}` : `lifecycle=${snapshot.lifecycleState}`,
+      ]),
+      observed_state: observedState ?? `lifecycle=${snapshot.lifecycleState}`,
+    };
+  }
+
+  private buildMissingStateBlocker(feature: FeatureRecord, reason: string): BlockerProfile {
+    return {
+      kind: 'state_corruption',
+      signature: buildBlockerSignature('state_corruption', 'unknown', reason, [feature.id]),
+      evidence: uniqueStrings([
+        reason,
+        `Feature state is missing or unreadable at ${relativePath(this.repositoryRoot, feature.statePath)}.`,
+      ]),
+      recoverability: 'terminal',
+      observed_state: 'lifecycle=unknown',
+    };
+  }
+
+  private buildDeterministicStateCorrectionDecision(
+    feature: FeatureRecord,
+    blocker: BlockerProfile,
+    reason: string,
+  ): DiagnosticAutocorrectionDecision {
+    return {
+      feature_id: feature.id,
+      diagnosis_summary: 'The feature state is malformed, and the existing state-correction contract is sufficient to repair it directly.',
+      blocker,
+      next_step: 'correct_state',
+      next_step_reason: reason,
+      interface_response: {
+        mode: 'none',
+        summary: 'Apply the state-correction contract directly to restore a canonical feature state.',
+        target_paths: [
+          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+          'src/contracts/state/feature-state.md',
+          'src/contracts/task/state-correction-task.md',
+        ],
+      },
+    };
+  }
+
+  private buildDeterministicDoctorRecoveryDecision(
+    feature: FeatureRecord,
+    snapshot: FeatureStateSnapshot,
+    blocker: BlockerProfile,
+    reason: string,
+    targetPaths: readonly (string | null)[],
+  ): DiagnosticAutocorrectionDecision {
+    const activeTask = snapshot.activeTask !== 'none'
+      ? snapshot.activeTask
+      : snapshot.blockedFrom?.active_task && snapshot.blockedFrom.active_task !== 'none'
+        ? snapshot.blockedFrom.active_task
+        : this.resolveStateCorrectionActiveTaskFromArtifacts(feature.id);
+
+    return {
+      feature_id: feature.id,
+      diagnosis_summary: 'The blocker is recoverable, so the runtime should plan a bounded doctor recovery task instead of guessing or stopping early.',
+      blocker,
+      next_step: 'plan_doctor_recovery',
+      next_step_reason: reason,
+      interface_response: {
+        mode: 'apply_in_doctor_recovery',
+        summary: activeTask
+          ? `Plan a bounded doctor recovery task that restores the recorded task anchor ${activeTask}.`
+          : 'Plan a bounded doctor recovery task that preserves the current recovery evidence and re-entry target.',
+        target_paths: uniqueStrings([
+          ...targetPaths.filter((item): item is string => typeof item === 'string' && item.length > 0),
+          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+          'src/contracts/task/doctor-recovery-task.md',
+        ]),
+      },
+    };
+  }
+
+  private buildDeterministicStopDiagnosticDecision(
+    blocker: BlockerProfile,
+    feature: FeatureRecord,
+    targetPaths: readonly (string | null)[],
+    reason: string,
+    summary: string,
+  ): DiagnosticAutocorrectionDecision {
+    return {
+      feature_id: feature.id,
+      diagnosis_summary: summary,
+      blocker,
+      next_step: 'stop_with_diagnostic',
+      next_step_reason: reason,
+      interface_response: {
+        mode: 'manual_review',
+        summary: 'Inspect the recorded state and diagnostic evidence before trying another automated recovery path.',
+        target_paths: uniqueStrings([
+          ...targetPaths.filter((item): item is string => typeof item === 'string' && item.length > 0),
+        ]),
+      },
+    };
   }
 
   private ensureDiagnosticAutocorrectionDecision(
@@ -1748,9 +2116,18 @@ class PrototypeCompassRose {
     const implementation = this.ensureImplementationAttempt(task);
     const liveDiff = this.git.diffPatch();
     const reviewDiff = selectReviewableDiffForReview(liveDiff, implementation);
-    if (reviewDiff.diff.trim().length === 0) {
-      throw new Error(`Review for ${taskId} cannot proceed because git diff is empty.`);
-    }
+    const agentContextRoot = join('logs', 'agent-contexts', this.runId);
+    const implementationContextArtifactNames = selectImplementationContextArtifactNames(
+      this.artifacts.listFiles(agentContextRoot).map((entry) => entry.name),
+      taskId,
+    );
+    const implementationContextPaths = implementationContextArtifactNames.map((name) => join(agentContextRoot, name));
+    const reviewContextPaths = reviewDiff.diff.trim().length === 0
+      ? uniqueStrings([
+          ...task.likelyAffectedFiles,
+          ...task.reviewableDiffHandoff.requiredChangedFiles,
+        ])
+      : [];
 
     const tempDir = mkdtempSync(join(tmpdir(), 'proto-compassrose-review-'));
     const diffPath = join(tempDir, 'diff.patch');
@@ -1759,11 +2136,28 @@ class PrototypeCompassRose {
     writeFileSync(diffPath, reviewDiff.diff, 'utf8');
     writeFileSync(qualityPath, `${JSON.stringify(qualityResults, null, 2)}\n`, 'utf8');
     writeFileSync(implementationPath, `${JSON.stringify(implementation, null, 2)}\n`, 'utf8');
+    const sourcePaths = [
+      'src/contracts/reviewer/review-prompt.md',
+      'src/contracts/reviewer/input.md',
+      'src/contracts/reviewer/output.md',
+      ...(stateCorrection ? ['src/contracts/task/state-correction-task.md'] : ['src/contracts/task/correction-task.md']),
+      ...(doctorRecovery ? ['src/contracts/task/doctor-recovery-task.md'] : []),
+      ...reviewContextPaths,
+      ...implementationContextPaths,
+      relativePath(this.repositoryRoot, task.path),
+      relativePath(this.repositoryRoot, feature.featurePath),
+      relativePath(this.repositoryRoot, feature.architecturePath),
+      relativePath(this.repositoryRoot, feature.statePath),
+      'docs/compassrose/CONFIG.md',
+      diffPath,
+      implementationPath,
+      qualityPath,
+    ];
 
     const prompt = [
       'Act as the CompassRose Reviewer.',
       '',
-      `Review task \`${taskId}\` for feature \`${task.featureId}\`.`,
+      `Review subtask \`${taskId}\` for feature \`${task.featureId}\`.`,
       '',
       'Read only:',
       '- `src/contracts/reviewer/review-prompt.md`',
@@ -1771,6 +2165,14 @@ class PrototypeCompassRose {
       '- `src/contracts/reviewer/output.md`',
       stateCorrection ? '- `src/contracts/task/state-correction-task.md`' : '- `src/contracts/task/correction-task.md`',
       doctorRecovery ? '- `src/contracts/task/doctor-recovery-task.md`' : null,
+      task.reviewableDiffHandoff.requiredChangedFiles.length > 0
+        ? `- Reviewable diff handoff expects these changed files: ${task.reviewableDiffHandoff.requiredChangedFiles.map((item) => `\`${item}\``).join(', ')}.`
+        : '- Reviewable diff handoff does not require a specific changed file list.',
+      implementationContextPaths.length > 0
+        ? `- Implementation context artifacts for this attempt: ${implementationContextPaths.map((item) => `\`${item}\``).join(', ')}.`
+        : '- No implementation context artifacts were found for this attempt.',
+      '- Read the implementer context artifacts before deciding whether the task was already satisfied or the context was too restrictive.',
+      ...reviewContextPaths.map((item) => `- \`${item}\``),
       `- \`${relativePath(this.repositoryRoot, task.path)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
@@ -1781,6 +2183,9 @@ class PrototypeCompassRose {
       '- `implementation.notes` inside the implementation artifact; if it is missing, treat that as an execution defect and report it explicitly.',
       `- \`${qualityPath}\``,
       '- if needed, only the files changed in the diff',
+      reviewDiff.diff.trim().length === 0
+        ? '- The live worktree diff is empty; compare the implementer context and the current repository state before rejecting, because the requested behavior may already have existed.'
+        : null,
       reviewDiff.source === 'fallback'
         ? '- The live worktree diff is empty because the implementer appears to have committed away the reviewable diff before handoff.'
         : null,
@@ -1792,7 +2197,7 @@ class PrototypeCompassRose {
       '- Validate objective, acceptance criteria, scope, constraints, and quality gates.',
       stateCorrection
         ? '- Validate the state target, restored lifecycle state, and active task pointer for the repaired state document.'
-        : '- Validate the implementation against the task contract and acceptance criteria.',
+        : '- Validate the implementation against the subtask contract and acceptance criteria.',
       stateCorrection
         ? '- If status is `changes_required`, keep the correction task state-only and preserve the restored task pointer.'
         : '- For `test_guided` tasks, confirm that the diff includes meaningful test changes for the claimed behavior.',
@@ -1801,15 +2206,31 @@ class PrototypeCompassRose {
         : null,
       doctorRecovery ? '- If this is a doctor recovery task, verify that the blocker signature is resolved and the feature can resume from the captured lifecycle state without entering a reviewer loop for the recovery itself.' : null,
       '- Return JSON only.',
-      '- If status is `changes_required`, include a correction task narrower than the original task.',
+      '- If status is `changes_required`, include a correction task narrower than the original subtask.',
       '- Do not modify files.',
     ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'reviewer',
+      kind: 'subtask_review',
+      label: `reviewer:subtask:${taskId}`,
+      feature_id: task.featureId,
+      task_id: taskId,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'reviewer_output',
+      },
+    }));
 
     const review = this.codex.runStructured<ReviewerOutput>(
       prompt,
       this.contracts.schema('reviewer_output'),
       [tempDir],
-      `reviewer:review:${taskId}`,
+      `reviewer:subtask:${taskId}`,
     );
     this.artifacts.writeJson(join('reviews', `${taskId}.json`), review);
     const taskInterfaceAnalysis = this.shouldAnalyzeTaskInterface(review)
@@ -1950,6 +2371,27 @@ class PrototypeCompassRose {
     const feature = this.loadFeature(task.featureId);
     const recoveryLessonLines = this.buildRecoveryLessonPromptLines(task.featureId);
     const prompt = buildDoctorRecoveryPrompt(task, doctorRecovery, recoveryLessonLines);
+    const sourcePaths = [
+      'src/contracts/runtime/doctor-recovery-execution-prompt.md',
+      'src/contracts/task/doctor-recovery-task.md',
+      task.path,
+      ...task.likelyAffectedFiles,
+    ];
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'doctor',
+      kind: 'doctor_recovery_task',
+      label: `doctor:recover:${task.taskId}`,
+      feature_id: task.featureId,
+      task_id: task.taskId,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexImplementerModel(),
+        output_schema_id: null,
+      },
+    }));
     const headBefore = this.git.headCommit();
     const commandResult = this.codex.run(prompt, `doctor:recover:${task.taskId}`);
     this.throwIfControlledStopRequested();
@@ -2066,7 +2508,7 @@ class PrototypeCompassRose {
   }
 
   private shouldAnalyzeTaskInterface(review: ReviewerOutput): boolean {
-    return review.status !== 'approved' || review.findings.length > 0;
+    return review.status === 'changes_required';
   }
 
   private analyzeTaskInterface(
@@ -2081,6 +2523,25 @@ class PrototypeCompassRose {
   ): TaskInterfaceAnalysis {
     const reviewPath = join(tempDir, 'review.json');
     writeFileSync(reviewPath, `${JSON.stringify(review, null, 2)}\n`, 'utf8');
+    const sourcePaths = [
+      'src/contracts/task/task.md',
+      ...(stateCorrection ? ['src/contracts/task/state-correction-task.md'] : []),
+      ...(doctorRecovery ? ['src/contracts/task/doctor-recovery-task.md'] : []),
+      ...(doctorRecovery ? ['src/contracts/planner/doctor-recovery-planning-prompt.md'] : []),
+      'src/contracts/implementer/task-execution-prompt.md',
+      'src/contracts/adapters/implementer-adapter.md',
+      'src/contracts/reviewer/review-prompt.md',
+      'src/contracts/reviewer/output.md',
+      'src/contracts/runtime/task-interface-analysis.md',
+      relativePath(this.repositoryRoot, task.path),
+      relativePath(this.repositoryRoot, feature.featurePath),
+      relativePath(this.repositoryRoot, feature.architecturePath),
+      relativePath(this.repositoryRoot, feature.statePath),
+      'docs/compassrose/CONFIG.md',
+      join(tempDir, 'implementation.json'),
+      join(tempDir, 'quality-gates.json'),
+      reviewPath,
+    ];
 
     const prompt = [
       'Act as the CompassRose task-interface analyst.',
@@ -2124,6 +2585,22 @@ class PrototypeCompassRose {
       '- Return JSON only.',
     ].join('\n');
 
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'diagnostic',
+      kind: 'task_interface_analysis',
+      label: `recover:task-interface:${task.taskId}`,
+      feature_id: task.featureId,
+      task_id: task.taskId,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'task_interface_analysis',
+      },
+    }));
+
     const analysis = this.codex.runStructured<TaskInterfaceAnalysis>(
       prompt,
       this.contracts.schema('task_interface_analysis'),
@@ -2146,23 +2623,45 @@ class PrototypeCompassRose {
       relativePath(this.repositoryRoot, feature.statePath),
       relativePath(this.repositoryRoot, this.projectStatePath),
     ];
+    const sourcePaths = [
+      'src/contracts/implementer/task-execution-prompt.md',
+      'src/contracts/adapters/implementer-adapter.md',
+      'src/contracts/task/task.md',
+      ...(stateCorrection ? ['src/contracts/task/state-correction-task.md'] : []),
+      task.path,
+      ...task.likelyAffectedFiles,
+    ];
     writeText(feature.statePath, this.updateFeatureStateDuringImplementation(feature.statePath, task.taskId));
     writeText(this.projectStatePath, this.updateProjectStateDuringImplementation(task.featureId, task.taskId));
 
     const attempts: ImplementationAttempt[] = [];
     let retriedAfterPartialChanges = false;
     let finalAttempt: ImplementationAttempt | null = null;
-    const baseLabel = correction
-      ? `implementer:correction:${task.taskId}`
-      : `implementer:implement:${task.taskId}`;
+    const baseLabel = `implementer:subtask:${task.taskId}`;
 
     for (let attemptIndex = 1; attemptIndex <= 2; attemptIndex += 1) {
+      const attemptLabel = `${baseLabel}:attempt-${attemptIndex}`;
       if (attemptIndex === 2) {
         console.log(`Implementation for ${task.taskId} left partial repository changes; retrying once from the current worktree.`);
       }
 
       const headBefore = this.git.headCommit();
-      const commandResult = this.implementer.run(prompt, `${baseLabel}:attempt-${attemptIndex}`);
+      this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+        role: 'implementer',
+        kind: 'subtask_execution',
+        label: attemptLabel,
+        feature_id: task.featureId,
+        task_id: task.taskId,
+        source_paths: sourcePaths,
+        prompt,
+        tool: {
+          name: this.options.implementer,
+          command: this.options.implementer === 'codex' ? this.codexCommand : this.opencodeCommand,
+          model: this.options.implementer === 'codex' ? resolveCodexImplementerModel() : resolveOpenCodeModel(),
+          output_schema_id: null,
+        },
+      }));
+      const commandResult = this.implementer.run(prompt, attemptLabel);
       this.throwIfControlledStopRequested();
       const headAfter = this.git.headCommit();
       const attempt = this.captureImplementationAttempt(task, commandResult, implementationStatePaths, headBefore, headAfter);
@@ -2208,7 +2707,7 @@ class PrototypeCompassRose {
       writeText(feature.statePath, this.updateFeatureStateAfterImplementationFailure(feature.statePath, task.taskId, failureReason));
       writeText(this.projectStatePath, this.updateProjectStateAfterImplementationFailure(task.featureId, task.taskId, failureReason));
       this.writeRefinementFeedback(failureReason, {
-        kind: correction ? 'correct_task' : 'implement_task',
+        kind: correction ? 'correct_task' : 'implement_subtask',
         feature_id: task.featureId,
         task_id: task.taskId,
         correction_task_id: correction ? task.taskId : null,
@@ -2272,6 +2771,7 @@ class PrototypeCompassRose {
       : null;
     const rawOutput = joinOutput(commandResult.stdout, commandResult.stderr);
     const implementationNotes = extractImplementationNotes(rawOutput);
+    const alreadyComplete = implementationNotesIndicatesAlreadyComplete(implementationNotes);
     const diagnostics = buildImplementationDiagnostics(
       task,
       commandResult,
@@ -2284,7 +2784,7 @@ class PrototypeCompassRose {
       headAfter,
     );
     const hasDiff = diff.trim().length > 0;
-    const status = commandResult.ok && hasDiff && diagnostics.minimum_progress_evidence_status !== 'absent' && implementationNotes !== null
+    const status = commandResult.ok && implementationNotes !== null && (hasDiff || alreadyComplete)
       ? 'success'
       : 'failed';
 
@@ -3023,8 +3523,12 @@ class PrototypeCompassRose {
 
         const fullPath = join(root, entry);
         const markdown = readFileSync(fullPath, 'utf8');
-        if (markdown.includes(`\`${taskId}\``)) {
-          return fullPath;
+        try {
+          if (parseTaskDocument(fullPath, markdown).taskId === taskId) {
+            return fullPath;
+          }
+        } catch {
+          continue;
         }
       }
     }
@@ -3079,14 +3583,14 @@ class PrototypeCompassRose {
     let markdown = readFileSync(this.projectStatePath, 'utf8');
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList([
-      passed ? `Review \`${taskId}\` for the active feature.` : `Investigate failed quality gates for \`${taskId}\`.`,
+      passed ? `Review subtask \`${taskId}\` for the active feature.` : `Investigate failed quality gates for subtask \`${taskId}\`.`,
       'Continue updating this file with approved repository facts as feature work lands.',
     ]));
     markdown = replaceSection(
       markdown,
       'Next Planning Hint',
       passed
-        ? `The active feature is \`${featureId}\`, and its next valid action is to review \`${taskId}\`.`
+        ? `The active feature is \`${featureId}\`, and its next valid action is to review subtask \`${taskId}\`.`
         : `The active feature is \`${featureId}\`, but quality gates for \`${taskId}\` failed and the run should stop.`,
     );
     return markdown;
@@ -3120,7 +3624,7 @@ class PrototypeCompassRose {
       'Plan the next implementation task for the active feature.',
       'Continue updating this file with approved repository facts as feature work lands.',
     ]));
-    markdown = replaceSection(markdown, 'Last Approved Change', `Task \`${taskId}\` was approved by the prototype orchestrator.`);
+    markdown = replaceSection(markdown, 'Last Approved Change', `Subtask \`${taskId}\` was approved by the prototype orchestrator.`);
     markdown = replaceSection(markdown, 'Next Planning Hint', `The active feature is \`${featureId}\`, and its next valid action is the next task-planning pass.`);
     return markdown;
   }
@@ -3129,10 +3633,10 @@ class PrototypeCompassRose {
     let markdown = readFileSync(this.projectStatePath, 'utf8');
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList([
-      `Execute correction task \`${correctionTaskId}\` for the active feature.`,
+      `Execute correction subtask \`${correctionTaskId}\` for the active feature.`,
       'Continue updating this file with approved repository facts as feature work lands.',
     ]));
-    markdown = replaceSection(markdown, 'Next Planning Hint', `The active feature is \`${featureId}\`, and its next valid action is to execute correction task \`${correctionTaskId}\`.`);
+    markdown = replaceSection(markdown, 'Next Planning Hint', `The active feature is \`${featureId}\`, and its next valid action is to execute correction subtask \`${correctionTaskId}\`.`);
     return markdown;
   }
 
@@ -3186,7 +3690,7 @@ class PrototypeCompassRose {
       markdown,
       'Next Planning Hint',
       lifecycleState === 'review_pending'
-        ? `Review \`${taskId}\` next.`
+        ? `Review subtask \`${taskId}\` next.`
         : `Quality gates for \`${taskId}\` failed; stop and recover before continuing.`,
     );
     return markdown;
@@ -3209,7 +3713,7 @@ class PrototypeCompassRose {
       '- active_correction_task: none',
       '- active_unblock_task: none',
     ].join('\n'));
-    markdown = replaceSection(markdown, 'Next Planning Hint', `Recover or finish implementation of \`${taskId}\` before allowing review or new planning.`);
+    markdown = replaceSection(markdown, 'Next Planning Hint', `Recover or finish subtask implementation of \`${taskId}\` before allowing review or new planning.`);
     return markdown;
   }
 
@@ -3253,7 +3757,7 @@ class PrototypeCompassRose {
       `Recover or finish implementation for \`${taskId}\`.`,
       'Continue updating this file with approved repository facts as feature work lands.',
     ]));
-    markdown = replaceSection(markdown, 'Next Planning Hint', `The active feature is \`${featureId}\`, and implementation of \`${taskId}\` is in progress.`);
+    markdown = replaceSection(markdown, 'Next Planning Hint', `The active feature is \`${featureId}\`, and subtask execution for \`${taskId}\` is in progress.`);
     return markdown;
   }
 
@@ -3274,7 +3778,7 @@ class PrototypeCompassRose {
       '- active_correction_task: none',
       '- active_unblock_task: none',
     ].join('\n'));
-    markdown = replaceSection(markdown, 'Last Approved Change', `Task \`${task.taskId}\` was approved by the prototype orchestrator.`);
+    markdown = replaceSection(markdown, 'Last Approved Change', `Subtask \`${task.taskId}\` was approved by the prototype orchestrator.`);
     markdown = replaceSection(markdown, 'Next Planning Hint', 'Plan the next task that advances this feature from the remaining gap.');
     return markdown;
   }
@@ -3298,7 +3802,7 @@ class PrototypeCompassRose {
       '- active_correction_task: none',
       '- active_unblock_task: none',
     ].join('\n'));
-    markdown = replaceSection(markdown, 'Next Planning Hint', `Execute correction task \`${correctionTaskId}\` next.`);
+    markdown = replaceSection(markdown, 'Next Planning Hint', `Execute correction subtask \`${correctionTaskId}\` next.`);
     return markdown;
   }
 
@@ -3748,7 +4252,7 @@ function parseArguments(argv: readonly string[]): ProtoOptions {
   let loop = false;
   let commit = true;
   let cwd = process.cwd();
-  let implementer: ImplementerTool = 'opencode';
+  let implementer: AgentToolName = 'opencode';
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -4186,13 +4690,41 @@ export function buildBlockerSignature(
     .slice(0, 96) || `${kind}-${lifecycleState}`.toLowerCase();
 }
 
+function isBlockerKind(value: string): value is BlockerKind {
+  return value === 'state_corruption'
+    || value === 'task_interface_gap'
+    || value === 'cli_mismatch'
+    || value === 'environment'
+    || value === 'implementation_failure'
+    || value === 'review_failure'
+    || value === 'unknown';
+}
+
+function isBlockerRecoverability(value: string): value is BlockerRecoverability {
+  return value === 'auto' || value === 'agent' || value === 'human' || value === 'terminal';
+}
+
+function readValueFromStructuredLines(lines: readonly string[], key: string): string | null {
+  for (const line of lines) {
+    const normalized = line.trim();
+    if (!normalized.toLowerCase().startsWith(`${key.toLowerCase()}:`)) {
+      continue;
+    }
+
+    const value = normalized.slice(key.length + 1).trim();
+    return value.length > 0 ? stripTicks(value) : null;
+  }
+
+  return null;
+}
+
 function buildImplementerPrompt(
   task: ParsedTaskDocument,
   correction: boolean,
   stateCorrection: StateCorrectionTask | null,
   recoveryLessonLines: readonly string[] = [],
 ): string {
-  const role = correction ? 'correction task' : 'task';
+  const role = stateCorrection ? 'state repair task' : 'subtask';
   const requiredDiffLine = task.reviewableDiffHandoff.requireLiveDiff
     ? (task.reviewableDiffHandoff.requiredChangedFiles.length > 0
         ? `- At handoff, leave the live worktree diff visible and limited to: ${task.reviewableDiffHandoff.requiredChangedFiles.map((item) => `\`${item}\``).join(', ')}.`
@@ -4289,11 +4821,13 @@ function buildImplementationDiagnostics(
 ): ImplementationDiagnostics {
   const hasDiff = diff.trim().length > 0;
   const headChanged = Boolean(headBefore && headAfter && headBefore !== headAfter);
+  const alreadyComplete = implementationNotesIndicatesAlreadyComplete(implementationNotes);
   const evidence = [
     `Task: ${task.taskId}`,
     `Changed files: ${changedFiles.length > 0 ? changedFiles.join(', ') : 'none'}`,
     `Fallback diff: ${fallbackDiff && fallbackDiff.trim().length > 0 ? 'present' : 'absent'}`,
     `Implementation notes: ${implementationNotes ? 'present' : 'absent'}`,
+    `Implementation completion signal: ${alreadyComplete ? 'already_complete' : 'not_detected'}`,
     `Exit code: ${commandResult.exitCode ?? 'null'}`,
     `Signal: ${commandResult.signal ?? 'null'}`,
     `Head changed during attempt: ${headChanged ? `yes (${headBefore} -> ${headAfter})` : 'no'}`,
@@ -4304,7 +4838,7 @@ function buildImplementationDiagnostics(
     classification: classifyImplementation(commandResult, rawOutput, hasDiff, implementationNotes, headBefore, headAfter, fallbackDiff),
     evidence,
     first_executable_step_status: hasDiff || rawOutput.trim().length > 0 ? 'attempted' : 'unknown',
-    minimum_progress_evidence_status: hasDiff ? 'present' : 'absent',
+    minimum_progress_evidence_status: hasDiff || alreadyComplete ? 'present' : 'absent',
     exit_code: commandResult.exitCode,
     signal: commandResult.signal,
     timed_out: commandResult.timedOut,
@@ -4324,9 +4858,14 @@ export function classifyImplementation(
   const normalized = rawOutput.toLowerCase();
   const headChanged = Boolean(headBefore && headAfter && headBefore !== headAfter);
   const hasFallbackDiff = Boolean(fallbackDiff && fallbackDiff.trim().length > 0);
+  const alreadyComplete = implementationNotesIndicatesAlreadyComplete(implementationNotes);
 
   if (!hasDiff && commandResult.ok && ((headChanged && hasFallbackDiff) || outputShowsCommittedReviewableDiff(rawOutput))) {
     return 'reviewable_diff_lost';
+  }
+
+  if (commandResult.ok && !hasDiff && alreadyComplete) {
+    return 'already_complete';
   }
 
   if (/context|token|too (large|long)|window/i.test(normalized)) {
@@ -4420,6 +4959,10 @@ function extractImplementationNotes(rawOutput: string): string | null {
   return section.trim();
 }
 
+function implementationNotesIndicatesAlreadyComplete(implementationNotes: string | null): boolean {
+  return implementationNotes !== null && /status:\s*already_complete\b/i.test(implementationNotes);
+}
+
 function validateTaskDeliverables(task: PlannedTask, taskLabel: string): void {
   const deliversExecutableWork = task.expected_deliverables.some((deliverable) => deliverable === 'code' || deliverable === 'tests');
   const deliversDocumentation = task.expected_deliverables.includes('documentation');
@@ -4454,7 +4997,7 @@ function inferLikelySources(trigger: string, selectedStep: StepDecision | null):
     sources.add('docs/features/README.md');
   }
 
-  if (selectedStep?.kind === 'plan_task') {
+  if (selectedStep?.kind === 'plan_task' || selectedStep?.kind === 'plan_subtask') {
     sources.add('src/contracts/planner/task-planning-prompt.md');
     sources.add('src/contracts/planner/output.md');
     sources.add('src/contracts/task/task.md');
@@ -4473,13 +5016,13 @@ function inferLikelySources(trigger: string, selectedStep: StepDecision | null):
     sources.add('src/contracts/state/feature-state.md');
   }
 
-  if (selectedStep?.kind === 'implement_task' || selectedStep?.kind === 'correct_task') {
+  if (selectedStep?.kind === 'implement_task' || selectedStep?.kind === 'implement_subtask' || selectedStep?.kind === 'correct_task') {
     sources.add('src/contracts/implementer/task-execution-prompt.md');
     sources.add('src/contracts/adapters/implementer-adapter.md');
     sources.add('src/contracts/task/task.md');
   }
 
-  if (selectedStep?.kind === 'review_task') {
+  if (selectedStep?.kind === 'review_task' || selectedStep?.kind === 'review_subtask') {
     sources.add('src/contracts/reviewer/review-prompt.md');
     sources.add('src/contracts/reviewer/output.md');
     sources.add('src/contracts/task/correction-task.md');
@@ -4620,7 +5163,11 @@ function buildNextQuestions(trigger: string, selectedStep: StepDecision | null):
     questions.push('Did the planner receive enough repository-local context to produce a bounded task?');
   }
 
-  if (selectedStep?.kind === 'review_task') {
+  if (selectedStep?.kind === 'plan_subtask') {
+    questions.push('Did the runtime have enough context to move the active task into a concrete subtask execution pass?');
+  }
+
+  if (selectedStep?.kind === 'review_task' || selectedStep?.kind === 'review_subtask') {
     questions.push('Did the reviewer receive enough structured implementation evidence beyond the raw diff?');
   }
 
@@ -5424,11 +5971,11 @@ function compareFeatureIds(left: string, right: string): number {
   return leftNumber - rightNumber;
 }
 
-function logAgentStart(agent: 'codex' | 'opencode', label: string, command: string): void {
+function logAgentStart(agent: AgentToolName, label: string, command: string): void {
   console.log(`[${agent}:${label}] start ${command}`);
 }
 
-function logAgentStream(agent: 'codex' | 'opencode', label: string, stream: 'stdout' | 'stderr', text: string): void {
+function logAgentStream(agent: AgentToolName, label: string, stream: 'stdout' | 'stderr', text: string): void {
   const trimmed = text.trimEnd();
   if (trimmed.length === 0) {
     return;
@@ -5449,7 +5996,7 @@ function logAgentStream(agent: 'codex' | 'opencode', label: string, stream: 'std
 }
 
 function logAgentEnd(
-  agent: 'codex' | 'opencode',
+  agent: AgentToolName,
   label: string,
   elapsedMs: number,
   exitCode: number | null,

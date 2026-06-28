@@ -24,6 +24,7 @@ The reviewer should read:
 - `src/contracts/reviewer/input.md`
 - `src/contracts/reviewer/output.md`
 - `src/contracts/task/correction-task.md`
+- the implementation context artifacts recorded for the attempt
 - the current task
 - the implementation diff
 - quality gate results
@@ -41,6 +42,10 @@ The reviewer must:
 - identify architectural violations
 - when an implementation was retried after partial progress, compare the final diff against the retry context and note whether the task interface appears tight enough for future runs
 - inspect implementation notes, and treat their absence as an execution defect that should be surfaced explicitly
+- inspect the exact implementer context artifacts before rejecting the attempt so you can tell whether the implementer was constrained by its own prompt, tool snapshot, or scope rules
+- compare the diff against the task's reviewable-diff handoff requirements before treating a missing specific change as a failure
+- if the requested behavior already existed before the attempt, say so explicitly and do not reject solely because the diff is empty or the expected file did not change
+- if the context itself prevented the change, surface that restriction explicitly and prefer a narrower correction task only when the restriction is actually fixable
 - if the live reviewable diff was lost and only a fallback committed diff is available, treat that as diagnostic evidence and do not approve the handoff silently
 - when `changes_required` is returned, make the findings specific enough for the orchestrator to persist a recovery lesson, including explicit scope-isolation notes when the reviewable diff leaks runtime state files or other forbidden paths
 - return structured findings
@@ -78,6 +83,7 @@ Instructions:
 - Check whether mandatory quality gates passed.
 - Record findings with clear severity and path references when possible.
 - If implementation notes are missing, say so explicitly and do not approve the attempt without a justification recovery path.
+- If the implementation context shows the behavior already existed before the attempt, do not reject solely because the diff is empty; explain the preexisting evidence instead.
 - If the live worktree diff is missing and the provided diff is only fallback evidence from a committed-away change, do not approve the attempt; require a narrower recovery or correction path.
 - Use `approved`, `changes_required`, `blocked`, or `failed` exactly as defined in the contract.
 - If the result is `changes_required`, include a correction task that is narrower than the original task and conforms to the correction-task contract.

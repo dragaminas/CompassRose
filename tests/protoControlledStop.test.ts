@@ -17,8 +17,9 @@ describe('proto controlled stop', () => {
 
       expect(result.exitCode === 130 || result.signal === 'SIGINT').toBe(true);
       expect(`${result.stdout}${result.stderr}`).toContain('Controlled stop requested');
-      expect(result.stdout).toContain('Next step: implement_task');
-      expect(result.stdout).toContain('[opencode:implementer:implement:F002-T04:attempt-1] start');
+      expect(result.stdout).toContain('Next step: plan_subtask');
+      expect(result.stdout).toContain('Next step: implement_subtask');
+      expect(result.stdout).toContain('[opencode:implementer:subtask:F002-T04:attempt-1] start');
       expect(result.stderr).not.toContain('failed; recovery will continue through unblock planning');
 
       const runSummary = JSON.parse(readFileSync(join(workspace.cloneRoot, '.git', 'proto-compassrose', 'latest-run.json'), 'utf8')) as {
@@ -106,6 +107,11 @@ async function runProtoControlledStop(cloneRoot: string): Promise<{
 }
 
 function syncPrototypeRuntime(sourceRoot: string, targetRoot: string): void {
+  writeFileSync(
+    join(targetRoot, 'src', 'contracts', 'runtime', 'agentContext.ts'),
+    readFileSync(join(sourceRoot, 'src', 'contracts', 'runtime', 'agentContext.ts'), 'utf8'),
+    'utf8',
+  );
   writeFileSync(
     join(targetRoot, 'proto', 'protoCompassRose.ts'),
     readFileSync(join(sourceRoot, 'proto', 'protoCompassRose.ts'), 'utf8'),
@@ -211,7 +217,7 @@ if (outputPath) {
   fs.writeFileSync(
     outputPath,
     JSON.stringify({
-      kind: 'implement_task',
+      kind: 'plan_subtask',
       feature_id: '002-configuration-model',
       task_id: 'F002-T04',
       correction_task_id: null,

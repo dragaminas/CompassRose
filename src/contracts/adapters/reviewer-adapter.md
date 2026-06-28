@@ -1,5 +1,7 @@
 # Reviewer Adapter Contract
 
+TypeScript contract: `src/contracts/adapters/reviewerAdapterContracts.ts`.
+
 ## Purpose
 
 Defines how CompassRose communicates with a Reviewer.
@@ -10,7 +12,7 @@ The Reviewer Adapter invokes a review-capable tool or model and normalizes the r
 
 ## Responsibility
 
-The adapter passes task, diff, and validation context to the configured reviewer.
+The adapter passes task, diff, validation, and implementation-context evidence to the configured reviewer.
 
 The adapter parses the review result.
 

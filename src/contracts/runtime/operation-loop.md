@@ -59,6 +59,7 @@ The runtime must load:
 - project configuration from `docs/compassrose/CONFIG.md`
 - project state from `docs/compassrose/PROJECT_STATE.md`
 - feature folders from `docs/features/`
+- the canonical work-item taxonomy from `src/contracts/runtime/work-item-taxonomy.md`
 - feature state using `src/contracts/state/feature-state.md`
 - planner, implementer, reviewer, task, correction-task, state-correction-task, and doctor-recovery-task contracts from `src/contracts/`
 
@@ -318,7 +319,7 @@ When planning:
 - respect `src/contracts/planner/output.md`
 - treat `state.md` as runtime reality
 - if the task is a later version of an earlier task, keep the earlier task as history and record the relation through `previous_task_id`
-- do not create a backlog
+- do not create a long-lived executable task list
 
 If a correction task is active, the runtime must prefer it over generating a new normal task.
 
@@ -401,6 +402,7 @@ If review returns `changes_required` and produces a correction task, the runtime
 - keep the feature in `correction_pending`
 - continue into the recorded correction task when loop execution is allowed
 - carry the recovery lesson forward so later planning can tighten the task interface or document an implementer limitation
+- before accepting a `changes_required` result, the reviewer should have inspected the exact implementer context and the task's reviewable-diff handoff so a missing change can be distinguished from a behavior that already existed or a context restriction that made the change impossible
 
 ---
 

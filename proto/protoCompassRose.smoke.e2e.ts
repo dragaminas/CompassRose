@@ -3,9 +3,10 @@ import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import type { AgentToolName } from '../src/contracts/runtime/agentContext.js';
 
 interface LogEntry {
-  readonly tool: 'codex' | 'opencode';
+  readonly tool: AgentToolName;
   readonly kind: string;
   readonly call: number;
 }

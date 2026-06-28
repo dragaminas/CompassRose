@@ -1,0 +1,276 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="1600" viewBox="0 0 2400 1600" role="img" aria-labelledby="title desc">
+  <title id="title">CompassRose application workflow</title>
+  <desc id="desc">Workflow diagram of the application contract loop: doctor/bootstrap entry for incompatible repositories, runtime entry for already compatible repositories, then select state, create context, execute action, emit event, transition state, persist, and repeat or stop.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#faf7f0" />
+      <stop offset="100%" stop-color="#eef5f8" />
+    </linearGradient>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#51606d" />
+    </marker>
+    <marker id="arrow-red" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M 0 0 L 12 6 L 0 12 z" fill="#b23a2f" />
+    </marker>
+    <style>
+      .bg { fill: url(#bg); }
+      .title { font: 700 30px ui-sans-serif, system-ui, sans-serif; fill: #15212b; }
+      .subtitle { font: 400 15px ui-sans-serif, system-ui, sans-serif; fill: #4b5a66; }
+      .lane { fill: #ffffff; fill-opacity: 0.9; stroke: #c6d0d8; stroke-width: 2; rx: 24; }
+      .lane-title { font: 700 18px ui-sans-serif, system-ui, sans-serif; fill: #1a2835; }
+      .box { fill: #ffffff; stroke: #6f7d89; stroke-width: 2; rx: 18; }
+      .box-blue { fill: #eef6ff; stroke: #4f77a3; stroke-width: 2; rx: 18; }
+      .box-green { fill: #eefbf2; stroke: #3c8d59; stroke-width: 2; rx: 18; }
+      .box-amber { fill: #fff6e0; stroke: #c18400; stroke-width: 2; rx: 18; }
+      .box-red { fill: #fff0ed; stroke: #c2412d; stroke-width: 2; rx: 18; }
+      .box-violet { fill: #f7f2ff; stroke: #7a57c2; stroke-width: 2; rx: 18; }
+      .text { font: 700 16px ui-sans-serif, system-ui, sans-serif; fill: #15212b; }
+      .small { font: 400 13px ui-sans-serif, system-ui, sans-serif; fill: #42505c; }
+      .tiny { font: 400 12px ui-sans-serif, system-ui, sans-serif; fill: #5a6772; }
+      .mono { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #233240; }
+      .mono-dim { font: 600 13px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #4b5965; }
+      .line { stroke: #51606d; stroke-width: 2.5; fill: none; marker-end: url(#arrow); }
+      .line-red { stroke: #b23a2f; stroke-width: 3; fill: none; marker-end: url(#arrow-red); }
+      .dash { stroke: #6b7782; stroke-width: 2.5; fill: none; stroke-dasharray: 7 7; marker-end: url(#arrow); }
+      .tag { font: 700 12px ui-sans-serif, system-ui, sans-serif; fill: #3c4a55; }
+    </style>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="2400" height="1600" />
+
+  <text class="title" x="60" y="56">CompassRose application workflow</text>
+  <text class="subtitle" x="60" y="84">This is the intended application loop described by the interfaces, not the current proto code path.</text>
+
+  <rect class="lane" x="50" y="150" width="650" height="1300" />
+  <rect class="lane" x="720" y="150" width="760" height="1300" />
+  <rect class="lane" x="1500" y="150" width="850" height="1300" />
+
+  <text class="lane-title" x="78" y="186">1. State drives the next action</text>
+  <text class="lane-title" x="748" y="186">2. Orchestrator and executor loop</text>
+  <text class="lane-title" x="1528" y="186">3. Events, transitions, and persistence</text>
+
+  <rect class="box-amber" x="772" y="98" width="300" height="76" />
+  <text class="text" x="796" y="126">Entry A: doctor/bootstrap</text>
+  <text class="small" x="796" y="148">Repo is not yet CompassRose-compatible.</text>
+  <text class="small" x="796" y="168">Diagnose and repair docs/state first.</text>
+
+  <rect class="box-blue" x="1092" y="98" width="360" height="76" />
+  <text class="text" x="1118" y="126">Entry B: runtime normal</text>
+  <text class="small" x="1118" y="148">Repo already passed bootstrap.</text>
+  <text class="small" x="1118" y="168">Enter the deterministic workflow loop.</text>
+
+  <!-- Left lane: state -> action map -->
+  <rect class="box-blue" x="82" y="198" width="586" height="92" />
+  <text class="text" x="108" y="228">`request_pending` / `formalization_pending`</text>
+  <text class="small" x="108" y="252">Select `PLAN_FEATURE` to formalize the request.</text>
+  <text class="small" x="108" y="272">`ImplementationState` is the selector input.</text>
+
+  <rect class="box-blue" x="82" y="314" width="586" height="92" />
+  <text class="text" x="108" y="344">`formalized` / `task_planning_pending`</text>
+  <text class="small" x="108" y="368">Select `PLAN_TASK` to create one atomic task.</text>
+  <text class="small" x="108" y="388">The planner reads `PlannerInput` and emits `PlannedTask`.</text>
+
+  <rect class="box-green" x="82" y="430" width="586" height="92" />
+  <text class="text" x="108" y="460">`task_ready` / `implementation_running`</text>
+  <text class="small" x="108" y="484">Select `PLAN_SUBTASK` or `IMPLEMENT_SUBTASK`.</text>
+  <text class="small" x="108" y="504">This is where the work gets executed and recorded.</text>
+
+  <rect class="box-green" x="82" y="546" width="586" height="92" />
+  <text class="text" x="108" y="576">`quality_gates_pending` / `review_pending`</text>
+  <text class="small" x="108" y="600">Select `RUN_QUALITY_GATES` or `REVIEW_SUBTASK`.</text>
+  <text class="small" x="108" y="620">Review can approve, request correction, or block.</text>
+
+  <rect class="box-amber" x="82" y="662" width="586" height="92" />
+  <text class="text" x="108" y="692">`correction_pending`</text>
+  <text class="small" x="108" y="716">Select `PLAN_SUBTASK` for the next correction iteration.</text>
+  <text class="small" x="108" y="736">Subtasks are iterations over the same task, not separate goals.</text>
+
+  <rect class="box-red" x="82" y="778" width="586" height="110" />
+  <text class="text" x="108" y="808">`implementation_failed` / `quality_failed` / `review_failed` / `blocked`</text>
+  <text class="small" x="108" y="832">Select `DIAGNOSE_REPO` and decide between state repair, doctor recovery,</text>
+  <text class="small" x="108" y="854">or `STOP_WITH_DIAGNOSTIC` when the fix needs human review.</text>
+  <text class="small" x="108" y="876">The diagnostic surface must preserve evidence and recoverability.</text>
+
+  <rect class="box-violet" x="82" y="912" width="586" height="92" />
+  <text class="text" x="108" y="942">`unblock_pending`</text>
+  <text class="small" x="108" y="966">Select `EXECUTE_DOCTOR_RECOVERY` to re-enter the live loop.</text>
+  <text class="small" x="108" y="986">The recovery task restores the captured lifecycle anchor.</text>
+
+  <rect class="box" x="82" y="1028" width="586" height="92" />
+  <text class="text" x="108" y="1058">`completed` / `NO_PENDING_REQUEST`</text>
+  <text class="small" x="108" y="1082">Select `EXIT` when nothing meaningful remains to do.</text>
+  <text class="small" x="108" y="1102">This is the clean stop path.</text>
+
+  <!-- Center lane: orchestrator loop -->
+  <rect class="box-blue" x="772" y="200" width="680" height="86" />
+  <text class="text" x="798" y="230">`RunnerInterface.run()` or `OrchestratorInterface.run()`</text>
+  <text class="small" x="798" y="254">Start the deterministic loop and load the current repository state.</text>
+  <text class="small" x="798" y="274">This is the application entry, not a model decision.</text>
+
+  <rect class="box-blue" x="772" y="320" width="680" height="86" />
+  <text class="text" x="798" y="350">`StateStoreInterface.loadState()`</text>
+  <text class="small" x="798" y="374">Fetch the current `SystemState` and any persisted project state snapshot.</text>
+  <text class="small" x="798" y="394">`StateHandlerInterface` can serve as a narrow compatibility facade here.</text>
+
+  <rect class="box" x="772" y="440" width="680" height="96" />
+  <text class="text" x="798" y="470">`ActionSelectorInterface.select(state)`</text>
+  <text class="small" x="798" y="494">Inspect the current state and choose the next `ActionType`.</text>
+  <text class="small" x="798" y="516">This is driven by `ImplementationState` and `ImplementationEvent`.</text>
+
+  <rect class="box-violet" x="772" y="570" width="680" height="106" />
+  <text class="text" x="798" y="600">`ActionContextFactoryInterface.create(actionType, state)`</text>
+  <text class="small" x="798" y="624">Build the smallest context required by the selected action.</text>
+  <text class="small" x="798" y="646">For external agents, also create and persist `AgentInvocationContext`.</text>
+  <text class="small" x="798" y="668">This keeps prompts, tool choice, config, and workspace auditable.</text>
+
+  <rect class="box" x="772" y="712" width="680" height="104" />
+  <text class="text" x="798" y="742">`ActionDispatcherInterface.dispatch(action)`</text>
+  <text class="small" x="798" y="766">Send the typed action to the chosen executor.</text>
+  <text class="small" x="798" y="788">This is the seam between orchestration and work execution.</text>
+  <text class="small" x="798" y="810">`ActionExecutorInterface` performs the actual action contract.</text>
+
+  <rect class="box-green" x="772" y="850" width="680" height="118" />
+  <text class="text" x="798" y="880">`ActionExecutorInterface.execute(action)`</text>
+  <text class="small" x="798" y="904">Planning actions write feature/task artifacts.</text>
+  <text class="small" x="798" y="926">Implementation actions create attempts, diffs, and diagnostics.</text>
+  <text class="small" x="798" y="948">Review actions create review output or a correction task.</text>
+  <text class="small" x="798" y="970">Recovery actions produce restoration targets and unblock the flow.</text>
+
+  <rect class="box-amber" x="772" y="1000" width="680" height="98" />
+  <text class="text" x="798" y="1030">The action returns an `ImplementationEvent`</text>
+  <text class="small" x="798" y="1054">Examples: `FEATURE_FORMALIZED`, `TASK_PLANNED`, `QUALITY_GATES_PASSED`,</text>
+  <text class="small" x="798" y="1076">`REVIEW_APPROVED`, `REVIEW_CHANGES_REQUIRED`, `CORRECTION_COMPLETED`.</text>
+
+  <rect class="box-blue" x="772" y="1130" width="680" height="94" />
+  <text class="text" x="798" y="1160">`StateMachineInterface.transition(currentState, event)`</text>
+  <text class="small" x="798" y="1184">Convert the event into the next `SystemState`.</text>
+  <text class="small" x="798" y="1204">This is where the repository lifecycle becomes explicit.</text>
+
+  <rect class="box" x="772" y="1254" width="680" height="94" />
+  <text class="text" x="798" y="1284">`StateStoreInterface.updateState(nextState)`</text>
+  <text class="small" x="798" y="1308">Persist the new state and any run records or summaries.</text>
+  <text class="small" x="798" y="1328">Then the loop decides whether to continue or stop.</text>
+
+  <rect class="box-red" x="772" y="1380" width="680" height="56" />
+  <text class="small" x="798" y="1414">`continue?` yes -> loop again | no -> exit</text>
+
+  <!-- Right lane: action families and outputs -->
+  <rect class="box-blue" x="1548" y="198" width="754" height="112" />
+  <text class="text" x="1574" y="228">Planning family</text>
+  <text class="small" x="1574" y="252">`PLAN_FEATURE` writes `PlannedFeatureDocs`.</text>
+  <text class="small" x="1574" y="274">`PLAN_TASK` writes `PlannedTask` and task artifacts.</text>
+  <text class="small" x="1574" y="296">The output is always one next step, never a backlog of hidden work.</text>
+
+  <rect class="box-green" x="1548" y="340" width="754" height="112" />
+  <text class="text" x="1574" y="370">Implementation family</text>
+  <text class="small" x="1574" y="394">`PLAN_SUBTASK` narrows the next iteration over the same task.</text>
+  <text class="small" x="1574" y="416">`IMPLEMENT_SUBTASK` produces `ImplementationAttempt` and diagnostics.</text>
+  <text class="small" x="1574" y="438">This is where the model or CLI tool actually touches the repo.</text>
+
+  <rect class="box-green" x="1548" y="482" width="754" height="112" />
+  <text class="text" x="1574" y="512">Validation family</text>
+  <text class="small" x="1574" y="536">`RUN_QUALITY_GATES` returns `QualityGateResult` records.</text>
+  <text class="small" x="1574" y="558">`REVIEW_SUBTASK` returns `ReviewerOutput` and may create `CorrectionTask`.</text>
+  <text class="small" x="1574" y="580">`RecoveryLesson` and `TaskInterfaceAnalysis` tighten future runs.</text>
+
+  <rect class="box-violet" x="1548" y="624" width="754" height="126" />
+  <text class="text" x="1574" y="654">Recovery family</text>
+  <text class="small" x="1574" y="678">`CORRECT_STATE` applies a bounded state/doc fix.</text>
+  <text class="small" x="1574" y="700">`PLAN_DOCTOR_RECOVERY` creates a doctor task with a restoration target.</text>
+  <text class="small" x="1574" y="722">`EXECUTE_DOCTOR_RECOVERY` runs the recorded recovery and restores the anchor.</text>
+  <text class="small" x="1574" y="744">`DiagnosticAutocorrectionDecision` decides when this family is needed.</text>
+
+  <rect class="box-amber" x="1548" y="780" width="754" height="104" />
+  <text class="text" x="1574" y="810">Diagnostic and stop family</text>
+  <text class="small" x="1574" y="834">`DIAGNOSE_REPO` / `STOP_WITH_DIAGNOSTIC` keep ambiguous failures explicit.</text>
+  <text class="small" x="1574" y="856">`EXIT` is the clean terminal path when no pending work remains.</text>
+
+  <rect class="box" x="1548" y="916" width="754" height="146" />
+  <text class="text" x="1574" y="946">Event summary</text>
+  <text class="small" x="1574" y="970">Planning events: `FEATURE_FORMALIZED`, `TASK_PLANNED`.</text>
+  <text class="small" x="1574" y="992">Execution events: `IMPLEMENTATION_COMPLETED`, `QUALITY_GATES_PASSED`.</text>
+  <text class="small" x="1574" y="1014">Review events: `REVIEW_APPROVED`, `REVIEW_CHANGES_REQUIRED`, `REVIEW_BLOCKED`.</text>
+  <text class="small" x="1574" y="1036">Recovery events: `CORRECTION_STARTED`, `CORRECTION_COMPLETED`, `DOCTOR_RECOVERY_COMPLETED`.</text>
+
+  <rect class="box" x="1548" y="1094" width="754" height="126" />
+  <text class="text" x="1574" y="1124">Application record keeping</text>
+  <text class="small" x="1574" y="1148">`StepDecision` captures which action was chosen for the current state.</text>
+  <text class="small" x="1574" y="1170">`StepRunRecord` stores the decision, exit code, and summary.</text>
+  <text class="small" x="1574" y="1192">`RunSummary` persists the full loop outcome.</text>
+
+  <rect class="box" x="1548" y="1250" width="754" height="108" />
+  <text class="text" x="1574" y="1280">Logging surface</text>
+  <text class="small" x="1574" y="1304">`AgentInvocationContext` is the exact prompt/context payload sent to an agent.</text>
+  <text class="small" x="1574" y="1326">This makes failures inspectable from the concrete input, not only the exit code.</text>
+
+  <!-- Connectors -->
+  <path class="line" d="M 668 246 L 772 246" />
+  <text class="tag" x="684" y="234">selects</text>
+
+  <path class="line" d="M 668 362 L 772 362" />
+  <text class="tag" x="684" y="350">selects</text>
+
+  <path class="line" d="M 668 478 L 772 478" />
+  <text class="tag" x="684" y="466">selects</text>
+
+  <path class="line" d="M 668 594 L 772 594" />
+  <text class="tag" x="684" y="582">selects</text>
+
+  <path class="line" d="M 668 710 L 772 710" />
+  <text class="tag" x="684" y="698">selects</text>
+
+  <path class="line" d="M 668 834 L 772 834" />
+  <text class="tag" x="684" y="822">selects</text>
+
+  <path class="line" d="M 668 958 L 772 958" />
+  <text class="tag" x="684" y="946">selects</text>
+
+  <path class="line" d="M 668 1074 L 772 1074" />
+  <text class="tag" x="684" y="1062">selects</text>
+
+  <path class="dash" d="M 1072 136 L 1092 136" />
+  <text class="tag" x="1082" y="92" text-anchor="middle">after repair</text>
+
+  <path class="line" d="M 1272 174 L 1272 200" />
+  <text class="tag" x="1282" y="190">starts normal loop</text>
+
+  <path class="line" d="M 1132 406 L 1132 440" />
+  <text class="tag" x="1142" y="434">selects</text>
+
+  <path class="line" d="M 1132 536 L 1132 570" />
+  <text class="tag" x="1142" y="564">builds context</text>
+
+  <path class="line" d="M 1132 676 L 1132 712" />
+  <text class="tag" x="1142" y="706">dispatches</text>
+
+  <path class="line" d="M 1132 816 L 1132 850" />
+  <text class="tag" x="1142" y="844">executes</text>
+
+  <path class="line" d="M 1132 968 L 1132 1000" />
+  <text class="tag" x="1142" y="994">returns event</text>
+
+  <path class="line" d="M 1132 1098 L 1132 1130" />
+  <text class="tag" x="1142" y="1124">transitions</text>
+
+  <path class="line" d="M 1132 1224 L 1132 1254" />
+  <text class="tag" x="1142" y="1248">persists</text>
+
+  <path class="dash" d="M 1390 622 L 1548 662" />
+  <text class="tag" x="1428" y="632">planning / recovery outputs</text>
+
+  <path class="dash" d="M 1390 766 L 1548 702" />
+  <text class="tag" x="1428" y="760">recovery outputs</text>
+
+  <path class="dash" d="M 1390 874 L 1548 844" />
+  <text class="tag" x="1432" y="872">events</text>
+
+  <path class="dash" d="M 1390 598 L 1548 1260" />
+  <text class="tag" x="1430" y="1220">agent logs</text>
+
+  <path class="line-red" d="M 1470 1418 L 1548 1418" />
+  <text class="tag" x="1488" y="1406">repeat or stop</text>
+
+  <text class="mono-dim" x="92" y="1162">State map is driven by `ImplementationState`.</text>
+  <text class="mono-dim" x="786" y="1470">The loop is deterministic and auditable.</text>
+  <text class="mono-dim" x="1550" y="1470">Events and summaries are explicit artifacts, not implicit side effects.</text>
+</svg>

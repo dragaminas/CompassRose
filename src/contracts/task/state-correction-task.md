@@ -102,7 +102,7 @@ A state correction task must:
 A state correction task must not:
 
 - Replan the feature.
-- Reopen the whole feature backlog.
+- Reopen the whole feature plan.
 - Modify code unless the state contract explicitly requires it.
 - Change unrelated feature documents.
 - Assume why the malformed state appeared without evidence.

@@ -34,8 +34,11 @@ formalized
 
 ## Outline Progress
 
-- <Implementation outline step 1>: not started | in progress | complete
-- <Implementation outline step 2>: not started | in progress | complete
+Each entry tracks one task request from the implementation outline.
+This section shows planning visibility, not an execution queue.
+
+- <Task request 1 from the implementation outline>: not started | in progress | complete
+- <Task request 2 from the implementation outline>: not started | in progress | complete
 
 ## Blocked By
 

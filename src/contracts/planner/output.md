@@ -1,5 +1,7 @@
 # Planner Output Contract
 
+TypeScript contract: `src/contracts/planner/plannerContracts.ts`.
+
 ## Purpose
 
 Defines the task produced by a Planner role.

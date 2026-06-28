@@ -10,12 +10,13 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `state-corruption-blocked-doctor-recovery-f002-t04-c3-u1-c1-u1-u1-u1-failed-its-re-entry-quality-`.
+- Feature `002-configuration-model` is blocked by `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr`.
 - Blocker recoverability: agent.
-- Feature `002-configuration-model` was suspended from `blocked`; the active task pointer remains `F002-T04-C3-U1-C1-U1`.
-- Blocking task context: `F002-T04-C3-U1-C1-U1-U1-U1`
+- The active task pointer remains `F002-T04-C3-U1-C1-U1`.
+- Blocking task context: `F002-T04-C3-U1-C1-U1`
 
 ## Implemented
+
 - `docs/compassrose/CONFIG.md` and `docs/compassrose/PROJECT_STATE.md` are present as the project-local operational documents.
 - The feature-001 foundation documents are formalized under `docs/features/001-project-identity-and-foundation/`.
 - The feature-002 configuration documents are formalized under `docs/features/002-configuration-model/`.
@@ -43,4 +44,4 @@ State correction artifact `F002-T04-C3-U1-C1-U1-C2802` was applied by the protot
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-blocked-doctor-recovery-f002-t04-c3-u1-c1-u1-u1-u1-failed-its-re-entry-quality-` and then restore `blocked`.
+Plan a doctor recovery task for blocker `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr` and then restore `blocked`.

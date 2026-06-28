@@ -19,7 +19,7 @@ The doctor role must:
 
 The doctor role must not:
 
-- widen into unrelated backlog work
+- widen into unrelated feature work
 - claim approval or completion without repository evidence
 - clear recovery evidence silently
 - start a second planning pass inside execution

@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { AgentToolName } from '../src/contracts/runtime/agentContext.js';
 import { describe, expect, test } from 'vitest';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -8,7 +9,7 @@ const tsxBinary = join(repoRoot, 'node_modules', '.bin', 'tsx');
 
 function runProtoScenario(
   scenario: string,
-  options: { commit?: boolean; implementer?: 'codex' | 'opencode' } = {},
+  options: { commit?: boolean; implementer?: AgentToolName } = {},
 ): { status: number | null; stdout: string; stderr: string } {
   const result = spawnSync(tsxBinary, ['proto/protoCompassRose.e2e.ts'], {
     cwd: repoRoot,

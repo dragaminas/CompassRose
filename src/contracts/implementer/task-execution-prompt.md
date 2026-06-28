@@ -1,5 +1,7 @@
 # Task Execution Prompt
 
+TypeScript contract: `src/contracts/adapters/implementerAdapterContracts.ts`.
+
 ## Purpose
 
 Defines the canonical prompt used to execute a CompassRose task through an external implementer.
@@ -36,7 +38,8 @@ The implementer must:
 - satisfy the acceptance criteria
 - follow the declared development policy
 - run or support the required quality gates when possible
-- produce repository changes that can be reviewed through a Git diff
+- produce repository changes that can be reviewed through a Git diff when a change is needed
+- if the requested behavior already exists, say so explicitly in `## Implementation Notes` and cite the repository evidence instead of forcing a redundant edit
 - leave the reviewable diff visible in the live worktree at handoff unless the task contract explicitly says otherwise
 
 Implementation recovery:

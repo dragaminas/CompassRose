@@ -59,7 +59,7 @@ The planner must:
 
 The planner must not:
 
-- generate a long-lived task backlog
+- generate a long-lived executable task list
 - invent unsupported repository structure
 - hide uncertainty instead of naming it
 - write detailed code instructions
@@ -95,7 +95,7 @@ Instructions:
 - Keep `feature.md` focused on purpose, scope, goals, acceptance criteria, deliverables, completion criteria, and implementation outline.
 - Keep `architecture.md` focused on modules, boundaries, interfaces, dependencies, constraints, design notes, and risks or open questions.
 - Keep `state.md` focused on lifecycle state, operational status, current reality, implemented deliverables, remaining deliverables, outline progress, known gaps, blockers, and the next planning hint.
-- Do not generate a task backlog.
+- Do not generate an executable task list.
 - Do not invent implementation details that are not supported by the repository or architecture.
 - If information is missing, make the uncertainty explicit.
 

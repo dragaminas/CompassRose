@@ -1,5 +1,7 @@
 # Reviewer Output Contract
 
+TypeScript contract: `src/contracts/reviewer/reviewerContracts.ts`.
+
 ## Purpose
 
 Defines the structured result produced by a Reviewer role.
@@ -93,7 +95,7 @@ correction_task:
 
 ### approved
 
-The implementation satisfies the task.
+The implementation satisfies the task, including cases where the reviewer confirmed that the requested behavior already existed before the attempt.
 
 ### changes_required
 

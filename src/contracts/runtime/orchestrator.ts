@@ -1,5 +1,6 @@
-import type { ActionContext, ActionType, SystemAction } from "../actions/actions.js";
-import type { ImplementationEvent, SystemState } from "../state/systemState.js";
+import type { ActionContext, ActionType, SystemAction } from "../actions/actionContracts.js";
+import type { ImplementationEvent } from "../state/implementationMachine.js";
+import type { SystemState } from "../state/workflowState.js";
 
 export interface StateStoreInterface {
     createState(): SystemState;

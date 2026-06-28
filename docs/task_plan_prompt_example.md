@@ -31,7 +31,7 @@ Requirements:
 - Choose the smallest meaningful step that advances this feature from the current gap.
 - Keep the task within this feature and within a small file footprint.
 - Base the task on current repository reality under the listed paths.
-- Do not generate a backlog.
+- Do not generate multiple tasks at once.
 - Do not plan work for another feature.
 - Do not modify files.
 

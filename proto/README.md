@@ -86,6 +86,7 @@ Prototype artifacts are written under `.git/proto-compassrose/`:
 - `latest-refinement.json`
 - `latest-recovery-lesson.md`
 - `latest-recovery-lesson.json`
+- `logs/agent-contexts/`
 - `recovery-lessons/`
 - `task-interface-analysis/`
 - `blockers/`
@@ -95,3 +96,5 @@ Prototype artifacts are written under `.git/proto-compassrose/`:
 If the script fails, start by checking `latest-refinement.md` and the matching run summary in `runs/`.
 
 For recovery-oriented failures, also inspect `latest-recovery-lesson.md` and the matching JSON artifact under `recovery-lessons/`.
+
+The `logs/agent-contexts/` artifacts record the exact prompt, tool snapshot, configuration snapshot, and workspace snapshot that were sent to each external agent.

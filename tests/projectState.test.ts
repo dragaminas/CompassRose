@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { validateProjectState } from '../src/doctor/projectState.js';
+import { validateProjectState } from '../src/contracts/state/projectState.js';
 
 describe('validateProjectState', () => {
   test('returns ok when project state has a heading and status section', () => {

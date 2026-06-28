@@ -366,7 +366,7 @@ planner_output:
       - tests
 ```
 
-The planner must not generate a long-term task list by default.
+The planner must not generate a long-term executable task list by default.
 
 It generates the next task only.
 

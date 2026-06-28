@@ -214,7 +214,7 @@ Accepted
 
 CompassRose generates the next task only.
 
-Long-lived task backlogs are not the primary planning mechanism.
+Long-lived executable task lists are not the primary planning mechanism.
 
 ---
 

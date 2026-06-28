@@ -206,7 +206,7 @@ A task must:
 A task must not:
 
 - Serve as a roadmap.
-- Represent a long-term backlog.
+- Represent a long-term planning source.
 - Mix unrelated features.
 - Require repository-wide exploration unless explicitly allowed.
 - Assume why a previous implementer stopped without producing code.

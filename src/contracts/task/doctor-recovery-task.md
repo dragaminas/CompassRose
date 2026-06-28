@@ -6,7 +6,7 @@ Defines the bounded recovery task executed by the `doctor` role when determinist
 
 A doctor recovery task may repair repository documentation, state, implementation code, tests, or task interfaces when that is the smallest safe change required to re-enter the deterministic loop.
 
-It is not a backlog-planning task, and it does not open a second review loop for the recovery itself.
+It is not a feature-planning task, and it does not open a second review loop for the recovery itself.
 
 Pure documentation or state drift that can be repaired directly by the runtime still belongs to `src/contracts/task/state-correction-task.md`.
 
@@ -14,7 +14,7 @@ Pure documentation or state drift that can be repaired directly by the runtime s
 
 ## Responsibility
 
-A doctor recovery task resolves a named blocker without silently redefining the feature backlog.
+A doctor recovery task resolves a named blocker without silently redefining the feature plan.
 
 It must preserve blocker evidence, task lineage, and the restoration target that tells the runtime where deterministic execution resumes after the recovery passes its own quality gates.
 
@@ -72,7 +72,7 @@ A doctor recovery task may:
 
 A doctor recovery task must not:
 
-- widen into unrelated backlog work
+- widen into unrelated feature work
 - reopen a normal reviewer loop for the recovery itself
 - hide stale recovery evidence
 - delete or rewrite the earlier failed task instead of linking back to it

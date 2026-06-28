@@ -51,7 +51,7 @@ The planner must:
 
 The planner must not:
 
-- generate a multi-task backlog
+- generate multiple tasks at once
 - expand scope beyond the feature without explicit permission
 - ask the implementer to decide architecture outside the task
 - rely on hidden assumptions

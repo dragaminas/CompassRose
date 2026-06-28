@@ -1,32 +1,12 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { loadAndValidateProjectState } from './projectState.js';
+import { loadAndValidateProjectState } from '../contracts/state/projectState.js';
+import type { DoctorOptions, DoctorCheck, DoctorReport } from '../contracts/doctor/doctorContracts.js';
 import { readProjectConfiguration } from '../config/configReader.js';
 import type { ConfigurationIssue } from '../config/configTypes.js';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { getCurrentSupportedPlatform } from '../platform/platformInfo.js';
 import { isDirectory, pathExists, resolveRepositoryRelativePath } from '../filesystem/pathResolver.js';
-
-export type DoctorCheckStatus = 'pass' | 'fail';
-
-export interface DoctorCheck {
-  readonly name: string;
-  readonly status: DoctorCheckStatus;
-  readonly details: readonly string[];
-}
-
-export interface DoctorReport {
-  readonly repositoryRoot: string | null;
-  readonly currentPlatform: string | null;
-  readonly configPath: string | null;
-  readonly checks: readonly DoctorCheck[];
-  readonly success: boolean;
-  readonly exitCode: number;
-}
-
-export interface DoctorOptions {
-  readonly cwd?: string;
-}
 
 export function runDoctor(options: DoctorOptions = {}): DoctorReport {
   const workingDirectory = options.cwd ?? process.cwd();

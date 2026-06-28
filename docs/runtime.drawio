@@ -183,7 +183,7 @@
         <mxCell id="BhB9ykIoYgxXmJzZVWLg-106" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="BhB9ykIoYgxXmJzZVWLg-52" source="BhB9ykIoYgxXmJzZVWLg-103" target="BhB9ykIoYgxXmJzZVWLg-105" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="BhB9ykIoYgxXmJzZVWLg-103" value="&lt;b&gt;Doctor recovery changes&lt;/b&gt;&lt;div&gt;May touch docs, state, src, and tests as needed&lt;/div&gt;&lt;div&gt;Must not widen into feature backlog&lt;/div&gt;&lt;div&gt;Must preserve task lineage and recovery evidence&lt;/div&gt;&lt;div&gt;No review loop on unblock&lt;/div&gt;" style="whiteSpace=wrap;html=1;rounded=1;" parent="BhB9ykIoYgxXmJzZVWLg-52" vertex="1">
+        <mxCell id="BhB9ykIoYgxXmJzZVWLg-103" value="&lt;b&gt;Doctor recovery changes&lt;/b&gt;&lt;div&gt;May touch docs, state, src, and tests as needed&lt;/div&gt;&lt;div&gt;Must not widen into feature planning&lt;/div&gt;&lt;div&gt;Must preserve task lineage and recovery evidence&lt;/div&gt;&lt;div&gt;No review loop on unblock&lt;/div&gt;" style="whiteSpace=wrap;html=1;rounded=1;" parent="BhB9ykIoYgxXmJzZVWLg-52" vertex="1">
           <mxGeometry x="144" y="690" width="326" height="90" as="geometry" />
         </mxCell>
         <mxCell id="BhB9ykIoYgxXmJzZVWLg-105" value="&lt;b&gt;Doctor quality gates&lt;/b&gt;&lt;div&gt;repo state is coherent&lt;/div&gt;&lt;div&gt;no stale recovery markers remain&lt;/div&gt;&lt;div&gt;re-entry point is valid&lt;/div&gt;&lt;div&gt;if gates fail, stop with diagnostic&lt;/div&gt;&lt;div&gt;if gates pass, re-enter deterministic loop&lt;/div&gt;" style="whiteSpace=wrap;html=1;rounded=1;" parent="BhB9ykIoYgxXmJzZVWLg-52" vertex="1">

@@ -60,6 +60,9 @@ The runtime may use these sections as supporting context, but not as the primary
 - `## Last Approved Change`
 - `## Next Planning Hint`
 
+`## Outline Progress` records the feature's visible task requests from the implementation outline.
+It is planning context, not a long-lived executable task list.
+
 ---
 
 ## Required Markdown Shape
@@ -100,7 +103,7 @@ formalized
 
 ## Outline Progress
 
-- <Implementation outline step 1>: not started | in progress | complete
+- <Task request 1 from the implementation outline>: not started | in progress | complete
 
 ## Blocked By
 
@@ -125,6 +128,9 @@ None
 
 <Optional hint for the planner about what should probably come next.>
 ```
+
+Each entry in `## Outline Progress` tracks one task request from the implementation outline.
+The section is visible planning context, not an execution queue.
 
 ---
 

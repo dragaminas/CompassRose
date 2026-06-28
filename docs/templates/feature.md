@@ -52,6 +52,9 @@ This feature is considered implemented when:
 
 ## Implementation Outline
 
+This section lists the visible task requests that make up the feature's intended implementation path.
+Each item should describe one bounded task request, not a long-lived executable task.
+
 1. <Planned implementation step 1>
 2. <Planned implementation step 2>
 3. <Planned implementation step 3>

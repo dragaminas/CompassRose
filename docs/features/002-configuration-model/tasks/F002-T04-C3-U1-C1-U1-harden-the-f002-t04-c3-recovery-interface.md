@@ -7,24 +7,24 @@
 `002-configuration-model`
 
 ## Goal
-Repair the stale recovery interface around `F002-T04-C3` so the current recovery artifact, feature state, and project state all describe one explicit `task_interface_gap` path from `implementation_failed` to `task_ready`, preserve the prior `no diff` plus missing `Implementation Notes` evidence, and surface the stale exact-string preimage mismatch as the diagnostic that justifies the bounded recovery successor.
+Reissue the `F002-T04-C3` doctor recovery interface so the current recovery artifact, feature state, and project state record the blocked `state_corruption` condition, preserve the active anchor `F002-T04-C3-U1-C1-U1`, and keep the feature restored to `blocked` after the doctor quality gates pass.
 
 ## First Executable Step
-grep -n -E 'task_interface_gap|task-interface-gap-F002-T04-C3-stale-preimage-mismatch|state_corruption|F002-T04-C3-U1-C1-U1|F002-T04-C1|review_pending|Implementation Notes|no diff|task_ready' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md
+grep -n -E 'state_corruption|state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr|F002-T04-C3-U1-C1-U1|blocked|active_task|active_correction_task|active_unblock_task' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md
 
 ## Minimum Progress Evidence
 - `git diff --name-only -- docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md` lists exactly those three files.
-- `git diff -- docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md` shows the recovery artifact now names `task-interface-gap-F002-T04-C3-stale-preimage-mismatch`, `task_interface_gap`, `implementation_failed`, `task_ready`, `no diff`, and `Implementation Notes`.
-- `git diff -- docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md` shows both state docs agree on the same `task-interface-gap-F002-T04-C3-stale-preimage-mismatch` recovery path and preserve the prior `no diff` / missing `Implementation Notes` lesson.
+- `git diff -- docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md` shows the recovery artifact now names `doctor_recovery`, `no_review_loop`, `state_corruption`, `blocked`, and the blocked restoration target for `active_task: F002-T04-C3-U1-C1-U1`.
+- `git diff -- docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md` shows both state docs agree on the same blocked recovery path and preserve `active_task: F002-T04-C3-U1-C1-U1`.
 
 ## Trace
 - Roadmap objective: Deterministic Orchestration
 - Feature goal: Define a repository-local configuration model that CompassRose can read, validate, and use as the project-level source of runtime policy.
-- State gap: The current recovery artifact still reasons from the older `F002-T04-C3-U1-C1` preimage while `state.md` records `active_task=F002-T04-C3-U1-C1-U1`, so the feature needs a bounded doctor successor for blocker signature `task-interface-gap-F002-T04-C3-stale-preimage-mismatch` instead of a direct state-correction pass.
+- State gap: The feature is currently blocked by `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr`, and the recovery interface must keep the active task anchor while converging the feature and project state on one explicit blocked recovery path.
 
 ## Context
-- Feature `002-configuration-model` is blocked by a stale recovery interface, not pure state drift. The diagnosed blocker signature is `task-interface-gap-F002-T04-C3-stale-preimage-mismatch`, and the task must preserve the earlier `no diff` / missing `Implementation Notes` evidence while converging the task artifact, feature state, and project state on one `task_interface_gap` path.
-- The latest edit attempt reported `Could not find oldString in the file` followed by `No changes to apply: oldString and newString are identical`, which is evidence that the interface was patching a stale preimage rather than a fresh target.
+- Feature `002-configuration-model` is blocked by a recoverable `state_corruption` diagnostic, not by a task-interface gap. The task must preserve the recorded blocker evidence and keep the state narratives aligned on `blocked` with `active_task=F002-T04-C3-U1-C1-U1`.
+- The current recovery path should remain bounded to the recorded blocker and the re-entry point; do not widen into source, config, or unrelated backlog work.
 
 ## Scope
 Allowed:
@@ -39,20 +39,20 @@ Forbidden:
 - `docs/features/002-configuration-model/architecture.md`
 
 ## Constraints
-- Update only the current recovery artifact and the two state documents; do not repair this by touching source code, tests, or configuration contracts.
-- Preserve `F002-T04-C3` as the recovery anchor and document the restoration target exactly as `lifecycle_state: task_ready`, `active_task: F002-T04-C3-U1-C1-U1`, `active_correction_task: none`, and `active_unblock_task: none`.
-- Carry the prior implementation-failure evidence directly in the recovery artifact and aligned state narratives: the earlier `F002-T04-C3` attempt produced no diff and omitted the required `Implementation Notes`.
-- Keep the task documentation-only, and make the feature and project narratives consistent with the current `task_interface_gap` recovery situation instead of generic state-corruption wording or contradictory blocked/not-blocked text.
+- Run this as doctor recovery with no_review_loop semantics; do not route it through the normal reviewer loop.
+- Keep the change documentation-only and bounded to the three allowed paths.
+- Preserve the blocker evidence and restoration target exactly as `lifecycle_state: blocked`, `active_task: F002-T04-C3-U1-C1-U1`, `active_correction_task: none`, `active_unblock_task: none`.
+- Do not reclassify the blocker as a task-interface gap; the current blocker is `state_corruption`.
+- Keep the recovery interface narrowly focused on the blocked recovery path and the state narratives that describe it.
 
 ## Development Policy
 - `documentation_first`
 
 ## Acceptance Criteria
-- `docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md` is rewritten as a `task_interface_gap` recovery artifact for `F002-T04-C3`, with the observed `quality_failed` state, the explicit restoration target back to `task_ready`, and the prior `no diff` plus missing `Implementation Notes` evidence recorded directly in the task text.
-- The recovery artifact updates its first executable step, minimum progress evidence, acceptance criteria, and quality gates so they check for stale recovery markers and require aligned edits in all three allowed files.
-- `docs/features/002-configuration-model/state.md` describes one consistent `F002-T04-C3` recovery path, preserves the blocked-from `implementation_failed` evidence and restoration target, and removes stale `F002-T04-C1` or empty-placeholder recovery narration.
-- `docs/compassrose/PROJECT_STATE.md` matches the feature-state narrative by describing the same stale recovery-interface problem and recovery target without contradictory blocked/not-blocked wording.
-- Only the three allowed documentation files change, and the resulting diff stays narrowly focused on repairing and hardening the stale recovery interface.
+- The task is recorded as a doctor recovery artifact with `doctor_recovery`, `no_review_loop`, and `state_corruption`.
+- The recovery artifact explicitly records the blocked restoration target for `active_task: F002-T04-C3-U1-C1-U1`.
+- `docs/features/002-configuration-model/state.md` and `docs/compassrose/PROJECT_STATE.md` agree on the same blocked recovery path and preserve the recorded anchor without introducing a conflicting `task_ready` target.
+- Only the three allowed documentation files change, and the re-entry gates pass in a plain shell.
 
 ## Files Likely Affected
 - `docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md`
@@ -62,8 +62,8 @@ Forbidden:
 ## Quality Gates to Run
 ```bash
 git diff --check
-grep -q 'F002-T04-C3' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md && grep -q 'task_interface_gap' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md && grep -q 'task-interface-gap-F002-T04-C3-stale-preimage-mismatch' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md && grep -q 'implementation_failed' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md && grep -q 'task_ready' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md && grep -q 'Implementation Notes' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md && grep -q 'no diff' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md
-for f in docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md; do grep -q 'F002-T04-C3-U1-C1-U1' "$f" && grep -q 'task-interface-gap-F002-T04-C3-stale-preimage-mismatch' "$f" && grep -q 'task_interface_gap' "$f" && grep -q 'implementation_failed' "$f" && grep -q 'task_ready' "$f" && ! grep -q 'review_pending' "$f" && ! grep -q 'F002-T04-C1' "$f"; done
+grep -q 'doctor_recovery' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md && grep -q 'no_review_loop' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md && grep -q 'state_corruption' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md && grep -q 'blocked' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md && grep -q 'active_task: F002-T04-C3-U1-C1-U1' docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md
+for f in docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md; do grep -q 'F002-T04-C3-U1-C1-U1' "$f" && grep -q 'state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr' "$f" && grep -q 'blocked' "$f" && grep -q 'active_unblock_task: none' "$f" && grep -q 'active_correction_task: none' "$f"; done
 files='docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md docs/features/002-configuration-model/state.md docs/compassrose/PROJECT_STATE.md'; out=$(git diff --name-only -- $files); printf '%s\n' "$out" | grep -qx 'docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-the-f002-t04-c3-recovery-interface.md' && printf '%s\n' "$out" | grep -qx 'docs/features/002-configuration-model/state.md' && printf '%s\n' "$out" | grep -qx 'docs/compassrose/PROJECT_STATE.md'
 ```
 
@@ -75,16 +75,18 @@ files='docs/features/002-configuration-model/tasks/F002-T04-C3-U1-C1-U1-harden-t
 - review_policy: no_review_loop
 
 ## Blocker Context
-- kind: task_interface_gap
-- signature: task-interface-gap-F002-T04-C3-stale-preimage-mismatch
+- kind: state_corruption
+- signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr
 - recoverability: agent
-- observed_state: lifecycle=quality_failed; active_task=F002-T04-C3-U1-C1; active_correction_task=none; active_unblock_task=none
-- evidence: A bounded doctor recovery successor can safely repair and harden this stale recovery interface without architectural review. It should preserve `F002-T04-C3` as the recovery anchor, restate the prior implementation-failure evidence, and tighten the task text, acceptance checks, and quality gates so the recovery documents converge on one explicit `implementation_failed -> task_ready` path.
-- evidence: The latest edit attempt reported `Could not find oldString in the file` and then `No changes to apply: oldString and newString are identical`, which means the interface was operating on a stale preimage rather than a fresh target.
-- evidence: The earlier `F002-T04-C3` attempt still produced no diff and omitted the required `Implementation Notes`.
+- observed_state: lifecycle=blocked; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
+- evidence: Feature 002-configuration-model is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.
+- evidence: - kind: state_corruption
+- evidence: - signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr
+- evidence: - recoverability: agent
+- evidence: lifecycle=blocked
 
 ## Restoration Target
-- lifecycle_state: task_ready
+- lifecycle_state: blocked
 - active_task: `F002-T04-C3-U1-C1-U1`
 - active_correction_task: `none`
 - active_unblock_task: `none`

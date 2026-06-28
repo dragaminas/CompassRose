@@ -2,7 +2,7 @@ import { Runner, RunType, type RunnerInterface } from "./contracts/runtime/runne
 import type { StateHandlerInterface } from "./contracts/state/stateHandler.js";
 import type { SystemState } from "./contracts/state/systemState.js";
 
-class SystemRunner extends Runner {
+abstract class SystemRunner extends Runner {
     stateHandler!: StateHandlerInterface;
 
     prepareNextChild(state: SystemState): RunnerInterface | undefined {

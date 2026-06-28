@@ -25,7 +25,7 @@ This feature includes:
 This feature does not include:
 
 - implementing the requested feature itself
-- generating a long-lived task backlog
+- generating a long-lived executable task list
 - replacing human ownership of the generated documentation
 - changing repository behavior outside the documentation flow required for feature formalization
 

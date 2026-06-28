@@ -4,6 +4,8 @@
 
 Defines the structured diagnostic produced after a problematic review outcome so future tasks can become tighter, clearer, and more deterministic.
 
+TypeScript contract: `src/contracts/runtime/taskInterfaceAnalysis.ts`.
+
 ---
 
 ## Responsibility

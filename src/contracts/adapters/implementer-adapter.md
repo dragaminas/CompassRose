@@ -1,5 +1,7 @@
 # Implementer Adapter Contract
 
+TypeScript contract: `src/contracts/adapters/implementerAdapterContracts.ts`.
+
 ## Purpose
 
 Defines how CompassRose communicates with an Implementer.
@@ -67,7 +69,7 @@ adapter_output:
   raw_output: string
   implementation_notes: string | null
   diagnostics:
-    classification: context_overflow | provider_failure | permission_prompt | reviewable_diff_lost | tool_refusal | missing_implementation_notes | model_passivity | ui_cli_behavior | unknown
+    classification: context_overflow | provider_failure | permission_prompt | reviewable_diff_lost | already_complete | tool_refusal | missing_implementation_notes | model_passivity | ui_cli_behavior | unknown
     evidence:
       - string
     first_executable_step_status: attempted | not_attempted | unknown
@@ -91,9 +93,10 @@ Allowed classifications:
 - `provider_failure`: the configured provider, endpoint, model, or upstream service failed before task execution could complete.
 - `permission_prompt`: execution stopped because the tool needed interactive approval, credentials, or filesystem/network permission.
 - `reviewable_diff_lost`: the tool appears to have created a commit or otherwise cleared the live worktree diff before CompassRose could capture the reviewable change.
+- `already_complete`: the tool exited successfully, reported that the requested behavior already existed, and produced no diff because no code change was needed.
 - `tool_refusal`: the tool explicitly refused the request or rejected the invocation.
 - `missing_implementation_notes`: the tool produced a repository attempt without the required implementation justification.
-- `model_passivity`: the tool completed without making changes, without producing minimum progress evidence, or without taking the requested first executable step, without an explicit refusal or infrastructure failure.
+- `model_passivity`: the tool completed without making changes, without producing minimum progress evidence, or without taking the requested first executable step, without an explicit refusal, an `already_complete` justification, or an infrastructure failure.
 - `ui_cli_behavior`: the wrapper, terminal UI, CLI mode, or command invocation prevented or obscured execution.
 - `unknown`: the adapter lacks enough evidence to choose a more specific classification.
 
@@ -103,11 +106,11 @@ If no code was produced, the adapter must report the observable evidence instead
 
 If the live worktree diff is empty because the tool committed or cleaned away the change before handoff, the adapter must fail the attempt, classify it as `reviewable_diff_lost`, and preserve any fallback commit diff only as diagnostic evidence.
 
-If the tool exits successfully after only reading context, the adapter must treat absent `minimum_progress_evidence` as a failed implementation attempt and classify it as `model_passivity` unless stronger evidence supports another classification.
+If the tool exits successfully after only reading context, the adapter must treat absent `minimum_progress_evidence` as a failed implementation attempt and classify it as `model_passivity` unless stronger evidence supports another classification such as `already_complete`.
 
 If the tool exits successfully but omits the required implementation notes, the adapter must treat that omission as a failed implementation attempt and classify it as `missing_implementation_notes` unless stronger evidence supports another classification.
 
-Successful implementation attempts must include non-null implementation notes so the reviewer can see the implementer justification.
+Successful implementation attempts must include non-null implementation notes so the reviewer can see the implementer justification, including explicit `already_complete` evidence when no diff was needed.
 
 Diagnostic evidence may include concise excerpts from raw output, process status, timeout status, command metadata, and explicit tool messages.
 
@@ -134,7 +137,7 @@ The adapter must:
 - Preserve raw output for audit.
 - Preserve normalized diagnostics for audit.
 - Keep each attempt independently reviewable when the runtime retries a partially completed implementation.
-- Fail clearly if no diff is produced.
+- Fail clearly if no diff is produced unless the implementation notes and observed repository state show that the requested behavior already existed and no repository change was needed.
 - Remain provider-agnostic.
 
 The adapter should support the repository-local canonical prompt document:

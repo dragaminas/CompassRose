@@ -1,5 +1,7 @@
 # Planner Input Contract
 
+TypeScript contract: `src/contracts/planner/plannerContracts.ts`.
+
 ## Purpose
 
 Defines the information provided to a Planner role when CompassRose asks for the next task.
@@ -14,7 +16,7 @@ The Planner returns one task.
 
 The Planner must generate the next atomic, reviewable task for a feature.
 
-The Planner must not generate a long-lived backlog.
+The Planner must not generate a long-lived executable task list.
 
 ---
 
@@ -148,7 +150,7 @@ The Planner must:
 - Respect allowed and forbidden boundaries.
 - Use project state as reality.
 - Treat roadmap and feature definitions as intent.
-- Use lifecycle state plus feature deliverables, remaining deliverables, and outline progress to choose the next meaningful gap.
+- Use lifecycle state plus feature deliverables, remaining deliverables, and outline progress for the feature's task requests to choose the next meaningful gap.
 - Produce a task traceable to a roadmap objective and feature.
 - Treat `unblock_pending` as the persisted doctor-recovery checkpoint when recovery work is active.
 

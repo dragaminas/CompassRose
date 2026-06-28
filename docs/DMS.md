@@ -300,7 +300,7 @@ Only with explicit user approval.
 ### Does Not Contain
 
 - The active task contract
-- A long-lived generated backlog
+- A long-lived generated executable task list
 - Detailed code instructions
 - Temporary review comments
 

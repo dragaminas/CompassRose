@@ -100,7 +100,7 @@ Success Criteria:
 
 * Planning operates at feature level
 * Tasks are generated on demand
-* Long-lived task backlogs are unnecessary
+* Long-lived executable task lists are unnecessary
 
 ---
 
