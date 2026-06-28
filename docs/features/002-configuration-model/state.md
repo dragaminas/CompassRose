@@ -78,7 +78,7 @@ The latest recovery work repaired the stale recovery interface around `F002-T04-
 
 ## Last Approved Change
 
-State correction artifact `F002-T04-C3-U1-C1-U1-C2072` was applied by the prototype orchestrator.
+State correction artifact `F002-T04-C3-U1-C1-U1-C2073` was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -86,4 +86,4 @@ State correction artifact `F002-T04-C3-U1-C1-U1-C2072` was applied by the protot
 
 ## Next Planning Hint
 
-Continue from the repaired `blocked` state for `F002-T04-C3-U1-C1-U1-C2072`.
+Continue from the repaired `blocked` state for `F002-T04-C3-U1-C1-U1-C2073`.
