@@ -10,11 +10,9 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr`.
-- Blocker recoverability: agent.
-- The active task pointer remains `F002-T04-C3-U1-C1-U1`.
-- Blocking task context: `F002-T04-C3-U1-C1-U1`
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T04-C3-U1-C1-U1-U1-U1`, to resolve the recoverable blocker and restore `blocked`.
+- Feature `002-configuration-model` is ready to resume normal implementation through task `F002-T05`.
+- Task `F002-T05` connects the validated configuration policy to the default CLI runtime preflight.
+- Recovery-only state has been cleared so the next runtime loop can prepare and execute the active task through the implementer path.
 
 ## Implemented
 
@@ -27,8 +25,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T04-C3-U1-C1-U1-U1-U1` for the active feature.
-- Restore the captured `blocked` state after the blocker is resolved.
+- Prepare and execute task `F002-T05` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -37,7 +34,7 @@ In progress
 
 ## Last Approved Change
 
-State correction artifact `F002-T04-C3-U1-C1-U1-C2802` was applied by the prototype orchestrator.
+Manual recovery reset restored task `F002-T05` as the next normal implementation target.
 
 ## Known Gaps
 
@@ -45,4 +42,4 @@ State correction artifact `F002-T04-C3-U1-C1-U1-C2802` was applied by the protot
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T04-C3-U1-C1-U1-U1-U1` from the captured `blocked` state.
+The active feature is `002-configuration-model`, and its next valid action is to prepare and execute task `F002-T05` through the normal implementer path.

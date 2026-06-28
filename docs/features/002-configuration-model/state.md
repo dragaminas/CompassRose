@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+task_ready
 
 ## Source Request
 
@@ -11,12 +11,12 @@ unblock_pending
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T04-C3-U1-C1-U1
+- active_task: F002-T05
 - active_correction_task: none
-- active_unblock_task: F002-T04-C3-U1-C1-U1-U1-U1
-- last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: blocked
+- active_unblock_task: none
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -31,7 +31,7 @@ This feature is formalized under `docs/features/002-configuration-model/`, and t
 
 Task `F002-T04` was approved, extending the typed config loader to validate and expose `execution`, `roles`, and `git_policy` data from the canonical project config.
 
-The current recovery work keeps `F002-T04-C3` on the recoverable `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr` path. The active anchor remains `F002-T04-C3-U1-C1-U1`, and the planned doctor recovery task `F002-T04-C3-U1-C1-U1-U1-U1` is now the active unblock target that will restore the captured `blocked` state after its own quality gates pass.
+The feature is ready to resume useful implementation work through task `F002-T05`, which connects the validated configuration policy to the default CLI runtime preflight. Recovery-only state has been cleared so the next runtime loop can prepare and execute the active task through the normal implementer path.
 
 ## Implemented Deliverables
 
@@ -58,28 +58,18 @@ The current recovery work keeps `F002-T04-C3` on the recoverable `state-corrupti
 
 ## Blocked By
 
-- kind: state_corruption
-- signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr
-- recoverability: agent
-- observed_state: lifecycle=blocked; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
-- evidence: Feature 002-configuration-model is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.
-- evidence: - kind: state_corruption
-- evidence: - signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr
-- evidence: - recoverability: agent
-- evidence: lifecycle=blocked
-- reason: Feature 002-configuration-model is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.
+- None
 
 ## Blocked From
 
-- lifecycle_state: `blocked`
-- active_task: `F002-T04-C3-U1-C1-U1`
-- active_correction_task: `none`
-- active_unblock_task: `none`
-- recoverability: agent
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-State correction artifact `F002-T04-C3-U1-C1-U1-C2802` was applied by the prototype orchestrator.
+Manual recovery reset restored task `F002-T05` as the next normal implementation target.
 
 ## Known Gaps
 
@@ -87,4 +77,4 @@ State correction artifact `F002-T04-C3-U1-C1-U1-C2802` was applied by the protot
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T04-C3-U1-C1-U1-U1-U1` next.
+Prepare and execute task `F002-T05` through the normal implementer path.
