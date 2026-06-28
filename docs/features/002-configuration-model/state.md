@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+unblock_pending
 
 ## Source Request
 
@@ -13,10 +13,10 @@ blocked
 - formalization: complete
 - active_task: F002-T04-C3-U1-C1-U1
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F002-T04-C3-U1-C1-U1-U1-U1
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: approved
+- last_review_result: blocked
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -59,22 +59,22 @@ The latest recovery work repaired the stale recovery interface around `F002-T04-
 ## Blocked By
 
 - - kind: state_corruption
-- - signature: state-corruption-blocked-the-bounded-doctor-recovery-already-failed-to-prove-deterministic-re-en
+- - signature: state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr
 - - recoverability: agent
 - - observed_state: lifecycle=blocked; active_task=F002-T04-C3-U1-C1-U1; active_correction_task=none; active_unblock_task=none
-- - evidence: The bounded doctor recovery already failed to prove deterministic re-entry readiness, and the remaining mismatch needs manual review before any successor task is planned or applied.
-- - evidence: kind: task_interface_gap
-- - evidence: signature: task-interface-gap-F002-T04-C3-stale-preimage-mismatch
-- - evidence: recoverability: agent
+- - evidence: Feature 002-configuration-model is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.
+- - evidence: - kind: state_corruption
+- - evidence: - signature: state-corruption-blocked-the-bounded-doctor-recovery-already-failed-to-prove-deterministic-re-en
+- - evidence: - recoverability: agent
 - - evidence: lifecycle=blocked
-- - reason: The bounded doctor recovery already failed to prove deterministic re-entry readiness, and the remaining mismatch needs manual review before any successor task is planned or applied.
+- - reason: Feature 002-configuration-model is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `blocked`
+- active_task: `F002-T04-C3-U1-C1-U1`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -86,4 +86,4 @@ State correction artifact `F002-T04-C3-U1-C1-U1-C2802` was applied by the protot
 
 ## Next Planning Hint
 
-Continue from the repaired `blocked` state for `F002-T04-C3-U1-C1-U1-C2802`.
+Execute doctor recovery task `F002-T04-C3-U1-C1-U1-U1-U1` next.
