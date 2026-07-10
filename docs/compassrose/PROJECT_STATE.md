@@ -25,7 +25,7 @@ In progress
 
 ## Pending
 
-- Run the review step for subtask `F002-T05` now that its quality gate false-negative is fixed.
+- Execute correction subtask `F002-T05-C1` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -42,4 +42,4 @@ Fixed a false-negative quality-gate failure for `F002-T05`, caused by a stale ta
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`; quality gates for `F002-T05` now pass, so the run should proceed to review.
+The active feature is `002-configuration-model`, and its next valid action is to execute correction subtask `F002-T05-C1`.
