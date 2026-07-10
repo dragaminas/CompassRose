@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-task_ready
+implementation_running
 
 ## Source Request
 
@@ -77,4 +77,4 @@ Manual recovery reset restored task `F002-T05` as the next normal implementation
 
 ## Next Planning Hint
 
-Prepare and execute task `F002-T05` through the normal implementer path.
+Recover or finish subtask implementation of `F002-T05` before allowing review or new planning.
