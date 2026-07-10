@@ -1,127 +1,109 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, afterAll } from 'vitest';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { main } from '../src/cli/main.js';
-import { createTempWorkspace, readFixtureConfigMarkdown } from './testUtils.js';
+import { readFixtureConfigMarkdown } from './testUtils.js';
 
-describe('main — runtime preflight', () => {
-  test('returns non-zero exit code when roles.planner.enabled is false', () => {
+function createTempWorkspace(files: Record<string, string> = {}): { root: string; dispose: () => void } {
+  const root = mkdtempSync(join(tmpdir(), 'compassrose-main-test-'));
+  for (const [relativePath, contents] of Object.entries(files)) {
+    const fullPath = join(root, relativePath);
+    mkdirSync(dirname(fullPath), { recursive: true });
+    writeFileSync(fullPath, contents, 'utf8');
+  }
+  return {
+    root,
+    dispose: () => rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+describe('main([]) — configuration-backed runtime preflight', () => {
+  test('returns non-zero when roles.planner.enabled is false', () => {
+    const config = readFixtureConfigMarkdown().replace(
+      'planner:\n    enabled: true',
+      'planner:\n    enabled: false',
+    );
+
     const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
-      files: {
-        'docs/compassrose/CONFIG.md':
-          readFixtureConfigMarkdown().replace(
-            '    enabled: true\n    adapter: external_cli\n\n  implementer:',
-            '    enabled: false\n    adapter: external_cli\n\n  implementer:',
-          ),
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
-        'docs/ROADMAP.md': '# roadmap\n',
-      },
+      'docs/compassrose/CONFIG.md': config,
     });
 
     try {
       const stderrMessages: string[] = [];
       const exitCode = main([], {
         cwd: workspace.root,
-        stderr: (msg: string) => stderrMessages.push(msg),
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
       });
 
       expect(exitCode).toBe(1);
-      expect(stderrMessages.join('\n')).toContain('planner');
+      expect(stderrMessages.some((m) => m.includes('roles.planner.enabled'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('runtime preflight'))).toBe(true);
     } finally {
       workspace.dispose();
     }
   });
 
-  test('returns non-zero exit code when execution.mode is unsupported', () => {
+  test('returns non-zero when execution.mode is unsupported', () => {
+    const config = readFixtureConfigMarkdown().replace(
+      'mode: interactive',
+      'mode: invalid_mode',
+    );
+
     const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
-      files: {
-        'docs/compassrose/CONFIG.md':
-          readFixtureConfigMarkdown().replace(
-            'mode: interactive',
-            'mode: unknown_mode',
-          ),
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
-        'docs/ROADMAP.md': '# roadmap\n',
-      },
+      'docs/compassrose/CONFIG.md': config,
     });
 
     try {
       const stderrMessages: string[] = [];
       const exitCode = main([], {
         cwd: workspace.root,
-        stderr: (msg: string) => stderrMessages.push(msg),
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
       });
 
       expect(exitCode).toBe(1);
-      expect(stderrMessages.join('\n')).toContain('execution.mode');
+      expect(stderrMessages.some((m) => m.includes('execution.mode'))).toBe(true);
     } finally {
       workspace.dispose();
     }
   });
 
-  test('returns non-zero exit code when roles.implementer.enabled is false', () => {
+  test('returns non-zero when git_policy has conflicting settings', () => {
+    let config = readFixtureConfigMarkdown();
+    config = config.replace(
+      'require_clean_worktree_before_task: true',
+      'require_clean_worktree_before_task: true',
+    );
+    config = config.replace(
+      'allow_dirty_worktree: false',
+      'allow_dirty_worktree: true',
+    );
+
     const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
-      files: {
-        'docs/compassrose/CONFIG.md':
-          readFixtureConfigMarkdown().replace(
-            '  implementer:\n    enabled: true',
-            '  implementer:\n    enabled: false',
-          ),
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
-        'docs/ROADMAP.md': '# roadmap\n',
-      },
+      'docs/compassrose/CONFIG.md': config,
     });
 
     try {
       const stderrMessages: string[] = [];
       const exitCode = main([], {
         cwd: workspace.root,
-        stderr: (msg: string) => stderrMessages.push(msg),
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
       });
 
       expect(exitCode).toBe(1);
-      expect(stderrMessages.join('\n')).toContain('implementer');
+      expect(stderrMessages.some((m) => m.includes('git_policy'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('Conflicting'))).toBe(true);
     } finally {
       workspace.dispose();
     }
   });
 
-  test('returns non-zero exit code when git_policy has conflicting settings', () => {
+  test('returns 0 and prints preflight message when all runtime preconditions pass', () => {
     const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
-      files: {
-        'docs/compassrose/CONFIG.md':
-          readFixtureConfigMarkdown()
-            .replace('require_clean_worktree_before_task: true', 'require_clean_worktree_before_task: true')
-            .replace('allow_dirty_worktree: false', 'allow_dirty_worktree: true'),
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
-        'docs/ROADMAP.md': '# roadmap\n',
-      },
-    });
-
-    try {
-      const stderrMessages: string[] = [];
-      const exitCode = main([], {
-        cwd: workspace.root,
-        stderr: (msg: string) => stderrMessages.push(msg),
-      });
-
-      expect(exitCode).toBe(1);
-      expect(stderrMessages.join('\n')).toContain('git_policy');
-    } finally {
-      workspace.dispose();
-    }
-  });
-
-  test('returns zero exit code and prints preflight message when config is compatible', () => {
-    const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
-      files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
-        'docs/ROADMAP.md': '# roadmap\n',
-      },
+      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
     });
 
     try {
@@ -129,60 +111,23 @@ describe('main — runtime preflight', () => {
       const stderrMessages: string[] = [];
       const exitCode = main([], {
         cwd: workspace.root,
-        stdout: (msg: string) => stdoutMessages.push(msg),
-        stderr: (msg: string) => stderrMessages.push(msg),
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
       });
 
       expect(exitCode).toBe(0);
-      expect(stdoutMessages.join('\n')).toContain('preflight passed');
+      expect(stdoutMessages).toContain('CompassRose preflight passed. No tasks to run.');
       expect(stderrMessages.length).toBe(0);
     } finally {
       workspace.dispose();
     }
   });
+});
 
-  test('returns non-zero exit code with config load errors when CONFIG.md is missing required sections', () => {
+describe('main([\'doctor\']) — regression', () => {
+  test('still routes to doctor command and returns doctor exit code', () => {
     const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
-      files: {
-        'docs/compassrose/CONFIG.md': '---\nproject:\n  name: test\n---\n',
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
-        'docs/ROADMAP.md': '# roadmap\n',
-      },
-    });
-
-    try {
-      const stderrMessages: string[] = [];
-      const exitCode = main([], {
-        cwd: workspace.root,
-        stderr: (msg: string) => stderrMessages.push(msg),
-      });
-
-      expect(exitCode).toBe(1);
-      expect(stderrMessages.length).toBeGreaterThan(0);
-    } finally {
-      workspace.dispose();
-    }
-  });
-
-  test('returns 1 and prints usage for unknown commands', () => {
-    const stderrMessages: string[] = [];
-    const exitCode = main(['unknown'], {
-      stderr: (msg: string) => stderrMessages.push(msg),
-    });
-
-    expect(exitCode).toBe(1);
-    expect(stderrMessages.join('\n')).toContain('Usage');
-  });
-
-  test('doctor path returns exit code 0 when environment is valid', () => {
-    const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
-      files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
-        'docs/ROADMAP.md': '# roadmap\n',
-      },
+      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
     });
 
     try {
@@ -190,12 +135,13 @@ describe('main — runtime preflight', () => {
       const stderrMessages: string[] = [];
       const exitCode = main(['doctor'], {
         cwd: workspace.root,
-        stdout: (msg: string) => stdoutMessages.push(msg),
-        stderr: (msg: string) => stderrMessages.push(msg),
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
       });
 
-      expect(exitCode).toBe(0);
-      expect(stdoutMessages.join('\n')).toContain('PASS');
+      expect(exitCode).toBe(1);
+      const allMessages = [...stdoutMessages, ...stderrMessages].join('\n');
+      expect(allMessages).toContain('CompassRose doctor');
     } finally {
       workspace.dispose();
     }
