@@ -2114,7 +2114,15 @@ class PrototypeCompassRose {
     const feature = this.loadFeature(task.featureId);
     const qualityResults = this.ensureQualityGateResults(task);
     const implementation = this.ensureImplementationAttempt(task);
-    const liveDiff = this.git.diffPatch();
+    // Exclude the runtime's own state-doc bookkeeping (written live to the working tree by
+    // executeImplementation) from what the reviewer sees as "the submitted diff" — otherwise the
+    // reviewer mistakes orchestrator bookkeeping for an implementer scope violation. Same exclusion
+    // captureImplementationAttempt and ensureImplementationAttempt already apply.
+    const reviewDiffExcludedPaths = [
+      relativePath(this.repositoryRoot, feature.statePath),
+      relativePath(this.repositoryRoot, this.projectStatePath),
+    ];
+    const liveDiff = this.git.diffPatch(reviewDiffExcludedPaths);
     const reviewDiff = selectReviewableDiffForReview(liveDiff, implementation);
     const agentContextRoot = join('logs', 'agent-contexts', this.runId);
     const implementationContextArtifactNames = selectImplementationContextArtifactNames(
@@ -2290,14 +2298,11 @@ class PrototypeCompassRose {
       writeText(this.projectStatePath, updatedProjectState);
 
       if (this.options.commit) {
-        this.git.commit(
-          [
-            relativePath(this.repositoryRoot, correctionPath),
-            relativePath(this.repositoryRoot, feature.statePath),
-            relativePath(this.repositoryRoot, this.projectStatePath),
-          ],
-          `proto: request correction ${correction.correction_task_id}`,
-        );
+        // Sweep every changed file, not just the correction artifact and state docs: the rejected
+        // implementer diff (e.g. src/cli/main.ts) is still live in the worktree at this point, and
+        // leaving it uncommitted trips ensureCleanWorktreeIfRequired() on the very next step.
+        const changedFiles = this.git.diffNameOnly();
+        this.git.commit(changedFiles, `proto: request correction ${correction.correction_task_id}`);
       }
       console.log(`Review requested correction task ${correction.correction_task_id} at ${relativePath(this.repositoryRoot, correctionPath)}.`);
       return {
@@ -2317,13 +2322,10 @@ class PrototypeCompassRose {
         : '';
 
       if (this.options.commit) {
-        this.git.commit(
-          [
-            relativePath(this.repositoryRoot, feature.statePath),
-            relativePath(this.repositoryRoot, this.projectStatePath),
-          ],
-          `proto: record blocked review for ${task.taskId}`,
-        );
+        // Same reasoning as the changes_required branch above: commit everything dirty so a
+        // rejected implementer diff never blocks the next step's clean-worktree precondition.
+        const changedFiles = this.git.diffNameOnly();
+        this.git.commit(changedFiles, `proto: record blocked review for ${task.taskId}`);
       }
 
       if (this.options.loop) {
