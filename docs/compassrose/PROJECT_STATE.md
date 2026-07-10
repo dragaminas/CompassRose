@@ -25,7 +25,7 @@ In progress
 
 ## Pending
 
-- Execute correction subtask `F002-T05-C1-CLEANUP` for the active feature.
+- Run the review step for subtask `F002-T05-C1` now that the reviewer diff-contamination bug is fixed.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -34,7 +34,7 @@ In progress
 
 ## Last Approved Change
 
-Fixed a false-negative quality-gate failure for `F002-T05`, caused by a stale task-id mismatch in the `state-correction-missing-active-task` e2e scenario; full quality gate suite now passes.
+Fixed a false rejection of `F002-T05-C1`: the reviewer's diff included the runtime's own state-doc bookkeeping, causing it to reject a clean implementation for a scope violation it never actually committed. A related bug that left rejected implementer diffs uncommitted (crashing the next step's clean-worktree check) is also fixed. `F002-T05-C1-CLEANUP` is dropped as moot.
 
 ## Known Gaps
 
@@ -42,4 +42,4 @@ Fixed a false-negative quality-gate failure for `F002-T05`, caused by a stale ta
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute correction subtask `F002-T05-C1-CLEANUP`.
+The active feature is `002-configuration-model`; quality gates for `F002-T05-C1` pass, so the run should proceed to review.
