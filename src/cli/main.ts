@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { resolve, join } from 'node:path';
+import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
 import { readProjectConfiguration, validateRuntimePreconditions } from '../config/configReader.js';
 
@@ -27,7 +28,9 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
   }
 
   if (argv.length === 0) {
-    const configPath = join(cwd, 'docs/compassrose/CONFIG.md');
+    const gitRoot = findGitRepositoryRoot(cwd);
+    const configBase = gitRoot ?? cwd;
+    const configPath = join(configBase, 'docs/compassrose/CONFIG.md');
     const configResult = readProjectConfiguration(configPath);
 
     if (!configResult.ok) {

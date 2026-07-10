@@ -1,5 +1,5 @@
 import { describe, expect, test, afterAll } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { main } from '../src/cli/main.js';
@@ -7,6 +7,9 @@ import { readFixtureConfigMarkdown } from './testUtils.js';
 
 function createTempWorkspace(files: Record<string, string> = {}): { root: string; dispose: () => void } {
   const root = mkdtempSync(join(tmpdir(), 'compassrose-main-test-'));
+  if (!existsSync(join(root, '.git'))) {
+    mkdirSync(join(root, '.git'), { recursive: true });
+  }
   for (const [relativePath, contents] of Object.entries(files)) {
     const fullPath = join(root, relativePath);
     mkdirSync(dirname(fullPath), { recursive: true });
@@ -118,6 +121,60 @@ describe('main([]) — configuration-backed runtime preflight', () => {
       expect(exitCode).toBe(0);
       expect(stdoutMessages).toContain('CompassRose preflight passed. No tasks to run.');
       expect(stderrMessages.length).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+});
+
+describe('main([]) — nested directory from repo root', () => {
+  test('resolves CONFIG.md from repo root when invoked from a nested subdirectory with passing preflight', () => {
+    const workspace = createTempWorkspace({
+      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+    });
+
+    const nestedDir = join(workspace.root, 'src', 'deeply', 'nested');
+
+    try {
+      const stdoutMessages: string[] = [];
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: nestedDir,
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(0);
+      expect(stdoutMessages).toContain('CompassRose preflight passed. No tasks to run.');
+      expect(stderrMessages.length).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('resolves CONFIG.md from repo root when invoked from a nested subdirectory with failing preflight', () => {
+    const config = readFixtureConfigMarkdown().replace(
+      'planner:\n    enabled: true',
+      'planner:\n    enabled: false',
+    );
+
+    const workspace = createTempWorkspace({
+      'docs/compassrose/CONFIG.md': config,
+    });
+
+    const nestedDir = join(workspace.root, 'src', 'deeply', 'nested');
+
+    try {
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: nestedDir,
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderrMessages.some((m) => m.includes('roles.planner.enabled'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('runtime preflight'))).toBe(true);
     } finally {
       workspace.dispose();
     }
