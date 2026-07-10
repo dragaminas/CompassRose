@@ -25,7 +25,7 @@ In progress
 
 ## Pending
 
-- Recover or finish implementation for `F002-T05`.
+- Run the review step for subtask `F002-T05` now that its quality gate false-negative is fixed.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -34,7 +34,7 @@ In progress
 
 ## Last Approved Change
 
-Manual recovery reset restored task `F002-T05` as the next normal implementation target.
+Fixed a false-negative quality-gate failure for `F002-T05`, caused by a stale task-id mismatch in the `state-correction-missing-active-task` e2e scenario; full quality gate suite now passes.
 
 ## Known Gaps
 
@@ -42,4 +42,4 @@ Manual recovery reset restored task `F002-T05` as the next normal implementation
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and subtask execution for `F002-T05` is in progress.
+The active feature is `002-configuration-model`; quality gates for `F002-T05` now pass, so the run should proceed to review.

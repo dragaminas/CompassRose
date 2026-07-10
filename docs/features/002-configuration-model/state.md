@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+review_pending
 
 ## Source Request
 
@@ -14,8 +14,8 @@ implementation_running
 - active_task: F002-T05
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: not_run
-- last_quality_gate_result: unknown
+- last_implementation_result: passed
+- last_quality_gate_result: passed
 - last_review_result: not_run
 - last_unblock_result: not_run
 
@@ -31,7 +31,7 @@ This feature is formalized under `docs/features/002-configuration-model/`, and t
 
 Task `F002-T04` was approved, extending the typed config loader to validate and expose `execution`, `roles`, and `git_policy` data from the canonical project config.
 
-The feature is ready to resume useful implementation work through task `F002-T05`, which connects the validated configuration policy to the default CLI runtime preflight. Recovery-only state has been cleared so the next runtime loop can prepare and execute the active task through the normal implementer path.
+Task `F002-T05` connects the validated configuration policy to the default CLI runtime preflight. Its implementation passed, but the quality gate (`npm test`) initially failed. Diagnosis found the failure was a false negative in the `state-correction-missing-active-task` e2e scenario in `proto/protoCompassRose.e2e.ts`: the scenario's seeded fallback task artifact and its assertions referenced different task ids (`F002-T05` vs. `F002-T04`), a drift introduced by an earlier rename that never touched all occurrences. The e2e harness was fixed to derive the expected id from a single shared constant instead of duplicating it, the full quality gate suite now passes (58/58 tests, clean typecheck), and `F002-T05` is ready for review.
 
 ## Implemented Deliverables
 
@@ -69,12 +69,13 @@ The feature is ready to resume useful implementation work through task `F002-T05
 
 ## Last Approved Change
 
-Manual recovery reset restored task `F002-T05` as the next normal implementation target.
+Fixed a false-negative quality-gate failure for `F002-T05`: the `state-correction-missing-active-task` e2e scenario asserted on a stale `F002-T04` id while seeding an `F002-T05` fallback artifact. The scenario now derives both from one shared constant.
 
 ## Known Gaps
 
 - The project-local configuration flow still needs a runtime consumer that uses the validated `execution`, `roles`, and `git_policy` data during orchestration.
+- The correction-task id allocator (`buildStateCorrectionTaskId` in `proto/protoCompassRose.ts`) has no cycle or depth limit; a prior recovery loop against `F002-T04-C3` generated thousands of near-duplicate correction docs before being stopped manually. Not yet addressed.
 
 ## Next Planning Hint
 
-Recover or finish subtask implementation of `F002-T05` before allowing review or new planning.
+Quality gates for `F002-T05` now pass; run the review step next.
