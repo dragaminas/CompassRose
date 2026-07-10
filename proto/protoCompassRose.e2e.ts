@@ -5,6 +5,21 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { AgentToolName } from '../src/contracts/runtime/agentContext.js';
 
+// Single source of truth for the 'state-correction-missing-active-task' scenario: the fallback task
+// artifact that seedStateCorrectionFallbackTaskArtifact() seeds and that the runtime resolves the
+// correction task id from (see resolveStateCorrectionActiveTaskFromArtifacts in protoCompassRose.ts).
+// Every assertion below must derive its expected file names from this constant instead of re-typing
+// the task id, or a rename here will silently stop matching what the runtime actually produces.
+const STATE_CORRECTION_FALLBACK_TASK_ID = 'F002-T05';
+
+function taskNumberSlug(taskId: string): string {
+  const taskNumber = taskId.match(/-T(\d+)$/)?.[1];
+  if (!taskNumber) {
+    throw new Error(`Cannot derive a task number slug from task id "${taskId}".`);
+  }
+  return taskNumber.padStart(3, '0');
+}
+
 function main(): number {
   const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const tempRoot = mkdtempSync(join(tmpdir(), 'proto-compassrose-e2e-'));
@@ -135,7 +150,6 @@ function main(): number {
   const recoveryLessonPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-recovery-lesson.json');
   const diagnosticPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-diagnostic.json');
   const refinementPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-refinement.json');
-  const stateCorrectionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-C2.json');
   const implementationArtifactPath = join(cloneRoot, '.git', 'proto-compassrose', 'implementations', 'F002-T04.json');
   const implementationAttemptHistoryPath = join(
     cloneRoot,
@@ -143,14 +157,6 @@ function main(): number {
     'proto-compassrose',
     'implementation-attempts',
     'F002-T04.json',
-  );
-  const stateCorrectionDocPath = join(
-    cloneRoot,
-    'docs',
-    'features',
-    '002-configuration-model',
-    'tasks',
-    '004.1-repair-feature-state-for-f002-t04.md',
   );
   const malformedFeatureStatePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
   const worktreeStatus = spawnSync('git', ['status', '--porcelain'], {
@@ -193,8 +199,6 @@ function main(): number {
     refinementPath,
     implementationAttemptHistoryPath,
     implementationArtifactPath,
-    stateCorrectionTaskPath,
-    stateCorrectionDocPath,
     featureTasksDirectory,
     protoTasksDirectory,
     malformedFeatureStatePath,
@@ -245,8 +249,6 @@ function buildScenarioChecks(input: {
   refinementPath: string;
   implementationAttemptHistoryPath: string;
   implementationArtifactPath: string;
-  stateCorrectionTaskPath: string;
-  stateCorrectionDocPath: string;
   featureTasksDirectory: string;
   protoTasksDirectory: string;
   malformedFeatureStatePath: string;
@@ -269,8 +271,6 @@ function buildScenarioChecks(input: {
     refinementPath,
     implementationAttemptHistoryPath,
     implementationArtifactPath,
-    stateCorrectionTaskPath,
-    stateCorrectionDocPath,
     featureTasksDirectory,
     protoTasksDirectory,
     malformedFeatureStatePath,
@@ -435,11 +435,12 @@ function buildScenarioChecks(input: {
 
   if (scenario === 'state-correction-missing-active-task') {
     const malformedFeatureState = existsSync(malformedFeatureStatePath) ? readFileSync(malformedFeatureStatePath, 'utf8') : '';
+    const fallbackTaskNumber = taskNumberSlug(STATE_CORRECTION_FALLBACK_TASK_ID);
     const stateCorrectionArtifactExists = readdirSync(protoTasksDirectory).some(
-      (entry) => /^F002-T04-C\d+\.json$/.test(entry),
+      (entry) => new RegExp(`^${STATE_CORRECTION_FALLBACK_TASK_ID}-C\\d+\\.json$`).test(entry),
     );
     const stateCorrectionDocumentExists = readdirSync(featureTasksDirectory).some(
-      (entry) => /^004\.\d+-repair-feature-state-for-f002-t04\.md$/.test(entry),
+      (entry) => new RegExp(`^${fallbackTaskNumber}\\.\\d+-repair-feature-state-for-${STATE_CORRECTION_FALLBACK_TASK_ID.toLowerCase()}\\.md$`).test(entry),
     );
     const stateRepairApplied = runSummary.steps?.some((step) => typeof step.summary === 'string' && step.summary.includes('applied a state correction')) === true;
 
@@ -670,12 +671,12 @@ function seedStateCorrectionFallbackTaskArtifact(cloneRoot: string): void {
   const artifactsRoot = join(cloneRoot, '.git', 'proto-compassrose', 'tasks');
   mkdirSync(artifactsRoot, { recursive: true });
   writeFileSync(
-    join(artifactsRoot, 'F002-T05.json'),
+    join(artifactsRoot, `${STATE_CORRECTION_FALLBACK_TASK_ID}.json`),
     `${JSON.stringify({
       ...SEEDED_TASK,
       task: {
         ...SEEDED_TASK.task,
-        task_id: 'F002-T05',
+        task_id: STATE_CORRECTION_FALLBACK_TASK_ID,
       },
     }, null, 2)}\n`,
     'utf8',
