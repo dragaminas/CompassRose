@@ -30,7 +30,7 @@ In progress
 
 ## Pending
 
-- Continue from the repaired `quality_failed` state for the active feature.
+- Recover or finish implementation for `F002-T05-C1-CORRECTION-HANDOFF`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -47,4 +47,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R6` passed 
 
 ## Next Planning Hint
 
-Continue from the repaired `quality_failed` state for `F002-T05-C1-CORRECTION-HANDOFF`.
+The active feature is `002-configuration-model`, and subtask execution for `F002-T05-C1-CORRECTION-HANDOFF` is in progress.
