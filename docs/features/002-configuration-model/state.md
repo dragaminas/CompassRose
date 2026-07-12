@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+unblock_pending
 
 ## Source Request
 
@@ -13,11 +13,11 @@ implementation_running
 - formalization: complete
 - active_task: F002-T05-C1-CORRECTION-HANDOFF
 - active_correction_task: none
-- active_unblock_task: none
-- last_implementation_result: not_run
+- active_unblock_task: F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5
+- last_implementation_result: failed
 - last_quality_gate_result: unknown
-- last_review_result: not_run
-- last_unblock_result: passed
+- last_review_result: blocked
+- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -60,14 +60,18 @@ Review of `F002-T05` then requested correction task `F002-T05-C1` (resolve the d
 
 ## Blocked By
 
-- None
+- - kind: implementation_failure
+- - signature: implementation-failure-F002-T05-C1-CORRECTION-HANDOFF
+- - recoverability: agent
+- - observed_state: lifecycle=implementation_failed; active_task=F002-T05-C1-CORRECTION-HANDOFF; active_correction_task=none; active_unblock_task=none
+- - evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF did not include the required Implementation Notes justification.
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `task_ready`
+- active_task: `F002-T05-C1-CORRECTION-HANDOFF`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -80,4 +84,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` passed 
 
 ## Next Planning Hint
 
-Recover or finish subtask implementation of `F002-T05-C1-CORRECTION-HANDOFF` before allowing review or new planning.
+Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5` next.

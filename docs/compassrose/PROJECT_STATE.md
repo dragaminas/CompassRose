@@ -15,6 +15,8 @@ In progress
 - Feature `002-configuration-model` was suspended from `task_ready`; the active task pointer remains `F002-T05-C1-CORRECTION-HANDOFF`.
 - Blocking task context: `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R3`
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF`.
+- Implementation failure evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF did not include the required Implementation Notes justification.
+- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5`, to resolve a recoverable blocker and restore `task_ready`.
 
 ## Implemented
 
@@ -27,7 +29,7 @@ In progress
 
 ## Pending
 
-- Recover or finish implementation for `F002-T05-C1-CORRECTION-HANDOFF`.
+- Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -44,4 +46,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` passed 
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and subtask execution for `F002-T05-C1-CORRECTION-HANDOFF` is in progress.
+The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5` from the captured `task_ready` state.
