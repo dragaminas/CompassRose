@@ -1443,7 +1443,7 @@ const logFile = process.env.PROTO_E2E_OPENCODE_LOG;
 const countFile = process.env.PROTO_E2E_OPENCODE_COUNT;
 const scenario = process.env.PROTO_E2E_SCENARIO || 'standard';
 const markerPath = path.join(repoRoot, 'proto', markerFileNameForScenario(scenario));
-const prompt = process.argv.slice(2).join(' ');
+const prompt = readStdinIfAvailable() || process.argv.slice(2).join(' ');
 const count = readCount(countFile) + 1;
 
 fs.mkdirSync(path.dirname(markerPath), { recursive: true });
@@ -1503,6 +1503,14 @@ function writeCount(filePath, value) {
   }
 
   fs.writeFileSync(filePath, String(value), 'utf8');
+}
+
+function readStdinIfAvailable() {
+  try {
+    return fs.readFileSync(0, 'utf8');
+  } catch {
+    return '';
+  }
 }
 `;
 

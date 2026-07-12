@@ -558,7 +558,7 @@ class OpenCodeCli {
       args,
       cwd: this.repositoryRoot,
       promptPath,
-      promptMode: 'arg',
+      promptMode: 'stdin',
       stdoutPath,
       stderrPath,
       heartbeatIntervalMs: DEFAULT_AGENT_HEARTBEAT_MS,

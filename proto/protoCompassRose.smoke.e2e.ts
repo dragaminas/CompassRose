@@ -494,7 +494,7 @@ const path = require('node:path');
 const repoRoot = process.cwd();
 const logFile = process.env.PROTO_E2E_CALL_LOG;
 const markerPath = path.join(repoRoot, 'proto', 'e2e-control.txt');
-const prompt = process.argv.slice(2).join(' ');
+const prompt = readStdinIfAvailable() || process.argv.slice(2).join(' ');
 
 fs.mkdirSync(path.dirname(markerPath), { recursive: true });
 fs.writeFileSync(markerPath, 'opencode smoke test touched this file\\n', 'utf8');
@@ -526,6 +526,14 @@ function detectPromptKind(prompt) {
   }
 
   return 'unknown';
+}
+
+function readStdinIfAvailable() {
+  try {
+    return fs.readFileSync(0, 'utf8');
+  } catch {
+    return '';
+  }
 }
 `;
 

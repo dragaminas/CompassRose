@@ -98,13 +98,23 @@ const childArgs = config.promptMode === 'arg'
 // tools like codex/opencode are npm-installed .cmd shims on Windows that node's
 // spawn can't exec without a shell, so those still need shell on win32.
 const isNodeScript = /\.(c|m)?js$/i.test(config.command);
-const spawnCommand = isNodeScript ? process.execPath : config.command;
-const spawnArgs = isNodeScript ? [config.command, ...childArgs] : childArgs;
+const useWindowsShell = !isNodeScript && process.platform === 'win32';
+
+// node's spawn(..., {shell: true}) on Windows does not quote array arguments before
+// handing them to cmd.exe — it just joins them with spaces, so any argument containing
+// whitespace (a repository path with a space, for example) gets split into several
+// arguments. Build the whole command line ourselves with proper Windows quoting instead.
+const spawnCommand = useWindowsShell
+  ? [config.command, ...childArgs].map(quoteWindowsArg).join(' ')
+  : isNodeScript
+    ? process.execPath
+    : config.command;
+const spawnArgs = useWindowsShell ? [] : isNodeScript ? [config.command, ...childArgs] : childArgs;
 
 const child = spawn(spawnCommand, spawnArgs, {
   cwd: config.cwd,
   stdio: config.promptMode === 'arg' ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'],
-  shell: !isNodeScript && process.platform === 'win32',
+  shell: useWindowsShell,
 });
 
 if (config.promptMode === 'stdin' && child.stdin) {
@@ -159,6 +169,36 @@ child.on('close', (code, signal) => {
 
   process.exit(code ?? 1);
 });
+
+// Windows CommandLineToArgvW quoting: wrap in double quotes when the argument has
+// whitespace or a quote, doubling backslashes that precede a quote (or that end the
+// argument, since they precede the closing quote) and escaping embedded quotes.
+function quoteWindowsArg(arg) {
+  if (arg.length > 0 && !/[\s"]/.test(arg)) {
+    return arg;
+  }
+
+  let result = '"';
+  let backslashes = 0;
+  for (const ch of arg) {
+    if (ch === '\\') {
+      backslashes += 1;
+      continue;
+    }
+
+    if (ch === '"') {
+      result += '\\'.repeat(backslashes * 2 + 1) + '"';
+      backslashes = 0;
+      continue;
+    }
+
+    result += '\\'.repeat(backslashes) + ch;
+    backslashes = 0;
+  }
+
+  result += '\\'.repeat(backslashes * 2) + '"';
+  return result;
+}
 
 function normalizeHeartbeatInterval(value) {
   const numeric = Number(value);
