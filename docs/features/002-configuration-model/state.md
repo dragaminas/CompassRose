@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+formalized
 
 ## Source Request
 
@@ -11,12 +11,12 @@ implementation_running
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T05-C1-CORRECTION-HANDOFF
+- active_task: none
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: not_run
-- last_quality_gate_result: unknown
-- last_review_result: not_run
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: approved
 - last_unblock_result: passed
 
 ## Current Reality
@@ -71,7 +71,7 @@ Review of `F002-T05` then requested correction task `F002-T05-C1` (resolve the d
 
 ## Last Approved Change
 
-Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R6` passed re-entry quality gates and was applied by the prototype orchestrator.
+Subtask `F002-T05-C1-CORRECTION-HANDOFF` was approved by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -80,4 +80,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R6` passed 
 
 ## Next Planning Hint
 
-Recover or finish subtask implementation of `F002-T05-C1-CORRECTION-HANDOFF` before allowing review or new planning.
+Plan the next task that advances this feature from the remaining gap.
