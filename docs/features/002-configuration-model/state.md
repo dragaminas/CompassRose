@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+task_ready
 
 ## Source Request
 
@@ -13,11 +13,11 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T05-C1-CORRECTION-HANDOFF-C1
 - active_correction_task: none
-- active_unblock_task: F002-T05-C1-CORRECTION-HANDOFF-C1-DOCTOR-RECOVERY-R1
-- last_implementation_result: failed
-- last_quality_gate_result: unknown
-- last_review_result: blocked
-- last_unblock_result: not_run
+- active_unblock_task: none
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: skipped
+- last_unblock_result: passed
 
 ## Current Reality
 
@@ -62,22 +62,18 @@ Task `F002-T05-C1-CORRECTION-HANDOFF` is now planned and ready to execute. Repai
 
 ## Blocked By
 
-- - kind: implementation_failure
-- - signature: implementation-failure-F002-T05-C1-CORRECTION-HANDOFF-C1
-- - recoverability: agent
-- - observed_state: lifecycle=implementation_failed; active_task=F002-T05-C1-CORRECTION-HANDOFF-C1; active_correction_task=none; active_unblock_task=none
-- - evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF-C1 produced no git diff (model_passivity).
+- None
 
 ## Blocked From
 
-- lifecycle_state: `task_ready`
-- active_task: `F002-T05-C1-CORRECTION-HANDOFF-C1`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Subtask `F002-T05-C1-CORRECTION-HANDOFF` was approved by the prototype orchestrator.
+Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-DOCTOR-RECOVERY-R1` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -86,4 +82,4 @@ Subtask `F002-T05-C1-CORRECTION-HANDOFF` was approved by the prototype orchestra
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-DOCTOR-RECOVERY-R1` next.
+Execute `F002-T05-C1-CORRECTION-HANDOFF-C1` when the current execution mode allows it.
