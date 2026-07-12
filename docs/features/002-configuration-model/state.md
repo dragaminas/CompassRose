@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-correction_pending
+implementation_running
 
 ## Source Request
 
@@ -11,12 +11,12 @@ correction_pending
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T05-C1-CORRECTION-HANDOFF-C1
-- active_correction_task: F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1
+- active_task: F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1
+- active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: changes_required
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
 - last_unblock_result: passed
 
 ## Current Reality
@@ -82,4 +82,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-DOCTOR-RECOVERY-R1` pass
 
 ## Next Planning Hint
 
-Execute correction subtask `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1` next.
+Recover or finish subtask implementation of `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1` before allowing review or new planning.
