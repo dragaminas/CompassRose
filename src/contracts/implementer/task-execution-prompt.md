@@ -32,7 +32,7 @@ The implementer must:
 
 - start with the task's `first_executable_step`
 - produce at least one item of `minimum_progress_evidence`
-- end every attempt with a short `## Implementation Notes` section that justifies the outcome
+- end every attempt with a short `## Implementation Notes` section that justifies the outcome, written in your own final reply text rather than only inside an edited file — the runtime parses it from what you say, not from a diff
 - stay within allowed paths
 - respect forbidden paths
 - satisfy the acceptance criteria
