@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-quality_failed
+unblock_pending
 
 ## Source Request
 
@@ -13,11 +13,11 @@ quality_failed
 - formalization: complete
 - active_task: F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R2
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: skipped
-- last_unblock_result: passed
+- last_review_result: blocked
+- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -66,10 +66,10 @@ Task `F002-T05-C1-CORRECTION-HANDOFF` is now planned and ready to execute. Repai
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `implementation_running`
+- active_task: `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -82,4 +82,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-REC
 
 ## Next Planning Hint
 
-Continue from the repaired `quality_failed` state for `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1`.
+Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R2` next.
