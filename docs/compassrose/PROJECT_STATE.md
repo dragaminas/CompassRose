@@ -18,6 +18,7 @@ In progress
 - Implementation failure evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF did not include the required Implementation Notes justification.
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF`.
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R6`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF`.
+- Feature `002-configuration-model` now has a planned next task, `F002-T05-C1-CORRECTION-HANDOFF`, ready to execute.
 
 ## Implemented
 
@@ -30,7 +31,7 @@ In progress
 
 ## Pending
 
-- Plan the next implementation task for the active feature.
+- Execute `F002-T05-C1-CORRECTION-HANDOFF` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -47,4 +48,4 @@ Subtask `F002-T05-C1-CORRECTION-HANDOFF` was approved by the prototype orchestra
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is the next task-planning pass.
+The active feature is `002-configuration-model`, and its next valid action is to execute `F002-T05-C1-CORRECTION-HANDOFF`.
