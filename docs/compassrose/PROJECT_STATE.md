@@ -25,7 +25,7 @@ In progress
 
 ## Pending
 
-- Execute correction subtask `F002-T05-C1-CORRECTION-HANDOFF` for the active feature.
+- Recover or finish implementation for `F002-T05-C1-CORRECTION-HANDOFF`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -42,4 +42,4 @@ Fixed a false rejection of `F002-T05-C1`: the reviewer's diff included the runti
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute correction subtask `F002-T05-C1-CORRECTION-HANDOFF`.
+The active feature is `002-configuration-model`, and subtask execution for `F002-T05-C1-CORRECTION-HANDOFF` is in progress.
