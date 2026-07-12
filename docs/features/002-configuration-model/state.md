@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+quality_failed
 
 ## Source Request
 
@@ -13,11 +13,11 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1
 - active_correction_task: none
-- active_unblock_task: F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R1
+- active_unblock_task: none
 - last_implementation_result: passed
-- last_quality_gate_result: failed
-- last_review_result: blocked
-- last_unblock_result: not_run
+- last_quality_gate_result: passed
+- last_review_result: skipped
+- last_unblock_result: passed
 
 ## Current Reality
 
@@ -66,14 +66,14 @@ Task `F002-T05-C1-CORRECTION-HANDOFF` is now planned and ready to execute. Repai
 
 ## Blocked From
 
-- lifecycle_state: `quality_failed`
-- active_task: `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-DOCTOR-RECOVERY-R1` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R1` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -82,4 +82,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-DOCTOR-RECOVERY-R1` pass
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R1` next.
+Continue from the repaired `quality_failed` state for `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1`.

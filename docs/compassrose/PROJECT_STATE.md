@@ -21,7 +21,7 @@ In progress
 - Feature `002-configuration-model` now has a planned next task, `F002-T05-C1-CORRECTION-HANDOFF`, ready to execute.
 - Implementation failure evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF-C1 produced no git diff (model_passivity).
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-DOCTOR-RECOVERY-R1`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF-C1`.
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R1`, to resolve a recoverable blocker and restore `quality_failed`.
+- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R1`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1`.
 
 ## Implemented
 
@@ -34,7 +34,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R1` for the active feature.
+- Continue from the repaired `quality_failed` state for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -43,7 +43,7 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-DOCTOR-RECOVERY-R1` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R1` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -51,4 +51,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-DOCTOR-RECOVERY-R1` pass
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R1` from the captured `quality_failed` state.
+Continue from the repaired `quality_failed` state for `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1`.
