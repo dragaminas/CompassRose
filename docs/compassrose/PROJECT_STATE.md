@@ -10,12 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `unknown-unblock-pending-doctor-recovery-f002-t05-c1-correction-handoff-c1-correction-r1-doctor-r`.
+- Feature `002-configuration-model` is blocked by `state-corruption-unblock-pending-doctor-recovery-f002-t05-c1-correction-handoff-c1-correction-r1`.
 - Blocker recoverability: agent.
-- Feature `002-configuration-model` was suspended from `implementation_running`; the active task pointer remains `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1`.
-- Blocking task context: `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R2`
-- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R3`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1`.
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R1`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `002-configuration-model` was suspended from `implementation_running`; the active task pointer remains `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF`.
+- Blocking task context: `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R1`
 
 ## Implemented
 
@@ -28,7 +26,8 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R1` for the active feature.
+- Plan a doctor recovery task for the active feature.
+- Restore the captured `implementation_running` state after the blocker is resolved.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -45,4 +44,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-REC
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R1` from the captured `implementation_running` state.
+Plan a doctor recovery task for blocker `state-corruption-unblock-pending-doctor-recovery-f002-t05-c1-correction-handoff-c1-correction-r1` and then restore `implementation_running`.

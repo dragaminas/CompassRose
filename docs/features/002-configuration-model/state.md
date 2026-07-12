@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+blocked
 
 ## Source Request
 
@@ -13,7 +13,7 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF
 - active_correction_task: none
-- active_unblock_task: F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R1
+- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: failed
 - last_review_result: blocked
@@ -62,7 +62,40 @@ Task `F002-T05-C1-CORRECTION-HANDOFF` is now planned and ready to execute. Repai
 
 ## Blocked By
 
-- None
+- - kind: state_corruption
+- - signature: state-corruption-unblock-pending-doctor-recovery-f002-t05-c1-correction-handoff-c1-correction-r1
+- - recoverability: agent
+- - observed_state: lifecycle=unblock_pending; active_task=F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF; active_correction_task=none; active_unblock_task=F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R1
+- - evidence: Doctor recovery F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R1 failed its re-entry quality gates.
+node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('implementation.json','utf8'));const m=x.preserved_attempt_artifact_manifest;if(!m||typeof m.attempt_id!=='string'||m.attempt_id!==x.attempt_id||!Array.isArray(m.artifacts)||m.artifacts.length!==3)process.exit(1);const roles=['task','implementer-prompt','runtime-context'];if(new Set(m.artifacts.map(a=>a.role)).size!==3||!roles.every(r=>m.artifacts.some(a=>a.role===r))||m.artifacts.some(a=>typeof a.path!=='string'||!fs.existsSync(a.path)||a.provenance!=='attempt_specific'||a.preserved_snapshot!==true))process.exit(1);if(JSON.stringify(x.implementation_context_paths)!==JSON.stringify(m.artifacts.map(a=>a.path)))process.exit(1);": No output.
+node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('implementation.json','utf8'));const p=x.implementation_context_paths;if(!Array.isArray(p)||p.length!==3||typeof x.implementation_notes!=='string'||!p.every(v=>x.implementation_notes.includes(v))||!Array.isArray(x.changed_files)||x.changed_files.length!==0||x.git_diff!==null||!Array.isArray(x.fallback_changed_files)||x.fallback_changed_files.length!==0||x.fallback_git_diff!==null)process.exit(1);": No output.
+npm test: - 0
++ 1
+
+ ❯ tests/protoBlockerFlows.test.ts:154:27
+    152|     const result = runProtoScenario('state-correction-missing-active-t…
+    153|
+    154|     expect(result.status).toBe(0);
+       |                           ^
+    155|     expect(result.stdout).toContain('PASS: state correction artifact w…
+    156|     expect(result.stdout).toContain('PASS: state correction document w…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/12]⎯
+node -e "const fs=require('fs');const q=JSON.parse(fs.readFileSync('quality-gates.json','utf8'));const required=['npm run typecheck','npm test'];if(typeof q.attempt_id!=='string'||!q.attempt_id||q.final_run_marker!==true||q.status!=='passed'||!Array.isArray(q.unexplained_failures)||q.unexplained_failures.length!==0||!Array.isArray(q.gates)||required.some(c=>!q.gates.some(g=>g.command===c&&g.status==='passed'&&g.final_run===true)))process.exit(1);":     at node:internal/process/execution:118:14
+    at [eval]-wrapper:6:24
+    at runScript (node:internal/process/execution:101:62)
+    at evalScript (node:internal/process/execution:133:3)
+    at node:internal/main/eval_string:51:3 {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Eric\\Documents\\Repos\\CompassRose\\quality-gates.json'
+}
+
+Node.js v20.19.5
+- - evidence: None
+- - evidence: lifecycle=unblock_pending
+- - reason: Doctor recovery F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R1 failed its re-entry quality gates. | node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('implementation.json','utf8'));const m=x.preserved_attempt_artifact_manifest;if(!m||typeof m.attempt_id!=='string'||m.attempt_id!==x.attempt_id||!Array.isArray(m.artifacts)||m.artifacts.length!==3)process.exit(1);const roles=['task','implementer-prompt','runtime-context'];if(new Set(m.artifacts.map(a=>a.role)).size!==3||!roles.every(r=>m.artifacts.some(a=>a.role===r))||m.artifacts.some(a=>typeof a.path!=='string'||!fs.existsSync(a.path)||a.provenance!=='attempt_specific'||a.preserved_snapshot!==true))process.exit(1);if(JSON.stringify(x.implementation_context_paths)!==JSON.stringify(m.artifacts.map(a=>a.path)))process.exit(1);": No output. | node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('implementation.json','utf8'));const p=x.implementation_context_paths;if(!Array.isArray(p)||p.length!==3||typeof x.implementation_notes!=='string'||!p.every(v=>x.implementation_notes.includes(v))||!Array.isArray(x.changed_files)||x.changed_files.length!==0||x.git_diff!==null||!Array.isArray(x.fallback_changed_files)||x.fallback_changed_files.length!==0||x.fallback_git_diff!==null)process.exit(1);": No output. | npm test: - 0 | + 1 | ❯ tests/protoBlockerFlows.test.ts:154:27 | 152|     const result = runProtoScenario('state-correction-missing-active-t… | 153| | 154|     expect(result.status).toBe(0); | |                           ^ | 155|     expect(result.stdout).toContain('PASS: state correction artifact w… | 156|     expect(result.stdout).toContain('PASS: state correction document w… | ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/12]⎯ | node -e "const fs=require('fs');const q=JSON.parse(fs.readFileSync('quality-gates.json','utf8'));const required=['npm run typecheck','npm test'];if(typeof q.attempt_id!=='string'||!q.attempt_id||q.final_run_marker!==true||q.status!=='passed'||!Array.isArray(q.unexplained_failures)||q.unexplained_failures.length!==0||!Array.isArray(q.gates)||required.some(c=>!q.gates.some(g=>g.command===c&&g.status==='passed'&&g.final_run===true)))process.exit(1);":     at node:internal/process/execution:118:14 | at [eval]-wrapper:6:24 | at runScript (node:internal/process/execution:101:62) | at evalScript (node:internal/process/execution:133:3) | at node:internal/main/eval_string:51:3 { | errno: -4058, | code: 'ENOENT', | syscall: 'open', | path: 'C:\\Users\\Eric\\Documents\\Repos\\CompassRose\\quality-gates.json' | } | Node.js v20.19.5
 
 ## Blocked From
 
@@ -70,6 +103,7 @@ Task `F002-T05-C1-CORRECTION-HANDOFF` is now planned and ready to execute. Repai
 - active_task: `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF`
 - active_correction_task: `none`
 - active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -82,4 +116,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-REC
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R1` next.
+Plan a doctor recovery task for blocker `state-corruption-unblock-pending-doctor-recovery-f002-t05-c1-correction-handoff-c1-correction-r1` and then restore `implementation_running`.
