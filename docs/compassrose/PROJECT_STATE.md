@@ -16,7 +16,7 @@ In progress
 - Blocking task context: `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R3`
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF`.
 - Implementation failure evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF did not include the required Implementation Notes justification.
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5`, to resolve a recoverable blocker and restore `task_ready`.
+- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF`.
 
 ## Implemented
 
@@ -29,7 +29,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5` for the active feature.
+- Execute `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -38,7 +38,7 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -46,4 +46,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` passed 
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5` from the captured `task_ready` state.
+Execute `F002-T05-C1-CORRECTION-HANDOFF` when the current execution mode allows it.

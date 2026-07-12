@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+task_ready
 
 ## Source Request
 
@@ -13,11 +13,11 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T05-C1-CORRECTION-HANDOFF
 - active_correction_task: none
-- active_unblock_task: F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5
-- last_implementation_result: failed
-- last_quality_gate_result: unknown
-- last_review_result: blocked
-- last_unblock_result: not_run
+- active_unblock_task: none
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: skipped
+- last_unblock_result: passed
 
 ## Current Reality
 
@@ -60,22 +60,18 @@ Review of `F002-T05` then requested correction task `F002-T05-C1` (resolve the d
 
 ## Blocked By
 
-- - kind: implementation_failure
-- - signature: implementation-failure-F002-T05-C1-CORRECTION-HANDOFF
-- - recoverability: agent
-- - observed_state: lifecycle=implementation_failed; active_task=F002-T05-C1-CORRECTION-HANDOFF; active_correction_task=none; active_unblock_task=none
-- - evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF did not include the required Implementation Notes justification.
+- None
 
 ## Blocked From
 
-- lifecycle_state: `task_ready`
-- active_task: `F002-T05-C1-CORRECTION-HANDOFF`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -84,4 +80,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` passed 
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5` next.
+Execute `F002-T05-C1-CORRECTION-HANDOFF` when the current execution mode allows it.
