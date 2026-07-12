@@ -27,7 +27,7 @@ In progress
 
 ## Pending
 
-- Recover or finish implementation for `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF`.
+- Investigate failed quality gates for subtask `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -44,4 +44,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-REC
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and subtask execution for `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF` is in progress.
+The active feature is `002-configuration-model`, but quality gates for `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF` failed and the run should stop.

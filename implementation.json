@@ -1,11 +1,11 @@
 {
-  "implementation_notes": "The repository behavior is already complete: tests/main.test.ts contains the nested preflight correction (regex fixture for /planner:\\r?\\n    enabled: true/), both targeted test cases are present and passing, and the live git diff is empty. No repository file changes are required or made by this correction. The adapter-owned handoff artifact is repaired here by attaching non-empty implementation_context_paths pointing to the three preserved artifacts that were cited but not structured in the previous attempt. changed_files=[], git_diff=null (empty diff, already-complete task).",
+  "implementation_notes": "The repository behavior is already complete with an empty live diff. The adapter-owned handoff artifact is repaired by attaching three existing preserved attempt-specific artifacts from logs/agent-contexts/run-2026-07-12--21-55-28-293/: the attempt-1 execution context (task), the attempt-1 prompt text (exact implementer prompt), and the attempt-2 execution context (runtime context). These replace the previously cited tracked repository contracts which were not attempt-specific preserved artifacts. changed_files=[], git_diff=null (empty diff, already-complete task).",
   "changed_files": [],
   "git_diff": null,
   "implementation_context_paths": [
-    "docs/features/002-configuration-model/tasks/F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-complete-the-already-satisfied-nested-preflight-evidence-handoff.md",
-    "src/contracts/implementer/task-execution-prompt.md",
-    "src/contracts/runtime/agent-context.md"
+    "logs/agent-contexts/run-2026-07-12--21-55-28-293/001-subtask-execution-implementer-subtask-f002-t05-c1-correction-handoff-c1-correction-r1-correction-1-attempt-1.json",
+    "logs/agent-contexts/run-2026-07-12--21-55-28-293/001-subtask-execution-implementer-subtask-f002-t05-c1-correction-handoff-c1-correction-r1-correction-1-attempt-1.prompt.txt",
+    "logs/agent-contexts/run-2026-07-12--21-55-28-293/002-subtask-execution-implementer-subtask-f002-t05-c1-correction-handoff-c1-correction-r1-correction-1-attempt-2.json"
   ],
   "quality_gates": {
     "git_diff_check": "pass",
