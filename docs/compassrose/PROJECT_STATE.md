@@ -17,6 +17,7 @@ In progress
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF`.
 - Implementation failure evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF did not include the required Implementation Notes justification.
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF`.
+- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R6`, to resolve a recoverable blocker and restore `quality_failed`.
 
 ## Implemented
 
@@ -29,7 +30,7 @@ In progress
 
 ## Pending
 
-- Investigate failed quality gates for subtask `F002-T05-C1-CORRECTION-HANDOFF`.
+- Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R6` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -46,4 +47,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5` passed 
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, but quality gates for `F002-T05-C1-CORRECTION-HANDOFF` failed and the run should stop.
+The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R6` from the captured `quality_failed` state.
