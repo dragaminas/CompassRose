@@ -39,7 +39,7 @@ The implementer must:
 - follow the declared development policy
 - run or support the required quality gates when possible
 - produce repository changes that can be reviewed through a Git diff when a change is needed
-- if the requested behavior already exists, say so explicitly in `## Implementation Notes` and cite the repository evidence instead of forcing a redundant edit
+- if the requested behavior already exists, start `## Implementation Notes` with the exact line `Status: already_complete`, cite the repository evidence, and do not force a redundant edit; the runtime uses that literal line to distinguish an already-satisfied task from one where no progress was made
 - leave the reviewable diff visible in the live worktree at handoff unless the task contract explicitly says otherwise
 
 Implementation recovery:

@@ -4768,7 +4768,8 @@ function buildImplementerPrompt(
     '- Keep the change minimal and provider-independent.',
     '- End every attempt with a short `## Implementation Notes` section.',
     '- If you changed repository files, justify the change briefly and cite the evidence.',
-    '- If you made no repository changes because the task already appears satisfied or blocked, explain why and cite the evidence.',
+    '- If you made no repository changes because the task already appears satisfied, start the notes with the line `Status: already_complete` and cite the repository evidence that already satisfies it; the runtime relies on that exact line to tell a satisfied task apart from a stalled one.',
+    '- If you made no repository changes because you are blocked, explain why and cite the evidence; do not use the `Status: already_complete` line unless the requested behavior genuinely already exists.',
     '- Keep implementation notes brief and separate from product documentation.',
     '- Do not claim approval.',
   ].join('\n');
@@ -4810,7 +4811,8 @@ function buildDoctorRecoveryPrompt(
     `- Follow \`${task.developmentPolicy}\`.`,
     '- End every attempt with a short `## Implementation Notes` section.',
     '- If you changed repository files, justify the recovery briefly and cite the blocker evidence.',
-    '- If you made no repository changes, explain why the recovery could not proceed.',
+    '- If you made no repository changes because the restoration target already holds, start the notes with the line `Status: already_complete` and cite the evidence; the runtime relies on that exact line to tell an already-satisfied recovery apart from one that could not proceed.',
+    '- If you made no repository changes because the recovery could not proceed, explain why; do not use the `Status: already_complete` line unless the restoration target genuinely already holds.',
   ].join('\n');
 }
 
