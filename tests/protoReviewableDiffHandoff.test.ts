@@ -206,17 +206,20 @@ describe('proto reviewable diff handoff', () => {
   });
 
   test('selects implementer context artifacts for the task from the agent-context log file names', () => {
+    // These fixture names mirror recordAgentInvocationContext()'s actual output: it slugifies
+    // `context.kind` (e.g. "subtask_execution") with slugify(), which turns every non-alphanumeric
+    // character - including underscores - into a hyphen, so real file names are fully hyphenated.
     const names = selectImplementationContextArtifactNames([
-      '001-feature_planning-planner-feature-plan-002-configuration-model.json',
-      '002-subtask_execution-implementer-subtask-f002-t04-attempt-1.json',
-      '002-subtask_execution-implementer-subtask-f002-t04-attempt-1.prompt.txt',
-      '003-subtask_review-reviewer-subtask-f002-t04.json',
-      '004-subtask_execution-doctor-subtask-f002-t04.json',
+      '001-feature-planning-planner-feature-plan-002-configuration-model.json',
+      '002-subtask-execution-implementer-subtask-f002-t04-attempt-1.json',
+      '002-subtask-execution-implementer-subtask-f002-t04-attempt-1.prompt.txt',
+      '003-subtask-review-reviewer-subtask-f002-t04.json',
+      '004-doctor-recovery-task-doctor-subtask-f002-t04.json',
     ], 'F002-T04');
 
     expect(names).toEqual([
-      '002-subtask_execution-implementer-subtask-f002-t04-attempt-1.json',
-      '002-subtask_execution-implementer-subtask-f002-t04-attempt-1.prompt.txt',
+      '002-subtask-execution-implementer-subtask-f002-t04-attempt-1.json',
+      '002-subtask-execution-implementer-subtask-f002-t04-attempt-1.prompt.txt',
     ]);
   });
 

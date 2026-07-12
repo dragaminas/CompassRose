@@ -85,7 +85,7 @@ export function selectImplementationContextArtifactNames(
   return artifactNames
     .filter((name) =>
       (name.endsWith('.json') || name.endsWith('.prompt.txt')) &&
-      name.includes('subtask_execution-implementer-') &&
+      name.includes('subtask-execution-implementer-') &&
       name.includes(taskToken))
     .sort((left, right) => left.localeCompare(right));
 }

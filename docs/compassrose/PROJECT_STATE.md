@@ -27,7 +27,7 @@ In progress
 
 ## Pending
 
-- Recover the implementation of `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R3` before continuing.
+- Execute correction subtask `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -44,4 +44,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-REC
 
 ## Next Planning Hint
 
-Resume `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1` implementation recovery before continuing.
+The active feature is `002-configuration-model`, and its next valid action is to execute correction subtask `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1`.
