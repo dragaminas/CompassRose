@@ -14,7 +14,7 @@ In progress
 - Blocker recoverability: agent.
 - Feature `002-configuration-model` was suspended from `implementation_running`; the active task pointer remains `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1`.
 - Blocking task context: `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R2`
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R3`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R3`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1`.
 
 ## Implemented
 
@@ -27,7 +27,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R3` for the active feature.
+- Recover the implementation of `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R3` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -36,7 +36,7 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R1` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R3` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -44,4 +44,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-REC
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-DOCTOR-RECOVERY-R3` from the captured `implementation_running` state.
+Resume `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1` implementation recovery before continuing.
