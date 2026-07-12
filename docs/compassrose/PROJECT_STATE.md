@@ -13,6 +13,8 @@ In progress
 - Feature `002-configuration-model` is ready to resume normal implementation through task `F002-T05`.
 - Task `F002-T05` connects the validated configuration policy to the default CLI runtime preflight.
 - Recovery-only state has been cleared so the next runtime loop can prepare and execute the active task through the implementer path.
+- Implementation failure evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF did not include the required Implementation Notes justification.
+- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY`, to resolve a recoverable blocker and restore `task_ready`.
 
 ## Implemented
 
@@ -25,7 +27,7 @@ In progress
 
 ## Pending
 
-- Recover or finish implementation for `F002-T05-C1-CORRECTION-HANDOFF`.
+- Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -42,4 +44,4 @@ Fixed a false rejection of `F002-T05-C1`: the reviewer's diff included the runti
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and subtask execution for `F002-T05-C1-CORRECTION-HANDOFF` is in progress.
+The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY` from the captured `task_ready` state.
