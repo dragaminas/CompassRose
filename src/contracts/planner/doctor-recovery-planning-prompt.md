@@ -41,8 +41,8 @@ The Planner must:
 - generate exactly one doctor recovery task
 - keep the task small and bounded
 - target the blocker that was explicitly observed
-- preserve blocker lineage and restoration-target evidence
-- restore the feature to the captured lifecycle state after doctor quality gates pass
+- preserve blocker signature and lineage for traceability
+- set `restoration_target.lifecycle_state` to a state that represents forward progress from before the blocker occurred (e.g. `task_ready`), never the same failed/blocked lifecycle state the blocker was diagnosed from — restoring into the identical state re-triggers the same diagnosis on the very next step instead of making progress
 - define explicit allowed and forbidden paths
 - define a concrete first executable step
 - define minimum progress evidence that cannot be satisfied by reading alone
@@ -86,7 +86,8 @@ Instructions:
 - Generate exactly one doctor recovery task.
 - The task must be small, bounded, and recovery-specific.
 - The task must conform to `src/contracts/task/doctor-recovery-task.md`.
-- Preserve the blocker signature and restoration target explicitly.
+- Preserve the blocker signature and lineage explicitly for traceability.
+- Set `restoration_target.lifecycle_state` to a state that represents forward progress from before the blocker occurred (e.g. `task_ready`) — never the same failed/blocked lifecycle state the blocker was diagnosed from.
 - State that the executor is `doctor` and that recovery re-enters the loop without a reviewer step.
 - Define explicit `allowed_paths` and `forbidden_paths`.
 - Define `first_executable_step` as one concrete command, file read, file edit, or test action.

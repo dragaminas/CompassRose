@@ -1481,7 +1481,7 @@ class PrototypeCompassRose {
       '- If the recovery task is a later version of an earlier task, set `previous_task_id` to that earlier task so the earlier task remains historical evidence; otherwise set it to `null`.',
       '- If the blocker is pure documentation or state drift, do not plan doctor recovery; use `correct_state` instead.',
       '- Mark the recovery as `doctor` with `no_review_loop` semantics.',
-      '- Restore the captured lifecycle state after doctor quality gates pass.',
+      '- The restoration target above is fixed by the runtime and represents forward progress, not the failed state the blocker was diagnosed from; do not propose a different one.',
       '- Use `test_guided` when the recovery produces code or tests.',
       '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
       '- Return JSON only and do not modify files.',
@@ -3193,7 +3193,7 @@ class PrototypeCompassRose {
     }
 
     return {
-      lifecycle_state: snapshot.lifecycleState,
+      lifecycle_state: forwardRestorationLifecycleState(snapshot.lifecycleState),
       active_task: snapshot.activeTask,
       active_correction_task: snapshot.activeCorrectionTask,
       active_unblock_task: snapshot.activeUnblockTask,
@@ -4561,6 +4561,21 @@ function stateCorrectionNextPlanningHint(stateCorrection: StateCorrectionTask): 
     active_correction_task: stateCorrection.state_target.restored_active_correction_task,
     active_unblock_task: 'none',
   }, stateCorrection.task_id, 'state_correction');
+}
+
+// A blocker is diagnosed FROM a failed/blocked lifecycle state, so restoring into that same
+// state would immediately re-trigger the identical diagnosis on the next step. When no explicit
+// `## Blocked From` anchor was recorded, fall back to the state machine's own documented forward
+// transition (see src/contracts/state/feature-state.md) instead of echoing the broken state.
+function forwardRestorationLifecycleState(lifecycleState: string): string {
+  switch (lifecycleState) {
+    case 'implementation_failed':
+    case 'quality_failed':
+    case 'review_failed':
+      return 'implementation_running';
+    default:
+      return lifecycleState;
+  }
 }
 
 function restorationTargetNextPlanningHint(
