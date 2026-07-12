@@ -35,17 +35,17 @@ Required inputs:
 Optional inputs:
 
 - Reviewable-diff handoff details from the task, when available
-- Implementation notes from the attempt artifact, when available
-- Implementation context artifacts that record the exact prompt and runtime snapshot sent to the implementer
+- `implementation.implementation_notes` from the attempt artifact, when available
+- Implementation context artifacts that record the exact prompt and runtime snapshot sent to the implementer, supplied as separate file paths alongside the task (not as a field inside `implementation`) and named explicitly in the prompt when present
 - Implementation diagnostics
 - Fallback committed diff evidence when the live worktree diff was lost before handoff
 - Previous review result
 - User review instructions
 
 When reviewable-diff handoff details are present, the Reviewer should compare the observed implementation against the exact required changed files before deciding whether a missing diff means the task was already satisfied or the task context was too restrictive.
-When implementation notes are present, the Reviewer should treat them as implementer-reported context, not as proof that the task is complete.
-If implementation notes are missing, the Reviewer should treat that omission as an execution defect and surface it explicitly in the review result.
-When implementation context artifacts are present, the Reviewer should inspect them before rejecting the attempt so context restrictions can be diagnosed explicitly.
+When `implementation.implementation_notes` is present, the Reviewer should treat it as implementer-reported context, not as proof that the task is complete.
+If `implementation.implementation_notes` is null or empty, the Reviewer should treat that omission as an execution defect and surface it explicitly in the review result.
+Implementation context artifacts are not always produced (for example, a doctor recovery handoff or an already-complete verification may legitimately have none) — their absence alone is not an execution defect; when they are supplied as separate files, the Reviewer should inspect them before rejecting the attempt so context restrictions can be diagnosed explicitly.
 If the live worktree diff is missing and CompassRose provides a fallback committed diff for diagnosis, the Reviewer should treat that fallback as evidence of attempted work, not as a valid handoff that can be approved silently.
 
 ---
@@ -85,9 +85,7 @@ reviewer_input:
     fallback_changed_files:
       - string
     fallback_git_diff: string | null
-    notes: string | null
-    implementation_context_paths:
-      - string
+    implementation_notes: string | null
     diagnostics:
       classification: context_overflow | provider_failure | permission_prompt | reviewable_diff_lost | already_complete | tool_refusal | missing_implementation_notes | model_passivity | ui_cli_behavior | unknown
       evidence:
@@ -129,7 +127,7 @@ The Reviewer must:
 - Check the reviewable-diff handoff details before treating a missing diff as a failure.
 - Consider implementation diagnostics when the diff is empty or incomplete.
 - Consider minimum progress evidence before treating an implementation attempt as reviewable.
-- Inspect the implementation context artifacts before rejecting the attempt so context restrictions can be diagnosed explicitly.
+- Inspect the implementation context artifacts, when supplied, before rejecting the attempt so context restrictions can be diagnosed explicitly; their absence alone is not a defect to report.
 - Identify unrelated changes.
 - Identify architectural violations.
 - Return a structured result.

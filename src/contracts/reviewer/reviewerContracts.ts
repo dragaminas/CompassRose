@@ -28,8 +28,7 @@ export interface ReviewerImplementationInput {
   readonly git_diff: string;
   readonly fallback_changed_files: readonly string[];
   readonly fallback_git_diff: string | null;
-  readonly notes: string | null;
-  readonly implementation_context_paths: readonly string[];
+  readonly implementation_notes: string | null;
   readonly diagnostics: ImplementationDiagnostics;
 }
 

@@ -24,7 +24,7 @@ The reviewer should read:
 - `src/contracts/reviewer/input.md`
 - `src/contracts/reviewer/output.md`
 - `src/contracts/task/correction-task.md`
-- the implementation context artifacts recorded for the attempt
+- the implementation context artifacts recorded for the attempt, when any were recorded
 - the current task
 - the implementation diff
 - quality gate results
@@ -41,8 +41,8 @@ The reviewer must:
 - evaluate quality gate results
 - identify architectural violations
 - when an implementation was retried after partial progress, compare the final diff against the retry context and note whether the task interface appears tight enough for future runs
-- inspect implementation notes, and treat their absence as an execution defect that should be surfaced explicitly
-- inspect the exact implementer context artifacts before rejecting the attempt so you can tell whether the implementer was constrained by its own prompt, tool snapshot, or scope rules
+- inspect `implementation.implementation_notes` (the field is named `implementation_notes`, not `notes`), and treat it being null or empty as an execution defect that should be surfaced explicitly
+- when implementer context artifacts are supplied as separate files alongside the task, inspect them before rejecting the attempt so you can tell whether the implementer was constrained by its own prompt, tool snapshot, or scope rules; their absence alone is not a defect, since not every attempt (e.g. a doctor recovery or an already-complete verification) produces them
 - compare the diff against the task's reviewable-diff handoff requirements before treating a missing specific change as a failure
 - if the requested behavior already existed before the attempt, say so explicitly and do not reject solely because the diff is empty or the expected file did not change
 - if the context itself prevented the change, surface that restriction explicitly and prefer a narrower correction task only when the restriction is actually fixable

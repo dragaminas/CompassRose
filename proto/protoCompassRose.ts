@@ -2192,7 +2192,7 @@ class PrototypeCompassRose {
       '- `docs/compassrose/CONFIG.md`',
       `- \`${diffPath}\``,
       `- \`${implementationPath}\``,
-      '- `implementation.notes` inside the implementation artifact; if it is missing, treat that as an execution defect and report it explicitly.',
+      '- `implementation.implementation_notes` inside the implementation artifact (the field is named `implementation_notes`, not `notes`); if it is null or empty, treat that as an execution defect and report it explicitly.',
       `- \`${qualityPath}\``,
       '- if needed, only the files changed in the diff',
       reviewDiff.diff.trim().length === 0
@@ -2570,7 +2570,7 @@ class PrototypeCompassRose {
       `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
       '- `docs/compassrose/CONFIG.md`',
       `- \`${join(tempDir, 'implementation.json')}\``,
-      '- `implementation.notes` inside `implementation.json`; if it is missing, treat that as an execution defect and report it explicitly.',
+      '- `implementation.implementation_notes` inside `implementation.json` (the field is named `implementation_notes`, not `notes`); if it is null or empty, treat that as an execution defect and report it explicitly.',
       `- \`${join(tempDir, 'quality-gates.json')}\``,
       `- \`${reviewPath}\``,
       '',
