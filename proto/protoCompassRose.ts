@@ -121,8 +121,12 @@ function runCommandWithHeartbeat(config: HeartbeatRunConfig): { status: number |
   };
 }
 
+function readUtf8(path: string): string {
+  return readFileSync(path, 'utf8').replace(/\r\n/g, '\n');
+}
+
 function readTextIfExists(path: string): string {
-  return existsSync(path) ? readFileSync(path, 'utf8') : '';
+  return existsSync(path) ? readUtf8(path) : '';
 }
 
 interface HeartbeatRunConfig {
@@ -264,7 +268,7 @@ class ArtifactStore {
   readJson<T>(relativePath: string): T | null {
     const targetPath = join(this.root, relativePath);
     try {
-      return JSON.parse(readFileSync(targetPath, 'utf8')) as T;
+      return JSON.parse(readUtf8(targetPath)) as T;
     } catch {
       return null;
     }
@@ -459,7 +463,7 @@ class CodexCli implements TaskImplementer {
       throw new Error(`codex exec failed:\n${stderr || stdout}`);
     }
 
-    return JSON.parse(readFileSync(outputPath, 'utf8')) as T;
+    return JSON.parse(readUtf8(outputPath)) as T;
   }
 
   run(prompt: string, label = 'implementer'): CommandExecution {
@@ -2892,7 +2896,7 @@ class PrototypeCompassRose {
 
   private correctState(featureId: string, reason: string): void {
     const feature = this.loadFeature(featureId);
-    const markdown = readFileSync(feature.statePath, 'utf8');
+    const markdown = readUtf8(feature.statePath);
     const lifecycleState = stripTicks(requireSection(markdown, 'Lifecycle State').trim());
     const operationalStatusSection = requireSection(markdown, 'Operational Status');
     const activeTask = stripTicks(parsePreferredStatusValue(operationalStatusSection, 'active_task') ?? 'none');
@@ -2933,7 +2937,7 @@ class PrototypeCompassRose {
   }
 
   private resolveStateCorrectionActiveTask(feature: FeatureRecord, featureStateMarkdown: string): string {
-    const projectStateMarkdown = readFileSync(this.projectStatePath, 'utf8');
+    const projectStateMarkdown = readUtf8(this.projectStatePath);
     const hintSources = [
       optionalSection(projectStateMarkdown, 'Pending'),
       optionalSection(projectStateMarkdown, 'Next Planning Hint'),
@@ -3144,7 +3148,7 @@ class PrototypeCompassRose {
   }
 
   private readFeatureStateSnapshot(feature: FeatureRecord): FeatureStateSnapshot {
-    const markdown = readFileSync(feature.statePath, 'utf8');
+    const markdown = readUtf8(feature.statePath);
     const operationalStatus = requireSection(markdown, 'Operational Status');
     const blockedBySection = optionalSection(markdown, 'Blocked By');
     const blockedFromSection = optionalSection(markdown, 'Blocked From');
@@ -3379,7 +3383,7 @@ class PrototypeCompassRose {
     blockedByLines: readonly string[],
     nextPlanningHint: string,
   ): string {
-    let markdown = readFileSync(featureStatePath, 'utf8');
+    let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'blocked');
     markdown = replaceOperationalStatus(markdown, {
       active_task: restorationTarget.active_task,
@@ -3408,7 +3412,7 @@ class PrototypeCompassRose {
     pendingLines: readonly string[],
     nextPlanningHint: string,
   ): string {
-    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    let markdown = readUtf8(this.projectStatePath);
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList(pendingLines));
     markdown = replaceSection(markdown, 'Current Reality', [
@@ -3432,7 +3436,7 @@ class PrototypeCompassRose {
       return null;
     }
 
-    return storedTaskArtifactFromDocument(taskPath, readFileSync(taskPath, 'utf8'));
+    return storedTaskArtifactFromDocument(taskPath, readUtf8(taskPath));
   }
 
   private primaryTaskAnchor(taskId: string): string {
@@ -3479,7 +3483,7 @@ class PrototypeCompassRose {
     if (stored) {
       const feature = this.loadFeature(stored.task.feature_id);
       const taskPath = this.findTaskDocumentPath(taskId, feature.tasksDirectory);
-      const parsed = parseTaskDocument(taskPath, readFileSync(taskPath, 'utf8'));
+      const parsed = parseTaskDocument(taskPath, readUtf8(taskPath));
       return {
         taskId: stored.task.task_id,
         previousTaskId: parsed.previousTaskId,
@@ -3507,7 +3511,7 @@ class PrototypeCompassRose {
     }
 
     const taskPath = this.findTaskDocumentPath(taskId);
-    return parseTaskDocument(taskPath, readFileSync(taskPath, 'utf8'));
+    return parseTaskDocument(taskPath, readUtf8(taskPath));
   }
 
   private findTaskDocumentPath(taskId: string, tasksDirectory?: string): string {
@@ -3524,7 +3528,7 @@ class PrototypeCompassRose {
         }
 
         const fullPath = join(root, entry);
-        const markdown = readFileSync(fullPath, 'utf8');
+        const markdown = readUtf8(fullPath);
         try {
           if (parseTaskDocument(fullPath, markdown).taskId === taskId) {
             return fullPath;
@@ -3547,7 +3551,7 @@ class PrototypeCompassRose {
   }
 
   private updateProjectStateForFeaturePlan(featureId: string): string {
-    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    let markdown = readUtf8(this.projectStatePath);
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList([
       'Plan the next implementation task for the active feature.',
@@ -3565,7 +3569,7 @@ class PrototypeCompassRose {
   }
 
   private updateProjectStateForTaskPlan(featureId: string, taskId: string): string {
-    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    let markdown = readUtf8(this.projectStatePath);
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList([
       `Execute \`${taskId}\` for the active feature.`,
@@ -3582,7 +3586,7 @@ class PrototypeCompassRose {
   }
 
   private updateProjectStateAfterImplementation(featureId: string, taskId: string, passed: boolean): string {
-    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    let markdown = readUtf8(this.projectStatePath);
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList([
       passed ? `Review subtask \`${taskId}\` for the active feature.` : `Investigate failed quality gates for subtask \`${taskId}\`.`,
@@ -3599,7 +3603,7 @@ class PrototypeCompassRose {
   }
 
   private updateProjectStateAfterImplementationFailure(featureId: string, taskId: string, reason: string): string {
-    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    let markdown = readUtf8(this.projectStatePath);
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList([
       `Recover the failed implementation attempt for \`${taskId}\` before continuing.`,
@@ -3620,7 +3624,7 @@ class PrototypeCompassRose {
   }
 
   private updateProjectStateAfterApprovedReview(featureId: string, taskId: string): string {
-    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    let markdown = readUtf8(this.projectStatePath);
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList([
       'Plan the next implementation task for the active feature.',
@@ -3632,7 +3636,7 @@ class PrototypeCompassRose {
   }
 
   private updateProjectStateForCorrection(featureId: string, correctionTaskId: string): string {
-    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    let markdown = readUtf8(this.projectStatePath);
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList([
       `Execute correction subtask \`${correctionTaskId}\` for the active feature.`,
@@ -3643,7 +3647,7 @@ class PrototypeCompassRose {
   }
 
   private updateFeatureStateForTaskPlan(featureStatePath: string, taskId: string, title: string): string {
-    let markdown = readFileSync(featureStatePath, 'utf8');
+    let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'task_ready');
     markdown = replaceOperationalStatus(markdown, {
       active_task: taskId,
@@ -3672,7 +3676,7 @@ class PrototypeCompassRose {
     lifecycleState: 'review_pending' | 'quality_failed',
     qualityResult: 'passed' | 'failed',
   ): string {
-    let markdown = readFileSync(featureStatePath, 'utf8');
+    let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', lifecycleState);
     markdown = replaceOperationalStatus(markdown, {
       active_task: taskId,
@@ -3699,7 +3703,7 @@ class PrototypeCompassRose {
   }
 
   private updateFeatureStateDuringImplementation(featureStatePath: string, taskId: string): string {
-    let markdown = readFileSync(featureStatePath, 'utf8');
+    let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'implementation_running');
     markdown = replaceOperationalStatus(markdown, {
       active_task: taskId,
@@ -3720,7 +3724,7 @@ class PrototypeCompassRose {
   }
 
   private updateFeatureStateAfterImplementationFailure(featureStatePath: string, taskId: string, reason: string): string {
-    let markdown = readFileSync(featureStatePath, 'utf8');
+    let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'implementation_failed');
     markdown = replaceOperationalStatus(markdown, {
       active_task: taskId,
@@ -3753,7 +3757,7 @@ class PrototypeCompassRose {
   }
 
   private updateProjectStateDuringImplementation(featureId: string, taskId: string): string {
-    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    let markdown = readUtf8(this.projectStatePath);
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList([
       `Recover or finish implementation for \`${taskId}\`.`,
@@ -3764,7 +3768,7 @@ class PrototypeCompassRose {
   }
 
   private updateFeatureStateAfterApprovedReview(featureStatePath: string, task: ParsedTaskDocument): string {
-    let markdown = readFileSync(featureStatePath, 'utf8');
+    let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'formalized');
     markdown = replaceOperationalStatus(markdown, {
       active_task: 'none',
@@ -3790,7 +3794,7 @@ class PrototypeCompassRose {
     taskId: string,
     correctionTaskId: string,
   ): string {
-    let markdown = readFileSync(featureStatePath, 'utf8');
+    let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'correction_pending');
     markdown = replaceOperationalStatus(markdown, {
       active_task: taskId,
@@ -3813,7 +3817,7 @@ class PrototypeCompassRose {
     taskId: string,
     correctionTaskId: string,
   ): string {
-    let markdown = readFileSync(featureStatePath, 'utf8');
+    let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'correction_pending');
     markdown = replaceOperationalStatus(markdown, {
       active_task: taskId,
@@ -3835,7 +3839,7 @@ class PrototypeCompassRose {
     taskId: string,
     restorationTarget: RestorationTarget,
   ): string {
-    let markdown = readFileSync(featureStatePath, 'utf8');
+    let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'unblock_pending');
     markdown = replaceOperationalStatus(markdown, {
       active_correction_task: 'none',
@@ -3866,7 +3870,7 @@ class PrototypeCompassRose {
     taskId: string,
     stateCorrection: StateCorrectionTask,
   ): string {
-    let markdown = readFileSync(featureStatePath, 'utf8');
+    let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', stateCorrection.state_target.restored_lifecycle_state);
     markdown = replaceOperationalStatus(markdown, {
       active_task: stateCorrection.state_target.restored_active_task,
@@ -3892,7 +3896,7 @@ class PrototypeCompassRose {
     task: ParsedTaskDocument,
     doctorRecovery: DoctorRecoveryTaskMetadata,
   ): string {
-    let markdown = readFileSync(featureStatePath, 'utf8');
+    let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', doctorRecovery.restoration_target.lifecycle_state);
     markdown = replaceOperationalStatus(markdown, {
       active_task: doctorRecovery.restoration_target.active_task,
@@ -3924,7 +3928,7 @@ class PrototypeCompassRose {
   }
 
   private updateProjectStateAfterStateCorrection(featureId: string, stateCorrection: StateCorrectionTask): string {
-    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    let markdown = readUtf8(this.projectStatePath);
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList(stateCorrectionProjectPendingLines(stateCorrection)));
     markdown = replaceSection(markdown, 'Last Approved Change', `State correction artifact \`${stateCorrection.task_id}\` was applied by the prototype orchestrator.`);
@@ -3939,7 +3943,7 @@ class PrototypeCompassRose {
   }
 
   private updateProjectStateForDoctorRecovery(featureId: string, taskId: string, lifecycleState: string): string {
-    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    let markdown = readUtf8(this.projectStatePath);
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList([
       `Execute doctor recovery task \`${taskId}\` for the active feature.`,
@@ -3960,7 +3964,7 @@ class PrototypeCompassRose {
   }
 
   private updateProjectStateAfterDoctorRecovery(featureId: string, taskId: string, restorationTarget: RestorationTarget): string {
-    let markdown = readFileSync(this.projectStatePath, 'utf8');
+    let markdown = readUtf8(this.projectStatePath);
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
     markdown = replaceSection(markdown, 'Pending', bulletList(restorationTargetProjectPendingLines(restorationTarget, taskId, 'doctor')));
     markdown = replaceSection(markdown, 'Last Approved Change', `Doctor recovery task \`${taskId}\` passed re-entry quality gates and was applied by the prototype orchestrator.`);
@@ -5892,7 +5896,7 @@ function buildStateCorrectionTaskId(tasksDirectory: string, activeTaskId: string
       continue;
     }
 
-    const markdown = readFileSync(join(tasksDirectory, entry), 'utf8');
+    const markdown = readUtf8(join(tasksDirectory, entry));
     for (const match of markdown.matchAll(pattern)) {
       highestCorrection = Math.max(highestCorrection, Number.parseInt(match[1] ?? '0', 10));
     }
@@ -6083,7 +6087,7 @@ function createRunId(): string {
 }
 
 function readJsonFile(path: string): unknown {
-  return JSON.parse(readFileSync(path, 'utf8'));
+  return JSON.parse(readUtf8(path));
 }
 
 function fingerprintForPath(path: string): FileFingerprint {

@@ -95,6 +95,7 @@ const childArgs = config.promptMode === 'arg'
 const child = spawn(config.command, childArgs, {
   cwd: config.cwd,
   stdio: config.promptMode === 'arg' ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'],
+  shell: process.platform === 'win32',
 });
 
 if (config.promptMode === 'stdin' && child.stdin) {
