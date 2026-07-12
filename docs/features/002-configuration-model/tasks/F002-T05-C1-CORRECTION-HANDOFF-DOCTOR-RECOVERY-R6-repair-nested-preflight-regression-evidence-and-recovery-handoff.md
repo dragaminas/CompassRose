@@ -48,7 +48,7 @@ Forbidden:
 ## Constraints
 - Execute as the `doctor` role with `review_policy=no_review_loop`; do not enter the normal reviewer loop.
 - Blocker metadata: kind=unknown; signature=unknown-quality-failed-feature-002-configuration-model-is-in-quality-failed-and-needs-diagnosis-; recoverability=agent; observed_state=lifecycle=quality_failed, active_task=F002-T05-C1-CORRECTION-HANDOFF, active_correction_task=none, active_unblock_task=none.
-- After doctor gates pass, restore lifecycle_state=quality_failed, active_task=F002-T05-C1-CORRECTION-HANDOFF, active_correction_task=none, and active_unblock_task=none.
+- After doctor gates pass, restore lifecycle_state=task_ready, active_task=F002-T05-C1-CORRECTION-HANDOFF, active_correction_task=none, and active_unblock_task=none.
 - The nested passing fixture must load the repository-root `docs/compassrose/CONFIG.md` while running from a nested directory with no competing nested configuration.
 - The nested failing fixture must exercise the identified role-disabled/runtime-precondition failure, assert exit code 1, and preserve the existing diagnostic output; a successful preflight must not satisfy the failure case.
 - Preserve the existing repository-root lookup, configuration validation, preflight validation, diagnostic logic, and `main(['doctor'])` behavior; do not redesign or refactor them.
@@ -102,7 +102,7 @@ npm test
 
 ## Restoration Target
 
-- lifecycle_state: quality_failed
+- lifecycle_state: task_ready
 - active_task: `F002-T05-C1-CORRECTION-HANDOFF`
 - active_correction_task: `none`
 - active_unblock_task: `none`

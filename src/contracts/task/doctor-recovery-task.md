@@ -58,7 +58,7 @@ A doctor recovery task must:
 - keep the scope bounded to the blocker and re-entry point
 - include a concrete `first_executable_step`
 - include `minimum_progress_evidence` that requires real repository change
-- make the restoration target explicit
+- make the restoration target explicit, and set `restoration_target.lifecycle_state` to a state that represents forward progress (e.g. `task_ready`) — never the same failed/blocked lifecycle state the blocker was diagnosed from, since restoring into it re-triggers the identical diagnosis on the very next step
 - state the doctor executor and `no_review_loop` policy in the task document
 - use quality gates that validate re-entry readiness, not reviewer convenience
 - give every `quality_gates.before_review` entry as a literal, directly executable shell command (e.g. `npm test`) — the runtime runs each entry verbatim; a natural-language description of what to verify is not a gate and will fail with no output

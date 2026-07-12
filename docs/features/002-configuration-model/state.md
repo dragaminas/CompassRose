@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-quality_failed
+task_ready
 
 ## Source Request
 
@@ -80,4 +80,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R6` passed 
 
 ## Next Planning Hint
 
-Continue from the repaired `quality_failed` state for `F002-T05-C1-CORRECTION-HANDOFF`.
+Resume `F002-T05-C1-CORRECTION-HANDOFF` from `task_ready`; the underlying nested-preflight fix has already passed all quality gates in prior recovery attempts and needs no further source changes.
