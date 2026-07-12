@@ -24,8 +24,8 @@ function createTempWorkspace(files: Record<string, string> = {}): { root: string
 describe('main([]) — configuration-backed runtime preflight', () => {
   test('returns non-zero when roles.planner.enabled is false', () => {
     const config = readFixtureConfigMarkdown().replace(
-      'planner:\n    enabled: true',
-      'planner:\n    enabled: false',
+      /planner:\r?\n    enabled: true/,
+      'planner:\r\n    enabled: false',
     );
 
     const workspace = createTempWorkspace({
@@ -156,8 +156,8 @@ describe('main([]) — nested directory from repo root', () => {
 
   test('resolves CONFIG.md from repo root when invoked from a nested subdirectory with failing preflight', () => {
     const config = readFixtureConfigMarkdown().replace(
-      'planner:\n    enabled: true',
-      'planner:\n    enabled: false',
+      /planner:\r?\n    enabled: true/,
+      'planner:\r\n    enabled: false',
     );
 
     const workspace = createTempWorkspace({
