@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+task_ready
 
 ## Source Request
 
@@ -13,11 +13,11 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T05-C1-CORRECTION-HANDOFF
 - active_correction_task: none
-- active_unblock_task: F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4
-- last_implementation_result: failed
-- last_quality_gate_result: unknown
-- last_review_result: blocked
-- last_unblock_result: not_run
+- active_unblock_task: none
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: skipped
+- last_unblock_result: passed
 
 ## Current Reality
 
@@ -60,39 +60,18 @@ Review of `F002-T05` then requested correction task `F002-T05-C1` (resolve the d
 
 ## Blocked By
 
-- - kind: state_corruption
-- - signature: state-corruption-unblock-pending-doctor-recovery-f002-t05-c1-correction-handoff-doctor-recovery-
-- - recoverability: agent
-- - observed_state: lifecycle=unblock_pending; active_task=F002-T05-C1-CORRECTION-HANDOFF; active_correction_task=none; active_unblock_task=F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R3
-- - evidence: Doctor recovery F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R3 failed its re-entry quality gates.
-npm test: - 0
-+ 1
-
- ❯ tests/protoBlockerFlows.test.ts:94:27
-     92|     const result = runProtoScenario('interface-gap', { commit: true });
-     93|
-     94|     expect(result.status).toBe(0);
-       |                           ^
-     95|     expect(result.stdout).toContain('PASS: recovery lesson was recorde…
-     96|     expect(result.stdout).toContain('PASS: recovery lesson recorded sc…
-
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
-- - evidence: - kind: state_corruption
-- - evidence: - signature: state-corruption-unblock-pending-implementation-for-f002-t05-c1-correction-handoff-doctor-recove
-- - evidence: - recoverability: agent
-- - evidence: lifecycle=unblock_pending
-- - reason: Doctor recovery F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R3 failed its re-entry quality gates. | npm test: - 0 | + 1 | ❯ tests/protoBlockerFlows.test.ts:94:27 | 92|     const result = runProtoScenario('interface-gap', { commit: true }); | 93| | 94|     expect(result.status).toBe(0); | |                           ^ | 95|     expect(result.stdout).toContain('PASS: recovery lesson was recorde… | 96|     expect(result.stdout).toContain('PASS: recovery lesson recorded sc… | ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+- None
 
 ## Blocked From
 
-- lifecycle_state: `task_ready`
-- active_task: `F002-T05-C1-CORRECTION-HANDOFF`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Fixed a false rejection of `F002-T05-C1`: `reviewTask()` did not exclude the runtime's own state-doc bookkeeping from the diff it showed the reviewer, so the reviewer mistook orchestrator bookkeeping for a scope violation. Also fixed a related bug where `changes_required`/`blocked` review verdicts left the implementer's diff uncommitted, crashing the next step's clean-worktree check. `F002-T05-C1`'s implementation (`src/cli/main.ts`, `tests/main.test.ts`) is committed and has no real `docs/` edits to clean up, so `F002-T05-C1-CLEANUP` is dropped.
+Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -101,4 +80,4 @@ Fixed a false rejection of `F002-T05-C1`: `reviewTask()` did not exclude the run
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` next.
+Execute `F002-T05-C1-CORRECTION-HANDOFF` when the current execution mode allows it.

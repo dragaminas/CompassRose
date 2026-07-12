@@ -14,7 +14,7 @@ In progress
 - Blocker recoverability: agent.
 - Feature `002-configuration-model` was suspended from `task_ready`; the active task pointer remains `F002-T05-C1-CORRECTION-HANDOFF`.
 - Blocking task context: `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R3`
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4`, to resolve a recoverable blocker and restore `task_ready`.
+- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF`.
 
 ## Implemented
 
@@ -27,7 +27,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` for the active feature.
+- Execute `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -36,7 +36,7 @@ In progress
 
 ## Last Approved Change
 
-Fixed a false rejection of `F002-T05-C1`: the reviewer's diff included the runtime's own state-doc bookkeeping, causing it to reject a clean implementation for a scope violation it never actually committed. A related bug that left rejected implementer diffs uncommitted (crashing the next step's clean-worktree check) is also fixed. `F002-T05-C1-CLEANUP` is dropped as moot.
+Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -44,4 +44,4 @@ Fixed a false rejection of `F002-T05-C1`: the reviewer's diff included the runti
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` from the captured `task_ready` state.
+Execute `F002-T05-C1-CORRECTION-HANDOFF` when the current execution mode allows it.

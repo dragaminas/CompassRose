@@ -134,6 +134,8 @@ describe('main([]) — nested directory from repo root', () => {
     });
 
     const nestedDir = join(workspace.root, 'src', 'deeply', 'nested');
+    mkdirSync(nestedDir, { recursive: true });
+    expect(existsSync(nestedDir)).toBe(true);
 
     try {
       const stdoutMessages: string[] = [];
@@ -163,6 +165,8 @@ describe('main([]) — nested directory from repo root', () => {
     });
 
     const nestedDir = join(workspace.root, 'src', 'deeply', 'nested');
+    mkdirSync(nestedDir, { recursive: true });
+    expect(existsSync(nestedDir)).toBe(true);
 
     try {
       const stderrMessages: string[] = [];

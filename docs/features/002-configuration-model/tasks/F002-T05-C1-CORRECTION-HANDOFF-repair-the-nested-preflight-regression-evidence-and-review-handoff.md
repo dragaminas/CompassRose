@@ -60,3 +60,28 @@ npm run typecheck
 npm test
 Verify the implementation artifact contains non-empty implementation.notes and explicit handoff diagnostics.
 ```
+
+## Implementation Notes
+
+R4 revalidated the existing bounded recovery diff in `tests/main.test.ts`. Both nested cases create a real `src/deeply/nested` directory and assert that the fixture exists before invoking `main([])`; the fixture still writes only the repository-root `docs/compassrose/CONFIG.md`, so there is no competing nested configuration. The role-disabled nested case continues to assert exit code `1` and the unchanged `roles.planner.enabled` and `runtime preflight` diagnostics. `src/cli/main.ts` was not changed, preserving its existing repository-root lookup, validation, and diagnostic behavior.
+
+The prior recovery's missing implementation output, missing `implementation.notes`, and missing context artifacts remain preserved as execution defects from the blocker evidence; this handoff records non-empty recovery notes and fresh command evidence instead of silently treating the earlier handoff as complete. The restoration target remains `task_ready` with active task `F002-T05-C1-CORRECTION-HANDOFF`, no active correction task, and no active unblock task. State restoration bookkeeping remains untouched as required; the successful doctor gate evidence is available for the runtime handoff. No commit was created.
+
+## Quality Gate Results
+
+- Baseline first step before edits: `npx vitest run tests/main.test.ts` — exit `0`, 7/7 tests passed; the nested passing case returned `0`, and the nested role-disabled case returned `1` with the expected preflight assertions.
+- Existing test-guided fixture evidence: the nested-directory invariant first failed in both nested cases, then passed after the fixture created the directory; the targeted nested run passed 2/2.
+- `npx vitest run tests/main.test.ts` — exit `0`, 7/7 passed in the mandated R4 baseline; the nested passing case returned `0`, and the nested role-disabled case returned `1` with the expected diagnostics.
+- `npm run typecheck` — exit `0`.
+- First R4 `npm test` attempt — exit `1`, with 58 passed, 1 failed, and 1 skipped across 12 test files. The failure was `tests/protoBlockerFlows.test.ts` in the `unblock-doc-code-mismatch` scenario, outside this task's allowed scope; this transient failure is preserved rather than hidden.
+- Latest R4 `npm test` rerun — exit `0`, with 59 passed and 1 skipped across 12 test files.
+- `git diff --check` — exit `0` after the R4 handoff update.
+
+## Handoff Diagnostics
+
+- blocker preserved: kind `state_corruption`, signature `state-corruption-blocked-feature-002-configuration-model-is-blocked-and-needs-diagnosis-autocorr`, with the recorded evidence that the feature is blocked and needs bounded diagnosis/autocorrection.
+- task lineage preserved: this task remains `F002-T05-C1-CORRECTION-HANDOFF`, parent `F002-T05-C1`, and this execution is doctor recovery `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4`, following R3.
+- recovery diff scope: `tests/main.test.ts` and this active handoff document only.
+- no source, state, contract, `proto/`, or unrelated test paths were changed.
+- re-entry status: latest doctor re-entry gates pass; the initial transient full-suite failure remains recorded, and no restoration bookkeeping was performed because state changes are outside this recovery's allowed scope.
+- review policy: `no_review_loop`; doctor re-entry gates are the recorded quality gates above.
