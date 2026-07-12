@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+quality_failed
 
 ## Source Request
 
@@ -14,8 +14,8 @@ implementation_running
 - active_task: F002-T05-C1-CORRECTION-HANDOFF
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: not_run
-- last_quality_gate_result: unknown
+- last_implementation_result: passed
+- last_quality_gate_result: failed
 - last_review_result: not_run
 - last_unblock_result: passed
 
@@ -80,4 +80,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5` passed 
 
 ## Next Planning Hint
 
-Recover or finish subtask implementation of `F002-T05-C1-CORRECTION-HANDOFF` before allowing review or new planning.
+Quality gates for `F002-T05-C1-CORRECTION-HANDOFF` failed; stop and recover before continuing.

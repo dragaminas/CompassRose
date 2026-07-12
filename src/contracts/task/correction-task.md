@@ -64,6 +64,7 @@ A correction task must:
 - Preserve original intent.
 - Include a concrete `first_executable_step`.
 - Include `minimum_progress_evidence` that cannot be satisfied by reading alone.
+- Give every `quality_gates.before_review` entry as a literal, directly executable shell command (e.g. `npm test`) — the runtime runs each entry verbatim; a natural-language description of what to verify is not a gate and will fail with no output.
 
 A correction task must not:
 

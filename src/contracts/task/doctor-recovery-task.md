@@ -61,6 +61,7 @@ A doctor recovery task must:
 - make the restoration target explicit
 - state the doctor executor and `no_review_loop` policy in the task document
 - use quality gates that validate re-entry readiness, not reviewer convenience
+- give every `quality_gates.before_review` entry as a literal, directly executable shell command (e.g. `npm test`) — the runtime runs each entry verbatim; a natural-language description of what to verify is not a gate and will fail with no output
 - keep architecture redesign out of scope unless the diagnostic explicitly says the blocker cannot be repaired otherwise
 - use `test_guided` when the recovery changes code or tests
 

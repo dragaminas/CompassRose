@@ -58,7 +58,6 @@ Forbidden:
 npx vitest run tests/main.test.ts
 npm run typecheck
 npm test
-Verify the implementation artifact contains non-empty implementation.notes and explicit handoff diagnostics.
 ```
 
 ## Implementation Notes
