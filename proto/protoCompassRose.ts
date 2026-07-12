@@ -3484,24 +3484,29 @@ class PrototypeCompassRose {
       const feature = this.loadFeature(stored.task.feature_id);
       const taskPath = this.findTaskDocumentPath(taskId, feature.tasksDirectory);
       const parsed = parseTaskDocument(taskPath, readUtf8(taskPath));
+      // Prefer values freshly parsed from the task markdown over the stored JSON snapshot
+      // captured at planning time. A doctor recovery or correction task is explicitly
+      // instructed to tighten the task interface by editing the markdown document (goal,
+      // scope, quality gates, acceptance criteria, ...); if execution kept reading the
+      // stale JSON instead, those edits would silently have no effect on the next run.
       return {
         taskId: stored.task.task_id,
         previousTaskId: parsed.previousTaskId,
         featureId: stored.task.feature_id,
-        title: stored.task.title,
-        objective: stored.task.objective,
-        firstExecutableStep: stored.task.first_executable_step,
-        minimumProgressEvidence: stored.task.minimum_progress_evidence,
-        allowedPaths: stored.task.scope.allowed_paths,
-        forbiddenPaths: stored.task.scope.forbidden_paths,
-        constraints: stored.task.constraints,
-        acceptanceCriteria: stored.task.acceptance_criteria,
-        qualityGates: stored.task.quality_gates.before_review,
-        developmentPolicy: stored.task.development_policy.mode,
-        likelyAffectedFiles: stored.task.context.relevant_paths,
-        trace: stored.task.trace,
-        context: stored.task.context,
-        expectedDeliverables: stored.task.expected_deliverables,
+        title: parsed.title,
+        objective: parsed.objective,
+        firstExecutableStep: parsed.firstExecutableStep,
+        minimumProgressEvidence: parsed.minimumProgressEvidence,
+        allowedPaths: parsed.allowedPaths,
+        forbiddenPaths: parsed.forbiddenPaths,
+        constraints: parsed.constraints,
+        acceptanceCriteria: parsed.acceptanceCriteria,
+        qualityGates: parsed.qualityGates,
+        developmentPolicy: parsed.developmentPolicy,
+        likelyAffectedFiles: parsed.likelyAffectedFiles,
+        trace: parsed.trace,
+        context: parsed.context,
+        expectedDeliverables: parsed.expectedDeliverables,
         stateCorrection: stored.state_correction ?? parsed.stateCorrection,
         doctorRecovery: stored.doctor_recovery ?? stored.unblock ?? parsed.doctorRecovery ?? parsed.unblock,
         unblock: stored.unblock ?? stored.doctor_recovery ?? parsed.unblock ?? parsed.doctorRecovery,
