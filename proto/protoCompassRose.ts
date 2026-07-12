@@ -5735,7 +5735,8 @@ function parsePreferredStatusValue(sectionBody: string, key: string): string | n
   return preferred ?? fallback;
 }
 
-function replaceSection(markdown: string, heading: string, newBody: string): string {
+function replaceSection(rawMarkdown: string, heading: string, newBody: string): string {
+  const markdown = rawMarkdown.replace(/\r\n/g, '\n');
   const sectionHeaderPattern = new RegExp(`^## ${escapeRegExp(heading)}\\n+`, 'm');
   const sectionMatch = markdown.match(sectionHeaderPattern);
   if (!sectionMatch || sectionMatch.index === undefined) {
@@ -5750,7 +5751,8 @@ function replaceSection(markdown: string, heading: string, newBody: string): str
   return `${markdown.slice(0, sectionStart)}${replacement}${markdown.slice(sectionEnd)}`;
 }
 
-function setOrInsertSection(markdown: string, heading: string, newBody: string): string {
+function setOrInsertSection(rawMarkdown: string, heading: string, newBody: string): string {
+  const markdown = rawMarkdown.replace(/\r\n/g, '\n');
   const sectionHeaderPattern = new RegExp(`^## ${escapeRegExp(heading)}\\n+`, 'm');
   if (sectionHeaderPattern.test(markdown)) {
     return replaceSection(markdown, heading, newBody);
@@ -5810,7 +5812,8 @@ function requireSection(markdown: string, heading: string): string {
   return body;
 }
 
-function optionalSection(markdown: string, heading: string): string | null {
+function optionalSection(rawMarkdown: string, heading: string): string | null {
+  const markdown = rawMarkdown.replace(/\r\n/g, '\n');
   const pattern = new RegExp(`^## ${escapeRegExp(heading)}\\n+`, 'm');
   const match = markdown.match(pattern);
   if (!match || match.index === undefined) {

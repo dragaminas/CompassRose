@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-review_pending
+correction_pending
 
 ## Source Request
 
@@ -12,11 +12,11 @@ review_pending
 
 - formalization: complete
 - active_task: F002-T05-C1
-- active_correction_task: none
+- active_correction_task: F002-T05-C1-CORRECTION-HANDOFF
 - active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: not_run
+- last_review_result: changes_required
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -80,4 +80,4 @@ Fixed a false rejection of `F002-T05-C1`: `reviewTask()` did not exclude the run
 
 ## Next Planning Hint
 
-Quality gates for `F002-T05-C1` pass; run the review step next.
+Execute correction subtask `F002-T05-C1-CORRECTION-HANDOFF` next.
