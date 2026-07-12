@@ -92,15 +92,35 @@ const childArgs = config.promptMode === 'arg'
   ? [...config.args, prompt.toString('utf8')]
   : config.args;
 
-const child = spawn(config.command, childArgs, {
+// A .cjs/.mjs/.js command is a Node script (e.g. an e2e test mock), not a real CLI
+// binary. Windows has no file association for those extensions, so cmd.exe can't
+// launch them even with shell:true; run them with node directly instead. Real CLI
+// tools like codex/opencode are npm-installed .cmd shims on Windows that node's
+// spawn can't exec without a shell, so those still need shell on win32.
+const isNodeScript = /\.(c|m)?js$/i.test(config.command);
+const spawnCommand = isNodeScript ? process.execPath : config.command;
+const spawnArgs = isNodeScript ? [config.command, ...childArgs] : childArgs;
+
+const child = spawn(spawnCommand, spawnArgs, {
   cwd: config.cwd,
   stdio: config.promptMode === 'arg' ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'],
-  shell: process.platform === 'win32',
+  shell: !isNodeScript && process.platform === 'win32',
 });
 
 if (config.promptMode === 'stdin' && child.stdin) {
   child.stdin.end(prompt);
 }
+
+// Forward a signal received directly by this runner to the child via the
+// live handle. child.kill(signal) is the mechanism Node reports reliably
+// across platforms; waiting for the child to die on its own and inferring
+// the signal from its exit is not reliable on Windows.
+const forwardSignal = (signal) => {
+  child.kill(signal);
+};
+
+process.on('SIGINT', forwardSignal);
+process.on('SIGTERM', forwardSignal);
 
 child.stdout.on('data', (chunk) => {
   stdoutBytes += chunk.length;

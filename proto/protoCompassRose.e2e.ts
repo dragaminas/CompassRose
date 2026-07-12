@@ -59,6 +59,14 @@ function main(): number {
   syncContractFiles(repoRoot, cloneRoot);
   syncFeatureStateDocs(repoRoot, cloneRoot);
 
+  // A fresh local clone (and the sync steps above, which rewrite files with content that's
+  // still identical to HEAD) can leave the index stat-cache out of sync with the checked-out
+  // files (observed on Windows checkouts without a committed .gitattributes), which makes
+  // `git status` report files as modified even though the content matches HEAD byte for
+  // byte. Re-add now, before scenario seeding introduces real (intentional) dirtiness, so
+  // later "worktree is clean" assertions reflect only what the run itself leaves behind.
+  spawnSync('git', ['add', '-A'], { cwd: cloneRoot, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+
   const codexMock = join(tempRoot, 'codex-mock.cjs');
   const opencodeMock = join(tempRoot, 'opencode-mock.cjs');
   const codexLog = join(tempRoot, 'codex.log');
@@ -113,6 +121,7 @@ function main(): number {
       },
       encoding: 'utf8',
       maxBuffer: 20 * 1024 * 1024,
+      shell: process.platform === 'win32',
     },
   );
 

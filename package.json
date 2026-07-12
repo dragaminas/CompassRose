@@ -18,8 +18,8 @@
     "proto:loop:codex": "tsx proto/protoCompassRose.ts run --loop --implementer codex",
     "proto:typecheck": "tsc -p proto/tsconfig.json",
     "proto:e2e": "tsx proto/protoCompassRose.e2e.ts",
-    "proto:e2e:codex": "PROTO_E2E_IMPLEMENTER=codex tsx proto/protoCompassRose.e2e.ts",
-    "proto:e2e:unblock": "PROTO_E2E_SCENARIO=unblock tsx proto/protoCompassRose.e2e.ts",
+    "proto:e2e:codex": "cross-env PROTO_E2E_IMPLEMENTER=codex tsx proto/protoCompassRose.e2e.ts",
+    "proto:e2e:unblock": "cross-env PROTO_E2E_SCENARIO=unblock tsx proto/protoCompassRose.e2e.ts",
     "proto:smoke": "tsx proto/protoCompassRose.smoke.e2e.ts"
   },
   "repository": {
@@ -36,6 +36,7 @@
   "homepage": "https://github.com/dragaminas/CompassRose#readme",
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "cross-env": "^10.1.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"

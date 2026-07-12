@@ -9,7 +9,16 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tsxBinary = join(repoRoot, 'node_modules', '.bin', 'tsx');
 
 describe('proto controlled stop', () => {
-  test('stops cleanly on SIGINT without converting the interrupt into a failure', async () => {
+  // This scenario simulates an interrupt by having the mocked implementer send itself
+  // SIGINT, then asserts the signal is visible on the process this test spawned. Windows
+  // has no real POSIX signals: without a console attached (as here, with piped stdio),
+  // a self-directed process.kill(pid, 'SIGINT') is emulated as a plain TerminateProcess,
+  // so Node reports `signal: null` instead of propagating 'SIGINT' up through the
+  // heartbeat-runner -> orchestrator chain. Real interactive Ctrl+C (a genuine console
+  // CTRL_C_EVENT hitting the whole process group) is unaffected by this and is handled by
+  // protoCompassRose.ts's own process.on('SIGINT') — only this piped-subprocess simulation
+  // can't be verified on win32.
+  test.skipIf(process.platform === 'win32')('stops cleanly on SIGINT without converting the interrupt into a failure', async () => {
     const workspace = prepareControlledStopWorkspace();
 
     try {
@@ -95,6 +104,7 @@ async function runProtoControlledStop(cloneRoot: string): Promise<{
       },
       encoding: 'utf8',
       maxBuffer: 20 * 1024 * 1024,
+      shell: process.platform === 'win32',
     },
   );
 

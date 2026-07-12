@@ -21,6 +21,7 @@ function runProtoScenario(
     },
     encoding: 'utf8',
     maxBuffer: 20 * 1024 * 1024,
+    shell: process.platform === 'win32',
   });
 
   return {

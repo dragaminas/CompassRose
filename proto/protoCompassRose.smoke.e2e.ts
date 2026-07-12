@@ -43,6 +43,12 @@ function main(): number {
     return 1;
   }
 
+  // See protoCompassRose.e2e.ts: a fresh local clone can leave the index stat-cache out
+  // of sync with the checked-out files, making `git status` report every file as modified
+  // even though content matches HEAD byte for byte. Re-add now so later checks reflect
+  // only what this run itself changes.
+  spawnSync('git', ['add', '-A'], { cwd: cloneRoot, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+
   syncPrototypeRuntime(repoRoot, cloneRoot);
   seedSmokeFeatureStateDocs(cloneRoot);
 
@@ -72,6 +78,7 @@ function main(): number {
       },
       encoding: 'utf8',
       maxBuffer: 20 * 1024 * 1024,
+      shell: process.platform === 'win32',
     },
   );
 
