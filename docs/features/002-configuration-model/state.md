@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+blocked
 
 ## Source Request
 
@@ -13,7 +13,7 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T05-C1-CORRECTION-HANDOFF
 - active_correction_task: none
-- active_unblock_task: F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R2
+- active_unblock_task: none
 - last_implementation_result: failed
 - last_quality_gate_result: unknown
 - last_review_result: blocked
@@ -63,13 +63,13 @@ Review of `F002-T05` then requested correction task `F002-T05-C1` (resolve the d
 - - kind: state_corruption
 - - signature: state-corruption-unblock-pending-implementation-for-f002-t05-c1-correction-handoff-doctor-recove
 - - recoverability: agent
-- - observed_state: lifecycle=unblock_pending; active_task=F002-T05-C1-CORRECTION-HANDOFF; active_correction_task=none; active_unblock_task=F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY
-- - evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY produced no git diff (context_overflow).
-- - evidence: - kind: implementation_failure
-- - evidence: - signature: implementation-failure-F002-T05-C1-CORRECTION-HANDOFF
+- - observed_state: lifecycle=unblock_pending; active_task=F002-T05-C1-CORRECTION-HANDOFF; active_correction_task=none; active_unblock_task=F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R2
+- - evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R2 did not include the required Implementation Notes justification.
+- - evidence: - kind: state_corruption
+- - evidence: - signature: state-corruption-unblock-pending-implementation-for-f002-t05-c1-correction-handoff-doctor-recove
 - - evidence: - recoverability: agent
 - - evidence: lifecycle=unblock_pending
-- - reason: Implementation for F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY produced no git diff (context_overflow).
+- - reason: Implementation for F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R2 did not include the required Implementation Notes justification.
 
 ## Blocked From
 
@@ -77,6 +77,7 @@ Review of `F002-T05` then requested correction task `F002-T05-C1` (resolve the d
 - active_task: `F002-T05-C1-CORRECTION-HANDOFF`
 - active_correction_task: `none`
 - active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -89,4 +90,4 @@ Fixed a false rejection of `F002-T05-C1`: `reviewTask()` did not exclude the run
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R2` next.
+Plan a doctor recovery task for blocker `state-corruption-unblock-pending-implementation-for-f002-t05-c1-correction-handoff-doctor-recove` and then restore `task_ready`.
