@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_failed
+unblock_pending
 
 ## Source Request
 
@@ -13,11 +13,11 @@ implementation_failed
 - formalization: complete
 - active_task: F002-T05-C1-CORRECTION-HANDOFF-C1
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F002-T05-C1-CORRECTION-HANDOFF-C1-DOCTOR-RECOVERY-R1
 - last_implementation_result: failed
 - last_quality_gate_result: unknown
-- last_review_result: not_run
-- last_unblock_result: passed
+- last_review_result: blocked
+- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -74,7 +74,6 @@ Task `F002-T05-C1-CORRECTION-HANDOFF` is now planned and ready to execute. Repai
 - active_task: `F002-T05-C1-CORRECTION-HANDOFF-C1`
 - active_correction_task: `none`
 - active_unblock_task: `none`
-- recoverability: agent
 
 ## Last Approved Change
 
@@ -87,4 +86,4 @@ Subtask `F002-T05-C1-CORRECTION-HANDOFF` was approved by the prototype orchestra
 
 ## Next Planning Hint
 
-Plan a bounded doctor recovery task for the failed implementation of `F002-T05-C1-CORRECTION-HANDOFF-C1` and restore task readiness before continuing.
+Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-DOCTOR-RECOVERY-R1` next.
