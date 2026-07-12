@@ -4968,7 +4968,16 @@ function extractImplementationNotes(rawOutput: string): string | null {
 }
 
 function implementationNotesIndicatesAlreadyComplete(implementationNotes: string | null): boolean {
-  return implementationNotes !== null && /status:\s*already_complete\b/i.test(implementationNotes);
+  if (implementationNotes === null) {
+    return false;
+  }
+
+  // Strip markdown bold/italic asterisks so "**Status**: already_complete" (bold wrapping
+  // only the label, colon outside) matches just as well as "Status: already_complete" or
+  // "**Status: already_complete**" — agents format this marker inconsistently. Underscores
+  // are deliberately left alone since "already_complete" itself contains one.
+  const withoutEmphasis = implementationNotes.replace(/\*/g, '');
+  return /status:\s*already_complete\b/i.test(withoutEmphasis);
 }
 
 function validateTaskDeliverables(task: PlannedTask, taskLabel: string): void {

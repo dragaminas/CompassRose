@@ -175,6 +175,36 @@ describe('proto reviewable diff handoff', () => {
     expect(classification).toBe('already_complete');
   });
 
+  test('classifies already_complete even when the agent bolds only the "Status" label with the colon outside the emphasis', () => {
+    const notes = [
+      '## Implementation Notes',
+      '',
+      '**Status**: already_complete',
+      '',
+      'The requested behavior already exists in src/config/configReader.ts.',
+    ].join('\n');
+
+    const classification = classifyImplementation(
+      {
+        ok: true,
+        stdout: notes,
+        stderr: '',
+        exitCode: 0,
+        signal: null,
+        timedOut: false,
+        commandInvoked: 'opencode run ...',
+      },
+      notes,
+      false,
+      notes,
+      'abc1234',
+      'abc1234',
+      null,
+    );
+
+    expect(classification).toBe('already_complete');
+  });
+
   test('selects implementer context artifacts for the task from the agent-context log file names', () => {
     const names = selectImplementationContextArtifactNames([
       '001-feature_planning-planner-feature-plan-002-configuration-model.json',

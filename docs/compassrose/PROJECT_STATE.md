@@ -19,6 +19,7 @@ In progress
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R5`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF`.
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R6`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF`.
 - Feature `002-configuration-model` now has a planned next task, `F002-T05-C1-CORRECTION-HANDOFF`, ready to execute.
+- Implementation failure evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF-C1 produced no git diff (model_passivity).
 
 ## Implemented
 
@@ -31,7 +32,7 @@ In progress
 
 ## Pending
 
-- Recover or finish implementation for `F002-T05-C1-CORRECTION-HANDOFF-C1`.
+- Recover the failed implementation attempt for `F002-T05-C1-CORRECTION-HANDOFF-C1` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -48,4 +49,4 @@ Subtask `F002-T05-C1-CORRECTION-HANDOFF` was approved by the prototype orchestra
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and subtask execution for `F002-T05-C1-CORRECTION-HANDOFF-C1` is in progress.
+The active feature is `002-configuration-model`, but implementation of `F002-T05-C1-CORRECTION-HANDOFF-C1` failed; plan a bounded doctor recovery task before continuing.

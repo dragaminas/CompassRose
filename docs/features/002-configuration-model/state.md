@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+implementation_failed
 
 ## Source Request
 
@@ -14,7 +14,7 @@ implementation_running
 - active_task: F002-T05-C1-CORRECTION-HANDOFF-C1
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: not_run
+- last_implementation_result: failed
 - last_quality_gate_result: unknown
 - last_review_result: not_run
 - last_unblock_result: passed
@@ -62,14 +62,19 @@ Task `F002-T05-C1-CORRECTION-HANDOFF` is now planned and ready to execute. Repai
 
 ## Blocked By
 
-- None
+- - kind: implementation_failure
+- - signature: implementation-failure-F002-T05-C1-CORRECTION-HANDOFF-C1
+- - recoverability: agent
+- - observed_state: lifecycle=implementation_failed; active_task=F002-T05-C1-CORRECTION-HANDOFF-C1; active_correction_task=none; active_unblock_task=none
+- - evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF-C1 produced no git diff (model_passivity).
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `task_ready`
+- active_task: `F002-T05-C1-CORRECTION-HANDOFF-C1`
+- active_correction_task: `none`
+- active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -82,4 +87,4 @@ Subtask `F002-T05-C1-CORRECTION-HANDOFF` was approved by the prototype orchestra
 
 ## Next Planning Hint
 
-Recover or finish subtask implementation of `F002-T05-C1-CORRECTION-HANDOFF-C1` before allowing review or new planning.
+Plan a bounded doctor recovery task for the failed implementation of `F002-T05-C1-CORRECTION-HANDOFF-C1` and restore task readiness before continuing.
