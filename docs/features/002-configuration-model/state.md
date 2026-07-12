@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+unblock_pending
 
 ## Source Request
 
@@ -13,7 +13,7 @@ blocked
 - formalization: complete
 - active_task: F002-T05-C1-CORRECTION-HANDOFF
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4
 - last_implementation_result: failed
 - last_quality_gate_result: unknown
 - last_review_result: blocked
@@ -89,7 +89,6 @@ npm test: - 0
 - active_task: `F002-T05-C1-CORRECTION-HANDOFF`
 - active_correction_task: `none`
 - active_unblock_task: `none`
-- recoverability: agent
 
 ## Last Approved Change
 
@@ -102,4 +101,4 @@ Fixed a false rejection of `F002-T05-C1`: `reviewTask()` did not exclude the run
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-unblock-pending-doctor-recovery-f002-t05-c1-correction-handoff-doctor-recovery-` and then restore `task_ready`.
+Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` next.

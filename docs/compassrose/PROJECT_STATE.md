@@ -14,6 +14,7 @@ In progress
 - Blocker recoverability: agent.
 - Feature `002-configuration-model` was suspended from `task_ready`; the active task pointer remains `F002-T05-C1-CORRECTION-HANDOFF`.
 - Blocking task context: `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R3`
+- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4`, to resolve a recoverable blocker and restore `task_ready`.
 
 ## Implemented
 
@@ -26,8 +27,7 @@ In progress
 
 ## Pending
 
-- Plan a doctor recovery task for the active feature.
-- Restore the captured `task_ready` state after the blocker is resolved.
+- Execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -44,4 +44,4 @@ Fixed a false rejection of `F002-T05-C1`: the reviewer's diff included the runti
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-unblock-pending-doctor-recovery-f002-t05-c1-correction-handoff-doctor-recovery-` and then restore `task_ready`.
+The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R4` from the captured `task_ready` state.
