@@ -991,6 +991,22 @@ export function validateRuntimePreconditions(configuration: ProjectConfiguration
     });
   }
 
+  const adapterKeys = new Set<string>();
+  for (const key of Object.keys(configuration.adapters)) {
+    adapterKeys.add(key);
+  }
+
+  const requiredRoleKeys = ['planner', 'implementer', 'reviewer'] as const;
+  for (const role of requiredRoleKeys) {
+    const entry = configuration.roles[role];
+    if (entry.enabled && entry.adapter && !adapterKeys.has(entry.adapter)) {
+      issues.push({
+        field: `roles.${role}.adapter`,
+        message: `Enabled role ${role} references adapter '${entry.adapter}' which is not defined in adapters section.`,
+      });
+    }
+  }
+
   return issues;
 }
 

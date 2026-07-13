@@ -185,6 +185,34 @@ describe('main([]) — nested directory from repo root', () => {
   });
 });
 
+describe('main([]) — role-to-adapter wiring validation', () => {
+  test('returns non-zero when an enabled role references a missing adapter', () => {
+    const config = readFixtureConfigMarkdown().replace(
+      /implementer:\r?\n    enabled: true\r?\n    adapter: external_cli/,
+      'implementer:\r\n    enabled: true\r\n    adapter: nonexistent_adapter',
+    );
+
+    const workspace = createTempWorkspace({
+      'docs/compassrose/CONFIG.md': config,
+    });
+
+    try {
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderrMessages.some((m) => m.includes('roles.implementer.adapter'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('runtime preflight'))).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+});
+
 describe('main([\'doctor\']) — regression', () => {
   test('still routes to doctor command and returns doctor exit code', () => {
     const workspace = createTempWorkspace({
