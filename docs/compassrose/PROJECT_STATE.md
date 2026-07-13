@@ -19,7 +19,7 @@ In progress
 - Implementation failure evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1 did not include the required Implementation Notes justification.
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1-DOCTOR-RECOVERY-R1`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1`.
 - Feature `002-configuration-model` now has a planned next task, `F002-T06`, ready to execute.
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T06-DOCTOR-RECOVERY-R1`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T06-DOCTOR-RECOVERY-R1`; the active task pointer was restored to `F002-T06`.
 
 ## Implemented
 
@@ -32,7 +32,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T06-DOCTOR-RECOVERY-R1` for the active feature.
+- Recover the implementation of `F002-T06-DOCTOR-RECOVERY-R1` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -41,7 +41,7 @@ In progress
 
 ## Last Approved Change
 
-Subtask `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1-CORRECTION-1` was approved by the prototype orchestrator.
+Doctor recovery task `F002-T06-DOCTOR-RECOVERY-R1` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -49,4 +49,4 @@ Subtask `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HAN
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T06-DOCTOR-RECOVERY-R1` from the captured `implementation_running` state.
+Resume `F002-T06` implementation recovery before continuing.
