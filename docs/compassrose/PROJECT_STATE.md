@@ -18,7 +18,7 @@ In progress
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R2`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF`.
 - Implementation failure evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1 did not include the required Implementation Notes justification.
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1-DOCTOR-RECOVERY-R1`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1`.
-- Feature `002-configuration-model` now has a planned next task, `F002-T07-C1`, ready to execute.
+- Feature `002-configuration-model` now has a planned next task, `F002-T07-C2`, ready to execute (renumbered from a colliding `F002-T07-C1` proposal; that id already belonged to the approved correction below).
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T06-DOCTOR-RECOVERY-R1`; the active task pointer was restored to `F002-T06`.
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T06-DOCTOR-RECOVERY-R2`; the active task pointer was restored to `F002-T06`.
 
@@ -33,7 +33,7 @@ In progress
 
 ## Pending
 
-- Recover or finish implementation for `F002-T07-C1`.
+- Investigate failed quality gates for subtask `F002-T07-C2`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -50,4 +50,4 @@ Subtask `F002-T07-C1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and subtask execution for `F002-T07-C1` is in progress.
+The active feature is `002-configuration-model`, but quality gates for `F002-T07-C2` failed and the run should stop.

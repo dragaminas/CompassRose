@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+quality_failed
 
 ## Source Request
 
@@ -11,11 +11,11 @@ implementation_running
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T07-C1
+- active_task: F002-T07-C2
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: not_run
-- last_quality_gate_result: unknown
+- last_implementation_result: passed
+- last_quality_gate_result: failed
 - last_review_result: not_run
 - last_unblock_result: passed
 
@@ -41,7 +41,7 @@ Task `F002-T06` is now planned and ready to execute. Expose the remaining docume
 
 Task `F002-T07` is now planned and ready to execute. Consume project runtime policy at the CLI entrypoint.
 
-Task `F002-T07-C1` is now planned and ready to execute. Enforce MVP external_cli-only role wiring.
+Task `F002-T07-C2` is now planned and ready to execute. Enforce MVP external_cli-only role wiring for the planner and reviewer roles (the implementer role was already covered by the approved `F002-T07-C1` correction). This task was originally planned with a colliding id (`F002-T07-C1`, already used by the approved correction above); the runtime now rejects a proposed task id that collides with an existing task document, and this task was renumbered to `F002-T07-C2` to resolve the existing collision.
 
 ## Implemented Deliverables
 
@@ -88,4 +88,4 @@ Subtask `F002-T07-C1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Recover or finish subtask implementation of `F002-T07-C1` before allowing review or new planning.
+Quality gates for `F002-T07-C2` failed; stop and recover before continuing.

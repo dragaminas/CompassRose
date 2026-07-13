@@ -1,7 +1,7 @@
-# Task F002-T07-C1: Enforce MVP external_cli-only role wiring
+# Task F002-T07-C2: Enforce MVP external_cli-only role wiring
 
 ## Task ID
-`F002-T07-C1`
+`F002-T07-C2`
 
 ## Task Lineage
 

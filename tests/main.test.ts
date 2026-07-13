@@ -242,6 +242,58 @@ describe('main([]) — role-to-adapter wiring validation', () => {
       workspace.dispose();
     }
   });
+
+  test('returns non-zero when an enabled planner role references a defined non-external adapter', () => {
+    const config = readFixtureConfigMarkdown()
+      .replace(
+        /planner:\r?\n    enabled: true\r?\n    adapter: external_cli/,
+        'planner:\r\n    enabled: true\r\n    adapter: my_provider_adapter',
+      )
+      .replace(
+        /adapters:\r?\n  external_cli:/,
+        'adapters:\n  my_provider_adapter:\n    type: my_provider\n    command: ""\n    args: []\n    stdin: false\n    input_file_argument: ""\n    output_file: ""\n\n  external_cli:',
+      );
+
+    const workspace = createTempWorkspace({
+      'docs/compassrose/CONFIG.md': config,
+    });
+
+    try {
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderrMessages.some((m) => m.includes('roles.planner.adapter'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('runtime preflight'))).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('passes with valid external_cli wiring for all enabled roles', () => {
+    const workspace = createTempWorkspace({
+      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+    });
+
+    try {
+      const stdoutMessages: string[] = [];
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(0);
+      expect(stderrMessages.length).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
 });
 
 describe('main([\'doctor\']) — regression', () => {
