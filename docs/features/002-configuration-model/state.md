@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+task_ready
 
 ## Source Request
 
@@ -11,7 +11,7 @@ formalized
 ## Operational Status
 
 - formalization: complete
-- active_task: none
+- active_task: F002-T07-C1
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
@@ -40,6 +40,8 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION
 Task `F002-T06` is now planned and ready to execute. Expose the remaining documented runtime policy in the configuration loader.
 
 Task `F002-T07` is now planned and ready to execute. Consume project runtime policy at the CLI entrypoint.
+
+Task `F002-T07-C1` is now planned and ready to execute. Enforce MVP external_cli-only role wiring.
 
 ## Implemented Deliverables
 
@@ -86,4 +88,4 @@ Subtask `F002-T07-C1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Plan the next task that advances this feature from the remaining gap.
+Execute `F002-T07-C1` when the current execution mode allows it.
