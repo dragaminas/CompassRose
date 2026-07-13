@@ -60,6 +60,13 @@ import {
   humanCorrectionNumber,
   humanTaskNumber,
 } from '../src/task/taskId.js';
+import {
+  assertTaskIdIsUnused,
+  findLatestImplementationAttemptTaskId,
+  findLatestTaskArtifactTaskId,
+  findTaskDocumentPath,
+  tryFindTaskDocumentPath,
+} from '../src/task/taskStore.js';
 // Re-exported for tests that still import these from this file directly; those imports are
 // updated to point at the src/ modules directly in a later step of this migration.
 export { normalizeTextForWrite, parseTaskDocument };
@@ -3057,60 +3064,20 @@ class PrototypeCompassRose {
   }
 
   private findLatestTaskArtifactTaskId(featureId: string): string | null {
-    // Break mtime ties with the file name: two artifacts written back-to-back (e.g. during
-    // planning followed immediately by a correction) can land on the same filesystem timestamp
-    // when mtime resolution is coarser than the time between the writes, which otherwise makes
-    // "latest" resolve arbitrarily instead of deterministically.
-    const artifacts = [...this.artifacts.listFiles('tasks')].sort((left, right) =>
-      right.mtimeMs - left.mtimeMs || right.name.localeCompare(left.name));
-
-    for (const artifact of artifacts) {
-      if (!artifact.name.endsWith('.json')) {
-        continue;
-      }
-
-      const stored = this.artifacts.readJson<StoredTaskArtifact>(join('tasks', artifact.name));
-      const task = stored?.task;
-      if (!task || task.feature_id !== featureId) {
-        continue;
-      }
-
-      if (typeof task.task_id !== 'string' || task.task_id.trim().length === 0) {
-        continue;
-      }
-
-      return task.task_id;
-    }
-
-    return null;
+    return findLatestTaskArtifactTaskId(
+      this.artifacts.listFiles('tasks'),
+      (fileName) => this.artifacts.readJson<StoredTaskArtifact>(join('tasks', fileName)),
+      featureId,
+    );
   }
 
   private findLatestImplementationAttemptTaskId(featureId: string): string | null {
-    // See findLatestTaskArtifactTaskId() above: break mtime ties with the file name so two
-    // artifacts written within the same timestamp tick still resolve deterministically.
-    const artifacts = [...this.artifacts.listFiles('implementation-attempts')].sort((left, right) =>
-      right.mtimeMs - left.mtimeMs || right.name.localeCompare(left.name));
-
-    for (const artifact of artifacts) {
-      if (!artifact.name.endsWith('.json') || artifact.name.includes('.attempt-')) {
-        continue;
-      }
-
-      const history = this.artifacts.readJson<ImplementationAttemptHistory>(join('implementation-attempts', artifact.name));
-      const taskId = history?.task_id;
-      if (typeof taskId !== 'string' || taskId.trim().length === 0) {
-        continue;
-      }
-
-      const stored = this.artifacts.readJson<StoredTaskArtifact>(join('tasks', `${taskId}.json`));
-      if (stored?.task?.feature_id !== featureId) {
-        continue;
-      }
-
-      return taskId;
-    }
-
-    return null;
+    return findLatestImplementationAttemptTaskId(
+      this.artifacts.listFiles('implementation-attempts'),
+      (fileName) => this.artifacts.readJson<ImplementationAttemptHistory>(join('implementation-attempts', fileName)),
+      (taskId) => this.artifacts.readJson<StoredTaskArtifact>(join('tasks', `${taskId}.json`)),
+      featureId,
+    );
   }
 
   private buildStateCorrectionTask(
@@ -3579,53 +3546,16 @@ class PrototypeCompassRose {
 
   private findTaskDocumentPath(taskId: string, tasksDirectory?: string): string {
     const searchRoots = tasksDirectory ? [tasksDirectory] : this.listFeatures().map((feature) => feature.tasksDirectory);
-
-    for (const root of searchRoots) {
-      if (!statSafeIsDirectory(root)) {
-        continue;
-      }
-
-      for (const entry of readdirSync(root)) {
-        if (!entry.endsWith('.md')) {
-          continue;
-        }
-
-        const fullPath = join(root, entry);
-        const markdown = readUtf8(fullPath);
-        try {
-          if (parseTaskDocument(fullPath, markdown).taskId === taskId) {
-            return fullPath;
-          }
-        } catch {
-          continue;
-        }
-      }
-    }
-
-    throw new Error(`Task document for ${taskId} was not found.`);
+    return findTaskDocumentPath(taskId, searchRoots);
   }
 
   private tryFindTaskDocumentPath(taskId: string, tasksDirectory?: string): string | null {
-    try {
-      return this.findTaskDocumentPath(taskId, tasksDirectory);
-    } catch {
-      return null;
-    }
+    const searchRoots = tasksDirectory ? [tasksDirectory] : this.listFeatures().map((feature) => feature.tasksDirectory);
+    return tryFindTaskDocumentPath(taskId, searchRoots);
   }
 
-  // Task/correction/doctor-recovery/state-correction ids are proposed by an LLM call and never
-  // otherwise checked for uniqueness before being written. A planner that echoes a stale id
-  // (e.g. re-deriving already-completed correction work from state-doc history) silently
-  // overwrites that id's stored JSON artifact and leaves two task documents claiming the same
-  // id, making findTaskDocumentPath() ambiguous from then on. Fail loudly before writing
-  // anything instead of corrupting the existing task's history.
   private assertTaskIdIsUnused(tasksDirectory: string, taskId: string, context: string): void {
-    const existingPath = this.tryFindTaskDocumentPath(taskId, tasksDirectory);
-    if (existingPath) {
-      throw new Error(
-        `${context} proposed task id \`${taskId}\`, but a task document already claims that id at ${relativePath(this.repositoryRoot, existingPath)}. Task ids must be unique; this would silently overwrite that task's stored history.`,
-      );
-    }
+    assertTaskIdIsUnused(tasksDirectory, taskId, context, this.repositoryRoot);
   }
 
   private updateProjectStateForFeaturePlan(featureId: string): string {
@@ -5600,14 +5530,6 @@ function sameFingerprint(left: FileFingerprint | undefined, right: FileFingerpri
     && left.mtimeMs === right.mtimeMs
     && left.size === right.size,
   );
-}
-
-function statSafeIsDirectory(path: string): boolean {
-  try {
-    return statSync(path).isDirectory();
-  } catch {
-    return false;
-  }
 }
 
 function statSafeIsFile(path: string): boolean {
