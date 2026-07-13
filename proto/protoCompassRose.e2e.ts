@@ -674,6 +674,13 @@ function seedImplementationFailedFeatureState(cloneRoot: string): void {
 function seedMalformedFeatureState(cloneRoot: string): void {
   const statePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
   writeFileSync(statePath, MALFORMED_STATE_MISSING_ACTIVE_TASK_SEED, 'utf8');
+  // resolveStateCorrectionActiveTask() checks docs/compassrose/PROJECT_STATE.md's Pending/Next
+  // Planning Hint/Current Reality sections for a task-id hint *before* falling back to the
+  // seeded STATE_CORRECTION_FALLBACK_TASK_ID artifact. Left un-reset, this file is whatever the
+  // real repository's PROJECT_STATE.md currently says - which drifts every time real feature
+  // work lands a new task id - so this scenario silently breaks whenever that happens to mention
+  // a task id, even though nothing about the scenario itself changed.
+  seedCleanProjectState(cloneRoot);
 }
 
 function seedStateCorrectionFallbackTaskArtifact(cloneRoot: string): void {
@@ -690,6 +697,11 @@ function seedStateCorrectionFallbackTaskArtifact(cloneRoot: string): void {
     }, null, 2)}\n`,
     'utf8',
   );
+}
+
+function seedCleanProjectState(cloneRoot: string): void {
+  const projectStatePath = join(cloneRoot, 'docs', 'compassrose', 'PROJECT_STATE.md');
+  writeFileSync(projectStatePath, CLEAN_PROJECT_STATE_SEED, 'utf8');
 }
 
 function seedTaskReadyState(cloneRoot: string): void {
@@ -1703,6 +1715,48 @@ Task \`F002-T04\` was approved before the implementation failure was recorded in
 ## Next Planning Hint
 
 Plan a bounded unblock task for the failed implementation of \`F002-T04\` and restore task readiness before continuing.
+`;
+
+// Deliberately free of any `F\d+-T\d+` pattern, since extractTaskIdHint() scans this file's
+// Pending/Next Planning Hint/Current Reality sections before resolveStateCorrectionActiveTask()
+// falls back to the seeded STATE_CORRECTION_FALLBACK_TASK_ID artifact.
+const CLEAN_PROJECT_STATE_SEED = `# State: Project Identity and Foundation
+
+## Status
+
+In progress
+
+## Active Feature
+
+\`002-configuration-model\`
+
+## Current Reality
+
+The project-local configuration and doctor contract are in place and the active feature is progressing through its own task lifecycle, tracked in its own feature state document.
+
+## Implemented
+
+- \`docs/compassrose/CONFIG.md\` and \`docs/compassrose/PROJECT_STATE.md\` are present as the project-local operational documents.
+
+## Pending
+
+- Continue updating this file with approved repository facts as feature work lands.
+
+## Blocked
+
+- None
+
+## Last Approved Change
+
+The project-local configuration and doctor contract were accepted.
+
+## Known Gaps
+
+- None recorded.
+
+## Next Planning Hint
+
+Consult the active feature's own state document for its next planning step.
 `;
 
 const MALFORMED_STATE_MISSING_ACTIVE_TASK_SEED = `# State: Configuration Model
