@@ -64,6 +64,7 @@ A doctor recovery task must:
 - give every `quality_gates.before_review` entry as a literal, directly executable shell command (e.g. `npm test`) — the runtime runs each entry verbatim; a natural-language description of what to verify is not a gate and will fail with no output
 - keep architecture redesign out of scope unless the diagnostic explicitly says the blocker cannot be repaired otherwise
 - use `test_guided` when the recovery changes code or tests
+- ground `first_executable_step`, `minimum_progress_evidence`, and `acceptance_criteria` only in artifacts, fields, and mechanisms that already exist in the runtime and its contracts — do not require a manifest, validator, or artifact type that is not implemented, even if a prior recovery lesson suggested one; a task that demands a fictional mechanism can never be satisfied and will keep bouncing between correction and recovery
 
 A doctor recovery task may:
 

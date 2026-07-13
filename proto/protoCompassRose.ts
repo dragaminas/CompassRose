@@ -3,6 +3,7 @@ import { dirname, join, relative as relativePath, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import type {
   BlockerKind,
   BlockerProfile,
@@ -1343,6 +1344,7 @@ class PrototypeCompassRose {
       '- If this task is a later version of an earlier task, set `previous_task_id` to that earlier task so the earlier task remains historical evidence; otherwise set it to `null`.',
       '- Use `test_guided` for implementation tasks that produce code.',
       '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
+      '- Any recovery lesson above is an unverified suggestion from a prior model call, not a confirmed requirement — only carry a suggested field, artifact, or mechanism into this task if it already exists in the contracts you were told to read; never invent a new manifest, validator, or artifact type to satisfy one.',
       '- Return JSON only and do not modify files.',
     ].join('\n');
 
@@ -1484,6 +1486,7 @@ class PrototypeCompassRose {
       '- The restoration target above is fixed by the runtime and represents forward progress, not the failed state the blocker was diagnosed from; do not propose a different one.',
       '- Use `test_guided` when the recovery produces code or tests.',
       '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
+      '- Any recovery lesson above is an unverified suggestion from a prior model call, not a confirmed requirement — only carry a suggested field, artifact, or mechanism into this task if it already exists in the contracts you were told to read; never invent a new manifest, validator, or artifact type to satisfy one.',
       '- Return JSON only and do not modify files.',
     ].join('\n');
 
@@ -2219,6 +2222,7 @@ class PrototypeCompassRose {
       doctorRecovery ? '- If this is a doctor recovery task, verify that the blocker signature is resolved and the feature can resume from the captured lifecycle state without entering a reviewer loop for the recovery itself.' : null,
       '- Return JSON only.',
       '- If status is `changes_required`, include a correction task narrower than the original subtask.',
+      '- Ground every field of that correction task in artifacts, fields, and mechanisms that already exist in the contracts you were told to read; do not invent a manifest, validator, or artifact type to describe the gap, even if that makes the finding sound less concrete — a correction that demands a fictional mechanism can never be satisfied.',
       '- Do not modify files.',
     ].join('\n');
 
@@ -2595,6 +2599,8 @@ class PrototypeCompassRose {
       'Rules:',
       '- Focus on the task interface, not on fixing the code.',
       '- Prefer concrete changes to `first_executable_step`, `minimum_progress_evidence`, context, scope, acceptance criteria, or quality gates.',
+      '- Every adjustment must reference a field, artifact, or mechanism that already exists in the contracts you were told to read. Do not invent new artifact types, manifests, validators, or field names to describe the gap.',
+      '- If satisfying the gap would require a mechanism the runtime does not implement, report that as a limitation instead of proposing one; a future task or agent will otherwise treat your proposal as if it already existed.',
       '- When the implementer appears limited rather than under-specified, say so explicitly.',
       '- Return JSON only.',
     ].join('\n');
@@ -4107,7 +4113,7 @@ class PrototypeCompassRose {
 
       const lines = [
         '',
-        'Recent implementation failure refinement:',
+        'Recent implementation failure refinement (advisory only — produced by a prior diagnostic model call and not independently verified against the contracts; ground anything you adopt from it in the contracts listed above rather than treating it as fact):',
         `- trigger: ${refinement.trigger}`,
       ];
 
@@ -4129,7 +4135,7 @@ class PrototypeCompassRose {
 
     const lines = [
       '',
-      'Recent recovery lesson:',
+      'Recent recovery lesson (advisory only — produced by a prior review/analysis model call and not independently verified; treat it as a hypothesis to check against the contracts listed above, not as a confirmed requirement):',
       `- task_id: ${lesson.task_id}`,
       `- review_status: ${lesson.review_status}`,
       `- summary: ${lesson.summary}`,
@@ -4142,27 +4148,41 @@ class PrototypeCompassRose {
       ...lesson.implementer_limitations.map((item) => `- implementer_limitation: ${item}`),
     ];
 
-    if (lesson.task_interface_adjustments.first_executable_step) {
-      lines.push(`- first_executable_step: ${lesson.task_interface_adjustments.first_executable_step}`);
+    const adjustments = lesson.task_interface_adjustments;
+    const hasAdjustments = Boolean(adjustments.first_executable_step)
+      || adjustments.minimum_progress_evidence.length > 0
+      || adjustments.context_additions.length > 0
+      || adjustments.scope_adjustments.length > 0
+      || adjustments.acceptance_criteria_adjustments.length > 0
+      || adjustments.quality_gate_adjustments.length > 0;
+
+    if (hasAdjustments) {
+      lines.push(
+        '- suggested_task_interface_adjustments (unverified proposals from that prior model call; adopt a suggestion only if it names a field, artifact, or mechanism that already exists in the contracts listed above — never invent a new artifact type, manifest, validator, or field name to satisfy one):',
+      );
     }
 
-    for (const item of lesson.task_interface_adjustments.minimum_progress_evidence) {
+    if (adjustments.first_executable_step) {
+      lines.push(`- first_executable_step: ${adjustments.first_executable_step}`);
+    }
+
+    for (const item of adjustments.minimum_progress_evidence) {
       lines.push(`- minimum_progress_evidence: ${item}`);
     }
 
-    for (const item of lesson.task_interface_adjustments.context_additions) {
+    for (const item of adjustments.context_additions) {
       lines.push(`- context_addition: ${item}`);
     }
 
-    for (const item of lesson.task_interface_adjustments.scope_adjustments) {
+    for (const item of adjustments.scope_adjustments) {
       lines.push(`- scope_adjustment: ${item}`);
     }
 
-    for (const item of lesson.task_interface_adjustments.acceptance_criteria_adjustments) {
+    for (const item of adjustments.acceptance_criteria_adjustments) {
       lines.push(`- acceptance_criteria_adjustment: ${item}`);
     }
 
-    for (const item of lesson.task_interface_adjustments.quality_gate_adjustments) {
+    for (const item of adjustments.quality_gate_adjustments) {
       lines.push(`- quality_gate_adjustment: ${item}`);
     }
 
@@ -4789,6 +4809,7 @@ function buildImplementerPrompt(
     '- Continue until there is repository evidence beyond read-only exploration.',
     `- Follow \`${task.developmentPolicy}\`.`,
     '- Keep the change minimal and provider-independent.',
+    '- If the task or any recovery-lesson context above references a mechanism, manifest, validator, or field that is not in the contracts you were told to read, report that as a task-interface defect in your notes; do not fabricate placeholder files or evidence to satisfy it.',
     '- End every attempt with a short `## Implementation Notes` section written in your own final reply text, not only inside an edited file; the runtime reads it from what you say, not from a diff.',
     '- If you changed repository files, justify the change briefly and cite the evidence.',
     '- If you made no repository changes because the task already appears satisfied, start the notes with the line `Status: already_complete` and cite the repository evidence that already satisfies it; the runtime relies on that exact line to tell a satisfied task apart from a stalled one.',
@@ -4830,6 +4851,7 @@ function buildDoctorRecoveryPrompt(
     '- Do not widen into unrelated backlog work.',
     '- Do not run `git commit`; leave the recovery diff available for the runtime handoff.',
     '- Treat `quality_gates.before_review` as doctor re-entry gates.',
+    '- If the task or any recovery-lesson context below references a mechanism, manifest, validator, or field that is not in the contracts you were told to read, report that as a task-interface defect in your notes; do not fabricate placeholder artifacts or files to satisfy it.',
     ...recoveryLessonLines,
     `- Follow \`${task.developmentPolicy}\`.`,
     '- End every attempt with a short `## Implementation Notes` section written in your own final reply text, not only inside an edited file; the runtime reads it from what you say, not from a diff.',
@@ -5913,11 +5935,29 @@ function firstExpectedChange(markdown: string): string | null {
 
 function buildTaskFileName(taskId: string, title: string): string {
   const number = humanTaskNumber(taskId).replace(/^Task\s+/i, '').trim();
-  return `${number}-${slugify(title)}.md`;
+  return capTaskFileNameLength(`${number}-${slugify(title)}`, taskId);
 }
 
 function buildCorrectionTaskFileName(correctionTaskId: string, title: string): string {
-  return `${humanCorrectionNumber(correctionTaskId).replace(/^Task\s+/i, '').trim()}-${slugify(title)}.md`;
+  const number = humanCorrectionNumber(correctionTaskId).replace(/^Task\s+/i, '').trim();
+  return capTaskFileNameLength(`${number}-${slugify(title)}`, correctionTaskId);
+}
+
+// Deeply nested correction/recovery task ids (e.g. one task-id chain appending a suffix onto
+// the previous one for several cycles) fall through humanTaskNumber/humanCorrectionNumber's
+// short-form regexes unchanged, so the file base name can grow past Windows' ~260 character
+// path limit once combined with a parent directory - breaking `git clone`/checkout for anyone
+// working from a nested path (e.g. the e2e harness's temp clone). The file name is purely
+// cosmetic: findTaskDocumentPath() matches by the task's own `## Task ID` section, not by file
+// name, so truncating here is safe. A short hash of the untruncated id keeps two different task
+// ids that truncate to the same prefix from colliding on the same file.
+function capTaskFileNameLength(base: string, uniqueSeed: string, maxLength = 120): string {
+  if (base.length <= maxLength) {
+    return `${base}.md`;
+  }
+
+  const suffix = `-${createHash('sha1').update(uniqueSeed).digest('hex').slice(0, 8)}`;
+  return `${base.slice(0, maxLength - suffix.length).replace(/-+$/, '')}${suffix}.md`;
 }
 
 function buildStateCorrectionTaskId(tasksDirectory: string, activeTaskId: string): string {

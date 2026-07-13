@@ -15,7 +15,7 @@ describe('proto reviewable diff handoff', () => {
       'features',
       '002-configuration-model',
       'tasks',
-      'F002-T04-C2-U1-U1-C1-C1-resubmit-the-retry-restoration-target-task-with-a-single-path-diff-and-compliant-implementation-notes.md',
+      'F002-T04-C2-U1-U1-C1-C1-resubmit-the-retry-restoration-target-task-with-a-single-path-diff-and-compliant-implem-77ec20d0.md',
     );
     const task = parseTaskDocument(taskPath, readFileSync(taskPath, 'utf8'));
 

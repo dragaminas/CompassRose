@@ -37,6 +37,7 @@ The correction task must:
 - define the first executable step the implementer should take
 - define minimum progress evidence that cannot be satisfied by reading alone
 - include concrete acceptance criteria
+- ground every field only in artifacts, fields, and mechanisms that already exist in the contracts and runtime you read for this review — never require a manifest, validator, or artifact type that is not implemented, even if your own findings described the gap in specific-sounding terms
 
 The correction task must not:
 
@@ -68,6 +69,7 @@ Instructions:
 - Define `first_executable_step` as one concrete command, file read, file edit, or test action.
 - Define `minimum_progress_evidence` as observable repository progress inside the allowed scope.
 - Include concrete acceptance criteria and required quality gates.
+- Ground every field in artifacts, fields, and mechanisms that already exist in the contracts and runtime; do not invent a manifest, validator, or artifact type to describe the gap.
 - Do not introduce new feature scope.
 
 Return:

@@ -65,6 +65,7 @@ A correction task must:
 - Include a concrete `first_executable_step`.
 - Include `minimum_progress_evidence` that cannot be satisfied by reading alone.
 - Give every `quality_gates.before_review` entry as a literal, directly executable shell command (e.g. `npm test`) — the runtime runs each entry verbatim; a natural-language description of what to verify is not a gate and will fail with no output.
+- Ground `first_executable_step`, `minimum_progress_evidence`, and `acceptance_criteria` only in artifacts, fields, and mechanisms that already exist in the runtime and its contracts — do not require a manifest, validator, or artifact type that is not implemented; a correction that demands a fictional mechanism can never be satisfied and will keep generating further corrections instead of converging.
 
 A correction task must not:
 

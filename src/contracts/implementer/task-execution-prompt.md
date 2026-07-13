@@ -48,6 +48,8 @@ Implementation recovery:
 - preserve the partial repository changes created by the previous attempt unless the task contract explicitly says otherwise
 - do not rewrite the task scope to compensate for a recoverable interruption; let the runtime decide whether a retry is allowed
 
+If the task, or any recovery-lesson context supplied with it, references a mechanism, manifest, validator, or field that does not exist in the contracts you were told to read: treat that as a task-interface defect and report it in `## Implementation Notes`. Do not fabricate placeholder files, artifacts, or evidence to satisfy an ungrounded requirement — a fabricated artifact is worse than reporting the gap, because it hides the defect from the next review cycle instead of surfacing it.
+
 The implementer must not:
 
 - redesign the feature outside the task
@@ -57,6 +59,7 @@ The implementer must not:
 - assume why any previous implementer stopped without producing code
 - stop after reading context unless blocked by an explicit error
 - run `git commit` or otherwise clear the live worktree diff before handoff unless the task contract explicitly allows it
+- fabricate artifacts, files, or evidence to satisfy a requirement that does not correspond to anything in the contracts you read
 
 ---
 
@@ -85,6 +88,7 @@ Instructions:
 - Avoid unrelated refactors or opportunistic cleanups.
 - Preserve existing behavior outside the task scope.
 - Run the required quality gates when they are available in the environment.
+- If the task references a mechanism, manifest, validator, or field that is not in the contracts you were given, report that as a task-interface defect in your notes instead of fabricating something to satisfy it.
 
 Output expectations:
 - produce the repository changes required by the task
