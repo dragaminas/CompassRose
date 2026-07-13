@@ -3,7 +3,6 @@ import { dirname, join, relative as relativePath, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
 import type {
   BlockerKind,
   BlockerProfile,
@@ -53,6 +52,14 @@ import { resolveRepositoryRelativePath } from '../src/filesystem/pathResolver.js
 import { findGitRepositoryRoot } from '../src/git/gitStatus.js';
 import { normalizeTextForWrite, readTextIfExists, readUtf8 } from '../src/filesystem/textNormalization.js';
 import { parseTaskDocument, storedTaskArtifactFromDocument } from '../src/task/taskDocument.js';
+import {
+  buildCorrectionTaskFileName,
+  buildStateCorrectionTaskId,
+  buildTaskFileName,
+  capTaskFileNameLength,
+  humanCorrectionNumber,
+  humanTaskNumber,
+} from '../src/task/taskId.js';
 // Re-exported for tests that still import these from this file directly; those imports are
 // updated to point at the src/ modules directly in a later step of this migration.
 export { normalizeTextForWrite, parseTaskDocument };
@@ -5435,79 +5442,6 @@ function replaceOperationalStatus(markdown: string, overrides: Partial<Record<st
   }
 
   return replaceSection(markdown, 'Operational Status', Object.entries(values).map(([key, value]) => `- ${key}: ${value}`).join('\n'));
-}
-
-function buildTaskFileName(taskId: string, title: string): string {
-  const number = humanTaskNumber(taskId).replace(/^Task\s+/i, '').trim();
-  return capTaskFileNameLength(`${number}-${slugify(title)}`, taskId);
-}
-
-function buildCorrectionTaskFileName(correctionTaskId: string, title: string): string {
-  const number = humanCorrectionNumber(correctionTaskId).replace(/^Task\s+/i, '').trim();
-  return capTaskFileNameLength(`${number}-${slugify(title)}`, correctionTaskId);
-}
-
-// Deeply nested correction/recovery task ids (e.g. one task-id chain appending a suffix onto
-// the previous one for several cycles) fall through humanTaskNumber/humanCorrectionNumber's
-// short-form regexes unchanged, so the file base name can grow past Windows' ~260 character
-// path limit once combined with a parent directory - breaking `git clone`/checkout for anyone
-// working from a nested path (e.g. the e2e harness's temp clone). The file name is purely
-// cosmetic: findTaskDocumentPath() matches by the task's own `## Task ID` section, not by file
-// name, so truncating here is safe. A short hash of the untruncated id keeps two different task
-// ids that truncate to the same prefix from colliding on the same file.
-function capTaskFileNameLength(base: string, uniqueSeed: string, maxLength = 120): string {
-  if (base.length <= maxLength) {
-    return `${base}.md`;
-  }
-
-  const suffix = `-${createHash('sha1').update(uniqueSeed).digest('hex').slice(0, 8)}`;
-  return `${base.slice(0, maxLength - suffix.length).replace(/-+$/, '')}${suffix}.md`;
-}
-
-function buildStateCorrectionTaskId(tasksDirectory: string, activeTaskId: string): string {
-  if (!statSafeIsDirectory(tasksDirectory)) {
-    return `${activeTaskId}-C1`;
-  }
-
-  const pattern = new RegExp('`' + escapeRegExp(activeTaskId) + '-C(\\d+)`', 'g');
-  let highestCorrection = 0;
-
-  for (const entry of readdirSync(tasksDirectory)) {
-    if (!entry.endsWith('.md')) {
-      continue;
-    }
-
-    const markdown = readUtf8(join(tasksDirectory, entry));
-    for (const match of markdown.matchAll(pattern)) {
-      highestCorrection = Math.max(highestCorrection, Number.parseInt(match[1] ?? '0', 10));
-    }
-  }
-
-  return `${activeTaskId}-C${highestCorrection + 1}`;
-}
-
-function humanTaskNumber(taskId: string): string {
-  const unblockMatch = taskId.match(/-T(\d+)-U(\d+)$/);
-  const unblockTaskNumber = unblockMatch?.[1];
-  const unblockSequence = unblockMatch?.[2];
-  if (unblockTaskNumber && unblockSequence) {
-    return `${String(Number.parseInt(unblockTaskNumber, 10)).padStart(3, '0')}.U${Number.parseInt(unblockSequence, 10)}`;
-  }
-
-  const match = taskId.match(/-T(\d+)$/);
-  const taskNumber = match?.[1];
-  return taskNumber ? String(Number.parseInt(taskNumber, 10)).padStart(3, '0') : taskId;
-}
-
-function humanCorrectionNumber(correctionTaskId: string): string {
-  const match = correctionTaskId.match(/-T(\d+)-C(\d+)$/);
-  const taskNumber = match?.[1];
-  const correctionNumber = match?.[2];
-  if (!taskNumber || !correctionNumber) {
-    return correctionTaskId;
-  }
-
-  return `${String(Number.parseInt(taskNumber, 10)).padStart(3, '0')}.${Number.parseInt(correctionNumber, 10)}`;
 }
 
 function bulletList(items: readonly string[]): string {
