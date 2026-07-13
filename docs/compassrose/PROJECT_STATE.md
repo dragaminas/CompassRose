@@ -30,7 +30,7 @@ In progress
 
 ## Pending
 
-- Recover or finish implementation for `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1-CORRECTION-1`.
+- Plan the next implementation task for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -39,7 +39,7 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1-DOCTOR-RECOVERY-R1` passed re-entry quality gates and was applied by the prototype orchestrator.
+Subtask `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1-CORRECTION-1` was approved by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -47,4 +47,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and subtask execution for `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1-CORRECTION-1` is in progress.
+The active feature is `002-configuration-model`, and its next valid action is the next task-planning pass.
