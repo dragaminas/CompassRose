@@ -2,13 +2,19 @@ import { readFileSync } from 'node:fs';
 import { err, ok, type Result } from '../shared/result.js';
 import type {
   ConfigurationIssue,
+  DevelopmentPolicyDefault,
+  DevelopmentPolicySection,
   ExecutionMode,
   GitBranchPerTask,
   GitCommitAfterTask,
   GitPolicySection,
   GitReviewTarget,
+  LimitsSection,
   ProjectConfiguration,
   ProjectConfigurationLoadResult,
+  QualityGatesSection,
+  ReviewPolicyMode,
+  ReviewPolicySection,
   RolesSection,
 } from './configTypes.js';
 import { isSupportedPlatformName, type SupportedPlatform } from '../platform/platformInfo.js';
@@ -517,6 +523,34 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
     return err(issues);
   }
 
+  const developmentPolicySection = requireObjectSection(parsedConfiguration, 'development_policy', 'development_policy', issues);
+  const developmentPolicy = validateDevelopmentPolicySection(developmentPolicySection, issues);
+
+  if (issues.length > 0) {
+    return err(issues);
+  }
+
+  const reviewPolicySection = requireObjectSection(parsedConfiguration, 'review_policy', 'review_policy', issues);
+  const reviewPolicy = validateReviewPolicySection(reviewPolicySection, issues);
+
+  if (issues.length > 0) {
+    return err(issues);
+  }
+
+  const qualityGatesSection = requireObjectSection(parsedConfiguration, 'quality_gates', 'quality_gates', issues);
+  const qualityGates = validateQualityGatesSection(qualityGatesSection, issues);
+
+  if (issues.length > 0) {
+    return err(issues);
+  }
+
+  const limitsSection = requireObjectSection(parsedConfiguration, 'limits', 'limits', issues);
+  const limits = validateLimitsSection(limitsSection, issues);
+
+  if (issues.length > 0) {
+    return err(issues);
+  }
+
   return ok({
     ...parsedConfiguration,
     project: {
@@ -556,6 +590,10 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
     },
     roles,
     git_policy: gitPolicy,
+    development_policy: developmentPolicy,
+    review_policy: reviewPolicy,
+    quality_gates: qualityGates,
+    limits: limits,
   });
 }
 
@@ -741,6 +779,8 @@ const VALID_EXECUTION_MODES = new Set<ExecutionMode>(['interactive', 'semi_autom
 const VALID_GIT_REVIEW_TARGETS = new Set<GitReviewTarget>(['git_diff']);
 const VALID_GIT_BRANCH_PER_TASK = new Set<GitBranchPerTask>(['required', 'optional', 'disabled']);
 const VALID_GIT_COMMIT_AFTER_TASK = new Set<GitCommitAfterTask>(['automatic', 'manual', 'disabled']);
+const VALID_DEVELOPMENT_POLICY_DEFAULTS = new Set<DevelopmentPolicyDefault>(['test_guided', 'implementation_first', 'documentation_first', 'strict_tdd']);
+const VALID_REVIEW_POLICY_MODES = new Set<ReviewPolicyMode>(['required', 'optional', 'disabled']);
 const REQUIRED_ROLE_KEYS = ['planner', 'implementer', 'reviewer'] as const;
 
 function validateExecutionMode(section: Record<string, unknown>, issues: ConfigurationIssue[]): ExecutionMode {
@@ -833,6 +873,93 @@ function validateGitEnum<T extends string>(
     return Array.from(validValues)[0] as T;
   }
   return value as T;
+}
+
+function validateDevelopmentPolicySection(section: Record<string, unknown>, issues: ConfigurationIssue[]): DevelopmentPolicySection {
+  const defaultValue = section['default'];
+  if (typeof defaultValue !== 'string' || !VALID_DEVELOPMENT_POLICY_DEFAULTS.has(defaultValue as DevelopmentPolicyDefault)) {
+    issues.push({
+      field: 'development_policy.default',
+      message: `Unsupported development_policy.default: ${typeof defaultValue === 'string' ? defaultValue : String(defaultValue)}. Must be one of: test_guided, implementation_first, documentation_first, strict_tdd.`,
+    });
+    return { default: 'implementation_first' };
+  }
+  return { default: defaultValue as DevelopmentPolicyDefault };
+}
+
+function validateReviewPolicySection(section: Record<string, unknown>, issues: ConfigurationIssue[]): ReviewPolicySection {
+  const modeValue = section['mode'];
+  if (typeof modeValue !== 'string' || !VALID_REVIEW_POLICY_MODES.has(modeValue as ReviewPolicyMode)) {
+    issues.push({
+      field: 'review_policy.mode',
+      message: `Unsupported review_policy.mode: ${typeof modeValue === 'string' ? modeValue : String(modeValue)}. Must be one of: required, optional, disabled.`,
+    });
+    return { mode: 'required', record_skipped_review: false };
+  }
+
+  const recordSkippedReview = requireBooleanValue(section, 'record_skipped_review', 'review_policy.record_skipped_review', issues);
+
+  if (issues.length > 0) {
+    return { mode: 'required' as ReviewPolicyMode, record_skipped_review: false };
+  }
+
+  return { mode: modeValue as ReviewPolicyMode, record_skipped_review: recordSkippedReview };
+}
+
+function validateQualityGatesSection(section: Record<string, unknown>, issues: ConfigurationIssue[]): QualityGatesSection {
+  const enabled = requireBooleanValue(section, 'enabled', 'quality_gates.enabled', issues);
+
+  const required = requireStringArrayValue(section, 'required', 'quality_gates.required', issues);
+  const optional = requireStringArrayValue(section, 'optional', 'quality_gates.optional', issues);
+
+  if (issues.length > 0) {
+    return { enabled: false, required: [], optional: [] };
+  }
+
+  return { enabled, required: [...required], optional: [...optional] };
+}
+
+function validateLimitsSection(section: Record<string, unknown>, issues: ConfigurationIssue[]): LimitsSection {
+  const maxTasksPerRun = requireNonNegativeInteger(section, 'max_tasks_per_run', 'limits.max_tasks_per_run', issues);
+  const maxRetriesPerTask = requireNonNegativeInteger(section, 'max_retries_per_task', 'limits.max_retries_per_task', issues);
+  const maxReviewIterations = requireNonNegativeInteger(section, 'max_review_iterations', 'limits.max_review_iterations', issues);
+  const stopOnQualityGateFailure = requireBooleanValue(section, 'stop_on_quality_gate_failure', 'limits.stop_on_quality_gate_failure', issues);
+  const stopOnReviewFailure = requireBooleanValue(section, 'stop_on_review_failure', 'limits.stop_on_review_failure', issues);
+
+  if (issues.length > 0) {
+    return {
+      max_tasks_per_run: 0,
+      max_retries_per_task: 0,
+      max_review_iterations: 0,
+      stop_on_quality_gate_failure: false,
+      stop_on_review_failure: false,
+    };
+  }
+
+  return {
+    max_tasks_per_run: maxTasksPerRun,
+    max_retries_per_task: maxRetriesPerTask,
+    max_review_iterations: maxReviewIterations,
+    stop_on_quality_gate_failure: stopOnQualityGateFailure,
+    stop_on_review_failure: stopOnReviewFailure,
+  };
+}
+
+function requireNonNegativeInteger(
+  parent: Record<string, unknown>,
+  propertyKey: string,
+  fieldPath: string,
+  issues: ConfigurationIssue[]
+): number {
+  const value = parent[propertyKey];
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    issues.push({
+      field: fieldPath,
+      message: `Field ${fieldPath} must be a non-negative integer, got: ${typeof value === 'number' ? value : String(value)}.`,
+    });
+    return 0;
+  }
+  return value;
 }
 
 export function validateRuntimePreconditions(configuration: ProjectConfiguration): ConfigurationIssue[] {

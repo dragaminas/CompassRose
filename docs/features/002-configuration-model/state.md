@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+quality_failed
 
 ## Source Request
 
@@ -14,8 +14,8 @@ implementation_running
 - active_task: F002-T06
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: not_run
-- last_quality_gate_result: unknown
+- last_implementation_result: passed
+- last_quality_gate_result: failed
 - last_review_result: not_run
 - last_unblock_result: passed
 
@@ -84,4 +84,4 @@ Subtask `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HAN
 
 ## Next Planning Hint
 
-Recover or finish subtask implementation of `F002-T06` before allowing review or new planning.
+Quality gates for `F002-T06` failed; stop and recover before continuing.

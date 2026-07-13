@@ -34,6 +34,33 @@ export type GitReviewTarget = 'git_diff';
 export type GitBranchPerTask = 'required' | 'optional' | 'disabled';
 export type GitCommitAfterTask = 'automatic' | 'manual' | 'disabled';
 
+export type DevelopmentPolicyDefault = 'test_guided' | 'implementation_first' | 'documentation_first' | 'strict_tdd';
+
+export interface DevelopmentPolicySection {
+  readonly default: DevelopmentPolicyDefault;
+}
+
+export type ReviewPolicyMode = 'required' | 'optional' | 'disabled';
+
+export interface ReviewPolicySection {
+  readonly mode: ReviewPolicyMode;
+  readonly record_skipped_review: boolean;
+}
+
+export interface QualityGatesSection {
+  readonly enabled: boolean;
+  readonly required: readonly string[];
+  readonly optional: readonly string[];
+}
+
+export interface LimitsSection {
+  readonly max_tasks_per_run: number;
+  readonly max_retries_per_task: number;
+  readonly max_review_iterations: number;
+  readonly stop_on_quality_gate_failure: boolean;
+  readonly stop_on_review_failure: boolean;
+}
+
 export interface GitPolicySection {
   readonly require_clean_worktree_before_task: boolean;
   readonly review_target: GitReviewTarget;
@@ -88,6 +115,10 @@ export interface ProjectConfiguration {
   readonly execution: ExecutionSection;
   readonly roles: RolesSection;
   readonly git_policy: GitPolicySection;
+  readonly development_policy: DevelopmentPolicySection;
+  readonly review_policy: ReviewPolicySection;
+  readonly quality_gates: QualityGatesSection;
+  readonly limits: LimitsSection;
   readonly [key: string]: unknown;
 }
 

@@ -184,3 +184,156 @@ describe('runtime-precondition policy fields', () => {
     }
   });
 });
+
+describe('policy sections: development_policy, review_policy, quality_gates, and limits', () => {
+  test('exposes canonical development_policy, review_policy, quality_gates, and limits values from valid canonical config', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+
+      expect(result.value.development_policy.default).toBe('implementation_first');
+
+      expect(result.value.review_policy.mode).toBe('required');
+      expect(result.value.review_policy.record_skipped_review).toBe(true);
+
+      expect(result.value.quality_gates.enabled).toBe(true);
+      expect(result.value.quality_gates.required).toEqual(['typecheck', 'tests']);
+      expect(result.value.quality_gates.optional).toEqual(['lint', 'build']);
+
+      expect(result.value.limits.max_tasks_per_run).toBe(1);
+      expect(result.value.limits.max_retries_per_task).toBe(1);
+      expect(result.value.limits.max_review_iterations).toBe(1);
+      expect(result.value.limits.stop_on_quality_gate_failure).toBe(true);
+      expect(result.value.limits.stop_on_review_failure).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('rejects invalid development_policy.default enum value', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+          'default: implementation_first',
+          'default: unknown_policy'
+        ),
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+
+      expect(result.ok).toBe(false);
+      if (result.ok) {
+        return;
+      }
+
+      expect(result.error.some((issue) => issue.field === 'development_policy.default')).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('rejects invalid review_policy.mode enum value', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+          'mode: required',
+          'mode: unknown_mode'
+        ),
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+
+      expect(result.ok).toBe(false);
+      if (result.ok) {
+        return;
+      }
+
+      expect(result.error.some((issue) => issue.field === 'review_policy.mode')).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('rejects non-string entries in quality_gates.required', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+          '    - typecheck\n    - tests',
+          '    - typecheck\n    - 42'
+        ),
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+
+      expect(result.ok).toBe(false);
+      if (result.ok) {
+        return;
+      }
+
+      expect(result.error.some((issue) => issue.field === 'quality_gates.required')).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('rejects non-integer limit values', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+          '  max_tasks_per_run: 1',
+          '  max_tasks_per_run: -5'
+        ),
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+
+      expect(result.ok).toBe(false);
+      if (result.ok) {
+        return;
+      }
+
+      expect(result.error.some((issue) => issue.field === 'limits.max_tasks_per_run')).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('rejects boolean value in review_policy.record_skipped_review when string expected is not enforced (boolean is valid)', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+
+      expect(result.value.review_policy.record_skipped_review).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+});
