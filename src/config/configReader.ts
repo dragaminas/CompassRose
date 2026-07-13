@@ -999,11 +999,23 @@ export function validateRuntimePreconditions(configuration: ProjectConfiguration
   const requiredRoleKeys = ['planner', 'implementer', 'reviewer'] as const;
   for (const role of requiredRoleKeys) {
     const entry = configuration.roles[role];
-    if (entry.enabled && entry.adapter && !adapterKeys.has(entry.adapter)) {
-      issues.push({
-        field: `roles.${role}.adapter`,
-        message: `Enabled role ${role} references adapter '${entry.adapter}' which is not defined in adapters section.`,
-      });
+    if (entry.enabled) {
+      if (!entry.adapter) {
+        issues.push({
+          field: `roles.${role}.adapter`,
+          message: `Enabled role ${role} has no adapter configured.`,
+        });
+      } else if (!adapterKeys.has(entry.adapter)) {
+        issues.push({
+          field: `roles.${role}.adapter`,
+          message: `Enabled role ${role} references adapter '${entry.adapter}' which is not defined in adapters section.`,
+        });
+      } else if (entry.adapter !== 'external_cli') {
+        issues.push({
+          field: `roles.${role}.adapter`,
+          message: `Enabled role ${role} uses adapter '${entry.adapter}', but only the generic 'external_cli' adapter is supported in the MVP.`,
+        });
+      }
     }
   }
 
