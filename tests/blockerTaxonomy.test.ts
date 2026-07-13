@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { buildBlockerSignature, classifyBlockerKind, normalizeTextForWrite } from '../proto/protoCompassRose.js';
+import { buildBlockerSignature, classifyBlockerKind } from '../src/state/blockerClassification.js';
+import { normalizeTextForWrite } from '../src/filesystem/textNormalization.js';
 
 describe('blocker taxonomy', () => {
   test('classifies task interface gaps as agent-recoverable blockers', () => {

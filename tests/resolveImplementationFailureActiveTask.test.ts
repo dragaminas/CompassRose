@@ -1,51 +1,6 @@
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { tmpdir } from 'node:os';
-import { describe, expect, test, afterEach } from 'vitest';
-
-interface FeatureStateSnapshot {
-  readonly lifecycleState: string;
-  readonly activeTask: string;
-  readonly activeCorrectionTask: string;
-  readonly activeUnblockTask: string;
-  readonly blockedBy: readonly string[];
-  readonly blockedFrom: {
-    lifecycle_state: string;
-    active_task: string;
-    active_correction_task: string;
-    active_unblock_task: string;
-  } | null;
-}
-
-// Core resolution logic extracted from resolveImplementationFailureActiveTask
-// for testable, standalone verification
-function resolveImplementationFailureActiveTask(
-  snapshot: FeatureStateSnapshot,
-  findAttemptTaskId: () => string | null,
-): string | null {
-  if (snapshot.activeTask !== 'none') {
-    return snapshot.activeTask;
-  }
-
-  if (snapshot.blockedFrom?.active_task && snapshot.blockedFrom.active_task !== 'none') {
-    return snapshot.blockedFrom.active_task;
-  }
-
-  // NEW: when both activeTask and blockedFrom are 'none',
-  // fall back to the implementation failure blocker recorded in blockedBy.
-  for (const line of snapshot.blockedBy) {
-    const signatureMatch = line.match(/signature:\s*implementation-failure-(.+)/i);
-    if (signatureMatch) {
-      const taskId = signatureMatch[1].trim();
-      // Only accept task IDs matching the expected F<NNN>-T<NNN>[-<suffix>] pattern
-      if (/^F\d+-T\d+/.test(taskId)) {
-        return taskId;
-      }
-    }
-  }
-
-  return findAttemptTaskId();
-}
+import { describe, expect, test } from 'vitest';
+import type { FeatureStateSnapshot } from '../src/contracts/state/featureStateSnapshot.js';
+import { resolveImplementationFailureActiveTask } from '../src/state/restorationTarget.js';
 
 function createSnapshot(overrides: Partial<FeatureStateSnapshot>): FeatureStateSnapshot {
   return {

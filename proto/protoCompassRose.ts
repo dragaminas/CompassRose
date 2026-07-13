@@ -77,12 +77,10 @@ import {
   stateCorrectionProjectPendingLines,
 } from '../src/state/restorationTarget.js';
 import { buildBlockerSignature, classifyBlockerKind } from '../src/state/blockerClassification.js';
-// Re-exported for tests/blockerTaxonomy.test.ts, which still imports these from this file; that
-// import is updated to point at src/state/blockerClassification.js directly in the next step.
-export { buildBlockerSignature, classifyBlockerKind };
-// Re-exported for tests that still import these from this file directly; those imports are
-// updated to point at the src/ modules directly in a later step of this migration.
-export { normalizeTextForWrite, parseTaskDocument };
+// Re-exported because tests/protoReviewableDiffHandoff.test.ts imports parseTaskDocument from
+// this file alongside proto-only helpers (classifyImplementation, selectReviewableDiffForReview),
+// so it's simpler to keep that one import site than to split it across two modules.
+export { parseTaskDocument };
 import {
   escapeRegExp,
   ensureTrailingNewline,
