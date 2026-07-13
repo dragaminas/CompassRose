@@ -2756,7 +2756,20 @@ class PrototypeCompassRose {
     writeText(this.projectStatePath, projectState);
 
     if (!passed) {
-      throw new Error(`Quality gates failed after implementing ${task.taskId}.`);
+      const failedGateSummaries = qualityResults
+        .filter((result) => result.status === 'failed')
+        .map((result) => `${result.name}: ${result.output_summary}`)
+        .join('\n');
+      const failureReason = `Quality gates failed after implementing ${task.taskId}.\n${failedGateSummaries}`;
+      this.writeRefinementFeedback(failureReason, {
+        kind: correction ? 'correct_task' : 'implement_subtask',
+        feature_id: task.featureId,
+        task_id: task.taskId,
+        correction_task_id: correction ? task.taskId : null,
+        reason: failureReason,
+      });
+      console.error(`Quality gates failed after implementing ${task.taskId}; recovery will continue through doctor recovery planning.`);
+      return true;
     }
 
     return false;
