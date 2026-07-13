@@ -32,7 +32,7 @@ In progress
 
 ## Pending
 
-- Recover the implementation of `F002-T06-DOCTOR-RECOVERY-R1` before continuing.
+- Investigate failed quality gates for subtask `F002-T06`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -49,4 +49,4 @@ Doctor recovery task `F002-T06-DOCTOR-RECOVERY-R1` passed re-entry quality gates
 
 ## Next Planning Hint
 
-Resume `F002-T06` implementation recovery before continuing.
+The active feature is `002-configuration-model`, but quality gates for `F002-T06` failed and the run should stop.

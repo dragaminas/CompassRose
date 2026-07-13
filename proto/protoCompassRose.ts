@@ -3016,7 +3016,12 @@ class PrototypeCompassRose {
   }
 
   private findLatestTaskArtifactTaskId(featureId: string): string | null {
-    const artifacts = [...this.artifacts.listFiles('tasks')].sort((left, right) => right.mtimeMs - left.mtimeMs);
+    // Break mtime ties with the file name: two artifacts written back-to-back (e.g. during
+    // planning followed immediately by a correction) can land on the same filesystem timestamp
+    // when mtime resolution is coarser than the time between the writes, which otherwise makes
+    // "latest" resolve arbitrarily instead of deterministically.
+    const artifacts = [...this.artifacts.listFiles('tasks')].sort((left, right) =>
+      right.mtimeMs - left.mtimeMs || right.name.localeCompare(left.name));
 
     for (const artifact of artifacts) {
       if (!artifact.name.endsWith('.json')) {
@@ -3040,7 +3045,10 @@ class PrototypeCompassRose {
   }
 
   private findLatestImplementationAttemptTaskId(featureId: string): string | null {
-    const artifacts = [...this.artifacts.listFiles('implementation-attempts')].sort((left, right) => right.mtimeMs - left.mtimeMs);
+    // See findLatestTaskArtifactTaskId() above: break mtime ties with the file name so two
+    // artifacts written within the same timestamp tick still resolve deterministically.
+    const artifacts = [...this.artifacts.listFiles('implementation-attempts')].sort((left, right) =>
+      right.mtimeMs - left.mtimeMs || right.name.localeCompare(left.name));
 
     for (const artifact of artifacts) {
       if (!artifact.name.endsWith('.json') || artifact.name.includes('.attempt-')) {

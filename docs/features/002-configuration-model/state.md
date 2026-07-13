@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+quality_failed
 
 ## Source Request
 
@@ -15,8 +15,8 @@ implementation_running
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: skipped
+- last_quality_gate_result: failed
+- last_review_result: not_run
 - last_unblock_result: passed
 
 ## Current Reality
@@ -84,4 +84,4 @@ Doctor recovery task `F002-T06-DOCTOR-RECOVERY-R1` passed re-entry quality gates
 
 ## Next Planning Hint
 
-Resume `F002-T06` implementation recovery before continuing.
+Quality gates for `F002-T06` failed; stop and recover before continuing.
