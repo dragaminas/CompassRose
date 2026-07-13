@@ -10,13 +10,13 @@
 Extend the project configuration loader with typed, validated development, review, quality-gate, and runtime-limit policy data so the deterministic runtime can consume the full documented project configuration.
 
 ## First Executable Step
-Add failing Vitest cases in tests/configReader.test.ts for canonical values and invalid development_policy, review_policy, quality_gates, and limits fields. Before handoff, report the runtime-captured `changed_files` and `git_diff` for the implementation attempt, and end the final response with a non-empty `## Implementation Notes` section that justifies the bounded change and records any remaining risk.
+Add failing Vitest cases in tests/configReader.test.ts for canonical values and invalid development_policy, review_policy, quality_gates, and limits fields. Before handoff, report the runtime-captured `changed_files`, `git_diff`, and raw or normalized implementation diagnostics for the implementation attempt, and end the final response with a non-empty `## Implementation Notes` section that justifies the bounded change and records any remaining risk.
 
 ## Minimum Progress Evidence
 - tests/configReader.test.ts contains executable coverage for the newly supported policy sections.
 - src/config/configTypes.ts exposes typed interfaces for development_policy, review_policy, quality_gates, and limits.
 - readProjectConfiguration() returns those typed sections for the canonical CONFIG.md and reports field-specific ConfigurationIssue values for malformed inputs.
-- The implementation handoff reports the runtime-supported `changed_files` and `git_diff` values for the attempt, and the final response contains a non-empty `## Implementation Notes` section with the implementation or already-satisfied evidence and any remaining risk.
+- The implementation handoff reports the runtime-supported `changed_files`, `git_diff`, and raw or normalized implementation diagnostics for the attempt, and the final response contains a non-empty `## Implementation Notes` section with the implementation or already-satisfied evidence and any remaining risk.
 
 ## Trace
 - Roadmap objective: Deterministic Orchestration
@@ -60,7 +60,7 @@ Forbidden:
 - Missing sections, unsupported enum values, wrong primitive types, non-string quality-gate entries, and invalid limit values produce field-specific ConfigurationIssue results.
 - Existing config-reader tests and the canonical configuration loading behavior remain passing without changes to docs/compassrose/CONFIG.md.
 - Only the three allowed paths contain implementation or test changes.
-- The implementation handoff reports only the runtime-supported `changed_files` and `git_diff` evidence, and the final response ends with a non-empty `## Implementation Notes` justification; no fallback fields, context-path fields, manifests, or separate handoff artifacts are required.
+- The implementation handoff reports only the runtime-supported `changed_files`, `git_diff`, and raw or normalized implementation diagnostics, and the final response ends with a non-empty `## Implementation Notes` justification; no fallback fields, context-path fields, manifests, or separate handoff artifacts are required.
 
 ## Files Likely Affected
 - `docs/features/002-configuration-model/feature.md`
