@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-task_ready
+implementation_running
 
 ## Source Request
 
@@ -14,9 +14,9 @@ task_ready
 - active_task: F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: skipped
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
 - last_unblock_result: passed
 
 ## Current Reality
@@ -82,4 +82,4 @@ Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION
 
 ## Next Planning Hint
 
-Execute `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1` when the current execution mode allows it.
+Recover or finish subtask implementation of `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1` before allowing review or new planning.
