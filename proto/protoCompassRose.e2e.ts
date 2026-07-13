@@ -154,7 +154,11 @@ function main(): number {
     `${runSummary.run_id ?? 'run'}-F002-T04-blocked.json`,
   );
   const unblockTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-U1.json');
-  const correctionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-C1.json');
+  // Deliberately not "F002-T04-C1": that id already belongs to a real, committed correction
+  // task in this repository's actual history (docs/features/002-configuration-model/tasks/
+  // 004.1-repair-feature-state-for-f002-t04.md). Reusing it here would collide with real task
+  // history once the e2e harness clones the current repository as its test workspace.
+  const correctionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-C90.json');
   const taskInterfaceAnalysisPath = join(cloneRoot, '.git', 'proto-compassrose', 'task-interface-analysis', 'F002-T04.json');
   const recoveryLessonPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-recovery-lesson.json');
   const diagnosticPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-diagnostic.json');
@@ -1081,7 +1085,7 @@ function sequenceForScenario(scenario) {
           },
           correction_task: {
             parent_task_id: 'F002-T04',
-            correction_task_id: 'F002-T04-C1',
+            correction_task_id: 'F002-T04-C90',
             feature_id: '002-configuration-model',
             title: 'Tighten the task interface for the implementer',
             objective: 'Reduce ambiguity in the task so the implementer can proceed with less context leakage.',
@@ -1094,7 +1098,7 @@ function sequenceForScenario(scenario) {
             scope: {
               allowed_paths: [
                 'docs/features/002-configuration-model/tasks/F002-T04.md',
-                'docs/features/002-configuration-model/tasks/F002-T04-C1.md',
+                'docs/features/002-configuration-model/tasks/F002-T04-C90.md',
                 'proto/interface-gap.txt',
               ],
               forbidden_paths: ['src/cli/main.ts', 'src/config/configReader.ts'],

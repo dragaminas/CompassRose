@@ -1372,6 +1372,7 @@ class PrototypeCompassRose {
     );
     const task = planned.task;
     validateTaskDeliverables(task, 'task');
+    this.assertTaskIdIsUnused(feature.tasksDirectory, task.task_id, 'Task planning');
 
     const taskPath = join(feature.tasksDirectory, buildTaskFileName(task.task_id, task.title));
     const taskMarkdown = renderTaskMarkdown(task);
@@ -1514,6 +1515,7 @@ class PrototypeCompassRose {
     );
     const task = planned.task;
     validateTaskDeliverables(task, 'doctor recovery task');
+    this.assertTaskIdIsUnused(feature.tasksDirectory, task.task_id, 'Doctor recovery planning');
 
     const doctorRecoveryMetadata: DoctorRecoveryTaskMetadata = {
       blocker,
@@ -2295,6 +2297,7 @@ class PrototypeCompassRose {
       }
 
       const correction = review.correction_task;
+      this.assertTaskIdIsUnused(feature.tasksDirectory, correction.correction_task_id, 'Review correction-task authoring');
       const correctionPath = this.writeCorrectionTask(correction);
       this.artifacts.writeJson(join('tasks', `${correction.correction_task_id}.json`), {
         task: correctionTaskToTask(correction),
@@ -2925,6 +2928,7 @@ class PrototypeCompassRose {
     }
 
     const stateCorrection = this.buildStateCorrectionTask(feature, restoredActiveTask, lifecycleState, reason);
+    this.assertTaskIdIsUnused(feature.tasksDirectory, stateCorrection.task_id, 'State correction planning');
     const path = this.writeStateCorrectionTask(stateCorrection);
     this.artifacts.writeJson(join('tasks', `${stateCorrection.task_id}.json`), {
       task: stateCorrectionTaskToTask(stateCorrection),
@@ -3569,6 +3573,21 @@ class PrototypeCompassRose {
       return this.findTaskDocumentPath(taskId, tasksDirectory);
     } catch {
       return null;
+    }
+  }
+
+  // Task/correction/doctor-recovery/state-correction ids are proposed by an LLM call and never
+  // otherwise checked for uniqueness before being written. A planner that echoes a stale id
+  // (e.g. re-deriving already-completed correction work from state-doc history) silently
+  // overwrites that id's stored JSON artifact and leaves two task documents claiming the same
+  // id, making findTaskDocumentPath() ambiguous from then on. Fail loudly before writing
+  // anything instead of corrupting the existing task's history.
+  private assertTaskIdIsUnused(tasksDirectory: string, taskId: string, context: string): void {
+    const existingPath = this.tryFindTaskDocumentPath(taskId, tasksDirectory);
+    if (existingPath) {
+      throw new Error(
+        `${context} proposed task id \`${taskId}\`, but a task document already claims that id at ${relativePath(this.repositoryRoot, existingPath)}. Task ids must be unique; this would silently overwrite that task's stored history.`,
+      );
     }
   }
 
