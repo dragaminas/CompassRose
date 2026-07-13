@@ -68,6 +68,14 @@ import {
   tryFindTaskDocumentPath,
 } from '../src/task/taskStore.js';
 import { extractImplementationNotes, implementationNotesIndicatesAlreadyComplete } from '../src/implementer/implementationNotes.js';
+import {
+  preferredRestorationTarget,
+  resolveImplementationFailureActiveTask,
+  restorationTargetNextPlanningHint,
+  restorationTargetProjectPendingLines,
+  stateCorrectionNextPlanningHint,
+  stateCorrectionProjectPendingLines,
+} from '../src/state/restorationTarget.js';
 // Re-exported for tests that still import these from this file directly; those imports are
 // updated to point at the src/ modules directly in a later step of this migration.
 export { normalizeTextForWrite, parseTaskDocument };
@@ -3042,26 +3050,10 @@ class PrototypeCompassRose {
   }
 
   private resolveImplementationFailureActiveTask(feature: FeatureRecord, snapshot: FeatureStateSnapshot): string | null {
-    if (snapshot.activeTask !== 'none') {
-      return snapshot.activeTask;
-    }
-
-    if (snapshot.blockedFrom?.active_task && snapshot.blockedFrom.active_task !== 'none') {
-      return snapshot.blockedFrom.active_task;
-    }
-
-    for (const line of snapshot.blockedBy) {
-      const signatureMatch = line.match(/signature:\s*implementation-failure-(.+)/i);
-      const taskIdCandidate = signatureMatch?.[1];
-      if (taskIdCandidate) {
-        const taskId = taskIdCandidate.trim();
-        if (/^F\d+-T\d+/.test(taskId)) {
-          return taskId;
-        }
-      }
-    }
-
-    return this.resolveStateCorrectionActiveTaskFromArtifacts(feature.id);
+    return resolveImplementationFailureActiveTask(
+      snapshot,
+      () => this.resolveStateCorrectionActiveTaskFromArtifacts(feature.id),
+    );
   }
 
   private findLatestTaskArtifactTaskId(featureId: string): string | null {
@@ -3211,16 +3203,7 @@ class PrototypeCompassRose {
   }
 
   private preferredRestorationTarget(snapshot: FeatureStateSnapshot): RestorationTarget {
-    if (snapshot.blockedFrom && snapshot.blockedFrom.lifecycle_state !== 'none') {
-      return snapshot.blockedFrom;
-    }
-
-    return {
-      lifecycle_state: forwardRestorationLifecycleState(snapshot.lifecycleState),
-      active_task: snapshot.activeTask,
-      active_correction_task: snapshot.activeCorrectionTask,
-      active_unblock_task: snapshot.activeUnblockTask,
-    };
+    return preferredRestorationTarget(snapshot);
   }
 
   private buildBlockerProfile(snapshot: FeatureStateSnapshot, reason: string): BlockerProfile {
@@ -4569,112 +4552,6 @@ function stateCorrectionTaskToTask(stateCorrection: StateCorrectionTask): Planne
   };
 }
 
-function stateCorrectionNextPlanningHint(stateCorrection: StateCorrectionTask): string {
-  return restorationTargetNextPlanningHint({
-    lifecycle_state: stateCorrection.state_target.restored_lifecycle_state,
-    active_task: stateCorrection.state_target.restored_active_task,
-    active_correction_task: stateCorrection.state_target.restored_active_correction_task,
-    active_unblock_task: 'none',
-  }, stateCorrection.task_id, 'state_correction');
-}
-
-// A blocker is diagnosed FROM a failed/blocked lifecycle state, so restoring into that same
-// state would immediately re-trigger the identical diagnosis on the next step. When no explicit
-// `## Blocked From` anchor was recorded, fall back to the state machine's own documented forward
-// transition (see src/contracts/state/feature-state.md) instead of echoing the broken state.
-function forwardRestorationLifecycleState(lifecycleState: string): string {
-  switch (lifecycleState) {
-    case 'implementation_failed':
-    case 'quality_failed':
-    case 'review_failed':
-      return 'implementation_running';
-    default:
-      return lifecycleState;
-  }
-}
-
-function restorationTargetNextPlanningHint(
-  restorationTarget: RestorationTarget,
-  activeTaskId: string,
-  activeTaskLabel: 'state_correction' | 'doctor' | 'unblock' | 'task' = 'task',
-): string {
-  switch (restorationTarget.lifecycle_state) {
-    case 'task_ready':
-      return `Execute \`${activeTaskId}\` when the current execution mode allows it.`;
-    case 'review_pending':
-      return `Review \`${activeTaskId}\` next.`;
-    case 'implementation_running':
-      return `Resume \`${activeTaskId}\` implementation recovery before continuing.`;
-    case 'formalized':
-      return 'Plan the next task that advances this feature from the remaining gap.';
-    case 'correction_pending':
-      return activeTaskLabel === 'doctor' || activeTaskLabel === 'unblock'
-        ? `Execute doctor recovery task \`${activeTaskId}\` next.`
-        : `Execute correction task \`${activeTaskId}\` next.`;
-    case 'unblock_pending':
-      return `Execute doctor recovery task \`${activeTaskId}\` next.`;
-    default:
-      return `Continue from the repaired \`${restorationTarget.lifecycle_state}\` state for \`${activeTaskId}\`.`;
-  }
-}
-
-function stateCorrectionProjectPendingLines(stateCorrection: StateCorrectionTask): string[] {
-  return restorationTargetProjectPendingLines({
-    lifecycle_state: stateCorrection.state_target.restored_lifecycle_state,
-    active_task: stateCorrection.state_target.restored_active_task,
-    active_correction_task: stateCorrection.state_target.restored_active_correction_task,
-    active_unblock_task: 'none',
-  }, stateCorrection.task_id, 'state_correction');
-}
-
-function restorationTargetProjectPendingLines(
-  restorationTarget: RestorationTarget,
-  activeTaskId: string,
-  activeTaskLabel: 'state_correction' | 'doctor' | 'unblock' | 'task' = 'task',
-): string[] {
-  switch (restorationTarget.lifecycle_state) {
-    case 'task_ready':
-      return [
-        `Execute \`${activeTaskId}\` for the active feature.`,
-        'Continue updating this file with approved repository facts as feature work lands.',
-      ];
-    case 'review_pending':
-      return [
-        `Review \`${activeTaskId}\` for the active feature.`,
-        'Continue updating this file with approved repository facts as feature work lands.',
-      ];
-    case 'implementation_running':
-      return [
-        `Recover the implementation of \`${activeTaskId}\` before continuing.`,
-        'Continue updating this file with approved repository facts as feature work lands.',
-      ];
-    case 'formalized':
-      return [
-        `Plan the next implementation task for the active feature.`,
-        'Continue updating this file with approved repository facts as feature work lands.',
-      ];
-    case 'correction_pending':
-      return activeTaskLabel === 'doctor' || activeTaskLabel === 'unblock'
-        ? [
-            `Execute doctor recovery task \`${activeTaskId}\` for the active feature.`,
-            'Continue updating this file with approved repository facts as feature work lands.',
-          ]
-        : [
-            `Execute correction task \`${activeTaskId}\` for the active feature.`,
-            'Continue updating this file with approved repository facts as feature work lands.',
-          ];
-    case 'unblock_pending':
-      return [
-        `Execute doctor recovery task \`${activeTaskId}\` for the active feature.`,
-        'Continue updating this file with approved repository facts as feature work lands.',
-      ];
-    default:
-      return [
-        `Continue from the repaired \`${restorationTarget.lifecycle_state}\` state for the active feature.`,
-        'Continue updating this file with approved repository facts as feature work lands.',
-      ];
-  }
-}
 
 export function classifyBlockerKind(
   reason: string,
