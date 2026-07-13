@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+formalized
 
 ## Source Request
 
@@ -11,12 +11,12 @@ implementation_running
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T06
+- active_task: none
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: skipped
+- last_review_result: approved
 - last_unblock_result: passed
 
 ## Current Reality
@@ -75,7 +75,7 @@ Task `F002-T06` is now planned and ready to execute. Expose the remaining docume
 
 ## Last Approved Change
 
-Doctor recovery task `F002-T06-DOCTOR-RECOVERY-R2` passed re-entry quality gates and was applied by the prototype orchestrator.
+Subtask `F002-T06` was approved by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -84,4 +84,4 @@ Doctor recovery task `F002-T06-DOCTOR-RECOVERY-R2` passed re-entry quality gates
 
 ## Next Planning Hint
 
-Resume `F002-T06` implementation recovery before continuing.
+Plan the next task that advances this feature from the remaining gap.
