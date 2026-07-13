@@ -50,6 +50,7 @@ Forbidden:
 - implementation_context_paths contains the three existing preserved attempt-specific files covering the task, exact implementer prompt, and runtime context.
 - The outer handoff metadata reports changed_files=[] with git_diff empty or null, fallback_changed_files=[], and fallback_git_diff=null.
 - implementation_notes repeats the same structured paths and states that repository behavior was already complete with an empty live diff.
+- The implementation handoff includes a non-empty `## Implementation Notes` justification explaining the bounded repair and citing the recorded blocker evidence.
 - The final doctor handoff includes a non-empty `## Implementation Notes` justification that explains the bounded recovery performed and cites the blocker evidence or already-complete restoration evidence.
 - No forbidden path is changed.
 
