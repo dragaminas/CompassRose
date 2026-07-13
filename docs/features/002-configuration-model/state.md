@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+task_ready
 
 ## Source Request
 
@@ -11,7 +11,7 @@ formalized
 ## Operational Status
 
 - formalization: complete
-- active_task: none
+- active_task: F002-T06
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
@@ -36,6 +36,8 @@ Task `F002-T05` connects the validated configuration policy to the default CLI r
 Review of `F002-T05` then requested correction task `F002-T05-C1` (resolve the default CLI preflight from the repository root instead of `cwd`). That implementation passed its quality gate, but review rejected it a second time as `F002-T05-C1-CLEANUP`, claiming the diff leaked edits into `docs/compassrose/PROJECT_STATE.md` and this feature's `state.md`. Diagnosis found this was a false rejection caused by a runtime bug: `reviewTask()` in `proto/protoCompassRose.ts` computed the reviewer's diff without excluding the state-doc bookkeeping the runtime itself writes live to the working tree during implementation (every other diff capture in the codebase already excludes those paths). The reviewer was seeing its own bookkeeping mixed into the implementer's diff. A second, related bug meant that any `changes_required`/`blocked` review verdict left the implementer's actual files permanently uncommitted, which crashed the run on the very next step's clean-worktree precondition. Both bugs are fixed: the reviewer's diff now excludes the state docs, and rejected implementations are fully committed like approved ones are. `F002-T05-C1`'s actual diff (`src/cli/main.ts`, `tests/main.test.ts`) never contained any `docs/` edits, so `F002-T05-C1-CLEANUP` had no real work to do and is dropped; `F002-T05-C1` is ready for review again with a reviewer that will now see the correct diff.
 
 Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R2` restored the recorded `implementation_running` state after its doctor re-entry gate passed. Resume the active repair-handoff task without changing the feature scope.
+
+Task `F002-T06` is now planned and ready to execute. Expose the remaining documented runtime policy in the configuration loader.
 
 ## Implemented Deliverables
 
@@ -82,4 +84,4 @@ Subtask `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HAN
 
 ## Next Planning Hint
 
-Plan the next task that advances this feature from the remaining gap.
+Execute `F002-T06` when the current execution mode allows it.
