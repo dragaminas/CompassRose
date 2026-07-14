@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+task_ready
 
 ## Source Request
 
@@ -11,7 +11,7 @@ formalized
 ## Operational Status
 
 - formalization: complete
-- active_task: none
+- active_task: F002-T10
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
@@ -46,6 +46,8 @@ Task `F002-T07-C2` is now planned and ready to execute. Enforce MVP external_cli
 Task `F002-T08` is now planned and ready to execute. Enforce repository and platform preconditions at CLI preflight.
 
 Task `F002-T09` is now planned and ready to execute. Enforce configured Git worktree policy at CLI preflight.
+
+Task `F002-T10` is now planned and ready to execute. Add deterministic feature-selection checkpoint to the CLI runtime.
 
 ## Implemented Deliverables
 
@@ -92,4 +94,4 @@ Subtask `F002-T09-C1-CORRECTION-1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Plan the next task that advances this feature from the remaining gap.
+Execute `F002-T10` when the current execution mode allows it.
