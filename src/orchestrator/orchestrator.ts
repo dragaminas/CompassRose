@@ -3033,6 +3033,10 @@ export class CompassRoseOrchestrator {
   }
 
   private listFeatures(): FeatureRecord[] {
+    if (!existsSync(this.featuresRoot)) {
+      return [];
+    }
+
     return readdirSync(this.featuresRoot)
       .filter((entry) => statSync(join(this.featuresRoot, entry)).isDirectory())
       .map((entry) => ({

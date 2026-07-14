@@ -1,5 +1,6 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 
 export interface TempWorkspaceOptions {
@@ -32,4 +33,14 @@ export function createTempWorkspace(options: TempWorkspaceOptions = {}): TempWor
 
 export function readFixtureConfigMarkdown(): string {
   return readFileSync(new URL('../docs/compassrose/CONFIG.md', import.meta.url), 'utf8');
+}
+
+/**
+ * Copies this repository's real src/contracts tree into a test workspace so a full
+ * CompassRoseOrchestrator (via ContractRegistry) can construct against it, the same way
+ * proto's e2e harness syncs contracts into its cloned scenario workspaces.
+ */
+export function copyContractsIntoWorkspace(root: string): void {
+  const contractsSource = fileURLToPath(new URL('../src/contracts', import.meta.url));
+  cpSync(contractsSource, join(root, 'src', 'contracts'), { recursive: true });
 }

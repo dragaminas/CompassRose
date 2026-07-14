@@ -1,11 +1,11 @@
 import { fileURLToPath } from 'node:url';
 import { resolve, join } from 'node:path';
-import { readdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
 import { readProjectConfiguration, validateRuntimePreconditions } from '../config/configReader.js';
 import { getCurrentSupportedPlatform } from '../platform/platformInfo.js';
+import { CompassRoseOrchestrator } from '../orchestrator/orchestrator.js';
 
 export interface CliEnvironment {
   readonly cwd?: string;
@@ -25,24 +25,6 @@ function checkDirtyWorktree(gitRoot: string): boolean {
     return false;
   }
 }
-
-const ALLOWED_LIFECYCLE_STATES = [
-  'formalization_pending',
-  'formalized',
-  'task_planning_pending',
-  'task_ready',
-  'implementation_running',
-  'implementation_failed',
-  'quality_gates_pending',
-  'quality_failed',
-  'review_pending',
-  'review_failed',
-  'correction_pending',
-  'unblock_pending',
-  'blocked',
-  'completed',
-  'request_pending',
-];
 
 export function main(argv: string[] = process.argv.slice(2), environment: CliEnvironment = {}): number {
   const stdout = environment.stdout ?? ((message: string) => process.stdout.write(`${message}\n`));
@@ -98,7 +80,6 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
       return 1;
     }
 
-    const featuresRoot = join(gitRoot, 'docs/features');
     const gitPolicy = configResult.value.git_policy;
     const requireClean = gitPolicy.require_clean_worktree_before_task;
     const allowDirty = gitPolicy.allow_dirty_worktree;
@@ -109,178 +90,13 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
       }
     }
 
-    if (existsSync(featuresRoot)) {
-      const featureDirs = readdirSync(featuresRoot)
-        .filter((name) => {
-          const dirPath = join(featuresRoot, name);
-          return existsSync(dirPath) && /^\d{3}-/.test(name);
-        })
-        .sort();
-
-      let selectedFeature: string | null = null;
-      let selectedLifecycle: string | null = null;
-
-      for (const featureDir of featureDirs) {
-        const statePath = join(featuresRoot, featureDir, 'state.md');
-        const requestPath = join(featuresRoot, featureDir, 'request.md');
-        const featurePath = join(featuresRoot, featureDir, 'feature.md');
-        const architecturePath = join(featuresRoot, featureDir, 'architecture.md');
-
-        if (!existsSync(statePath)) {
-          if (existsSync(requestPath)) {
-            const missingFormalized =
-              !existsSync(featurePath) || !existsSync(architecturePath) || !existsSync(statePath);
-            if (missingFormalized) {
-              selectedFeature = featureDir;
-              selectedLifecycle = 'request_pending';
-              break;
-            }
-          }
-          stderr(`runtime feature-selection: ${featureDir}: malformed lifecycle data in state.md`);
-          return 1;
-        }
-
-        const stateContent = readFileSync(statePath, 'utf8');
-        const lifecycleMatch = stateContent.match(/^## Lifecycle State\s*\n\s*(.+)/m);
-
-        if (!lifecycleMatch) {
-          if (existsSync(requestPath)) {
-            const missingFormalized =
-              !existsSync(featurePath) || !existsSync(architecturePath) || !existsSync(statePath);
-            if (missingFormalized) {
-              selectedFeature = featureDir;
-              selectedLifecycle = 'request_pending';
-              break;
-            }
-          }
-          stderr(`runtime feature-selection: ${featureDir}: malformed lifecycle data in state.md`);
-          return 1;
-        }
-
-        let lifecycleState = lifecycleMatch[1]!.trim();
-
-        if (existsSync(requestPath)) {
-          const missingFormalized =
-            !existsSync(featurePath) || !existsSync(architecturePath) || !existsSync(statePath);
-          if (missingFormalized) {
-            lifecycleState = 'request_pending';
-          }
-        }
-
-        if (!ALLOWED_LIFECYCLE_STATES.includes(lifecycleState)) {
-          stderr(`runtime feature-selection: ${featureDir}: malformed lifecycle data in state.md`);
-          return 1;
-        }
-
-        if (lifecycleState === 'completed') {
-          continue;
-        }
-
-        selectedFeature = featureDir;
-        selectedLifecycle = lifecycleState;
-
-        if (lifecycleState === 'formalized') {
-          const updatedContent = stateContent.replace(
-            /(^## Lifecycle State\s*\n\s*)formalized\s*$/m,
-            `$1task_planning_pending\n`,
-          );
-          writeFileSync(statePath, updatedContent, 'utf8');
-          stdout(
-            `CompassRose: transitioning feature ${selectedFeature} from formalized to task_planning_pending`,
-          );
-          selectedLifecycle = 'task_planning_pending';
-        }
-
-        if (lifecycleState === 'task_planning_pending') {
-          const plannerAdapter = (configResult.value.roles?.planner as { enabled?: boolean; adapter?: string })?.adapter;
-          const adaptersSection = configResult.value.adapters as Record<string, unknown> | undefined;
-          const adapterConfig = adaptersSection?.[plannerAdapter ?? 'external_cli'] as Record<string, unknown> | undefined;
-          const command = typeof adapterConfig?.command === 'string' ? adapterConfig.command : '';
-          const args = Array.isArray(adapterConfig?.args) ? (adapterConfig.args as string[]) : [];
-
-          if (command) {
-            let runCommand = command;
-            let runArgs: string[] = [...args];
-
-            const lowerCommand = command.toLowerCase();
-            if (lowerCommand.endsWith('.js') && !lowerCommand.includes('/')) {
-              // Use node to run .js files explicitly for cross-platform compatibility
-            }
-
-            if (lowerCommand.endsWith('.js')) {
-              runCommand = 'node';
-              runArgs = [command, ...args];
-            } else if (lowerCommand.endsWith('.py')) {
-              runCommand = 'python';
-              runArgs = [command, ...args];
-            } else if (lowerCommand.endsWith('.sh') || lowerCommand.endsWith('.cmd') || lowerCommand.endsWith('.bat')) {
-              try {
-                const shellResult = execFileSync('cmd', ['/c', command], {
-                  cwd: gitRoot,
-                  encoding: 'utf8',
-                });
-                if (shellResult) {
-                  stdout(shellResult.trim());
-                }
-              } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                stderr(`runtime task-planning: planner command '${command}' failed: ${errorMessage}`);
-                return 1;
-              }
-
-              stdout(
-                `CompassRose: dispatching task planning for feature ${selectedFeature} (lifecycle state: task_planning_pending)`,
-              );
-              break;
-            }
-
-            if (runCommand !== command) {
-              try {
-                const plannerOutput = execFileSync(runCommand, runArgs, {
-                  cwd: gitRoot,
-                  encoding: 'utf8',
-                });
-                if (plannerOutput) {
-                  stdout(plannerOutput.trim());
-                }
-              } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                stderr(`runtime task-planning: planner command '${command}' failed: ${errorMessage}`);
-                return 1;
-              }
-            } else {
-              try {
-                const plannerOutput = execFileSync(command, args, {
-                  cwd: gitRoot,
-                  encoding: 'utf8',
-                });
-                if (plannerOutput) {
-                  stdout(plannerOutput.trim());
-                }
-              } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                stderr(`runtime task-planning: planner command '${command}' failed: ${errorMessage}`);
-                return 1;
-              }
-            }
-          }
-
-          stdout(
-            `CompassRose: dispatching task planning for feature ${selectedFeature} (lifecycle state: task_planning_pending)`,
-          );
-        }
-
-        break;
-      }
-
-      if (selectedFeature) {
-        stdout(`CompassRose: selecting feature ${selectedFeature} (lifecycle state: ${selectedLifecycle})`);
-        return 0;
-      }
-    }
-
-    stdout('CompassRose: no selectable feature remaining');
-    return 0;
+    const orchestrator = new CompassRoseOrchestrator({
+      cwd: gitRoot,
+      loop: false,
+      commit: true,
+      implementer: 'opencode',
+    });
+    return orchestrator.run();
   }
 
   stderr('Usage: compassrose doctor');
