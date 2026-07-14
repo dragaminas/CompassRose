@@ -192,6 +192,79 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
         }
 
         if (lifecycleState === 'task_planning_pending') {
+          const plannerAdapter = (configResult.value.roles?.planner as { enabled?: boolean; adapter?: string })?.adapter;
+          const adaptersSection = configResult.value.adapters as Record<string, unknown> | undefined;
+          const adapterConfig = adaptersSection?.[plannerAdapter ?? 'external_cli'] as Record<string, unknown> | undefined;
+          const command = typeof adapterConfig?.command === 'string' ? adapterConfig.command : '';
+          const args = Array.isArray(adapterConfig?.args) ? (adapterConfig.args as string[]) : [];
+
+          if (command) {
+            let runCommand = command;
+            let runArgs: string[] = [...args];
+
+            const lowerCommand = command.toLowerCase();
+            if (lowerCommand.endsWith('.js') && !lowerCommand.includes('/')) {
+              // Use node to run .js files explicitly for cross-platform compatibility
+            }
+
+            if (lowerCommand.endsWith('.js')) {
+              runCommand = 'node';
+              runArgs = [command, ...args];
+            } else if (lowerCommand.endsWith('.py')) {
+              runCommand = 'python';
+              runArgs = [command, ...args];
+            } else if (lowerCommand.endsWith('.sh') || lowerCommand.endsWith('.cmd') || lowerCommand.endsWith('.bat')) {
+              try {
+                const shellResult = execFileSync('cmd', ['/c', command], {
+                  cwd: gitRoot,
+                  encoding: 'utf8',
+                });
+                if (shellResult) {
+                  stdout(shellResult.trim());
+                }
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                stderr(`runtime task-planning: planner command '${command}' failed: ${errorMessage}`);
+                return 1;
+              }
+
+              stdout(
+                `CompassRose: dispatching task planning for feature ${selectedFeature} (lifecycle state: task_planning_pending)`,
+              );
+              break;
+            }
+
+            if (runCommand !== command) {
+              try {
+                const plannerOutput = execFileSync(runCommand, runArgs, {
+                  cwd: gitRoot,
+                  encoding: 'utf8',
+                });
+                if (plannerOutput) {
+                  stdout(plannerOutput.trim());
+                }
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                stderr(`runtime task-planning: planner command '${command}' failed: ${errorMessage}`);
+                return 1;
+              }
+            } else {
+              try {
+                const plannerOutput = execFileSync(command, args, {
+                  cwd: gitRoot,
+                  encoding: 'utf8',
+                });
+                if (plannerOutput) {
+                  stdout(plannerOutput.trim());
+                }
+              } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                stderr(`runtime task-planning: planner command '${command}' failed: ${errorMessage}`);
+                return 1;
+              }
+            }
+          }
+
           stdout(
             `CompassRose: dispatching task planning for feature ${selectedFeature} (lifecycle state: task_planning_pending)`,
           );

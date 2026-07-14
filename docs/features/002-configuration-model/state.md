@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+correction_pending
 
 ## Source Request
 
@@ -12,11 +12,11 @@ implementation_running
 
 - formalization: complete
 - active_task: F002-T14
-- active_correction_task: none
+- active_correction_task: F002-T14-C1
 - active_unblock_task: none
-- last_implementation_result: not_run
-- last_quality_gate_result: unknown
-- last_review_result: not_run
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: changes_required
 - last_unblock_result: passed
 
 ## Current Reality
@@ -102,4 +102,4 @@ Subtask `F002-T13` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Recover or finish subtask implementation of `F002-T14` before allowing review or new planning.
+Execute correction subtask `F002-T14-C1` next.

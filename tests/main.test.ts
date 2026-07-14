@@ -617,6 +617,66 @@ task_planning_pending
       workspace.dispose();
     }
   });
+
+  test('task_planning_pending feature invokes configured external_cli planner exactly once', () => {
+    const configWithPlannerCommand = readFixtureConfigMarkdown().replace(
+      /planner:\r?\n    enabled: true\r?\n    adapter: external_cli/,
+      'planner:\r\n    enabled: true\r\n    adapter: external_cli',
+    );
+
+    const workspace = createTempGitWorkspace((original) => original);
+
+    const mockPlannerPath = join(workspace.root, 'scripts', 'mock-planner.js');
+    mkdirSync(join(workspace.root, 'scripts'), { recursive: true });
+    writeFileSync(mockPlannerPath, 'console.log("## Task Planning Complete"); process.exit(0);', 'utf8');
+
+    const configWithMockPlanner = configWithPlannerCommand.replace(
+      'command: ""',
+      'command: "' + mockPlannerPath + '"',
+    );
+    writeFileSync(join(workspace.root, 'docs/compassrose/CONFIG.md'), configWithMockPlanner, 'utf8');
+
+    const taskPlanningPendingState = `# State: Task Planning Pending Feature
+
+## Lifecycle State
+
+task_planning_pending
+`;
+
+    mkdirSync(join(workspace.root, 'docs/features/002-formalized'), { recursive: true });
+    writeFileSync(join(workspace.root, 'docs/features/002-formalized/feature.md'), '# Formalized Feature\n', 'utf8');
+    writeFileSync(join(workspace.root, 'docs/features/002-formalized/architecture.md'), '# Architecture\n', 'utf8');
+    writeFileSync(join(workspace.root, 'docs/features/002-formalized/state.md'), taskPlanningPendingState, 'utf8');
+
+    try {
+      execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['add', '.'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+      execFileSync('git', ['commit', '-m', 'add task_planning_pending feature with mock planner'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch {
+      // ignore
+    }
+
+    try {
+      const stdoutMessages: string[] = [];
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(0);
+      expect(stdoutMessages).toContain('CompassRose: dispatching task planning for feature 002-formalized (lifecycle state: task_planning_pending)');
+      expect(stdoutMessages).toContain('## Task Planning Complete');
+      expect(stderrMessages.length).toBe(0);
+
+      const stateContent = readFileSync(join(workspace.root, 'docs/features/002-formalized/state.md'), 'utf8');
+      expect(stateContent).toEqual(taskPlanningPendingState);
+    } finally {
+      workspace.dispose();
+    }
+  });
 });
 
 describe('main([]) — preflight ordering and lifecycle edge cases', () => {
