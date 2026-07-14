@@ -16,6 +16,7 @@ In progress
 - Blocking task context: `F002-T10-DOCTOR-RECOVERY-R1`
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T10-DOCTOR-RECOVERY-R2`; the active task pointer was restored to `F002-T10`.
 - Feature `002-configuration-model` now has a planned next task, `F002-T14`, ready to execute.
+- Tasks `F002-T10` through `F002-T14` (and the pending correction `F002-T14-C1`) are superseded by embedding proto's orchestrator (`PrototypeCompassRose`, renamed `CompassRoseOrchestrator`) into `src/orchestrator/orchestrator.ts` and wiring `src/cli/main.ts` to run it directly; see `docs/features/002-configuration-model/state.md` for the full account. The active task pointer for this feature is now `none`; its lifecycle state is `task_planning_pending`.
 
 ## Implemented
 
@@ -28,7 +29,7 @@ In progress
 
 ## Pending
 
-- Recover or finish implementation for `F002-T14-C1`.
+- Plan the next task for `002-configuration-model` against its actual declared scope, now that `F002-T10`-`F002-T14`'s orchestration-adjacent goals are met by the real orchestrator instead.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -41,8 +42,8 @@ Subtask `F002-T13` was approved by the prototype orchestrator.
 
 ## Known Gaps
 
-- Feature `002-configuration-model` now has validated runtime-precondition policy data in the config loader, but the broader runtime loop still needs to consume that data in a concrete orchestration entrypoint.
+- None currently tracked at the project level.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and subtask execution for `F002-T14-C1` is in progress.
+The active feature is `002-configuration-model`; plan its next task against its actual declared scope now that `F002-T10`-`F002-T14`'s orchestration-adjacent goals are met by the real orchestrator embedded in `src/orchestrator/orchestrator.ts`.

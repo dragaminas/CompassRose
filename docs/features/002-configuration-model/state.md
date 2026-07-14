@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+task_planning_pending
 
 ## Source Request
 
@@ -11,7 +11,7 @@ implementation_running
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T14-C1
+- active_task: none
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: not_run
@@ -57,6 +57,8 @@ Task `F002-T13` is now planned and ready to execute. Dispatch task planning from
 
 Task `F002-T14` is now planned and ready to execute. Invoke the configured planner for task_planning_pending features.
 
+Tasks `F002-T10` through `F002-T14` (and the pending correction `F002-T14-C1`) are superseded, not completed and not silently discarded. They drifted outside this feature's own declared scope (`feature.md`'s "this feature does not include" list explicitly excludes "implementation of unrelated orchestration features beyond the configuration contract they depend on") and reconstructed — more thinly and with real bugs (no prompt construction, no heartbeat, no signal handling, a broken extension-based command interpreter) — behavior that already existed in `proto/protoCompassRose.ts`'s orchestrator: feature selection, lifecycle-transition persistence, and external-CLI-adapter invocation. Rather than complete that reimplementation, the real orchestrator (`PrototypeCompassRose`, renamed `CompassRoseOrchestrator`) was moved into `src/orchestrator/orchestrator.ts`, and `src/cli/main.ts`'s no-args path now constructs and runs it directly after this feature's own legitimate preflight chain (`F002-T04` through `F002-T09`: config load/validate, role/adapter wiring, platform check, dirty-worktree check) passes. `compassrose` (no args) reaches the same "no selectable feature" / feature-selection outcome the removed code produced, now backed by the real, already-battle-tested orchestration loop instead of a parallel, thinner copy of it.
+
 ## Implemented Deliverables
 
 - the source feature request exists at `docs/features/002-configuration-model/request.md`
@@ -97,9 +99,8 @@ Subtask `F002-T13` was approved by the prototype orchestrator.
 
 ## Known Gaps
 
-- The project-local configuration flow still needs a runtime consumer that uses the validated `execution`, `roles`, and `git_policy` data during orchestration.
-- The correction-task id allocator (`buildStateCorrectionTaskId` in `proto/protoCompassRose.ts`) has no cycle or depth limit; a prior recovery loop against `F002-T04-C3` generated thousands of near-duplicate correction docs before being stopped manually. Not yet addressed.
+- The correction-task id allocator (`buildStateCorrectionTaskId` in `src/orchestrator/orchestrator.ts`) has no cycle or depth limit; a prior recovery loop against `F002-T04-C3` generated thousands of near-duplicate correction docs before being stopped manually. Not yet addressed.
 
 ## Next Planning Hint
 
-Recover or finish subtask implementation of `F002-T14-C1` before allowing review or new planning.
+Plan the next task for this feature against its actual declared scope (`request.md`/`feature.md`), now that `F002-T10`-`F002-T14`'s orchestration-adjacent goals are met by the real orchestrator instead.
