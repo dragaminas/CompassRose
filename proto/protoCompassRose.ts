@@ -50,7 +50,7 @@ import type { ProjectConfiguration } from '../src/config/configTypes.js';
 import { readProjectConfiguration } from '../src/config/configReader.js';
 import { resolveRepositoryRelativePath } from '../src/filesystem/pathResolver.js';
 import { findGitRepositoryRoot } from '../src/git/gitStatus.js';
-import { normalizeTextForWrite, readTextIfExists, readUtf8 } from '../src/filesystem/textNormalization.js';
+import { normalizeTextForWrite, readUtf8 } from '../src/filesystem/textNormalization.js';
 import { parseTaskDocument, storedTaskArtifactFromDocument } from '../src/task/taskDocument.js';
 import {
   buildCorrectionTaskFileName,
@@ -84,6 +84,10 @@ import { ArtifactStore } from '../src/artifacts/artifactStore.js';
 import { DEFAULT_AGENT_HEARTBEAT_MS, runCommandWithHeartbeat } from '../src/agents/heartbeatRunner.js';
 import type { HeartbeatRunConfig } from '../src/agents/heartbeatRunner.js';
 import { normalizeModelName, resolveCodexImplementerModel, resolveCodexPlannerModel, resolveOpenCodeModel } from '../src/agents/modelResolution.js';
+import { logAgentEnd, logAgentStart, logAgentStream } from '../src/agents/agentLogging.js';
+import { CodexCli } from '../src/agents/codexCli.js';
+import { OpenCodeCli } from '../src/agents/openCodeCli.js';
+import type { CommandExecution, TaskImplementer } from '../src/agents/taskImplementer.js';
 // Re-exported because tests/protoReviewableDiffHandoff.test.ts imports parseTaskDocument from
 // this file alongside proto-only helpers (classifyImplementation, selectReviewableDiffForReview),
 // so it's simpler to keep that one import site than to split it across two modules.
@@ -114,20 +118,6 @@ type StructuredSchemaId =
   | 'reviewer_output'
   | 'task_interface_analysis'
   | 'diagnostic_autocorrection';
-
-interface CommandExecution {
-  readonly ok: boolean;
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly exitCode: number | null;
-  readonly signal: string | null;
-  readonly timedOut: boolean;
-  readonly commandInvoked: string;
-}
-
-interface TaskImplementer {
-  run(prompt: string, label?: string): CommandExecution;
-}
 
 interface FileFingerprint {
   readonly exists: boolean;
@@ -211,212 +201,6 @@ class ContractRegistry {
   }
 }
 
-class CodexCli implements TaskImplementer {
-  constructor(
-    private readonly repositoryRoot: string,
-    private readonly command: string,
-  ) {}
-
-  runStructured<T>(
-    prompt: string,
-    schema: unknown,
-    extraReadableDirs: readonly string[] = [],
-    label = 'step-selector',
-  ): T {
-    const tempDir = mkdtempSync(join(tmpdir(), 'proto-compassrose-codex-'));
-    const schemaPath = join(tempDir, 'schema.json');
-    const outputPath = join(tempDir, 'output.json');
-    const promptPath = join(tempDir, 'prompt.txt');
-    const stdoutPath = join(tempDir, 'stdout.log');
-    const stderrPath = join(tempDir, 'stderr.log');
-    writeFileSync(schemaPath, `${JSON.stringify(schema, null, 2)}\n`, 'utf8');
-    writeFileSync(promptPath, prompt, 'utf8');
-
-    const args = [
-      'exec',
-      '--ephemeral',
-      '-C',
-      this.repositoryRoot,
-      '-s',
-      'read-only',
-      '--dangerously-bypass-approvals-and-sandbox',
-      '--output-schema',
-      schemaPath,
-      '-o',
-      outputPath,
-    ];
-
-    for (const dir of extraReadableDirs) {
-      args.push('--add-dir', dir);
-    }
-
-    const model = resolveCodexPlannerModel();
-    if (model) {
-      args.push('-m', model);
-    }
-
-    args.push('-');
-
-    logAgentStart('codex', label, this.command);
-    const startedAt = Date.now();
-    const result = runCommandWithHeartbeat({
-      agent: 'codex',
-      label,
-      command: this.command,
-      args,
-      cwd: this.repositoryRoot,
-      promptPath,
-      promptMode: 'stdin',
-      stdoutPath,
-      stderrPath,
-      heartbeatIntervalMs: DEFAULT_AGENT_HEARTBEAT_MS,
-    });
-    const elapsedMs = Date.now() - startedAt;
-    const stdout = readTextIfExists(stdoutPath);
-    const stderr = readTextIfExists(stderrPath);
-    logAgentStream('codex', label, 'stdout', stdout);
-    logAgentStream('codex', label, 'stderr', stderr);
-    logAgentEnd('codex', label, elapsedMs, result.status, result.error?.message ?? null);
-
-    if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
-      throw new ControlledStopError(
-        `Controlled stop requested while running codex exec for ${label}.`,
-        stopExitCodeForSignal(result.signal),
-        result.signal,
-      );
-    }
-
-    if (result.status !== 0) {
-      throw new Error(`codex exec failed:\n${stderr || stdout}`);
-    }
-
-    return JSON.parse(readUtf8(outputPath)) as T;
-  }
-
-  run(prompt: string, label = 'implementer'): CommandExecution {
-    const tempDir = mkdtempSync(join(tmpdir(), 'proto-compassrose-codex-'));
-    const promptPath = join(tempDir, 'prompt.txt');
-    const stdoutPath = join(tempDir, 'stdout.log');
-    const stderrPath = join(tempDir, 'stderr.log');
-    writeFileSync(promptPath, prompt, 'utf8');
-
-    const args = [
-      'exec',
-      '--ephemeral',
-      '--cd',
-      this.repositoryRoot,
-      '--dangerously-bypass-approvals-and-sandbox',
-    ];
-
-    const model = resolveCodexImplementerModel();
-    if (model) {
-      args.push('-m', model);
-    }
-
-    args.push('-');
-
-    logAgentStart('codex', label, this.command);
-    const startedAt = Date.now();
-    const result = runCommandWithHeartbeat({
-      agent: 'codex',
-      label,
-      command: this.command,
-      args,
-      cwd: this.repositoryRoot,
-      promptPath,
-      promptMode: 'stdin',
-      stdoutPath,
-      stderrPath,
-      heartbeatIntervalMs: DEFAULT_AGENT_HEARTBEAT_MS,
-    });
-    const elapsedMs = Date.now() - startedAt;
-
-    const stdout = readTextIfExists(stdoutPath);
-    const stderr = readTextIfExists(stderrPath);
-    logAgentStream('codex', label, 'stdout', stdout);
-    logAgentStream('codex', label, 'stderr', stderr);
-    logAgentEnd('codex', label, elapsedMs, result.status, result.error?.message ?? null);
-
-    if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
-      throw new ControlledStopError(
-        `Controlled stop requested while running codex exec for ${label}.`,
-        stopExitCodeForSignal(result.signal),
-        result.signal,
-      );
-    }
-
-    return {
-      ok: result.status === 0 && !result.error,
-      stdout,
-      stderr,
-      exitCode: result.status,
-      signal: result.signal ?? null,
-      timedOut: false,
-      commandInvoked: [this.command, ...args].join(' '),
-    };
-  }
-}
-
-class OpenCodeCli {
-  constructor(
-    private readonly repositoryRoot: string,
-    private readonly command: string,
-  ) {}
-
-  run(prompt: string, label = 'implementer'): CommandExecution {
-    const tempDir = mkdtempSync(join(tmpdir(), 'proto-compassrose-opencode-'));
-    const promptPath = join(tempDir, 'prompt.txt');
-    const stdoutPath = join(tempDir, 'stdout.log');
-    const stderrPath = join(tempDir, 'stderr.log');
-    writeFileSync(promptPath, prompt, 'utf8');
-
-    const args = ['run', '--dir', this.repositoryRoot, '--dangerously-skip-permissions'];
-    const model = resolveOpenCodeModel();
-    if (model) {
-      args.push('-m', model);
-    }
-
-    logAgentStart('opencode', label, this.command);
-    const startedAt = Date.now();
-    const result = runCommandWithHeartbeat({
-      agent: 'opencode',
-      label,
-      command: this.command,
-      args,
-      cwd: this.repositoryRoot,
-      promptPath,
-      promptMode: 'stdin',
-      stdoutPath,
-      stderrPath,
-      heartbeatIntervalMs: DEFAULT_AGENT_HEARTBEAT_MS,
-    });
-    const elapsedMs = Date.now() - startedAt;
-
-    const stdout = readTextIfExists(stdoutPath);
-    const stderr = readTextIfExists(stderrPath);
-    logAgentStream('opencode', label, 'stdout', stdout);
-    logAgentStream('opencode', label, 'stderr', stderr);
-    logAgentEnd('opencode', label, elapsedMs, result.status, result.error?.message ?? null);
-
-    if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
-      throw new ControlledStopError(
-        `Controlled stop requested while running opencode for ${label}.`,
-        stopExitCodeForSignal(result.signal),
-        result.signal,
-      );
-    }
-
-    return {
-      ok: result.status === 0 && !result.error,
-      stdout,
-      stderr,
-      exitCode: result.status,
-      signal: result.signal ?? null,
-      timedOut: false,
-      commandInvoked: [this.command, ...args].join(' '),
-    };
-  }
-}
 
 class PrototypeCompassRose {
   private readonly repositoryRoot: string;
@@ -4960,42 +4744,6 @@ function compareFeatureIds(left: string, right: string): number {
   const leftNumber = Number.parseInt(left.split('-')[0] ?? '0', 10);
   const rightNumber = Number.parseInt(right.split('-')[0] ?? '0', 10);
   return leftNumber - rightNumber;
-}
-
-function logAgentStart(agent: AgentToolName, label: string, command: string): void {
-  console.log(`[${agent}:${label}] start ${command}`);
-}
-
-function logAgentStream(agent: AgentToolName, label: string, stream: 'stdout' | 'stderr', text: string): void {
-  const trimmed = text.trimEnd();
-  if (trimmed.length === 0) {
-    return;
-  }
-
-  const prefix = `[${agent}:${label}] ${stream} | `;
-  const rendered = trimmed
-    .split('\n')
-    .map((line) => `${prefix}${line}`)
-    .join('\n');
-
-  if (stream === 'stderr') {
-    process.stderr.write(`${rendered}\n`);
-    return;
-  }
-
-  process.stdout.write(`${rendered}\n`);
-}
-
-function logAgentEnd(
-  agent: AgentToolName,
-  label: string,
-  elapsedMs: number,
-  exitCode: number | null,
-  errorMessage: string | null,
-): void {
-  const status = exitCode === 0 ? 'ok' : `exit ${exitCode ?? 'null'}`;
-  const errorSuffix = errorMessage ? `, error: ${errorMessage}` : '';
-  console.log(`[${agent}:${label}] done (${status}${errorSuffix}) in ${elapsedMs}ms`);
 }
 
 function summarizeCommandOutput(stdout: string, stderr: string): string {

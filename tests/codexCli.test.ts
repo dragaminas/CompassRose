@@ -1,0 +1,78 @@
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { afterEach, describe, expect, test } from 'vitest';
+import { createTempWorkspace, type TempWorkspace } from './testUtils.js';
+import { CodexCli } from '../src/agents/codexCli.js';
+
+let workspace: TempWorkspace | undefined;
+
+afterEach(() => {
+  workspace?.dispose();
+  workspace = undefined;
+});
+
+function writeMockCodex(root: string, script: string): string {
+  const path = join(root, 'codex-mock.mjs');
+  writeFileSync(path, script, 'utf8');
+  return path;
+}
+
+describe('CodexCli.run', () => {
+  test('returns ok:true with captured stdout on success', () => {
+    workspace = createTempWorkspace();
+    const command = writeMockCodex(
+      workspace.root,
+      "let data = '';\nprocess.stdin.on('data', (c) => { data += c; });\nprocess.stdin.on('end', () => { process.stdout.write(`saw:${data}`); process.exit(0); });\n",
+    );
+    const client = new CodexCli(workspace.root, command);
+    const result = client.run('do the thing', 'implementer');
+
+    expect(result.ok).toBe(true);
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe('saw:do the thing');
+    expect(result.commandInvoked).toContain(command);
+    expect(result.commandInvoked).toContain('--dangerously-bypass-approvals-and-sandbox');
+  });
+
+  test('returns ok:false with captured stderr on non-zero exit', () => {
+    workspace = createTempWorkspace();
+    const command = writeMockCodex(
+      workspace.root,
+      "process.stderr.write('boom');\nprocess.exit(1);\n",
+    );
+    const client = new CodexCli(workspace.root, command);
+    const result = client.run('do the thing');
+
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toBe('boom');
+  });
+});
+
+describe('CodexCli.runStructured', () => {
+  test('parses the JSON written to the -o output path on success', () => {
+    workspace = createTempWorkspace();
+    const command = writeMockCodex(
+      workspace.root,
+      [
+        "const fs = await import('node:fs');",
+        "const outIndex = process.argv.indexOf('-o');",
+        "const outputPath = process.argv[outIndex + 1];",
+        "fs.writeFileSync(outputPath, JSON.stringify({ status: 'approved' }));",
+        'process.exit(0);',
+      ].join('\n'),
+    );
+    const client = new CodexCli(workspace.root, command);
+    const result = client.runStructured<{ status: string }>('review this', { type: 'object' });
+
+    expect(result).toEqual({ status: 'approved' });
+  });
+
+  test('throws when the command exits non-zero', () => {
+    workspace = createTempWorkspace();
+    const command = writeMockCodex(workspace.root, "process.stderr.write('bad schema');\nprocess.exit(1);\n");
+    const client = new CodexCli(workspace.root, command);
+
+    expect(() => client.runStructured('review this', { type: 'object' })).toThrow(/codex exec failed/);
+  });
+});
