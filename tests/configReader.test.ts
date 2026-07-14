@@ -210,7 +210,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
       expect(result.value.quality_gates.required).toEqual(['typecheck', 'tests']);
       expect(result.value.quality_gates.optional).toEqual(['lint', 'build']);
 
-      expect(result.value.limits.max_tasks_per_run).toBe(1);
+      expect(result.value.limits.max_tasks_per_run).toBe(50);
       expect(result.value.limits.max_retries_per_task).toBe(1);
       expect(result.value.limits.max_review_iterations).toBe(1);
       expect(result.value.limits.stop_on_quality_gate_failure).toBe(true);
@@ -296,8 +296,8 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
     const workspace = createTempWorkspace({
       files: {
         'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
-          '  max_tasks_per_run: 1',
-          '  max_tasks_per_run: -5'
+          '  max_retries_per_task: 1',
+          '  max_retries_per_task: -5'
         ),
       },
     });
@@ -310,7 +310,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
         return;
       }
 
-      expect(result.error.some((issue) => issue.field === 'limits.max_tasks_per_run')).toBe(true);
+      expect(result.error.some((issue) => issue.field === 'limits.max_retries_per_task')).toBe(true);
     } finally {
       workspace.dispose();
     }

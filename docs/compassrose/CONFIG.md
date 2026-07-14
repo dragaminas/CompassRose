@@ -111,7 +111,7 @@ git_policy:
   commit_after_task: manual
 
 limits:
-  max_tasks_per_run: 1
+  max_tasks_per_run: 50
   max_retries_per_task: 1
   max_review_iterations: 1
   stop_on_quality_gate_failure: true
