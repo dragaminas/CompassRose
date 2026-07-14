@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+implementation_running
 
 ## Source Request
 
@@ -13,11 +13,11 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T07-C2
 - active_correction_task: none
-- active_unblock_task: F002-T07-C2-DOCTOR-RECOVERY-R2
+- active_unblock_task: none
 - last_implementation_result: passed
-- last_quality_gate_result: failed
-- last_review_result: blocked
-- last_unblock_result: not_run
+- last_quality_gate_result: passed
+- last_review_result: skipped
+- last_unblock_result: passed
 
 ## Current Reality
 
@@ -68,37 +68,18 @@ Task `F002-T07-C2` is now planned and ready to execute. Enforce MVP external_cli
 
 ## Blocked By
 
-- - kind: unknown
-- - signature: unknown-unblock-pending-doctor-recovery-f002-t07-c2-doctor-recovery-r1-failed-its-re-entry-quali
-- - recoverability: agent
-- - observed_state: lifecycle=unblock_pending; active_task=F002-T07-C2; active_correction_task=none; active_unblock_task=F002-T07-C2-DOCTOR-RECOVERY-R1
-- - evidence: Doctor recovery F002-T07-C2-DOCTOR-RECOVERY-R1 failed its re-entry quality gates.
-npm test: - 0
-+ 1
-
- ❯ tests/protoBlockerFlows.test.ts:106:27
-    104|     const result = runProtoScenario('implementation-retry');
-    105|
-    106|     expect(result.status).toBe(0);
-       |                           ^
-    107|     expect(result.stdout).toContain('PASS: implementation retry histor…
-    108|     expect(result.stdout).toContain('PASS: implementation retry record…
-
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
-- - evidence: None
-- - evidence: lifecycle=unblock_pending
-- - reason: Doctor recovery F002-T07-C2-DOCTOR-RECOVERY-R1 failed its re-entry quality gates. | npm test: - 0 | + 1 | ❯ tests/protoBlockerFlows.test.ts:106:27 | 104|     const result = runProtoScenario('implementation-retry'); | 105| | 106|     expect(result.status).toBe(0); | |                           ^ | 107|     expect(result.stdout).toContain('PASS: implementation retry histor… | 108|     expect(result.stdout).toContain('PASS: implementation retry record… | ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+- None
 
 ## Blocked From
 
-- lifecycle_state: `implementation_running`
-- active_task: `F002-T07-C2`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Subtask `F002-T07-C1` was approved by the prototype orchestrator.
+Doctor recovery task `F002-T07-C2-DOCTOR-RECOVERY-R2` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -107,4 +88,4 @@ Subtask `F002-T07-C1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T07-C2-DOCTOR-RECOVERY-R2` next.
+Resume `F002-T07-C2` implementation recovery before continuing.
