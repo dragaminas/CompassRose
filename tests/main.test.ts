@@ -1,5 +1,5 @@
 import { describe, expect, test, afterAll } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -506,6 +506,57 @@ formalized
       expect(exitCode).toBe(0);
       expect(stdoutMessages.some((m) => m.includes('002-formalized'))).toBe(true);
       expect(stdoutMessages.some((m) => m.includes('formalized'))).toBe(true);
+      expect(stderrMessages.length).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+});
+
+describe('main([]) — formalized feature transitions to task_planning_pending', () => {
+  test('formalized feature transitions to task_planning_pending', () => {
+    const formalizedFeatureState = `# State: Formalized Feature
+
+## Lifecycle State
+
+formalized
+`;
+
+    const workspace = createTempGitWorkspace();
+
+    mkdirSync(join(workspace.root, 'docs/features/002-formalized'), { recursive: true });
+    writeFileSync(join(workspace.root, 'docs/features/002-formalized/feature.md'), '# Formalized Feature\n', 'utf8');
+    writeFileSync(join(workspace.root, 'docs/features/002-formalized/architecture.md'), '# Architecture\n', 'utf8');
+    writeFileSync(join(workspace.root, 'docs/features/002-formalized/state.md'), formalizedFeatureState, 'utf8');
+
+    try {
+      execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['add', '.'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+      execFileSync('git', ['commit', '-m', 'add formalized feature'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch {
+      // ignore
+    }
+
+    try {
+      const stdoutMessages: string[] = [];
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(0);
+
+      const stateContent = readFileSync(join(workspace.root, 'docs/features/002-formalized/state.md'), 'utf8');
+      expect(stateContent).toContain('task_planning_pending');
+      expect(stateContent).toContain('# State: Formalized Feature');
+      expect(stateContent).toContain('## Lifecycle State');
+
+      expect(stdoutMessages.some((m) => m.includes('002-formalized'))).toBe(true);
+      expect(stdoutMessages.some((m) => m.includes('formalized'))).toBe(true);
+      expect(stdoutMessages.some((m) => m.includes('task_planning_pending'))).toBe(true);
       expect(stderrMessages.length).toBe(0);
     } finally {
       workspace.dispose();

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { resolve, join } from 'node:path';
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
@@ -178,6 +178,18 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
 
         selectedFeature = featureDir;
         selectedLifecycle = lifecycleState;
+
+        if (lifecycleState === 'formalized') {
+          const updatedContent = stateContent.replace(
+            /(^## Lifecycle State\s*\n\s*)formalized\s*$/m,
+            `$1task_planning_pending\n`,
+          );
+          writeFileSync(statePath, updatedContent, 'utf8');
+          stdout(
+            `CompassRose: transitioning feature ${selectedFeature} from formalized to task_planning_pending`,
+          );
+        }
+
         break;
       }
 
