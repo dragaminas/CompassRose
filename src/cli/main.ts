@@ -26,6 +26,24 @@ function checkDirtyWorktree(gitRoot: string): boolean {
   }
 }
 
+const ALLOWED_LIFECYCLE_STATES = [
+  'formalization_pending',
+  'formalized',
+  'task_planning_pending',
+  'task_ready',
+  'implementation_running',
+  'implementation_failed',
+  'quality_gates_pending',
+  'quality_failed',
+  'review_pending',
+  'review_failed',
+  'correction_pending',
+  'unblock_pending',
+  'blocked',
+  'completed',
+  'request_pending',
+];
+
 export function main(argv: string[] = process.argv.slice(2), environment: CliEnvironment = {}): number {
   const stdout = environment.stdout ?? ((message: string) => process.stdout.write(`${message}\n`));
   const stderr = environment.stderr ?? ((message: string) => process.stderr.write(`${message}\n`));
@@ -81,6 +99,16 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     }
 
     const featuresRoot = join(gitRoot, 'docs/features');
+    const gitPolicy = configResult.value.git_policy;
+    const requireClean = gitPolicy.require_clean_worktree_before_task;
+    const allowDirty = gitPolicy.allow_dirty_worktree;
+    if (requireClean && !allowDirty) {
+      if (checkDirtyWorktree(gitRoot)) {
+        stderr('runtime preflight: git_policy: worktree is not clean and require_clean_worktree_before_task is enabled');
+        return 1;
+      }
+    }
+
     if (existsSync(featuresRoot)) {
       const featureDirs = readdirSync(featuresRoot)
         .filter((name) => {
@@ -94,28 +122,53 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
 
       for (const featureDir of featureDirs) {
         const statePath = join(featuresRoot, featureDir, 'state.md');
+        const requestPath = join(featuresRoot, featureDir, 'request.md');
+        const featurePath = join(featuresRoot, featureDir, 'feature.md');
+        const architecturePath = join(featuresRoot, featureDir, 'architecture.md');
+
         if (!existsSync(statePath)) {
+          if (existsSync(requestPath)) {
+            const missingFormalized =
+              !existsSync(featurePath) || !existsSync(architecturePath) || !existsSync(statePath);
+            if (missingFormalized) {
+              selectedFeature = featureDir;
+              selectedLifecycle = 'request_pending';
+              break;
+            }
+          }
           continue;
         }
 
         const stateContent = readFileSync(statePath, 'utf8');
         const lifecycleMatch = stateContent.match(/^## Lifecycle State\s*\n\s*(.+)/m);
-        let lifecycleState: string;
 
         if (!lifecycleMatch) {
+          if (existsSync(requestPath)) {
+            const missingFormalized =
+              !existsSync(featurePath) || !existsSync(architecturePath) || !existsSync(statePath);
+            if (missingFormalized) {
+              selectedFeature = featureDir;
+              selectedLifecycle = 'request_pending';
+              break;
+            }
+          }
           stderr(`runtime feature-selection: ${featureDir}: malformed lifecycle data in state.md`);
           return 1;
         }
 
-        lifecycleState = lifecycleMatch[1]!.trim();
+        let lifecycleState = lifecycleMatch[1]!.trim();
 
-        const requestPath = join(featuresRoot, featureDir, 'request.md');
         if (existsSync(requestPath)) {
-          const formalizedFiles = ['feature.md', 'architecture.md', 'state.md'];
-          const missing = formalizedFiles.some((f) => !existsSync(join(featuresRoot, featureDir, f)));
-          if (missing) {
+          const missingFormalized =
+            !existsSync(featurePath) || !existsSync(architecturePath) || !existsSync(statePath);
+          if (missingFormalized) {
             lifecycleState = 'request_pending';
           }
+        }
+
+        if (!ALLOWED_LIFECYCLE_STATES.includes(lifecycleState)) {
+          stderr(`runtime feature-selection: ${featureDir}: malformed lifecycle data in state.md`);
+          return 1;
         }
 
         if (lifecycleState === 'completed') {
@@ -133,17 +186,7 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
       }
     }
 
-    const gitPolicy = configResult.value.git_policy;
-    const requireClean = gitPolicy.require_clean_worktree_before_task;
-    const allowDirty = gitPolicy.allow_dirty_worktree;
-    if (requireClean && !allowDirty) {
-      if (checkDirtyWorktree(gitRoot)) {
-        stderr('runtime preflight: git_policy: worktree is not clean and require_clean_worktree_before_task is enabled');
-        return 1;
-      }
-    }
-
-    stdout('CompassRose preflight passed. No tasks to run.');
+    stdout('CompassRose: no selectable feature remaining');
     return 0;
   }
 

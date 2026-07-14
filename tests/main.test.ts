@@ -120,7 +120,7 @@ describe('main([]) — configuration-backed runtime preflight', () => {
       });
 
       expect(exitCode).toBe(0);
-      expect(stdoutMessages).toContain('CompassRose preflight passed. No tasks to run.');
+      expect(stdoutMessages).toContain('CompassRose: no selectable feature remaining');
       expect(stderrMessages.length).toBe(0);
     } finally {
       workspace.dispose();
@@ -196,7 +196,7 @@ describe('main([]) — nested directory from repo root', () => {
       });
 
       expect(exitCode).toBe(0);
-      expect(stdoutMessages).toContain('CompassRose preflight passed. No tasks to run.');
+      expect(stdoutMessages).toContain('CompassRose: no selectable feature remaining');
       expect(stderrMessages.length).toBe(0);
     } finally {
       workspace.dispose();
@@ -461,7 +461,7 @@ describe('main([]) — dirty worktree enforcement', () => {
       });
 
       expect(exitCode).toBe(0);
-      expect(stdoutMessages).toContain('CompassRose preflight passed. No tasks to run.');
+      expect(stdoutMessages).toContain('CompassRose: no selectable feature remaining');
     } finally {
       workspace.dispose();
     }
@@ -507,6 +507,217 @@ formalized
       expect(stdoutMessages.some((m) => m.includes('002-formalized'))).toBe(true);
       expect(stdoutMessages.some((m) => m.includes('formalized'))).toBe(true);
       expect(stderrMessages.length).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+});
+
+describe('main([]) — preflight ordering and lifecycle edge cases', () => {
+  test('git_policy dirty-worktree check runs before feature selection', () => {
+    const featureState = `# State: Test Feature
+
+## Lifecycle State
+
+formalized
+`;
+
+    const workspace = createTempGitWorkspace();
+
+    // Add feature files and commit them so feature selection can find them
+    mkdirSync(join(workspace.root, 'docs/features/003-formalized'), { recursive: true });
+    writeFileSync(join(workspace.root, 'docs/features/003-formalized/state.md'), featureState, 'utf8');
+    writeFileSync(join(workspace.root, 'docs/features/003-formalized/feature.md'), '# Feature\n', 'utf8');
+    writeFileSync(join(workspace.root, 'docs/features/003-formalized/architecture.md'), '# Arch\n', 'utf8');
+    try {
+      execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['add', '.'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+      execFileSync('git', ['commit', '-m', 'add feature'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch {
+      // git might fail; that's OK
+    }
+
+    // Now dirty the worktree AFTER committing the feature
+    try {
+      writeFileSync(join(workspace.root, 'dirty.txt'), 'dirty\n', 'utf8');
+    } catch {
+      workspace.dispose();
+      throw new Error('Failed to create dirty file');
+    }
+
+    try {
+      const stdoutMessages: string[] = [];
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderrMessages.some((m) => m.includes('runtime preflight'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('git_policy'))).toBe(true);
+      expect(stdoutMessages.some((m) => m.includes('003-formalized'))).toBe(false);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('exits 0 with deterministic no-selectable-feature message when all features are completed', () => {
+    const completedState = `# State: Done Feature
+
+## Lifecycle State
+
+completed
+`;
+
+    const workspace = createTempGitWorkspace();
+
+    mkdirSync(join(workspace.root, 'docs/features/001-done'), { recursive: true });
+    writeFileSync(join(workspace.root, 'docs/features/001-done/state.md'), completedState, 'utf8');
+    writeFileSync(join(workspace.root, 'docs/features/001-done/feature.md'), '# Feature\n', 'utf8');
+    try {
+      execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['add', '.'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+      execFileSync('git', ['commit', '-m', 'add completed feature'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch {
+      // ignore
+    }
+
+    try {
+      const stdoutMessages: string[] = [];
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(0);
+      expect(stdoutMessages.some((m) => m.includes('no selectable feature'))).toBe(true);
+      expect(stdoutMessages.some((m) => m.includes('No tasks to run'))).toBe(false);
+      expect(stderrMessages.length).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('selects feature as request_pending when request.md exists but formalized files are missing', () => {
+    const stateContent = `# State
+
+## Lifecycle State
+
+formalization_pending
+`;
+
+    const workspace = createTempGitWorkspace();
+
+    mkdirSync(join(workspace.root, 'docs/features/004-request'), { recursive: true });
+    writeFileSync(join(workspace.root, 'docs/features/004-request/request.md'), '# Request\n', 'utf8');
+    writeFileSync(join(workspace.root, 'docs/features/004-request/state.md'), stateContent, 'utf8');
+    // Deliberately do NOT create feature.md or architecture.md to trigger request_pending derivation
+
+    try {
+      execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['add', '.'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+      execFileSync('git', ['commit', '-m', 'add request_pending feature'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch {
+      // ignore
+    }
+
+    try {
+      const stdoutMessages: string[] = [];
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(0);
+      expect(stdoutMessages.some((m) => m.includes('004-request'))).toBe(true);
+      expect(stdoutMessages.some((m) => m.includes('request_pending'))).toBe(true);
+      expect(stderrMessages.length).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('exits 1 with diagnostic when lifecycle data is entirely missing from state.md', () => {
+    const workspace = createTempGitWorkspace();
+
+    mkdirSync(join(workspace.root, 'docs/features/005-broken'), { recursive: true });
+    writeFileSync(join(workspace.root, 'docs/features/005-broken/state.md'), '# State\n\nNo lifecycle header here\n');
+    writeFileSync(join(workspace.root, 'docs/features/005-broken/feature.md'), '# Feature\n');
+
+    try {
+      execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['add', '.'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+      execFileSync('git', ['commit', '-m', 'add broken feature', '--allow-empty'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch {
+      // ignore
+    }
+
+    try {
+      const stdoutMessages: string[] = [];
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderrMessages.some((m) => m.includes('runtime feature-selection'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('malformed lifecycle data'))).toBe(true);
+      expect(stdoutMessages.some((m) => m.includes('005-broken'))).toBe(false);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('exits 1 with diagnostic when lifecycle value is unknown', () => {
+    const workspace = createTempGitWorkspace();
+
+    mkdirSync(join(workspace.root, 'docs/features/006-unknown'), { recursive: true });
+    writeFileSync(
+      join(workspace.root, 'docs/features/006-unknown/state.md'),
+      `# State
+
+## Lifecycle State
+
+unknown_lifecycle
+`,
+      'utf8',
+    );
+    writeFileSync(join(workspace.root, 'docs/features/006-unknown/feature.md'), '# Feature\n');
+
+    try {
+      execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['add', '.'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+      execFileSync('git', ['commit', '-m', 'add unknown lifecycle feature', '--allow-empty'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch {
+      // ignore
+    }
+
+    try {
+      const stdoutMessages: string[] = [];
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderrMessages.some((m) => m.includes('runtime feature-selection'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('malformed lifecycle data'))).toBe(true);
+      expect(stdoutMessages.some((m) => m.includes('006-unknown'))).toBe(false);
     } finally {
       workspace.dispose();
     }
