@@ -6,6 +6,7 @@ import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
 import { readProjectConfiguration, validateRuntimePreconditions } from '../config/configReader.js';
 import { getCurrentSupportedPlatform } from '../platform/platformInfo.js';
 import { CompassRoseOrchestrator } from '../orchestrator/orchestrator.js';
+import { parseRunArguments } from './runOptions.js';
 
 export interface CliEnvironment {
   readonly cwd?: string;
@@ -43,64 +44,63 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     return report.exitCode;
   }
 
-  if (argv.length === 0) {
-    const gitRoot = findGitRepositoryRoot(cwd);
-    if (gitRoot === null) {
-      stderr('runtime preflight: git repository: current directory is not inside a git repository');
-      return 1;
-    }
-    const configBase = gitRoot;
-    const configPath = join(configBase, 'docs/compassrose/CONFIG.md');
-    const configResult = readProjectConfiguration(configPath);
-
-    if (!configResult.ok) {
-      for (const issue of configResult.error) {
-        if (issue.line) {
-          stderr(`${issue.field} (line ${issue.line}): ${issue.message}`);
-        } else {
-          stderr(`${issue.field}: ${issue.message}`);
-        }
-      }
-      return 1;
-    }
-
-    const preflightIssues = validateRuntimePreconditions(configResult.value);
-    if (preflightIssues.length > 0) {
-      for (const issue of preflightIssues) {
-        stderr(`runtime preflight: ${issue.field}: ${issue.message}`);
-      }
-      return 1;
-    }
-
-    const currentPlatform = getCurrentSupportedPlatform();
-    const supportedPlatforms = configResult.value.project?.supported_platforms;
-    if (currentPlatform === null || (Array.isArray(supportedPlatforms) && !supportedPlatforms.includes(currentPlatform))) {
-      const platformLabel = currentPlatform ?? 'unknown';
-      stderr(`runtime preflight: supported_platforms: current platform '${platformLabel}' is not supported. Supported platforms: ${supportedPlatforms?.join(', ') ?? 'none'}`);
-      return 1;
-    }
-
-    const gitPolicy = configResult.value.git_policy;
-    const requireClean = gitPolicy.require_clean_worktree_before_task;
-    const allowDirty = gitPolicy.allow_dirty_worktree;
-    if (requireClean && !allowDirty) {
-      if (checkDirtyWorktree(gitRoot)) {
-        stderr('runtime preflight: git_policy: worktree is not clean and require_clean_worktree_before_task is enabled');
-        return 1;
-      }
-    }
-
-    const orchestrator = new CompassRoseOrchestrator({
-      cwd: gitRoot,
-      loop: false,
-      commit: true,
-      implementer: 'opencode',
-    });
-    return orchestrator.run();
+  let options;
+  try {
+    options = parseRunArguments(argv, cwd);
+  } catch (error) {
+    stderr(error instanceof Error ? error.message : String(error));
+    stderr('Usage: compassrose [--loop] [--implementer codex|opencode] [--no-commit] [--cwd <path>]');
+    stderr('Usage: compassrose doctor');
+    return 1;
   }
 
-  stderr('Usage: compassrose doctor');
-  return 1;
+  const gitRoot = findGitRepositoryRoot(options.cwd);
+  if (gitRoot === null) {
+    stderr('runtime preflight: git repository: current directory is not inside a git repository');
+    return 1;
+  }
+  const configPath = join(gitRoot, 'docs/compassrose/CONFIG.md');
+  const configResult = readProjectConfiguration(configPath);
+
+  if (!configResult.ok) {
+    for (const issue of configResult.error) {
+      if (issue.line) {
+        stderr(`${issue.field} (line ${issue.line}): ${issue.message}`);
+      } else {
+        stderr(`${issue.field}: ${issue.message}`);
+      }
+    }
+    return 1;
+  }
+
+  const preflightIssues = validateRuntimePreconditions(configResult.value);
+  if (preflightIssues.length > 0) {
+    for (const issue of preflightIssues) {
+      stderr(`runtime preflight: ${issue.field}: ${issue.message}`);
+    }
+    return 1;
+  }
+
+  const currentPlatform = getCurrentSupportedPlatform();
+  const supportedPlatforms = configResult.value.project?.supported_platforms;
+  if (currentPlatform === null || (Array.isArray(supportedPlatforms) && !supportedPlatforms.includes(currentPlatform))) {
+    const platformLabel = currentPlatform ?? 'unknown';
+    stderr(`runtime preflight: supported_platforms: current platform '${platformLabel}' is not supported. Supported platforms: ${supportedPlatforms?.join(', ') ?? 'none'}`);
+    return 1;
+  }
+
+  const gitPolicy = configResult.value.git_policy;
+  const requireClean = gitPolicy.require_clean_worktree_before_task;
+  const allowDirty = gitPolicy.allow_dirty_worktree;
+  if (requireClean && !allowDirty) {
+    if (checkDirtyWorktree(gitRoot)) {
+      stderr('runtime preflight: git_policy: worktree is not clean and require_clean_worktree_before_task is enabled');
+      return 1;
+    }
+  }
+
+  const orchestrator = new CompassRoseOrchestrator({ ...options, cwd: gitRoot });
+  return orchestrator.run();
 }
 
 if (fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? '')) {
