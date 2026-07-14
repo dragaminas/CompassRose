@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+task_ready
 
 ## Source Request
 
@@ -11,7 +11,7 @@ formalized
 ## Operational Status
 
 - formalization: complete
-- active_task: none
+- active_task: F002-T13
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
@@ -52,6 +52,8 @@ Task `F002-T10` is now planned and ready to execute. Add deterministic feature-s
 Task `F002-T11` is now planned and ready to execute. Advance formalized features to task planning.
 
 Task `F002-T12` is now planned and ready to execute. Align the CLI handoff report with the persisted lifecycle state.
+
+Task `F002-T13` is now planned and ready to execute. Dispatch task planning from the selected lifecycle state.
 
 ## Implemented Deliverables
 
@@ -98,4 +100,4 @@ Subtask `F002-T12-C1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Plan the next task that advances this feature from the remaining gap.
+Execute `F002-T13` when the current execution mode allows it.
