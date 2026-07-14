@@ -28,7 +28,7 @@ In progress
 
 ## Pending
 
-- Execute correction subtask `F002-T11-C1-CORRECTION-1` for the active feature.
+- Recover or finish implementation for `F002-T11-C1-CORRECTION-1`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -45,4 +45,4 @@ Subtask `F002-T10-C1-CORRECTION-1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute correction subtask `F002-T11-C1-CORRECTION-1`.
+The active feature is `002-configuration-model`, and subtask execution for `F002-T11-C1-CORRECTION-1` is in progress.
