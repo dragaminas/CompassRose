@@ -1,5 +1,5 @@
 import { describe, expect, test, afterAll } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
@@ -355,10 +355,10 @@ function createTempGitWorkspace(
   // Initialize a proper git repository
   mkdirSync(join(root, '.git'), { recursive: true });
   try {
-    execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' });
-  } catch {
-    // If git init fails (git not available), the .git dir marker is enough for findGitRepositoryRoot
-    // but dirty worktree tests will fail — this is acceptable when git is unavailable
+    execFileSync('git', ['init'], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'] });
+  } catch (err) {
+    workspace.dispose();
+    throw new Error(`git init failed: ${err}`);
   }
 
   // Create and commit a base file so git considers the repo clean initially
@@ -367,10 +367,11 @@ function createTempGitWorkspace(
   writeFileSync(join(root, 'README.md'), '# Test\n', 'utf8');
 
   try {
-    execFileSync('git', ['add', '.'], { cwd: root, stdio: 'ignore' });
-    execFileSync('git', ['commit', '-m', 'initial', '--allow-empty'], { cwd: root, stdio: 'ignore' });
-  } catch {
-    // If git commands fail, just keep the .git dir marker
+    execFileSync('git', ['add', '.'], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'] });
+    execFileSync('git', ['commit', '-m', 'initial', '--allow-empty'], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'] });
+  } catch (err) {
+    workspace.dispose();
+    throw new Error(`git commit failed: ${err}`);
   }
 
   return {
@@ -384,13 +385,39 @@ describe('main([]) — dirty worktree enforcement', () => {
   test('returns exit code 1 with runtime preflight and git_policy diagnostics when worktree is dirty', () => {
     const workspace = createTempGitWorkspace();
 
-    // Create untracked and modified files to make the worktree dirty
+    // Create untracked files to make the worktree dirty
     try {
       writeFileSync(join(workspace.root, 'untracked.txt'), 'dirty content\n', 'utf8');
     } catch {
-      // If we can't create dirty state, skip this test
       workspace.dispose();
-      return;
+      throw new Error('Failed to create untracked file for dirty worktree test');
+    }
+
+    try {
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderrMessages.some((m) => m.includes('runtime preflight'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('git_policy'))).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('returns exit code 1 with runtime preflight and git_policy diagnostics when a tracked file is modified', () => {
+    const workspace = createTempGitWorkspace();
+
+    // Modify a file that was committed by the fixture (README.md)
+    try {
+      writeFileSync(join(workspace.root, 'README.md'), '# Modified for test\n', 'utf8');
+    } catch {
+      workspace.dispose();
+      throw new Error('Failed to modify tracked file for dirty worktree test');
     }
 
     try {
@@ -421,7 +448,7 @@ describe('main([]) — dirty worktree enforcement', () => {
       writeFileSync(join(workspace.root, 'untracked.txt'), 'dirty content\n', 'utf8');
     } catch {
       workspace.dispose();
-      return;
+      throw new Error('Failed to create untracked file for allow-dirty test');
     }
 
     try {
