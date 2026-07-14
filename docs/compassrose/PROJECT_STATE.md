@@ -15,7 +15,7 @@ In progress
 - Feature `002-configuration-model` was suspended from `implementation_running`; the active task pointer remains `F002-T10`.
 - Blocking task context: `F002-T10-DOCTOR-RECOVERY-R1`
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T10-DOCTOR-RECOVERY-R2`; the active task pointer was restored to `F002-T10`.
-- Feature `002-configuration-model` now has a planned next task, `F002-T11`, ready to execute.
+- Feature `002-configuration-model` now has a planned next task, `F002-T12`, ready to execute.
 
 ## Implemented
 
@@ -28,7 +28,7 @@ In progress
 
 ## Pending
 
-- Plan the next implementation task for the active feature.
+- Execute `F002-T12` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -45,4 +45,4 @@ Subtask `F002-T11-C1-CORRECTION-1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is the next task-planning pass.
+The active feature is `002-configuration-model`, and its next valid action is to execute `F002-T12`.
