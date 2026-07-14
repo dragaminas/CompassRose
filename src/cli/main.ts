@@ -92,7 +92,11 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
   const gitPolicy = configResult.value.git_policy;
   const requireClean = gitPolicy.require_clean_worktree_before_task;
   const allowDirty = gitPolicy.allow_dirty_worktree;
-  if (requireClean && !allowDirty) {
+  // Same escape hatch CompassRoseOrchestrator already honors internally, so e2e scenarios
+  // that deliberately seed pre-existing (uncommitted) fixture state can bypass both checks
+  // with one flag instead of needing a second, main.ts-specific one.
+  const skipCleanWorktreeCheck = process.env.PROTO_COMPASSROSE_SKIP_CLEAN_CHECK === '1';
+  if (requireClean && !allowDirty && !skipCleanWorktreeCheck) {
     if (checkDirtyWorktree(gitRoot)) {
       stderr('runtime preflight: git_policy: worktree is not clean and require_clean_worktree_before_task is enabled');
       return 1;

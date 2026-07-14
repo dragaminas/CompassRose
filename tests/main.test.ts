@@ -1,4 +1,4 @@
-import { describe, expect, test, afterAll } from 'vitest';
+import { afterEach, describe, expect, test, afterAll, vi } from 'vitest';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -388,6 +388,30 @@ function createTempGitWorkspace(
 }
 
 describe('main([]) — dirty worktree enforcement', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('PROTO_COMPASSROSE_SKIP_CLEAN_CHECK=1 bypasses the dirty-worktree preflight check', () => {
+    const workspace = createTempGitWorkspace();
+    writeFileSync(join(workspace.root, 'untracked.txt'), 'dirty content\n', 'utf8');
+    vi.stubEnv('PROTO_COMPASSROSE_SKIP_CLEAN_CHECK', '1');
+
+    try {
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(0);
+      expect(stderrMessages.length).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
   test('returns exit code 1 with runtime preflight and git_policy diagnostics when worktree is dirty', () => {
     const workspace = createTempGitWorkspace();
 
