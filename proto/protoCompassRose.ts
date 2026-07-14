@@ -83,6 +83,7 @@ import { GitClient } from '../src/git/gitClient.js';
 import { ArtifactStore } from '../src/artifacts/artifactStore.js';
 import { DEFAULT_AGENT_HEARTBEAT_MS, runCommandWithHeartbeat } from '../src/agents/heartbeatRunner.js';
 import type { HeartbeatRunConfig } from '../src/agents/heartbeatRunner.js';
+import { normalizeModelName, resolveCodexImplementerModel, resolveCodexPlannerModel, resolveOpenCodeModel } from '../src/agents/modelResolution.js';
 // Re-exported because tests/protoReviewableDiffHandoff.test.ts imports parseTaskDocument from
 // this file alongside proto-only helpers (classifyImplementation, selectReviewableDiffForReview),
 // so it's simpler to keep that one import site than to split it across two modules.
@@ -126,20 +127,6 @@ interface CommandExecution {
 
 interface TaskImplementer {
   run(prompt: string, label?: string): CommandExecution;
-}
-
-export function resolveCodexPlannerModel(): string | null {
-  return normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_PLANNER_MODEL)
-    ?? normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_MODEL);
-}
-
-// Only return an explicit override; otherwise let the backend use its active default.
-export function resolveCodexImplementerModel(): string | null {
-  return normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL);
-}
-
-export function resolveOpenCodeModel(): string | null {
-  return normalizeModelName(process.env.PROTO_COMPASSROSE_OPENCODE_MODEL);
 }
 
 interface FileFingerprint {
@@ -4967,15 +4954,6 @@ function replaceOperationalStatus(markdown: string, overrides: Partial<Record<st
 
 function bulletList(items: readonly string[]): string {
   return items.map((item) => `- ${item}`).join('\n');
-}
-
-function normalizeModelName(value: string | undefined | null): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
 }
 
 function compareFeatureIds(left: string, right: string): number {
