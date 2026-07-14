@@ -515,19 +515,32 @@ formalized
 
 describe('main([]) — formalized feature transitions to task_planning_pending', () => {
   test('formalized feature transitions to task_planning_pending', () => {
-    const formalizedFeatureState = `# State: Formalized Feature
+    const originalStateContent = `# State: Formalized Feature
 
 ## Lifecycle State
 
 formalized
+
+## Design Notes
+
+Architecture decision: use event sourcing for audit trail.
+
+## Tags
+
+scope: backend, priority: high
 `;
+
+    const expectedStateContent = originalStateContent.replace(
+      /(^## Lifecycle State\s*\n\s*)formalized\s*$/m,
+      `$1task_planning_pending\n`,
+    );
 
     const workspace = createTempGitWorkspace();
 
     mkdirSync(join(workspace.root, 'docs/features/002-formalized'), { recursive: true });
     writeFileSync(join(workspace.root, 'docs/features/002-formalized/feature.md'), '# Formalized Feature\n', 'utf8');
     writeFileSync(join(workspace.root, 'docs/features/002-formalized/architecture.md'), '# Architecture\n', 'utf8');
-    writeFileSync(join(workspace.root, 'docs/features/002-formalized/state.md'), formalizedFeatureState, 'utf8');
+    writeFileSync(join(workspace.root, 'docs/features/002-formalized/state.md'), originalStateContent, 'utf8');
 
     try {
       execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: workspace.root, stdio: 'pipe' });
@@ -550,9 +563,7 @@ formalized
       expect(exitCode).toBe(0);
 
       const stateContent = readFileSync(join(workspace.root, 'docs/features/002-formalized/state.md'), 'utf8');
-      expect(stateContent).toContain('task_planning_pending');
-      expect(stateContent).toContain('# State: Formalized Feature');
-      expect(stateContent).toContain('## Lifecycle State');
+      expect(stateContent).toEqual(expectedStateContent);
 
       expect(stdoutMessages.some((m) => m.includes('002-formalized'))).toBe(true);
       expect(stdoutMessages.some((m) => m.includes('formalized'))).toBe(true);
