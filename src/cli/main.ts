@@ -188,6 +188,7 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
           stdout(
             `CompassRose: transitioning feature ${selectedFeature} from formalized to task_planning_pending`,
           );
+          selectedLifecycle = 'task_planning_pending';
         }
 
         break;

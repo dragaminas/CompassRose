@@ -565,9 +565,7 @@ scope: backend, priority: high
       const stateContent = readFileSync(join(workspace.root, 'docs/features/002-formalized/state.md'), 'utf8');
       expect(stateContent).toEqual(expectedStateContent);
 
-      expect(stdoutMessages.some((m) => m.includes('002-formalized'))).toBe(true);
-      expect(stdoutMessages.some((m) => m.includes('formalized'))).toBe(true);
-      expect(stdoutMessages.some((m) => m.includes('task_planning_pending'))).toBe(true);
+      expect(stdoutMessages).toContain('CompassRose: selecting feature 002-formalized (lifecycle state: task_planning_pending)');
       expect(stderrMessages.length).toBe(0);
     } finally {
       workspace.dispose();
