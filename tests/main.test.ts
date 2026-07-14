@@ -127,6 +127,54 @@ describe('main([]) — configuration-backed runtime preflight', () => {
   });
 });
 
+describe('main([]) — runtime preconditions', () => {
+  test('returns non-zero when invoked outside a Git repository', () => {
+    const root = mkdtempSync(join(tmpdir(), 'compassrose-main-test-nogit-'));
+    mkdirSync(join(root, 'docs/compassrose'), { recursive: true });
+    writeFileSync(join(root, 'docs/compassrose/CONFIG.md'), readFixtureConfigMarkdown(), 'utf8');
+
+    try {
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: root,
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderrMessages.some((m) => m.includes('runtime preflight'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('git repository'))).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('returns non-zero when current platform is not in supported_platforms', () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+
+    const workspace = createTempWorkspace({
+      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+    });
+
+    try {
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderrMessages.some((m) => m.includes('runtime preflight'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('supported_platforms'))).toBe(true);
+    } finally {
+      workspace.dispose();
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
+  });
+});
+
 describe('main([]) — nested directory from repo root', () => {
   test('resolves CONFIG.md from repo root when invoked from a nested subdirectory with passing preflight', () => {
     const workspace = createTempWorkspace({

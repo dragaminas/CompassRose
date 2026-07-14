@@ -3,6 +3,7 @@ import { resolve, join } from 'node:path';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
 import { readProjectConfiguration, validateRuntimePreconditions } from '../config/configReader.js';
+import { getCurrentSupportedPlatform } from '../platform/platformInfo.js';
 
 export interface CliEnvironment {
   readonly cwd?: string;
@@ -29,7 +30,11 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
 
   if (argv.length === 0) {
     const gitRoot = findGitRepositoryRoot(cwd);
-    const configBase = gitRoot ?? cwd;
+    if (gitRoot === null) {
+      stderr('runtime preflight: git repository: current directory is not inside a git repository');
+      return 1;
+    }
+    const configBase = gitRoot;
     const configPath = join(configBase, 'docs/compassrose/CONFIG.md');
     const configResult = readProjectConfiguration(configPath);
 
@@ -49,6 +54,14 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
       for (const issue of preflightIssues) {
         stderr(`runtime preflight: ${issue.field}: ${issue.message}`);
       }
+      return 1;
+    }
+
+    const currentPlatform = getCurrentSupportedPlatform();
+    const supportedPlatforms = configResult.value.project?.supported_platforms;
+    if (currentPlatform === null || (Array.isArray(supportedPlatforms) && !supportedPlatforms.includes(currentPlatform))) {
+      const platformLabel = currentPlatform ?? 'unknown';
+      stderr(`runtime preflight: supported_platforms: current platform '${platformLabel}' is not supported. Supported platforms: ${supportedPlatforms?.join(', ') ?? 'none'}`);
       return 1;
     }
 
