@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -16,7 +16,8 @@ describe('proto controlled stop', () => {
   // so Node reports `signal: null` instead of propagating 'SIGINT' up through the
   // heartbeat-runner -> orchestrator chain. Real interactive Ctrl+C (a genuine console
   // CTRL_C_EVENT hitting the whole process group) is unaffected by this and is handled by
-  // protoCompassRose.ts's own process.on('SIGINT') — only this piped-subprocess simulation
+  // CompassRoseOrchestrator's own process.on('SIGINT') (installControlledStopHandlers in
+  // src/orchestrator/orchestrator.ts) — only this piped-subprocess simulation
   // can't be verified on win32.
   test.skipIf(process.platform === 'win32')('stops cleanly on SIGINT without converting the interrupt into a failure', async () => {
     const workspace = prepareControlledStopWorkspace();
@@ -92,7 +93,7 @@ async function runProtoControlledStop(cloneRoot: string): Promise<{
   const tempRoot = dirname(cloneRoot);
   const runResult = spawnSync(
     tsxBinary,
-    ['proto/protoCompassRose.ts', 'run', '--loop', '--no-commit', '--implementer', 'opencode'],
+    ['src/cli/main.ts', '--loop', '--no-commit', '--implementer', 'opencode'],
     {
       cwd: cloneRoot,
       env: {
@@ -117,21 +118,24 @@ async function runProtoControlledStop(cloneRoot: string): Promise<{
 }
 
 function syncPrototypeRuntime(sourceRoot: string, targetRoot: string): void {
-  writeFileSync(
-    join(targetRoot, 'src', 'contracts', 'runtime', 'agentContext.ts'),
-    readFileSync(join(sourceRoot, 'src', 'contracts', 'runtime', 'agentContext.ts'), 'utf8'),
-    'utf8',
-  );
-  writeFileSync(
-    join(targetRoot, 'proto', 'protoCompassRose.ts'),
-    readFileSync(join(sourceRoot, 'proto', 'protoCompassRose.ts'), 'utf8'),
-    'utf8',
-  );
-  writeFileSync(
-    join(targetRoot, 'proto', 'protoHeartbeatRunner.mjs'),
-    readFileSync(join(sourceRoot, 'proto', 'protoHeartbeatRunner.mjs'), 'utf8'),
-    'utf8',
-  );
+  copyTree(join(sourceRoot, 'src'), join(targetRoot, 'src'));
+}
+
+function copyTree(sourceRoot: string, targetRoot: string): void {
+  if (!existsSync(sourceRoot)) {
+    return;
+  }
+
+  if (statSync(sourceRoot).isFile()) {
+    mkdirSync(dirname(targetRoot), { recursive: true });
+    writeFileSync(targetRoot, readFileSync(sourceRoot, 'utf8'), 'utf8');
+    return;
+  }
+
+  mkdirSync(targetRoot, { recursive: true });
+  for (const entry of readdirSync(sourceRoot)) {
+    copyTree(join(sourceRoot, entry), join(targetRoot, entry));
+  }
 }
 
 function seedTaskReadyState(cloneRoot: string): void {

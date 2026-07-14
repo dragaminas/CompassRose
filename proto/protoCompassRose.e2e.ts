@@ -7,7 +7,7 @@ import type { AgentToolName } from '../src/contracts/runtime/agentContext.js';
 
 // Single source of truth for the 'state-correction-missing-active-task' scenario: the fallback task
 // artifact that seedStateCorrectionFallbackTaskArtifact() seeds and that the runtime resolves the
-// correction task id from (see resolveStateCorrectionActiveTaskFromArtifacts in protoCompassRose.ts).
+// correction task id from (see resolveStateCorrectionActiveTaskFromArtifacts in src/orchestrator/orchestrator.ts).
 // Every assertion below must derive its expected file names from this constant instead of re-typing
 // the task id, or a rename here will silently stop matching what the runtime actually produces.
 const STATE_CORRECTION_FALLBACK_TASK_ID = 'F002-T05';
@@ -55,8 +55,7 @@ function main(): number {
     return 1;
   }
 
-  syncPrototypeRuntime(repoRoot, cloneRoot);
-  syncContractFiles(repoRoot, cloneRoot);
+  copyTree(join(repoRoot, 'src'), join(cloneRoot, 'src'));
   syncFeatureStateDocs(repoRoot, cloneRoot);
   pinScenarioConfigLimits(cloneRoot);
 
@@ -103,7 +102,7 @@ function main(): number {
 
   const runResult = spawnSync(
     tsxBinary,
-    ['proto/protoCompassRose.ts', 'run', '--loop', '--implementer', implementerTool, ...(commitEnabled ? [] : ['--no-commit'])],
+    ['src/cli/main.ts', '--loop', '--implementer', implementerTool, ...(commitEnabled ? [] : ['--no-commit'])],
     {
       cwd: cloneRoot,
       env: {
@@ -182,7 +181,7 @@ function main(): number {
     process.stderr.write(`git status failed:\n${worktreeStatus.stderr || worktreeStatus.stdout}\n`);
     return 1;
   }
-  const ignoredWorktreePaths = new Set(['proto/protoCompassRose.ts']);
+  const ignoredWorktreePaths = new Set<string>();
   const worktreeDirtyLines = (worktreeStatus.stdout || '')
     .split('\n')
     .map((line) => line.trimEnd())
@@ -552,16 +551,6 @@ function markerFileNameForScenario(scenario: string): string {
   }
 }
 
-function syncPrototypeRuntime(repoRoot: string, cloneRoot: string): void {
-  const sourcePath = join(repoRoot, 'proto', 'protoCompassRose.ts');
-  const targetPath = join(cloneRoot, 'proto', 'protoCompassRose.ts');
-  writeFileSync(targetPath, readFileSync(sourcePath, 'utf8'), 'utf8');
-
-  const helperSourcePath = join(repoRoot, 'proto', 'protoHeartbeatRunner.mjs');
-  const helperTargetPath = join(cloneRoot, 'proto', 'protoHeartbeatRunner.mjs');
-  writeFileSync(helperTargetPath, readFileSync(helperSourcePath, 'utf8'), 'utf8');
-}
-
 // These scenarios and their mocked codex/opencode responses are scripted around exactly one
 // primary task per `run --loop` invocation. Pin that here instead of inheriting whatever the
 // live repository's docs/compassrose/CONFIG.md happens to say today, so a real project tuning
@@ -572,10 +561,6 @@ function pinScenarioConfigLimits(cloneRoot: string): void {
   const config = readFileSync(configPath, 'utf8');
   const pinned = config.replace(/max_tasks_per_run:\s*\d+/, 'max_tasks_per_run: 1');
   writeFileSync(configPath, pinned, 'utf8');
-}
-
-function syncContractFiles(repoRoot: string, cloneRoot: string): void {
-  copyTree(join(repoRoot, 'src', 'contracts'), join(cloneRoot, 'src', 'contracts'));
 }
 
 function syncFeatureStateDocs(repoRoot: string, cloneRoot: string): void {

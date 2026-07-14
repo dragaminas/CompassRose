@@ -3,10 +3,10 @@ import type { FeatureStateSnapshot } from "../state/featureStateSnapshot.js";
 import type { StepDecision } from "./stepDecision.js";
 
 /**
- * Runtime contracts shared by `proto/protoCompassRose.ts`.
+ * Runtime contracts shared by `src/orchestrator/orchestrator.ts` and `src/cli/main.ts`.
  *
  * These shapes capture the small set of records that are important enough to
- * live in the contract layer instead of being duplicated inside proto.
+ * live in the contract layer instead of being duplicated inside the orchestrator.
  */
 export interface ProtoOptions {
   readonly loop: boolean;

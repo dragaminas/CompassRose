@@ -26,9 +26,10 @@ const STRUCTURED_SCHEMA_PATHS: Record<StructuredSchemaId, string> = {
 
 // The runtime-critical paths are the files that, if changed, mean the orchestrator's own
 // behavior may have changed underneath it — so a running loop should restart instead of
-// continuing to execute stale in-memory logic. Today that's the single file this class'
-// self-hosting caller lives in; a caller may pass a different set for its own layout.
-const DEFAULT_RUNTIME_CRITICAL_PATHS: readonly string[] = ['proto/protoCompassRose.ts'];
+// continuing to execute stale in-memory logic. CompassRoseOrchestrator always passes its
+// own explicit module list (see ORCHESTRATOR_RUNTIME_CRITICAL_PATHS in orchestrator.ts);
+// this default only applies to a caller that doesn't specify one.
+const DEFAULT_RUNTIME_CRITICAL_PATHS: readonly string[] = ['src/orchestrator/orchestrator.ts'];
 
 function readJsonFile(path: string): unknown {
   return JSON.parse(readUtf8(path));

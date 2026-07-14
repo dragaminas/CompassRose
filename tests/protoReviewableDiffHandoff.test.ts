@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { selectImplementationContextArtifactNames } from '../src/contracts/runtime/agentContext.js';
-import { parseTaskDocument } from '../proto/protoCompassRose.js';
+import { parseTaskDocument } from '../src/task/taskDocument.js';
 import { classifyImplementation, selectReviewableDiffForReview } from '../src/orchestrator/implementationDiagnostics.js';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');

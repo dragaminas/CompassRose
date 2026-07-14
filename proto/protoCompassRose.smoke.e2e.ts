@@ -64,7 +64,7 @@ function main(): number {
 
   const runResult = spawnSync(
     tsxBinary,
-    ['proto/protoCompassRose.ts', 'run', '--loop', '--no-commit'],
+    ['src/cli/main.ts', '--loop', '--no-commit'],
     {
       cwd: cloneRoot,
       env: {
@@ -123,13 +123,24 @@ function main(): number {
 }
 
 function syncPrototypeRuntime(repoRoot: string, cloneRoot: string): void {
-  const sourcePath = join(repoRoot, 'proto', 'protoCompassRose.ts');
-  const targetPath = join(cloneRoot, 'proto', 'protoCompassRose.ts');
-  writeFileSync(targetPath, readFileSync(sourcePath, 'utf8'), 'utf8');
+  copyTree(join(repoRoot, 'src'), join(cloneRoot, 'src'));
+}
 
-  const helperSourcePath = join(repoRoot, 'proto', 'protoHeartbeatRunner.mjs');
-  const helperTargetPath = join(cloneRoot, 'proto', 'protoHeartbeatRunner.mjs');
-  writeFileSync(helperTargetPath, readFileSync(helperSourcePath, 'utf8'), 'utf8');
+function copyTree(sourceRoot: string, targetRoot: string): void {
+  if (!existsSync(sourceRoot)) {
+    return;
+  }
+
+  if (statSync(sourceRoot).isFile()) {
+    mkdirSync(dirname(targetRoot), { recursive: true });
+    writeFileSync(targetRoot, readFileSync(sourceRoot, 'utf8'), 'utf8');
+    return;
+  }
+
+  mkdirSync(targetRoot, { recursive: true });
+  for (const entry of readdirSync(sourceRoot)) {
+    copyTree(join(sourceRoot, entry), join(targetRoot, entry));
+  }
 }
 
 function seedSmokeFeatureStateDocs(cloneRoot: string): void {
