@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { resolve, join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
 import { readProjectConfiguration, validateRuntimePreconditions } from '../config/configReader.js';
@@ -9,6 +10,19 @@ export interface CliEnvironment {
   readonly cwd?: string;
   readonly stdout?: (message: string) => void;
   readonly stderr?: (message: string) => void;
+}
+
+function checkDirtyWorktree(gitRoot: string): boolean {
+  try {
+    const output = execFileSync('git', ['status', '--porcelain'], {
+      cwd: gitRoot,
+      encoding: 'utf8',
+    });
+    const lines = output.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+    return lines.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 export function main(argv: string[] = process.argv.slice(2), environment: CliEnvironment = {}): number {
@@ -63,6 +77,16 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
       const platformLabel = currentPlatform ?? 'unknown';
       stderr(`runtime preflight: supported_platforms: current platform '${platformLabel}' is not supported. Supported platforms: ${supportedPlatforms?.join(', ') ?? 'none'}`);
       return 1;
+    }
+
+    const gitPolicy = configResult.value.git_policy;
+    const requireClean = gitPolicy.require_clean_worktree_before_task;
+    const allowDirty = gitPolicy.allow_dirty_worktree;
+    if (requireClean && !allowDirty) {
+      if (checkDirtyWorktree(gitRoot)) {
+        stderr('runtime preflight: git_policy: worktree is not clean and require_clean_worktree_before_task is enabled');
+        return 1;
+      }
     }
 
     stdout('CompassRose preflight passed. No tasks to run.');

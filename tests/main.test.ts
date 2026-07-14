@@ -1,7 +1,8 @@
 import { describe, expect, test, afterAll } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 import { main } from '../src/cli/main.js';
 import { readFixtureConfigMarkdown } from './testUtils.js';
 
@@ -338,6 +339,102 @@ describe('main([]) — role-to-adapter wiring validation', () => {
 
       expect(exitCode).toBe(0);
       expect(stderrMessages.length).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+});
+
+function createTempGitWorkspace(
+  configOverride: (original: string) => string = (o) => o,
+): { root: string; dispose: () => void; dirtyConfig: string } {
+  const originalConfig = readFixtureConfigMarkdown();
+  const dirtyConfig = configOverride(originalConfig);
+  const root = mkdtempSync(join(tmpdir(), 'compassrose-worktree-test-'));
+
+  // Initialize a proper git repository
+  mkdirSync(join(root, '.git'), { recursive: true });
+  try {
+    execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' });
+  } catch {
+    // If git init fails (git not available), the .git dir marker is enough for findGitRepositoryRoot
+    // but dirty worktree tests will fail — this is acceptable when git is unavailable
+  }
+
+  // Create and commit a base file so git considers the repo clean initially
+  mkdirSync(join(root, 'docs/compassrose'), { recursive: true });
+  writeFileSync(join(root, 'docs/compassrose/CONFIG.md'), dirtyConfig, 'utf8');
+  writeFileSync(join(root, 'README.md'), '# Test\n', 'utf8');
+
+  try {
+    execFileSync('git', ['add', '.'], { cwd: root, stdio: 'ignore' });
+    execFileSync('git', ['commit', '-m', 'initial', '--allow-empty'], { cwd: root, stdio: 'ignore' });
+  } catch {
+    // If git commands fail, just keep the .git dir marker
+  }
+
+  return {
+    root,
+    dirtyConfig,
+    dispose: () => rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+describe('main([]) — dirty worktree enforcement', () => {
+  test('returns exit code 1 with runtime preflight and git_policy diagnostics when worktree is dirty', () => {
+    const workspace = createTempGitWorkspace();
+
+    // Create untracked and modified files to make the worktree dirty
+    try {
+      writeFileSync(join(workspace.root, 'untracked.txt'), 'dirty content\n', 'utf8');
+    } catch {
+      // If we can't create dirty state, skip this test
+      workspace.dispose();
+      return;
+    }
+
+    try {
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderrMessages.some((m) => m.includes('runtime preflight'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('git_policy'))).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('allows dirty worktree when require_clean_worktree_before_task is false and allow_dirty_worktree is true', () => {
+    const workspace = createTempGitWorkspace((config) =>
+      config
+        .replace('require_clean_worktree_before_task: true', 'require_clean_worktree_before_task: false')
+        .replace('allow_dirty_worktree: false', 'allow_dirty_worktree: true'),
+    );
+
+    // Create untracked files to make the worktree dirty
+    try {
+      writeFileSync(join(workspace.root, 'untracked.txt'), 'dirty content\n', 'utf8');
+    } catch {
+      workspace.dispose();
+      return;
+    }
+
+    try {
+      const stdoutMessages: string[] = [];
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(0);
+      expect(stdoutMessages).toContain('CompassRose preflight passed. No tasks to run.');
     } finally {
       workspace.dispose();
     }
