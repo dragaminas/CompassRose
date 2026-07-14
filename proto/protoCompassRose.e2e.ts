@@ -58,6 +58,7 @@ function main(): number {
   syncPrototypeRuntime(repoRoot, cloneRoot);
   syncContractFiles(repoRoot, cloneRoot);
   syncFeatureStateDocs(repoRoot, cloneRoot);
+  pinScenarioConfigLimits(cloneRoot);
 
   // A fresh local clone (and the sync steps above, which rewrite files with content that's
   // still identical to HEAD) can leave the index stat-cache out of sync with the checked-out
@@ -559,6 +560,18 @@ function syncPrototypeRuntime(repoRoot: string, cloneRoot: string): void {
   const helperSourcePath = join(repoRoot, 'proto', 'protoHeartbeatRunner.mjs');
   const helperTargetPath = join(cloneRoot, 'proto', 'protoHeartbeatRunner.mjs');
   writeFileSync(helperTargetPath, readFileSync(helperSourcePath, 'utf8'), 'utf8');
+}
+
+// These scenarios and their mocked codex/opencode responses are scripted around exactly one
+// primary task per `run --loop` invocation. Pin that here instead of inheriting whatever the
+// live repository's docs/compassrose/CONFIG.md happens to say today, so a real project tuning
+// change (e.g. raising limits.max_tasks_per_run for faster unattended progress) can't silently
+// make the runtime plan a second, unscripted task mid-scenario and fail in an unrelated way.
+function pinScenarioConfigLimits(cloneRoot: string): void {
+  const configPath = join(cloneRoot, 'docs', 'compassrose', 'CONFIG.md');
+  const config = readFileSync(configPath, 'utf8');
+  const pinned = config.replace(/max_tasks_per_run:\s*\d+/, 'max_tasks_per_run: 1');
+  writeFileSync(configPath, pinned, 'utf8');
 }
 
 function syncContractFiles(repoRoot: string, cloneRoot: string): void {
