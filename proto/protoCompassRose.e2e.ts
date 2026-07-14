@@ -227,7 +227,12 @@ function main(): number {
   if (checks.every((check) => check.ok)) {
     console.log(`codex calls: ${codexCalls}`);
     console.log(`opencode calls: ${opencodeCalls}`);
-    rmSync(tempRoot, { recursive: true, force: true });
+    // Windows can transiently hold a handle open on a just-used git pack/idx file
+    // (antivirus scanning, delayed handle release from the git subprocess that
+    // just exited), so an immediate recursive rm can fail with EPERM/EBUSY even
+    // though nothing is actually still using the directory. Retry with backoff
+    // instead of failing the whole scenario over a cleanup race.
+    rmSync(tempRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     return 0;
   }
 
