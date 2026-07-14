@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+task_ready
 
 ## Source Request
 
@@ -11,7 +11,7 @@ formalized
 ## Operational Status
 
 - formalization: complete
-- active_task: none
+- active_task: F002-T08
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
@@ -42,6 +42,8 @@ Task `F002-T06` is now planned and ready to execute. Expose the remaining docume
 Task `F002-T07` is now planned and ready to execute. Consume project runtime policy at the CLI entrypoint.
 
 Task `F002-T07-C2` is now planned and ready to execute. Enforce MVP external_cli-only role wiring for the planner and reviewer roles (the implementer role was already covered by the approved `F002-T07-C1` correction). This task was originally planned with a colliding id (`F002-T07-C1`, already used by the approved correction above); the runtime now rejects a proposed task id that collides with an existing task document, and this task was renumbered to `F002-T07-C2` to resolve the existing collision.
+
+Task `F002-T08` is now planned and ready to execute. Enforce repository and platform preconditions at CLI preflight.
 
 ## Implemented Deliverables
 
@@ -88,4 +90,4 @@ Subtask `F002-T07-C2` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Plan the next task that advances this feature from the remaining gap.
+Execute `F002-T08` when the current execution mode allows it.
