@@ -191,6 +191,12 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
           selectedLifecycle = 'task_planning_pending';
         }
 
+        if (lifecycleState === 'task_planning_pending') {
+          stdout(
+            `CompassRose: dispatching task planning for feature ${selectedFeature} (lifecycle state: task_planning_pending)`,
+          );
+        }
+
         break;
       }
 
