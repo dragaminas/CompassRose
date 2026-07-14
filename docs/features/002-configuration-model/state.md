@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+blocked
 
 ## Source Request
 
@@ -13,7 +13,7 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T10
 - active_correction_task: none
-- active_unblock_task: F002-T10-DOCTOR-RECOVERY-R1
+- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: failed
 - last_review_result: blocked
@@ -74,7 +74,26 @@ Task `F002-T10` is now planned and ready to execute. Add deterministic feature-s
 
 ## Blocked By
 
-- None
+- - kind: state_corruption
+- - signature: state-corruption-unblock-pending-doctor-recovery-f002-t10-doctor-recovery-r1-failed-its-re-entry
+- - recoverability: agent
+- - observed_state: lifecycle=unblock_pending; active_task=F002-T10; active_correction_task=none; active_unblock_task=F002-T10-DOCTOR-RECOVERY-R1
+- - evidence: Doctor recovery F002-T10-DOCTOR-RECOVERY-R1 failed its re-entry quality gates.
+npm test: - 0
++ 1
+
+ ❯ tests/protoBlockerFlows.test.ts:154:27
+    152|     const result = runProtoScenario('state-correction-missing-active-t…
+    153|
+    154|     expect(result.status).toBe(0);
+       |                           ^
+    155|     expect(result.stdout).toContain('PASS: state correction artifact w…
+    156|     expect(result.stdout).toContain('PASS: state correction document w…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+- - evidence: None
+- - evidence: lifecycle=unblock_pending
+- - reason: Doctor recovery F002-T10-DOCTOR-RECOVERY-R1 failed its re-entry quality gates. | npm test: - 0 | + 1 | ❯ tests/protoBlockerFlows.test.ts:154:27 | 152|     const result = runProtoScenario('state-correction-missing-active-t… | 153| | 154|     expect(result.status).toBe(0); | |                           ^ | 155|     expect(result.stdout).toContain('PASS: state correction artifact w… | 156|     expect(result.stdout).toContain('PASS: state correction document w… | ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
 
 ## Blocked From
 
@@ -82,6 +101,7 @@ Task `F002-T10` is now planned and ready to execute. Add deterministic feature-s
 - active_task: `F002-T10`
 - active_correction_task: `none`
 - active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -94,4 +114,4 @@ Subtask `F002-T09-C1-CORRECTION-1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T10-DOCTOR-RECOVERY-R1` next.
+Plan a doctor recovery task for blocker `state-corruption-unblock-pending-doctor-recovery-f002-t10-doctor-recovery-r1-failed-its-re-entry` and then restore `implementation_running`.

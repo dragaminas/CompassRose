@@ -10,13 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `unknown-unblock-pending-doctor-recovery-f002-t07-c2-doctor-recovery-r1-failed-its-re-entry-quali`.
+- Feature `002-configuration-model` is blocked by `state-corruption-unblock-pending-doctor-recovery-f002-t10-doctor-recovery-r1-failed-its-re-entry`.
 - Blocker recoverability: agent.
-- Feature `002-configuration-model` was suspended from `implementation_running`; the active task pointer remains `F002-T07-C2`.
-- Blocking task context: `F002-T07-C2-DOCTOR-RECOVERY-R1`
-- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T07-C2-DOCTOR-RECOVERY-R2`; the active task pointer was restored to `F002-T07-C2`.
-- Feature `002-configuration-model` now has a planned next task, `F002-T10`, ready to execute.
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T10-DOCTOR-RECOVERY-R1`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `002-configuration-model` was suspended from `implementation_running`; the active task pointer remains `F002-T10`.
+- Blocking task context: `F002-T10-DOCTOR-RECOVERY-R1`
 
 ## Implemented
 
@@ -29,7 +26,8 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T10-DOCTOR-RECOVERY-R1` for the active feature.
+- Plan a doctor recovery task for the active feature.
+- Restore the captured `implementation_running` state after the blocker is resolved.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -46,4 +44,4 @@ Subtask `F002-T09-C1-CORRECTION-1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T10-DOCTOR-RECOVERY-R1` from the captured `implementation_running` state.
+Plan a doctor recovery task for blocker `state-corruption-unblock-pending-doctor-recovery-f002-t10-doctor-recovery-r1-failed-its-re-entry` and then restore `implementation_running`.
