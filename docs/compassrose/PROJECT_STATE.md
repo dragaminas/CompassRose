@@ -27,7 +27,7 @@ In progress
 
 ## Pending
 
-- Recover or finish implementation for `F002-T10-C1-CORRECTION-1`.
+- Plan the next implementation task for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -36,7 +36,7 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `F002-T10-DOCTOR-RECOVERY-R2` passed re-entry quality gates and was applied by the prototype orchestrator.
+Subtask `F002-T10-C1-CORRECTION-1` was approved by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -44,4 +44,4 @@ Doctor recovery task `F002-T10-DOCTOR-RECOVERY-R2` passed re-entry quality gates
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and subtask execution for `F002-T10-C1-CORRECTION-1` is in progress.
+The active feature is `002-configuration-model`, and its next valid action is the next task-planning pass.

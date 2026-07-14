@@ -136,7 +136,8 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
               break;
             }
           }
-          continue;
+          stderr(`runtime feature-selection: ${featureDir}: malformed lifecycle data in state.md`);
+          return 1;
         }
 
         const stateContent = readFileSync(statePath, 'utf8');

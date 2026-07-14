@@ -722,6 +722,39 @@ unknown_lifecycle
       workspace.dispose();
     }
   });
+
+  test('exits 1 when state.md is absent and request.md is also absent', () => {
+    const workspace = createTempGitWorkspace();
+
+    mkdirSync(join(workspace.root, 'docs/features/007-missing-state'), { recursive: true });
+    writeFileSync(join(workspace.root, 'docs/features/007-missing-state/feature.md'), '# Feature\n');
+
+    try {
+      execFileSync('git', ['config', 'user.email', 'test@test.com'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: workspace.root, stdio: 'pipe' });
+      execFileSync('git', ['add', '.'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+      execFileSync('git', ['commit', '-m', 'add missing-state feature', '--allow-empty'], { cwd: workspace.root, stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch {
+      // ignore
+    }
+
+    try {
+      const stdoutMessages: string[] = [];
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderrMessages.some((m) => m.includes('runtime feature-selection'))).toBe(true);
+      expect(stderrMessages.some((m) => m.includes('malformed lifecycle data'))).toBe(true);
+      expect(stdoutMessages.some((m) => m.includes('007-missing-state'))).toBe(false);
+    } finally {
+      workspace.dispose();
+    }
+  });
 });
 
 describe('main([\'doctor\']) — regression', () => {
