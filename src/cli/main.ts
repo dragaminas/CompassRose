@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { resolve, join } from 'node:path';
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
@@ -77,6 +78,59 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
       const platformLabel = currentPlatform ?? 'unknown';
       stderr(`runtime preflight: supported_platforms: current platform '${platformLabel}' is not supported. Supported platforms: ${supportedPlatforms?.join(', ') ?? 'none'}`);
       return 1;
+    }
+
+    const featuresRoot = join(gitRoot, 'docs/features');
+    if (existsSync(featuresRoot)) {
+      const featureDirs = readdirSync(featuresRoot)
+        .filter((name) => {
+          const dirPath = join(featuresRoot, name);
+          return existsSync(dirPath) && /^\d{3}-/.test(name);
+        })
+        .sort();
+
+      let selectedFeature: string | null = null;
+      let selectedLifecycle: string | null = null;
+
+      for (const featureDir of featureDirs) {
+        const statePath = join(featuresRoot, featureDir, 'state.md');
+        if (!existsSync(statePath)) {
+          continue;
+        }
+
+        const stateContent = readFileSync(statePath, 'utf8');
+        const lifecycleMatch = stateContent.match(/^## Lifecycle State\s*\n\s*(.+)/m);
+        let lifecycleState: string;
+
+        if (!lifecycleMatch) {
+          stderr(`runtime feature-selection: ${featureDir}: malformed lifecycle data in state.md`);
+          return 1;
+        }
+
+        lifecycleState = lifecycleMatch[1]!.trim();
+
+        const requestPath = join(featuresRoot, featureDir, 'request.md');
+        if (existsSync(requestPath)) {
+          const formalizedFiles = ['feature.md', 'architecture.md', 'state.md'];
+          const missing = formalizedFiles.some((f) => !existsSync(join(featuresRoot, featureDir, f)));
+          if (missing) {
+            lifecycleState = 'request_pending';
+          }
+        }
+
+        if (lifecycleState === 'completed') {
+          continue;
+        }
+
+        selectedFeature = featureDir;
+        selectedLifecycle = lifecycleState;
+        break;
+      }
+
+      if (selectedFeature) {
+        stdout(`CompassRose: selecting feature ${selectedFeature} (lifecycle state: ${selectedLifecycle})`);
+        return 0;
+      }
     }
 
     const gitPolicy = configResult.value.git_policy;

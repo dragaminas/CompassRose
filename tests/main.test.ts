@@ -468,6 +468,51 @@ describe('main([]) — dirty worktree enforcement', () => {
   });
 });
 
+describe('main([]) — feature selection after preflight', () => {
+  test('selects the first non-completed feature and reports its lifecycle state', () => {
+    const completedFeatureState = `# State: Completed Feature
+
+## Lifecycle State
+
+completed
+`;
+
+    const formalizedFeatureState = `# State: Formalized Feature
+
+## Lifecycle State
+
+formalized
+`;
+
+    const workspace = createTempWorkspace({
+      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'docs/features/001-completed/feature.md': '# Completed Feature\n',
+      'docs/features/001-completed/architecture.md': '# Architecture\n',
+      'docs/features/001-completed/state.md': completedFeatureState,
+      'docs/features/002-formalized/feature.md': '# Formalized Feature\n',
+      'docs/features/002-formalized/architecture.md': '# Architecture\n',
+      'docs/features/002-formalized/state.md': formalizedFeatureState,
+    });
+
+    try {
+      const stdoutMessages: string[] = [];
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: (msg) => { stdoutMessages.push(msg); },
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(0);
+      expect(stdoutMessages.some((m) => m.includes('002-formalized'))).toBe(true);
+      expect(stdoutMessages.some((m) => m.includes('formalized'))).toBe(true);
+      expect(stderrMessages.length).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+});
+
 describe('main([\'doctor\']) — regression', () => {
   test('still routes to doctor command and returns doctor exit code', () => {
     const workspace = createTempWorkspace({
