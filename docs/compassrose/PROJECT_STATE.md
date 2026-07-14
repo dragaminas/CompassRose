@@ -21,6 +21,7 @@ In progress
 - Feature `002-configuration-model` now has a planned next task, `F002-T07-C2`, ready to execute (renumbered from a colliding `F002-T07-C1` proposal; that id already belonged to the approved correction below).
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T06-DOCTOR-RECOVERY-R1`; the active task pointer was restored to `F002-T06`.
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T06-DOCTOR-RECOVERY-R2`; the active task pointer was restored to `F002-T06`.
+- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T07-C2-DOCTOR-RECOVERY-R1`, to resolve a recoverable blocker and restore `implementation_running`.
 
 ## Implemented
 
@@ -33,7 +34,7 @@ In progress
 
 ## Pending
 
-- Investigate failed quality gates for subtask `F002-T07-C2`.
+- Execute doctor recovery task `F002-T07-C2-DOCTOR-RECOVERY-R1` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -50,4 +51,4 @@ Subtask `F002-T07-C1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, but quality gates for `F002-T07-C2` failed and the run should stop.
+The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T07-C2-DOCTOR-RECOVERY-R1` from the captured `implementation_running` state.
