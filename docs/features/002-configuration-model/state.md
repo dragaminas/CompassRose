@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+unblock_pending
 
 ## Source Request
 
@@ -13,7 +13,7 @@ blocked
 - formalization: complete
 - active_task: F002-T07-C2
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F002-T07-C2-DOCTOR-RECOVERY-R2
 - last_implementation_result: passed
 - last_quality_gate_result: failed
 - last_review_result: blocked
@@ -95,7 +95,6 @@ npm test: - 0
 - active_task: `F002-T07-C2`
 - active_correction_task: `none`
 - active_unblock_task: `none`
-- recoverability: agent
 
 ## Last Approved Change
 
@@ -108,4 +107,4 @@ Subtask `F002-T07-C1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `unknown-unblock-pending-doctor-recovery-f002-t07-c2-doctor-recovery-r1-failed-its-re-entry-quali` and then restore `implementation_running`.
+Execute doctor recovery task `F002-T07-C2-DOCTOR-RECOVERY-R2` next.

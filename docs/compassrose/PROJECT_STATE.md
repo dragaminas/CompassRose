@@ -14,6 +14,7 @@ In progress
 - Blocker recoverability: agent.
 - Feature `002-configuration-model` was suspended from `implementation_running`; the active task pointer remains `F002-T07-C2`.
 - Blocking task context: `F002-T07-C2-DOCTOR-RECOVERY-R1`
+- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T07-C2-DOCTOR-RECOVERY-R2`, to resolve a recoverable blocker and restore `implementation_running`.
 
 ## Implemented
 
@@ -26,8 +27,7 @@ In progress
 
 ## Pending
 
-- Plan a doctor recovery task for the active feature.
-- Restore the captured `implementation_running` state after the blocker is resolved.
+- Execute doctor recovery task `F002-T07-C2-DOCTOR-RECOVERY-R2` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -44,4 +44,4 @@ Subtask `F002-T07-C1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `unknown-unblock-pending-doctor-recovery-f002-t07-c2-doctor-recovery-r1-failed-its-re-entry-quali` and then restore `implementation_running`.
+The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T07-C2-DOCTOR-RECOVERY-R2` from the captured `implementation_running` state.
