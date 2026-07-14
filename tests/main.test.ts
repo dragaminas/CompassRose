@@ -357,7 +357,7 @@ function createTempGitWorkspace(
   try {
     execFileSync('git', ['init'], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'] });
   } catch (err) {
-    workspace.dispose();
+    rmSync(root, { recursive: true, force: true });
     throw new Error(`git init failed: ${err}`);
   }
 
@@ -370,7 +370,7 @@ function createTempGitWorkspace(
     execFileSync('git', ['add', '.'], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'] });
     execFileSync('git', ['commit', '-m', 'initial', '--allow-empty'], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'] });
   } catch (err) {
-    workspace.dispose();
+    rmSync(root, { recursive: true, force: true });
     throw new Error(`git commit failed: ${err}`);
   }
 
