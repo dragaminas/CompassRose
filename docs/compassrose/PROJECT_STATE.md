@@ -10,18 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is resumed in `implementation_running` after bounded doctor recovery R2.
-- The historical blocker signature `state-corruption-unblock-pending-doctor-recovery-f002-t05-c1-correction-handoff-c1-correction-r1` and its agent recoverability are preserved in the feature state.
-- The active task pointer remains `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF`.
-- Historical blocking task context: `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R1`; the exact supplied R1 artifact path is absent from the workspace.
-- Doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R2` restored the recorded implementation anchor.
-- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-DOCTOR-RECOVERY-R2`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF`.
-- Implementation failure evidence: Implementation for F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1 did not include the required Implementation Notes justification.
-- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1-DOCTOR-RECOVERY-R1`; the active task pointer was restored to `F002-T05-C1-CORRECTION-HANDOFF-C1-CORRECTION-R1-CORRECTION-1-REPAIR-HANDOFF-CORRECTION-1`.
-- Feature `002-configuration-model` now has a planned next task, `F002-T07-C2`, ready to execute (renumbered from a colliding `F002-T07-C1` proposal; that id already belonged to the approved correction below).
-- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T06-DOCTOR-RECOVERY-R1`; the active task pointer was restored to `F002-T06`.
-- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T06-DOCTOR-RECOVERY-R2`; the active task pointer was restored to `F002-T06`.
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T07-C2-DOCTOR-RECOVERY-R1`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `002-configuration-model` is blocked by `unknown-unblock-pending-doctor-recovery-f002-t07-c2-doctor-recovery-r1-failed-its-re-entry-quali`.
+- Blocker recoverability: agent.
+- Feature `002-configuration-model` was suspended from `implementation_running`; the active task pointer remains `F002-T07-C2`.
+- Blocking task context: `F002-T07-C2-DOCTOR-RECOVERY-R1`
 
 ## Implemented
 
@@ -34,7 +26,8 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T07-C2-DOCTOR-RECOVERY-R1` for the active feature.
+- Plan a doctor recovery task for the active feature.
+- Restore the captured `implementation_running` state after the blocker is resolved.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -51,4 +44,4 @@ Subtask `F002-T07-C1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T07-C2-DOCTOR-RECOVERY-R1` from the captured `implementation_running` state.
+Plan a doctor recovery task for blocker `unknown-unblock-pending-doctor-recovery-f002-t07-c2-doctor-recovery-r1-failed-its-re-entry-quali` and then restore `implementation_running`.

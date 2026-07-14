@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+blocked
 
 ## Source Request
 
@@ -13,7 +13,7 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T07-C2
 - active_correction_task: none
-- active_unblock_task: F002-T07-C2-DOCTOR-RECOVERY-R1
+- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: failed
 - last_review_result: blocked
@@ -68,7 +68,26 @@ Task `F002-T07-C2` is now planned and ready to execute. Enforce MVP external_cli
 
 ## Blocked By
 
-- None
+- - kind: unknown
+- - signature: unknown-unblock-pending-doctor-recovery-f002-t07-c2-doctor-recovery-r1-failed-its-re-entry-quali
+- - recoverability: agent
+- - observed_state: lifecycle=unblock_pending; active_task=F002-T07-C2; active_correction_task=none; active_unblock_task=F002-T07-C2-DOCTOR-RECOVERY-R1
+- - evidence: Doctor recovery F002-T07-C2-DOCTOR-RECOVERY-R1 failed its re-entry quality gates.
+npm test: - 0
++ 1
+
+ ❯ tests/protoBlockerFlows.test.ts:106:27
+    104|     const result = runProtoScenario('implementation-retry');
+    105|
+    106|     expect(result.status).toBe(0);
+       |                           ^
+    107|     expect(result.stdout).toContain('PASS: implementation retry histor…
+    108|     expect(result.stdout).toContain('PASS: implementation retry record…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+- - evidence: None
+- - evidence: lifecycle=unblock_pending
+- - reason: Doctor recovery F002-T07-C2-DOCTOR-RECOVERY-R1 failed its re-entry quality gates. | npm test: - 0 | + 1 | ❯ tests/protoBlockerFlows.test.ts:106:27 | 104|     const result = runProtoScenario('implementation-retry'); | 105| | 106|     expect(result.status).toBe(0); | |                           ^ | 107|     expect(result.stdout).toContain('PASS: implementation retry histor… | 108|     expect(result.stdout).toContain('PASS: implementation retry record… | ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
 
 ## Blocked From
 
@@ -76,6 +95,7 @@ Task `F002-T07-C2` is now planned and ready to execute. Enforce MVP external_cli
 - active_task: `F002-T07-C2`
 - active_correction_task: `none`
 - active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -88,4 +108,4 @@ Subtask `F002-T07-C1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T07-C2-DOCTOR-RECOVERY-R1` next.
+Plan a doctor recovery task for blocker `unknown-unblock-pending-doctor-recovery-f002-t07-c2-doctor-recovery-r1-failed-its-re-entry-quali` and then restore `implementation_running`.
