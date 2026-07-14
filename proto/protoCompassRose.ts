@@ -80,6 +80,7 @@ import { buildBlockerSignature, classifyBlockerKind } from '../src/state/blocker
 import { uniqueStrings } from '../src/shared/arrays.js';
 import { ControlledStopError, stopExitCodeForSignal } from '../src/runtime/controlledStop.js';
 import { GitClient } from '../src/git/gitClient.js';
+import { ArtifactStore } from '../src/artifacts/artifactStore.js';
 // Re-exported because tests/protoReviewableDiffHandoff.test.ts imports parseTaskDocument from
 // this file alongside proto-only helpers (classifyImplementation, selectReviewableDiffForReview),
 // so it's simpler to keep that one import site than to split it across two modules.
@@ -177,63 +178,6 @@ interface FileFingerprint {
   readonly exists: boolean;
   readonly mtimeMs: number;
   readonly size: number;
-}
-
-class ArtifactStore {
-  private readonly root: string;
-
-  constructor(repositoryRoot: string) {
-    this.root = join(repositoryRoot, '.git', 'proto-compassrose');
-    mkdirSync(this.root, { recursive: true });
-  }
-
-  writeJson(relativePath: string, value: unknown): void {
-    const targetPath = join(this.root, relativePath);
-    mkdirSync(dirname(targetPath), { recursive: true });
-    writeFileSync(targetPath, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
-  }
-
-  readJson<T>(relativePath: string): T | null {
-    const targetPath = join(this.root, relativePath);
-    try {
-      return JSON.parse(readUtf8(targetPath)) as T;
-    } catch {
-      return null;
-    }
-  }
-
-  listFiles(relativePath: string): readonly { name: string; fullPath: string; mtimeMs: number }[] {
-    const targetDir = join(this.root, relativePath);
-    try {
-      return readdirSync(targetDir)
-        .map((name) => {
-          const fullPath = join(targetDir, name);
-          const stat = statSync(fullPath);
-          return {
-            name,
-            fullPath,
-            mtimeMs: stat.mtimeMs,
-          };
-        })
-        .filter((entry) => entry.fullPath.length > 0);
-    } catch {
-      return [];
-    }
-  }
-
-  writeText(relativePath: string, value: string): string {
-    const targetPath = join(this.root, relativePath);
-    mkdirSync(dirname(targetPath), { recursive: true });
-    writeFileSync(targetPath, normalizeTextForWrite(value), 'utf8');
-    return targetPath;
-  }
-
-  writeRawText(relativePath: string, value: string): string {
-    const targetPath = join(this.root, relativePath);
-    mkdirSync(dirname(targetPath), { recursive: true });
-    writeFileSync(targetPath, value, 'utf8');
-    return targetPath;
-  }
 }
 
 const STRUCTURED_SCHEMA_PATHS: Record<StructuredSchemaId, string> = {
