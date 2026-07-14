@@ -81,6 +81,8 @@ import { uniqueStrings } from '../src/shared/arrays.js';
 import { ControlledStopError, stopExitCodeForSignal } from '../src/runtime/controlledStop.js';
 import { GitClient } from '../src/git/gitClient.js';
 import { ArtifactStore } from '../src/artifacts/artifactStore.js';
+import { DEFAULT_AGENT_HEARTBEAT_MS, runCommandWithHeartbeat } from '../src/agents/heartbeatRunner.js';
+import type { HeartbeatRunConfig } from '../src/agents/heartbeatRunner.js';
 // Re-exported because tests/protoReviewableDiffHandoff.test.ts imports parseTaskDocument from
 // this file alongside proto-only helpers (classifyImplementation, selectReviewableDiffForReview),
 // so it's simpler to keep that one import site than to split it across two modules.
@@ -126,9 +128,6 @@ interface TaskImplementer {
   run(prompt: string, label?: string): CommandExecution;
 }
 
-const DEFAULT_AGENT_HEARTBEAT_MS = 15_000;
-const HEARTBEAT_RUNNER_PATH = join(dirname(fileURLToPath(import.meta.url)), 'protoHeartbeatRunner.mjs');
-
 export function resolveCodexPlannerModel(): string | null {
   return normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_PLANNER_MODEL)
     ?? normalizeModelName(process.env.PROTO_COMPASSROSE_CODEX_MODEL);
@@ -141,37 +140,6 @@ export function resolveCodexImplementerModel(): string | null {
 
 export function resolveOpenCodeModel(): string | null {
   return normalizeModelName(process.env.PROTO_COMPASSROSE_OPENCODE_MODEL);
-}
-
-function runCommandWithHeartbeat(config: HeartbeatRunConfig): { status: number | null; signal: string | null; error: Error | undefined } {
-  const result = spawnSync(process.execPath, [HEARTBEAT_RUNNER_PATH], {
-    cwd: config.cwd,
-    env: {
-      ...process.env,
-      PROTO_COMPASSROSE_HEARTBEAT_CONFIG: JSON.stringify(config),
-    },
-    stdio: 'inherit',
-  });
-
-  return {
-    status: result.status,
-    signal: result.signal,
-    error: result.error,
-  };
-}
-
-
-interface HeartbeatRunConfig {
-  readonly agent: AgentToolName;
-  readonly label: string;
-  readonly command: string;
-  readonly args: readonly string[];
-  readonly cwd: string;
-  readonly promptPath: string;
-  readonly promptMode: 'stdin' | 'arg';
-  readonly stdoutPath: string;
-  readonly stderrPath: string;
-  readonly heartbeatIntervalMs: number;
 }
 
 interface FileFingerprint {

@@ -1,0 +1,227 @@
+#!/usr/bin/env node
+import { closeSync, openSync, readFileSync, writeSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+
+const DEFAULT_HEARTBEAT_MS = 15_000;
+
+const rawConfig = process.env.PROTO_COMPASSROSE_HEARTBEAT_CONFIG;
+if (!rawConfig) {
+  process.stderr.write('Missing PROTO_COMPASSROSE_HEARTBEAT_CONFIG.\n');
+  process.exit(1);
+}
+
+let config;
+try {
+  config = JSON.parse(rawConfig);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`Failed to parse PROTO_COMPASSROSE_HEARTBEAT_CONFIG: ${message}\n`);
+  process.exit(1);
+}
+
+if (!isValidConfig(config)) {
+  process.stderr.write('Invalid heartbeat runner configuration.\n');
+  process.exit(1);
+}
+
+const prompt = readFileSync(config.promptPath);
+const stdoutFd = openSync(config.stdoutPath, 'w');
+const stderrFd = openSync(config.stderrPath, 'w');
+const prefix = `[${config.agent}:${config.label}]`;
+const heartbeatIntervalMs = normalizeHeartbeatInterval(config.heartbeatIntervalMs);
+const startedAt = Date.now();
+let lastOutputAt = startedAt;
+let stdoutBytes = 0;
+let stderrBytes = 0;
+let cleanedUp = false;
+
+const cleanup = () => {
+  if (cleanedUp) {
+    return;
+  }
+
+  cleanedUp = true;
+  closeSync(stdoutFd);
+  closeSync(stderrFd);
+};
+
+const formatDuration = (durationMs) => {
+  const totalSeconds = Math.max(0, Math.round(durationMs / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}h${minutes}m`;
+  }
+
+  if (minutes > 0) {
+    return `${minutes}m${seconds}s`;
+  }
+
+  return `${seconds}s`;
+};
+
+const formatBytes = (byteCount) => {
+  if (byteCount < 1024) {
+    return `${byteCount}B`;
+  }
+
+  if (byteCount < 1024 * 1024) {
+    return `${(byteCount / 1024).toFixed(byteCount < 10 * 1024 ? 1 : 0)}kB`;
+  }
+
+  return `${(byteCount / (1024 * 1024)).toFixed(1)}MB`;
+};
+
+const heartbeat = () => {
+  const elapsed = Date.now() - startedAt;
+  const idleMs = Date.now() - lastOutputAt;
+  const activityState = stdoutBytes === 0 && stderrBytes === 0
+    ? 'no child output yet'
+    : idleMs >= heartbeatIntervalMs
+      ? `idle for ${formatDuration(idleMs)}`
+      : `active ${formatDuration(idleMs)} ago`;
+
+  process.stderr.write(
+    `${prefix} running for ${formatDuration(elapsed)} (${activityState}, stdout ${formatBytes(stdoutBytes)}, stderr ${formatBytes(stderrBytes)})\n`,
+  );
+};
+
+const childArgs = config.promptMode === 'arg'
+  ? [...config.args, prompt.toString('utf8')]
+  : config.args;
+
+// A .cjs/.mjs/.js command is a Node script (e.g. an e2e test mock), not a real CLI
+// binary. Windows has no file association for those extensions, so cmd.exe can't
+// launch them even with shell:true; run them with node directly instead. Real CLI
+// tools like codex/opencode are npm-installed .cmd shims on Windows that node's
+// spawn can't exec without a shell, so those still need shell on win32.
+const isNodeScript = /\.(c|m)?js$/i.test(config.command);
+const useWindowsShell = !isNodeScript && process.platform === 'win32';
+
+// node's spawn(..., {shell: true}) on Windows does not quote array arguments before
+// handing them to cmd.exe — it just joins them with spaces, so any argument containing
+// whitespace (a repository path with a space, for example) gets split into several
+// arguments. Build the whole command line ourselves with proper Windows quoting instead.
+const spawnCommand = useWindowsShell
+  ? [config.command, ...childArgs].map(quoteWindowsArg).join(' ')
+  : isNodeScript
+    ? process.execPath
+    : config.command;
+const spawnArgs = useWindowsShell ? [] : isNodeScript ? [config.command, ...childArgs] : childArgs;
+
+const child = spawn(spawnCommand, spawnArgs, {
+  cwd: config.cwd,
+  stdio: config.promptMode === 'arg' ? ['ignore', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe'],
+  shell: useWindowsShell,
+});
+
+if (config.promptMode === 'stdin' && child.stdin) {
+  child.stdin.end(prompt);
+}
+
+// Forward a signal received directly by this runner to the child via the
+// live handle. child.kill(signal) is the mechanism Node reports reliably
+// across platforms; waiting for the child to die on its own and inferring
+// the signal from its exit is not reliable on Windows.
+const forwardSignal = (signal) => {
+  child.kill(signal);
+};
+
+process.on('SIGINT', forwardSignal);
+process.on('SIGTERM', forwardSignal);
+
+child.stdout.on('data', (chunk) => {
+  stdoutBytes += chunk.length;
+  lastOutputAt = Date.now();
+  writeSync(stdoutFd, chunk);
+});
+
+child.stderr.on('data', (chunk) => {
+  stderrBytes += chunk.length;
+  lastOutputAt = Date.now();
+  writeSync(stderrFd, chunk);
+});
+
+process.stderr.write(`${prefix} monitoring ${config.command}; heartbeat every ${Math.round(heartbeatIntervalMs / 1000)}s\n`);
+const interval = setInterval(heartbeat, heartbeatIntervalMs);
+
+child.on('error', (error) => {
+  clearInterval(interval);
+  cleanup();
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`${prefix} failed to start: ${message}\n`);
+  process.exit(1);
+});
+
+child.on('close', (code, signal) => {
+  clearInterval(interval);
+  cleanup();
+
+  if (signal === 'SIGINT') {
+    process.kill(process.pid, 'SIGINT');
+  }
+
+  if (signal === 'SIGTERM') {
+    process.kill(process.pid, 'SIGTERM');
+  }
+
+  process.exit(code ?? 1);
+});
+
+// Windows CommandLineToArgvW quoting: wrap in double quotes when the argument has
+// whitespace or a quote, doubling backslashes that precede a quote (or that end the
+// argument, since they precede the closing quote) and escaping embedded quotes.
+function quoteWindowsArg(arg) {
+  if (arg.length > 0 && !/[\s"]/.test(arg)) {
+    return arg;
+  }
+
+  let result = '"';
+  let backslashes = 0;
+  for (const ch of arg) {
+    if (ch === '\\') {
+      backslashes += 1;
+      continue;
+    }
+
+    if (ch === '"') {
+      result += '\\'.repeat(backslashes * 2 + 1) + '"';
+      backslashes = 0;
+      continue;
+    }
+
+    result += '\\'.repeat(backslashes) + ch;
+    backslashes = 0;
+  }
+
+  result += '\\'.repeat(backslashes * 2) + '"';
+  return result;
+}
+
+function normalizeHeartbeatInterval(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return DEFAULT_HEARTBEAT_MS;
+  }
+
+  return Math.floor(numeric);
+}
+
+function isValidConfig(value) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    typeof value.agent === 'string' &&
+    typeof value.label === 'string' &&
+    typeof value.command === 'string' &&
+    Array.isArray(value.args) &&
+    value.args.every((entry) => typeof entry === 'string') &&
+    typeof value.cwd === 'string' &&
+    typeof value.promptPath === 'string' &&
+    (value.promptMode === 'stdin' || value.promptMode === 'arg') &&
+    typeof value.stdoutPath === 'string' &&
+    typeof value.stderrPath === 'string'
+  );
+}
