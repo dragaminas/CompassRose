@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+correction_pending
 
 ## Source Request
 
@@ -12,11 +12,11 @@ implementation_running
 
 - formalization: complete
 - active_task: F002-T10
-- active_correction_task: none
+- active_correction_task: F002-T10-C1
 - active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: skipped
+- last_review_result: changes_required
 - last_unblock_result: passed
 
 ## Current Reality
@@ -94,4 +94,4 @@ Doctor recovery task `F002-T10-DOCTOR-RECOVERY-R2` passed re-entry quality gates
 
 ## Next Planning Hint
 
-Resume `F002-T10` implementation recovery before continuing.
+Execute correction subtask `F002-T10-C1` next.
