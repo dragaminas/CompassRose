@@ -41,6 +41,7 @@ import type {
   ContractRefreshResult,
   FeatureInspection,
   FeatureRecord,
+  FixRecord,
   ProtoOptions,
   RunSummary,
   StepExecutionResult,
@@ -202,6 +203,7 @@ export class CompassRoseOrchestrator {
   private readonly configurationPath: string;
   private readonly projectStatePath: string;
   private readonly featuresRoot: string;
+  private readonly fixesRoot: string;
   private readonly maxTasksPerRun: number;
   private readonly runId: string;
   private readonly codexCommand: string;
@@ -249,13 +251,18 @@ export class CompassRoseOrchestrator {
       repositoryRoot,
       readRecordString(documentation, 'features_root') ?? 'docs/features',
     );
+    const fixesRoot = resolveRepositoryRelativePath(
+      repositoryRoot,
+      readRecordString(documentation, 'fixes_root') ?? 'docs/fixes',
+    );
 
-    if (!projectStatePath || !featuresRoot) {
-      throw new Error('Configuration paths for project state or features root are invalid.');
+    if (!projectStatePath || !featuresRoot || !fixesRoot) {
+      throw new Error('Configuration paths for project state, features root, or fixes root are invalid.');
     }
 
     this.projectStatePath = projectStatePath;
     this.featuresRoot = featuresRoot;
+    this.fixesRoot = fixesRoot;
     this.maxTasksPerRun = readPositiveInteger(limits, 'max_tasks_per_run') ?? Number.POSITIVE_INFINITY;
     this.runId = createRunId();
     this.startedAt = new Date().toISOString();
@@ -3068,6 +3075,35 @@ export class CompassRoseOrchestrator {
         architecturePath: join(this.featuresRoot, entry, 'architecture.md'),
         statePath: join(this.featuresRoot, entry, 'state.md'),
         tasksDirectory: join(this.featuresRoot, entry, 'tasks'),
+      }))
+      .sort((left, right) => compareFeatureIds(left.id, right.id));
+  }
+
+  private loadFix(fixId: string): FixRecord {
+    const fixes = this.listFixes();
+    const fix = fixes.find((item) => item.id === fixId);
+    if (!fix) {
+      throw new Error(`Fix ${fixId} was not found under ${this.fixesRoot}.`);
+    }
+
+    return fix;
+  }
+
+  private listFixes(): FixRecord[] {
+    if (!existsSync(this.fixesRoot)) {
+      return [];
+    }
+
+    return readdirSync(this.fixesRoot)
+      .filter((entry) => statSync(join(this.fixesRoot, entry)).isDirectory())
+      .map((entry) => ({
+        id: entry,
+        name: entry.replace(/^\d+-/, ''),
+        directory: join(this.fixesRoot, entry),
+        requestPath: join(this.fixesRoot, entry, 'request.md'),
+        fixPath: join(this.fixesRoot, entry, 'fix.md'),
+        statePath: join(this.fixesRoot, entry, 'state.md'),
+        tasksDirectory: join(this.fixesRoot, entry, 'tasks'),
       }))
       .sort((left, right) => compareFeatureIds(left.id, right.id));
   }

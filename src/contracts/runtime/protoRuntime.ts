@@ -1,6 +1,7 @@
 import type { AgentToolName } from "./agentContext.js";
 import type { FeatureStateSnapshot } from "../state/featureStateSnapshot.js";
 import type { StepDecision } from "./stepDecision.js";
+import type { FixSeverity } from "../planner/plannerContracts.js";
 
 /**
  * Runtime contracts shared by `src/orchestrator/orchestrator.ts` and `src/cli/main.ts`.
@@ -30,28 +31,61 @@ export interface FeatureRecord {
 }
 
 /**
+ * Lightweight inventory record for a fix-request folder (see docs/fixes/README.md).
+ * A fix has no architecture.md, unlike a feature.
+ */
+export interface FixRecord {
+  readonly id: string;
+  readonly name: string;
+  readonly directory: string;
+  readonly requestPath: string;
+  readonly fixPath: string;
+  readonly statePath: string;
+  readonly tasksDirectory: string;
+}
+
+/**
+ * The lifecycle-state-driven classification shared by both features and fixes —
+ * the state graph in src/contracts/state/feature-state.md is container-agnostic.
+ */
+export type WorkItemInspectionKind =
+  | 'request_pending'
+  | 'formalization_pending'
+  | 'formalized'
+  | 'task_planning_pending'
+  | 'task_ready'
+  | 'unblock_pending'
+  | 'implementation_running'
+  | 'quality_gates_pending'
+  | 'review_pending'
+  | 'correction_pending'
+  | 'implementation_failed'
+  | 'quality_failed'
+  | 'review_failed'
+  | 'blocked'
+  | 'completed'
+  | 'malformed';
+
+/**
  * Runtime classification of how a feature should be handled next.
  */
 export interface FeatureInspection {
-  readonly kind:
-    | 'request_pending'
-    | 'formalization_pending'
-    | 'formalized'
-    | 'task_planning_pending'
-    | 'task_ready'
-    | 'unblock_pending'
-    | 'implementation_running'
-    | 'quality_gates_pending'
-    | 'review_pending'
-    | 'correction_pending'
-    | 'implementation_failed'
-    | 'quality_failed'
-    | 'review_failed'
-    | 'blocked'
-    | 'completed'
-    | 'malformed';
+  readonly kind: WorkItemInspectionKind;
   readonly reason: string;
   readonly snapshot: FeatureStateSnapshot | null;
+}
+
+/**
+ * Runtime classification of how a fix should be handled next, plus the severity/ownership
+ * read from its state.md's Operational Status so the scheduler doesn't need to re-parse
+ * fix.md prose on every tick.
+ */
+export interface FixInspection {
+  readonly kind: WorkItemInspectionKind;
+  readonly reason: string;
+  readonly snapshot: FeatureStateSnapshot | null;
+  readonly severity: FixSeverity;
+  readonly owningFeature: string | null;
 }
 
 /**
