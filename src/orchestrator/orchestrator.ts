@@ -50,6 +50,7 @@ import type {
   StepExecutionResult,
   StepRunRecord,
   WorkItemContext,
+  WorkItemInspectionKind,
 } from '../contracts/runtime/protoRuntime.js';
 import type { ProjectConfiguration } from '../config/configTypes.js';
 import { readProjectConfiguration } from '../config/configReader.js';
@@ -478,9 +479,78 @@ export class CompassRoseOrchestrator {
     return result.status ?? 1;
   }
 
+  private isStartableInspectionKind(kind: WorkItemInspectionKind): boolean {
+    return kind === 'request_pending' || kind === 'formalization_pending' || kind === 'formalized' || kind === 'task_planning_pending';
+  }
+
+  private isContinuingInspectionKind(kind: WorkItemInspectionKind): boolean {
+    return kind !== 'completed' && !this.isStartableInspectionKind(kind);
+  }
+
+  private static readonly FIX_SEVERITY_RANK: Record<FixSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+
+  /**
+   * Two-pass scheduler so severity can affect what starts next without ever aborting
+   * something already in flight (confirmed policy -- see docs/fixes/README.md):
+   *
+   * Pass 1 scans for anything already mid-execution -- features first in today's exact
+   * numeric order, then fixes -- and resumes the first one found, regardless of severity.
+   * Pass 2 only runs when nothing is in flight, and decides what to START next in strict
+   * tier order: critical/high fixes, then features (today's exact numeric-order scan,
+   * unchanged), then medium/low fixes as ordinary backlog.
+   *
+   * Note: this intentionally changes ordering versus the old single-pass scan even when zero
+   * fixes exist -- today, a lower-numbered *startable* feature wins over a higher-numbered
+   * *continuing* one, because the old scan never distinguished the two. This two-pass split
+   * makes the continuing one win instead, which is the deliberate, tested behavior change this
+   * phase bundles in (see tests/schedulerPriority.test.ts).
+   */
   private determineNextStep(): StepDecision {
-    for (const feature of this.listFeatures()) {
-      const decision = this.selectStepForFeature(feature);
+    const featureInspections = this.listFeatures().map((feature) => ({ feature, inspection: this.inspectFeature(feature) }));
+    const fixInspections = this.listFixes().map((fix) => ({ fix, inspection: this.inspectFix(fix) }));
+
+    for (const { feature, inspection } of featureInspections) {
+      if (this.isContinuingInspectionKind(inspection.kind)) {
+        const decision = this.selectStepForFeature(feature);
+        if (decision) {
+          return decision;
+        }
+      }
+    }
+
+    for (const { fix, inspection } of fixInspections) {
+      if (this.isContinuingInspectionKind(inspection.kind)) {
+        const decision = this.selectStepForFix(fix);
+        if (decision) {
+          return decision;
+        }
+      }
+    }
+
+    const [mostSevereFix] = fixInspections
+      .filter(({ inspection }) => this.isStartableInspectionKind(inspection.kind) && (inspection.severity === 'critical' || inspection.severity === 'high'))
+      .sort((left, right) => CompassRoseOrchestrator.FIX_SEVERITY_RANK[left.inspection.severity] - CompassRoseOrchestrator.FIX_SEVERITY_RANK[right.inspection.severity]);
+    if (mostSevereFix) {
+      const decision = this.selectStepForFix(mostSevereFix.fix);
+      if (decision) {
+        return decision;
+      }
+    }
+
+    for (const { feature, inspection } of featureInspections) {
+      if (this.isStartableInspectionKind(inspection.kind)) {
+        const decision = this.selectStepForFeature(feature);
+        if (decision) {
+          return decision;
+        }
+      }
+    }
+
+    const [firstMinorFix] = fixInspections.filter(
+      ({ inspection }) => this.isStartableInspectionKind(inspection.kind) && (inspection.severity === 'medium' || inspection.severity === 'low'),
+    );
+    if (firstMinorFix) {
+      const decision = this.selectStepForFix(firstMinorFix.fix);
       if (decision) {
         return decision;
       }
@@ -491,7 +561,7 @@ export class CompassRoseOrchestrator {
       feature_id: null,
       task_id: null,
       correction_task_id: null,
-      reason: 'No non-completed feature remains.',
+      reason: 'No non-completed feature or fix remains.',
     };
   }
 
