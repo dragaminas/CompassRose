@@ -133,9 +133,15 @@ documentation:
     - feature.md
     - architecture.md
     - state.md
+  fixes_root: docs/fixes
+  fix_request_file: request.md
+  fix_files:
+    - fix.md
+    - state.md
   role_prompt_files:
     feature_planning: src/contracts/planner/feature-planning-prompt.md
     task_planning: src/contracts/planner/task-planning-prompt.md
+    fix_planning: src/contracts/planner/fix-planning-prompt.md
     task_execution: src/contracts/implementer/task-execution-prompt.md
     review: src/contracts/reviewer/review-prompt.md
     correction_task: src/contracts/reviewer/correction-task-prompt.md

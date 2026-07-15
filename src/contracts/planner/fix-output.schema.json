@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fix_id",
+    "fix_md",
+    "state_md",
+    "summary"
+  ],
+  "properties": {
+    "fix_id": { "type": "string" },
+    "fix_md": { "type": "string" },
+    "state_md": { "type": "string" },
+    "summary": { "type": "string" }
+  }
+}

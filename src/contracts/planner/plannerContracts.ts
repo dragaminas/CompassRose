@@ -22,6 +22,20 @@ export interface PlannedFeatureDocs {
   readonly summary: string;
 }
 
+/**
+ * Formalization output for a fix request (see docs/fixes/README.md). A fix has no
+ * architecture.md — it repairs already-shipped behavior rather than introducing new
+ * architectural surface.
+ */
+export interface PlannedFixDocs {
+  readonly fix_id: string;
+  readonly fix_md: string;
+  readonly state_md: string;
+  readonly summary: string;
+}
+
+export type FixSeverity = "critical" | "high" | "medium" | "low";
+
 export type PlannerLifecycleState =
   | "formalization_pending"
   | "formalized"

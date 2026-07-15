@@ -27,6 +27,29 @@ That outline is expressed as visible task requests.
 
 The outline is for visibility and coordination, not for execution.
 
+### fix request
+
+A human-authored bug report stored in `docs/fixes/NNN-slug/request.md`.
+
+It captures a defect in already-shipped behavior, not a gap in an in-progress feature and not
+a review finding inside an active task (see `correction task` below) — those are distinct
+categories. It may be formalized into the fix document set, but it is not itself an executable
+artifact.
+
+### fix
+
+The formalized fix documents: `fix.md` and `state.md`. A fix has no `architecture.md`.
+
+A fix defines the planning scope, a `severity` (`critical | high | medium | low`), an
+`owning_feature` (or `none` if the fix is cross-cutting/transversal), and the high-level
+implementation outline. That outline is expressed as visible task requests, exactly like a
+feature's.
+
+Severity — not numeric order — governs when a fix is scheduled: a `critical`/`high` fix is
+planned before any new feature work starts, but never interrupts a feature task that is
+already mid-execution. `medium`/`low` fixes are ordinary backlog, scheduled after feature work
+that is ready to start.
+
 ### task request
 
 A single visible item in the feature outline that describes one intended next unit of work.
@@ -85,9 +108,9 @@ It may touch docs, state, source, or tests only as needed for deterministic re-e
 
 ## Rules
 
-- `request` and the feature outline are user-visible planning intent.
+- `request`/`fix request` and the work-item outline (a feature's or a fix's) are user-visible planning intent.
 - `task` is the only canonical executable planning unit.
 - `subtask` and `attempt` are execution iterations, not planning units.
 - `correction task`, `state correction task`, and `doctor recovery task` are temporary recovery artifacts.
-- CompassRose must not treat the feature outline as a long-lived executable task list.
-- A visible feature outline may show the intended number of implementation steps, but the runtime still generates only the next executable task.
+- CompassRose must not treat a work-item outline as a long-lived executable task list.
+- A visible work-item outline may show the intended number of implementation steps, but the runtime still generates only the next executable task.

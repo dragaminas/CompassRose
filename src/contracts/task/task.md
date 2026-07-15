@@ -90,7 +90,9 @@ The earlier task remains historical evidence and must not be deleted just becaus
 
 ### feature_id
 
-The owning feature.
+The id of the owning work item — a feature's directory id, or a fix's directory id when the
+task belongs to a fix request (see `docs/fixes/README.md`). The runtime resolves this id
+against both `docs/features/` and `docs/fixes/`; the field name is unchanged for either case.
 
 ### objective
 
@@ -189,7 +191,7 @@ Use this when the task must pin:
 A task must:
 
 - Be small.
-- Be feature-scoped.
+- Be scoped to its owning work item (feature or fix).
 - Be reviewable.
 - Be executable by an external tool.
 - Contain no hidden requirements.
