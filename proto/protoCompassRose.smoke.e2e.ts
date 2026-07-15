@@ -50,6 +50,7 @@ function main(): number {
   spawnSync('git', ['add', '-A'], { cwd: cloneRoot, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
 
   syncPrototypeRuntime(repoRoot, cloneRoot);
+  pinScenarioConfigLimits(cloneRoot);
   seedSmokeFeatureStateDocs(cloneRoot);
 
   const codexMock = join(tempRoot, 'codex-mock.cjs');
@@ -124,6 +125,19 @@ function main(): number {
 
 function syncPrototypeRuntime(repoRoot: string, cloneRoot: string): void {
   copyTree(join(repoRoot, 'src'), join(cloneRoot, 'src'));
+}
+
+// This scenario and its mocked codex response are scripted around exactly one primary task
+// per `run --loop` invocation (the mock always returns the same hardcoded task_id for any
+// planner-kind call). Pin the limit here instead of inheriting whatever the live repository's
+// docs/compassrose/CONFIG.md happens to say today, so a real project tuning change (e.g.
+// raising limits.max_tasks_per_run) can't silently make the runtime plan a second, unscripted
+// task mid-run and collide on that reused task_id.
+function pinScenarioConfigLimits(cloneRoot: string): void {
+  const configPath = join(cloneRoot, 'docs', 'compassrose', 'CONFIG.md');
+  const config = readFileSync(configPath, 'utf8');
+  const pinned = config.replace(/max_tasks_per_run:\s*\d+/, 'max_tasks_per_run: 1');
+  writeFileSync(configPath, pinned, 'utf8');
 }
 
 function copyTree(sourceRoot: string, targetRoot: string): void {
@@ -316,12 +330,14 @@ if (kind === 'diagnostic') {
         ],
       },
     };
-} else if (kind === 'planner') {
+} else if (kind === 'planner' || kind === 'doctor_recovery_planner') {
+  const taskId = kind === 'doctor_recovery_planner' ? 'F002-T04-U1' : 'F002-T04-P1';
+  const title = kind === 'doctor_recovery_planner' ? 'Smoke doctor recovery' : 'Smoke follow-up task planning';
   payload = {
       task: {
-        task_id: 'F002-T04-U1',
+        task_id: taskId,
         feature_id: '002-configuration-model',
-        title: 'Smoke doctor recovery',
+        title,
         objective: 'Keep the recovery path deterministic and restore the active task after the smoke correction pass.',
         first_executable_step: 'Update src/doctor/projectState.ts so the smoke can observe a visible diff.',
         minimum_progress_evidence: [
@@ -463,7 +479,13 @@ function detectPromptKind(prompt) {
   }
 
   if (prompt.includes('Act as the CompassRose Planner.')) {
-    return 'planner';
+    // Both normal task planning and doctor-recovery task planning open with the identical
+    // "Act as the CompassRose Planner." line (see src/orchestrator/orchestrator.ts's planTask
+    // and planDoctorRecoveryTask); only the second line tells them apart. Returning the same
+    // 'planner' kind for both used to make this mock hand back an identical hardcoded
+    // task_id regardless of which one actually ran, which collides the moment both are
+    // exercised in the same run.
+    return prompt.includes('Plan the next doctor recovery task') ? 'doctor_recovery_planner' : 'planner';
   }
 
   if (prompt.includes('Act as the CompassRose Doctor.')) {
