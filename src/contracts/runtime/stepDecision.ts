@@ -7,6 +7,8 @@
 export type StepKind =
   | "plan_feature"
   | "plan_task"
+  | "plan_fix"
+  | "plan_fix_task"
   | "plan_subtask"
   | "correct_state"
   | "doctor_recovery_task"
@@ -22,6 +24,13 @@ export type StepKind =
 
 export interface StepDecision {
   readonly kind: StepKind;
+  /**
+   * The id of the active work item. For `plan_fix`/`plan_fix_task` this is a fix's
+   * directory id under fixes_root; for every other kind it's a feature's directory id
+   * under features_root (or, for task-scoped kinds, resolved transparently by
+   * resolveWorkItemContext() from the task's own feature_id/fix_id). The field name is
+   * unchanged for either case -- see docs/fixes/README.md.
+   */
   readonly feature_id: string | null;
   readonly task_id: string | null;
   readonly correction_task_id: string | null;

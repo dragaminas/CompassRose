@@ -14,6 +14,7 @@ afterEach(() => {
 function seedSchemas(root: string): void {
   const schemaFiles: Record<string, string> = {
     'src/contracts/planner/feature-output.schema.json': '{"type":"object","title":"feature_plan"}',
+    'src/contracts/planner/fix-output.schema.json': '{"type":"object","title":"fix_plan"}',
     'src/contracts/planner/output.schema.json': '{"type":"object","title":"planner_output"}',
     'src/contracts/reviewer/output.schema.json': '{"type":"object","title":"reviewer_output"}',
     'src/contracts/runtime/task-interface-analysis.schema.json': '{"type":"object","title":"task_interface_analysis"}',
@@ -28,12 +29,13 @@ function seedSchemas(root: string): void {
 }
 
 describe('ContractRegistry', () => {
-  test('loads all five structured schemas on construction', () => {
+  test('loads all six structured schemas on construction', () => {
     workspace = createTempWorkspace();
     seedSchemas(workspace.root);
     const registry = new ContractRegistry(workspace.root);
 
     expect(registry.schema<{ title: string }>('feature_plan').title).toBe('feature_plan');
+    expect(registry.schema<{ title: string }>('fix_plan').title).toBe('fix_plan');
     expect(registry.schema<{ title: string }>('planner_output').title).toBe('planner_output');
     expect(registry.schema<{ title: string }>('reviewer_output').title).toBe('reviewer_output');
     expect(registry.schema<{ title: string }>('task_interface_analysis').title).toBe('task_interface_analysis');
@@ -88,7 +90,7 @@ describe('ContractRegistry', () => {
     seedSchemas(workspace.root);
     const registry = new ContractRegistry(workspace.root);
 
-    // All 5 known ids are always loaded by initialize(); this exercises the throw path
+    // All 6 known ids are always loaded by initialize(); this exercises the throw path
     // via an id outside the known union to prove schema() doesn't silently return undefined.
     expect(() => registry.schema('unknown_schema' as never)).toThrow(/is not loaded/);
   });

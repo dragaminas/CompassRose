@@ -13,11 +13,13 @@ import type {
   DiagnosticAutocorrectionDecision,
   DiagnosticClassification,
   FeatureStateSnapshot,
+  FixSeverity,
   ImplementationAttempt,
   ImplementationAttemptHistory,
   ImplementationDiagnostics,
   ParsedTaskDocument,
   PlannedFeatureDocs,
+  PlannedFixDocs,
   PlannedTask,
   PlannerOutput,
   QualityGateResult,
@@ -41,6 +43,7 @@ import type {
   ContractRefreshResult,
   FeatureInspection,
   FeatureRecord,
+  FixInspection,
   FixRecord,
   ProtoOptions,
   RunSummary,
@@ -509,7 +512,7 @@ export class CompassRoseOrchestrator {
         };
       case 'formalized':
       case 'task_planning_pending':
-        if (this.completedPrimaryTaskAnchors.size >= this.maxTasksPerRun) {
+        if (this.primaryTaskLimitReached()) {
           return {
             kind: 'stop',
             feature_id: feature.id,
@@ -764,6 +767,230 @@ export class CompassRoseOrchestrator {
     }
   }
 
+  private readFixSeverityAndOwnership(fix: Pick<WorkItemContext, 'statePath'>): { severity: FixSeverity; owningFeature: string | null } {
+    try {
+      const markdown = readUtf8(fix.statePath);
+      const operationalStatus = requireSection(markdown, 'Operational Status');
+      const rawSeverity = stripTicks(parsePreferredStatusValue(operationalStatus, 'severity') ?? '').toLowerCase();
+      const severity: FixSeverity = rawSeverity === 'critical' || rawSeverity === 'high' || rawSeverity === 'medium' || rawSeverity === 'low'
+        ? rawSeverity
+        : 'medium';
+      const rawOwningFeature = stripTicks(parsePreferredStatusValue(operationalStatus, 'owning_feature') ?? 'none');
+      const owningFeature = rawOwningFeature === 'none' || rawOwningFeature === '' ? null : rawOwningFeature;
+      return { severity, owningFeature };
+    } catch {
+      return { severity: 'medium', owningFeature: null };
+    }
+  }
+
+  /**
+   * Mirrors inspectFeature() exactly -- the lifecycle graph is container-agnostic (see
+   * src/contracts/state/feature-state.md) -- minus the architecture.md presence check a fix
+   * doesn't have, plus reading severity/owning_feature so the scheduler doesn't need to
+   * re-parse fix.md prose on every tick.
+   */
+  private inspectFix(fix: FixRecord): FixInspection {
+    const { severity, owningFeature } = this.readFixSeverityAndOwnership(fix);
+    const hasRequest = statSafeIsFile(fix.requestPath);
+    const hasFixDoc = statSafeIsFile(fix.fixPath);
+    const hasStateDoc = statSafeIsFile(fix.statePath);
+
+    if (hasRequest && (!hasFixDoc || !hasStateDoc)) {
+      return {
+        kind: 'request_pending',
+        reason: `Fix ${fix.id} is missing one or more formalized documents, so the runtime must formalize the request first.`,
+        snapshot: null,
+        severity,
+        owningFeature,
+      };
+    }
+
+    if (!hasStateDoc) {
+      return {
+        kind: 'malformed',
+        reason: `Fix ${fix.id} has no readable state.md outside a clean request_pending start, so diagnosis/autocorrection must decide the recovery path.`,
+        snapshot: null,
+        severity,
+        owningFeature,
+      };
+    }
+
+    let snapshot: FeatureStateSnapshot;
+    try {
+      snapshot = this.readFeatureStateSnapshot(fix);
+    } catch (error) {
+      return {
+        kind: 'malformed',
+        reason: `Fix ${fix.id} state.md is malformed: ${errorMessage(error)}.`,
+        snapshot: null,
+        severity,
+        owningFeature,
+      };
+    }
+
+    if (!hasFixDoc && snapshot.lifecycleState !== 'formalization_pending') {
+      return {
+        kind: 'malformed',
+        reason: `Fix ${fix.id} is missing its formalized fix.md while lifecycle state is ${snapshot.lifecycleState}; diagnosis/autocorrection must repair the inconsistency.`,
+        snapshot,
+        severity,
+        owningFeature,
+      };
+    }
+
+    switch (snapshot.lifecycleState) {
+      case 'request_pending':
+        return { kind: 'request_pending', reason: `Fix ${fix.id} is waiting for formalization from request.md.`, snapshot, severity, owningFeature };
+      case 'formalization_pending':
+        return { kind: 'formalization_pending', reason: `Fix ${fix.id} is in formalization_pending and should resume formalization deterministically.`, snapshot, severity, owningFeature };
+      case 'formalized':
+        return { kind: 'formalized', reason: `Fix ${fix.id} is formalized and its next deterministic action is task planning.`, snapshot, severity, owningFeature };
+      case 'task_planning_pending':
+        return { kind: 'task_planning_pending', reason: `Fix ${fix.id} is waiting for exactly one next task to be planned.`, snapshot, severity, owningFeature };
+      case 'task_ready':
+        return snapshot.activeTask !== 'none'
+          ? { kind: 'task_ready', reason: `Fix ${fix.id} is task_ready with active task ${snapshot.activeTask}.`, snapshot, severity, owningFeature }
+          : { kind: 'malformed', reason: `Fix ${fix.id} is task_ready but active_task is missing, so diagnosis/autocorrection must restore the execution anchor.`, snapshot, severity, owningFeature };
+      case 'unblock_pending':
+        return snapshot.activeUnblockTask !== 'none'
+          ? { kind: 'unblock_pending', reason: `Fix ${fix.id} is unblock_pending with active doctor recovery task ${snapshot.activeUnblockTask}.`, snapshot, severity, owningFeature }
+          : { kind: 'malformed', reason: `Fix ${fix.id} is unblock_pending but active_unblock_task is missing, so diagnosis/autocorrection must restore the doctor recovery anchor.`, snapshot, severity, owningFeature };
+      case 'implementation_running':
+        return snapshot.activeTask !== 'none'
+          ? { kind: 'implementation_running', reason: `Fix ${fix.id} is implementation_running for ${snapshot.activeTask} and should resume deterministically.`, snapshot, severity, owningFeature }
+          : { kind: 'malformed', reason: `Fix ${fix.id} is implementation_running but active_task is missing, so diagnosis/autocorrection must decide whether to repair state or plan doctor recovery.`, snapshot, severity, owningFeature };
+      case 'quality_gates_pending':
+        return snapshot.activeTask !== 'none'
+          ? { kind: 'quality_gates_pending', reason: `Fix ${fix.id} is quality_gates_pending for ${snapshot.activeTask}; the runtime should resume review-side validation deterministically.`, snapshot, severity, owningFeature }
+          : { kind: 'malformed', reason: `Fix ${fix.id} is quality_gates_pending but active_task is missing, so diagnosis/autocorrection must restore the review anchor.`, snapshot, severity, owningFeature };
+      case 'review_pending':
+        return snapshot.activeTask !== 'none'
+          ? { kind: 'review_pending', reason: `Fix ${fix.id} is review_pending for ${snapshot.activeTask}.`, snapshot, severity, owningFeature }
+          : { kind: 'malformed', reason: `Fix ${fix.id} is review_pending but active_task is missing, so diagnosis/autocorrection must restore the review anchor.`, snapshot, severity, owningFeature };
+      case 'correction_pending':
+        return snapshot.activeCorrectionTask !== 'none'
+          ? { kind: 'correction_pending', reason: `Fix ${fix.id} is correction_pending with correction task ${snapshot.activeCorrectionTask}.`, snapshot, severity, owningFeature }
+          : { kind: 'malformed', reason: `Fix ${fix.id} is correction_pending but active_correction_task is missing, so diagnosis/autocorrection must restore the correction anchor.`, snapshot, severity, owningFeature };
+      case 'implementation_failed':
+        return { kind: 'implementation_failed', reason: `Fix ${fix.id} is in implementation_failed and needs diagnosis/autocorrection before normal execution can resume.`, snapshot, severity, owningFeature };
+      case 'quality_failed':
+        return { kind: 'quality_failed', reason: `Fix ${fix.id} is in quality_failed and needs diagnosis/autocorrection before normal execution can resume.`, snapshot, severity, owningFeature };
+      case 'review_failed':
+        return { kind: 'review_failed', reason: `Fix ${fix.id} is in review_failed and needs diagnosis/autocorrection before normal execution can resume.`, snapshot, severity, owningFeature };
+      case 'blocked':
+        return { kind: 'blocked', reason: `Fix ${fix.id} is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.`, snapshot, severity, owningFeature };
+      case 'completed':
+        return { kind: 'completed', reason: `Fix ${fix.id} is completed.`, snapshot, severity, owningFeature };
+      default:
+        return { kind: 'malformed', reason: `Fix ${fix.id} has unknown lifecycle state ${snapshot.lifecycleState}, so diagnosis/autocorrection must repair or stop.`, snapshot, severity, owningFeature };
+    }
+  }
+
+  private primaryTaskLimitReached(): boolean {
+    return this.completedPrimaryTaskAnchors.size >= this.maxTasksPerRun;
+  }
+
+  /**
+   * Mirrors selectStepForFeature() exactly, except the "start new work" kinds are plan_fix/
+   * plan_fix_task instead of plan_feature/plan_task, and the primary-task budget is the same
+   * shared this.completedPrimaryTaskAnchors counter/cap used for features (see
+   * primaryTaskLimitReached()) -- one budget across both lifecycles, not a separate one per kind.
+   */
+  private selectStepForFix(fix: FixRecord): StepDecision | null {
+    const inspection = this.inspectFix(fix);
+
+    switch (inspection.kind) {
+      case 'completed':
+        return null;
+      case 'request_pending':
+      case 'formalization_pending':
+        return {
+          kind: 'plan_fix',
+          feature_id: fix.id,
+          task_id: null,
+          correction_task_id: null,
+          reason: inspection.reason,
+        };
+      case 'formalized':
+      case 'task_planning_pending':
+        if (this.primaryTaskLimitReached()) {
+          return {
+            kind: 'stop',
+            feature_id: fix.id,
+            task_id: null,
+            correction_task_id: null,
+            reason: `Primary task limit reached for this run (${this.maxTasksPerRun}); stop before planning another normal task for fix ${fix.id}.`,
+          };
+        }
+
+        return {
+          kind: 'plan_fix_task',
+          feature_id: fix.id,
+          task_id: null,
+          correction_task_id: null,
+          reason: inspection.reason,
+        };
+      case 'task_ready':
+        return {
+          kind: 'plan_subtask',
+          feature_id: fix.id,
+          task_id: requireNonNoneValue(inspection.snapshot?.activeTask, `Fix ${fix.id} requires active_task for task_ready.`),
+          correction_task_id: null,
+          reason: inspection.reason,
+        };
+      case 'unblock_pending':
+        return {
+          kind: 'doctor_recovery_task',
+          feature_id: fix.id,
+          task_id: requireNonNoneValue(inspection.snapshot?.activeUnblockTask, `Fix ${fix.id} requires active_unblock_task for unblock_pending.`),
+          correction_task_id: null,
+          reason: inspection.reason,
+        };
+      case 'implementation_running':
+        return {
+          kind: 'implement_subtask',
+          feature_id: fix.id,
+          task_id: requireNonNoneValue(inspection.snapshot?.activeTask, `Fix ${fix.id} requires active_task for implementation_running.`),
+          correction_task_id: null,
+          reason: inspection.reason,
+        };
+      case 'quality_gates_pending':
+      case 'review_pending':
+        return {
+          kind: 'review_subtask',
+          feature_id: fix.id,
+          task_id: requireNonNoneValue(inspection.snapshot?.activeTask, `Fix ${fix.id} requires active_task for review.`),
+          correction_task_id: null,
+          reason: inspection.reason,
+        };
+      case 'correction_pending':
+        return {
+          kind: 'plan_subtask',
+          feature_id: fix.id,
+          task_id: requireNonNoneValue(
+            inspection.snapshot?.activeCorrectionTask,
+            `Fix ${fix.id} requires active_correction_task for correction_pending.`,
+          ),
+          correction_task_id: null,
+          reason: inspection.reason,
+        };
+      case 'implementation_failed':
+      case 'quality_failed':
+      case 'review_failed':
+      case 'blocked':
+      case 'malformed':
+        return {
+          kind: 'diagnose_autocorrect',
+          feature_id: fix.id,
+          task_id: inspection.snapshot?.activeTask ?? null,
+          correction_task_id: inspection.snapshot?.activeCorrectionTask ?? null,
+          reason: inspection.reason,
+        };
+      default:
+        return assertNever(inspection.kind);
+    }
+  }
+
   private executeStep(decision: StepDecision): StepExecutionResult {
     switch (decision.kind) {
       case 'plan_feature':
@@ -771,6 +998,11 @@ export class CompassRoseOrchestrator {
         return { exitCode: 0, continueLoop: true, summary: `Feature ${requireString(decision.feature_id, 'feature_id')} formalized.` };
       case 'plan_task':
         return this.planTask(requireString(decision.feature_id, 'feature_id'));
+      case 'plan_fix':
+        this.planFixRequest(requireString(decision.feature_id, 'feature_id'));
+        return { exitCode: 0, continueLoop: true, summary: `Fix ${requireString(decision.feature_id, 'feature_id')} formalized.` };
+      case 'plan_fix_task':
+        return this.planFixTask(requireString(decision.feature_id, 'feature_id'));
       case 'plan_subtask':
         this.planSubtask(requireString(decision.task_id, 'task_id'));
         return { exitCode: 0, continueLoop: true, summary: `Subtask prepared for ${requireString(decision.task_id, 'task_id')}.` };
@@ -899,6 +1131,85 @@ export class CompassRoseOrchestrator {
     }
   }
 
+  /**
+   * Mirrors planFeature(), narrower: no docs/ROADMAP.md/SAD.md/ADR.md/DMS.md reads (a fix
+   * repairs already-shipped behavior rather than introducing new architectural surface), and
+   * produces fix.md + state.md only -- no architecture.md. See
+   * src/contracts/planner/fix-planning-prompt.md.
+   */
+  private planFixRequest(fixId: string): void {
+    this.ensureCleanWorktreeIfRequired(fixId);
+    const fix = this.loadFix(fixId);
+    const sourcePaths = [
+      'src/contracts/planner/fix-planning-prompt.md',
+      relativePath(this.repositoryRoot, fix.requestPath),
+      'docs/compassrose/PROJECT_STATE.md',
+      'docs/compassrose/CONFIG.md',
+      'docs/fixes/README.md',
+      'docs/templates/fix.md',
+      'docs/templates/state.md',
+      'src/contracts/state/feature-state.md',
+    ];
+    const prompt = [
+      'Act as the CompassRose Planner.',
+      '',
+      `Formalize fix \`${fixId}\`.`,
+      '',
+      'Read only:',
+      '- `src/contracts/planner/fix-planning-prompt.md`',
+      `- \`${relativePath(this.repositoryRoot, fix.requestPath)}\``,
+      '- `docs/compassrose/PROJECT_STATE.md`',
+      '- `docs/compassrose/CONFIG.md`',
+      '- `docs/fixes/README.md`',
+      '- `docs/templates/fix.md`',
+      '- `docs/templates/state.md`',
+      '- `src/contracts/state/feature-state.md` (read "feature" as "fix" throughout; this fix has no architecture.md)',
+      '',
+      'Return JSON with complete Markdown for `fix.md` and `state.md`.',
+      'Assign `severity` (critical|high|medium|low) and `owning_feature` (a feature id, or `none` if transversal) honestly, and include both as `## Operational Status` bullets in `state.md`.',
+      'Do not modify files.',
+    ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'planner',
+      kind: 'feature_planning',
+      label: `planner:fix-plan:${fixId}`,
+      feature_id: fixId,
+      task_id: null,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'fix_plan',
+      },
+    }));
+
+    const planned = this.codex.runStructured<PlannedFixDocs>(
+      prompt,
+      this.contracts.schema('fix_plan'),
+      [],
+      `planner:fix-plan:${fixId}`,
+    );
+    writeText(fix.fixPath, ensureTrailingNewline(planned.fix_md));
+    writeText(fix.statePath, ensureTrailingNewline(planned.state_md));
+
+    const updatedProjectState = this.updateProjectStateForFixPlan(fixId);
+    writeText(this.projectStatePath, updatedProjectState);
+
+    if (this.options.commit) {
+      this.git.commit(
+        [
+          relativePath(this.repositoryRoot, fix.fixPath),
+          relativePath(this.repositoryRoot, fix.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+        ],
+        `proto: formalize fix ${fixId}`,
+      );
+    }
+  }
+
   private planTask(featureId: string): StepExecutionResult {
     this.ensureCleanWorktreeIfRequired(featureId);
     const feature = this.loadFeature(featureId);
@@ -1020,6 +1331,119 @@ export class CompassRoseOrchestrator {
     }
 
     return { exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${featureId}.` };
+  }
+
+  /**
+   * Mirrors planTask(), narrower: no architecture.md reference (a fix has none), a sibling-fix
+   * index instead of the sibling-feature index, and no scope_justification/feature-scope-guard
+   * check -- that mechanism stays feature-only in v1 (see docs/fixes/README.md and the plan).
+   * Fix-owned tasks reuse the same feature_id/`## Parent Feature` field a feature task already
+   * uses (see resolveWorkItemContext()), with task ids prefixed `FX` instead of `F` so a task id
+   * alone still tells a human which lifecycle it belongs to.
+   */
+  private planFixTask(fixId: string): StepExecutionResult {
+    this.ensureCleanWorktreeIfRequired(fixId);
+    const fix = this.loadFix(fixId);
+    const siblingFixes = buildSiblingFeatureIndex(this.fixesRoot, fixId, 'fix.md');
+    const sourcePaths = [
+      'src/contracts/planner/task-planning-prompt.md',
+      'src/contracts/planner/input.md',
+      'src/contracts/planner/output.md',
+      'src/contracts/state/feature-state.md',
+      'src/contracts/task/task.md',
+      relativePath(this.repositoryRoot, fix.fixPath),
+      relativePath(this.repositoryRoot, fix.statePath),
+      'docs/compassrose/PROJECT_STATE.md',
+      'docs/compassrose/CONFIG.md',
+      'src/contracts/runtime/operation-loop.md',
+    ];
+    const prompt = [
+      'Act as the CompassRose Planner.',
+      '',
+      `Plan the next task for fix \`${fixId}\`.`,
+      '',
+      'Read only:',
+      '- `src/contracts/planner/task-planning-prompt.md`',
+      '- `src/contracts/planner/input.md`',
+      '- `src/contracts/planner/output.md`',
+      '- `src/contracts/state/feature-state.md`',
+      '- `src/contracts/task/task.md`',
+      `- \`${relativePath(this.repositoryRoot, fix.fixPath)}\``,
+      `- \`${relativePath(this.repositoryRoot, fix.statePath)}\``,
+      '- `docs/compassrose/PROJECT_STATE.md`',
+      '- `docs/compassrose/CONFIG.md`',
+      '- `src/contracts/runtime/operation-loop.md`',
+      ...this.buildRecoveryLessonPromptLines(fixId),
+      '',
+      'Sibling fixes (avoid proposing a task that duplicates one already open):',
+      ...(siblingFixes.length > 0
+        ? siblingFixes.map((sibling) => `- ${sibling.featureId}: ${sibling.title} — ${sibling.summary || 'no summary available'}`)
+        : ['- none']),
+      '',
+      'Rules:',
+      '- Generate exactly one atomic task.',
+      '- Keep the task scoped to this fix and reviewable.',
+      '- Set `feature_id` to this fix\'s own id (`' + fixId + '`), exactly like a feature task would set it to a feature id.',
+      '- If this task is a later version of an earlier task, set `previous_task_id` to that earlier task so the earlier task remains historical evidence; otherwise set it to `null`.',
+      '- Use `test_guided` for implementation tasks that produce code.',
+      '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
+      '- Prefix the task id `FX` instead of `F` (e.g. `FX' + fixId.split('-')[0] + '-T01`), so a task id alone always tells a human it belongs to a fix, not a feature.',
+      '- Any recovery lesson above is an unverified suggestion from a prior model call, not a confirmed requirement — only carry a suggested field, artifact, or mechanism into this task if it already exists in the contracts you were told to read; never invent a new manifest, validator, or artifact type to satisfy one.',
+      '- Set `scope_justification.belongs_to_other_feature` to `null`; that check is feature-only.',
+      '- Return JSON only and do not modify files.',
+    ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'planner',
+      kind: 'task_planning',
+      label: `planner:fix-task-plan:${fixId}`,
+      feature_id: fixId,
+      task_id: null,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'planner_output',
+      },
+    }));
+
+    const planned = this.codex.runStructured<PlannerOutput>(
+      prompt,
+      this.contracts.schema('planner_output'),
+      [],
+      `planner:fix-task-plan:${fixId}`,
+    );
+    const task = planned.task;
+
+    validateTaskDeliverables(task, 'task');
+    this.assertTaskIdIsUnused(fix.tasksDirectory, task.task_id, 'Fix task planning');
+
+    const taskPath = join(fix.tasksDirectory, buildTaskFileName(task.task_id, task.title));
+    const taskMarkdown = renderTaskMarkdown(task);
+
+    writeText(taskPath, taskMarkdown);
+    this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), planned);
+
+    const updatedFixState = this.updateFeatureStateForTaskPlan(fix.statePath, task.task_id, task.title);
+    const updatedProjectState = this.updateProjectStateForFixTaskPlan(fixId, task.task_id);
+
+    writeText(fix.statePath, updatedFixState);
+    writeText(this.projectStatePath, updatedProjectState);
+
+    if (this.options.commit) {
+      this.git.commit(
+        [
+          relativePath(this.repositoryRoot, taskPath),
+          relativePath(this.repositoryRoot, fix.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+        ],
+        `proto: plan task ${task.task_id}`,
+      );
+    }
+
+    return { exitCode: 0, continueLoop: true, summary: `Next task planned for fix ${fixId}.` };
   }
 
   private planSubtask(taskId: string): void {
@@ -3210,6 +3634,50 @@ export class CompassRoseOrchestrator {
       'Current Reality',
       `- The active feature pointer currently targets \`${featureId}\``,
       `- The active feature pointer currently targets \`${featureId}\`; the detailed task and lifecycle state for that feature lives in \`docs/features/${featureId}/state.md\`.`,
+    );
+    return markdown;
+  }
+
+  // PROJECT_STATE.md's "Active Feature" pointer/Pending/Next Planning Hint fields are purely
+  // narrative (never read by scheduling code -- see determineNextStep()), and predate fixes
+  // existing at all. Rather than fork every updateProjectStateAfter*() call in the generic
+  // execution machinery to thread a work-item kind through, these two fix-specific plan/task
+  // methods just reuse the same "Active Feature" section with fix-flavored wording; once a
+  // fix's task starts executing, the shared execution-machinery methods (executeImplementation,
+  // reviewTask, etc.) continue updating that same pointer/hint fields generically, so the label
+  // may say "Active Feature" while pointing at a fix id. This is a known, cosmetic-only quirk of
+  // the single global pointer design -- nothing reads it for decisions.
+  private updateProjectStateForFixPlan(fixId: string): string {
+    let markdown = readUtf8(this.projectStatePath);
+    markdown = setOrInsertSection(markdown, 'Active Feature', `\`${fixId}\``);
+    markdown = replaceSection(markdown, 'Pending', bulletList([
+      'Plan the next implementation task for the active fix.',
+      'Continue updating this file with approved repository facts as fix work lands.',
+    ]));
+    markdown = replaceSection(markdown, 'Next Planning Hint', `The active work item is fix \`${fixId}\`, and its next valid action is task planning.`);
+    markdown = replaceSection(markdown, 'Last Approved Change', `Fix \`${fixId}\` was formalized by the orchestrator.`);
+    markdown = upsertBulletInSection(
+      markdown,
+      'Current Reality',
+      `- The active work-item pointer currently targets fix \`${fixId}\``,
+      `- The active work-item pointer currently targets fix \`${fixId}\`; the detailed task and lifecycle state for that fix lives in \`docs/fixes/${fixId}/state.md\`.`,
+    );
+    return markdown;
+  }
+
+  private updateProjectStateForFixTaskPlan(fixId: string, taskId: string): string {
+    let markdown = readUtf8(this.projectStatePath);
+    markdown = setOrInsertSection(markdown, 'Active Feature', `\`${fixId}\``);
+    markdown = replaceSection(markdown, 'Pending', bulletList([
+      `Execute \`${taskId}\` for the active fix.`,
+      'Continue updating this file with approved repository facts as fix work lands.',
+    ]));
+    markdown = replaceSection(markdown, 'Next Planning Hint', `The active work item is fix \`${fixId}\`, and its next valid action is to execute \`${taskId}\`.`);
+    markdown = upsertBulletInSection(
+      markdown,
+      'Current Reality',
+      `- Fix \`${fixId}\` now has a planned next task`,
+      `- Fix \`${fixId}\` now has a planned next task, \`${taskId}\`, ready to execute.`,
     );
     return markdown;
   }

@@ -5,6 +5,7 @@ import { readUtf8 } from '../filesystem/textNormalization.js';
 
 export type StructuredSchemaId =
   | 'feature_plan'
+  | 'fix_plan'
   | 'planner_output'
   | 'reviewer_output'
   | 'task_interface_analysis'
@@ -18,6 +19,7 @@ interface FileFingerprint {
 
 const STRUCTURED_SCHEMA_PATHS: Record<StructuredSchemaId, string> = {
   feature_plan: 'src/contracts/planner/feature-output.schema.json',
+  fix_plan: 'src/contracts/planner/fix-output.schema.json',
   planner_output: 'src/contracts/planner/output.schema.json',
   reviewer_output: 'src/contracts/reviewer/output.schema.json',
   task_interface_analysis: 'src/contracts/runtime/task-interface-analysis.schema.json',
