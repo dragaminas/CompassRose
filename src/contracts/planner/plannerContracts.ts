@@ -136,6 +136,20 @@ export interface PlannerInput {
   readonly planning_hint: string | null;
 }
 
+/**
+ * Grounds a planned task against the feature it's proposed for: which of that feature's
+ * own declared scope items it satisfies, which "does not include" items it must avoid,
+ * and — if the planner recognizes the behavior as belonging to a sibling feature instead
+ * (see src/planner/siblingFeatureIndex.ts and src/contracts/planner/feature-scope-guard.md)
+ * — which one, so the orchestrator can refuse to write the task instead of letting scope
+ * drift accumulate one plausible-looking task at a time.
+ */
+export interface TaskScopeJustification {
+  readonly included_by: string;
+  readonly excluded_by: readonly string[];
+  readonly belongs_to_other_feature: string | null;
+}
+
 export interface PlannedTask {
   readonly task_id: string;
   readonly previous_task_id?: string | null;
@@ -152,6 +166,11 @@ export interface PlannedTask {
   readonly quality_gates: TaskQualityGates;
   readonly acceptance_criteria: readonly string[];
   readonly expected_deliverables: readonly ExpectedDeliverable[];
+  // Optional on the type (not every PlannedTask comes from a real planner call — see
+  // correctionTaskToTask/stateCorrectionTaskToTask in src/orchestrator/taskRendering.ts,
+  // which build this shape for rendering an existing correction, not a new proposal), but
+  // required in output.schema.json so a genuine planner_output response always includes it.
+  readonly scope_justification?: TaskScopeJustification;
 }
 
 export interface PlannerOutput {

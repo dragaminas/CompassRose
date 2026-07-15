@@ -140,6 +140,7 @@ import {
   statSafeIsFile,
   writeText,
 } from './runtimeHelpers.js';
+import { buildSiblingFeatureIndex } from '../planner/siblingFeatureIndex.js';
 export { parseTaskDocument };
 import {
   escapeRegExp,
@@ -761,8 +762,7 @@ export class CompassRoseOrchestrator {
         this.planFeature(requireString(decision.feature_id, 'feature_id'));
         return { exitCode: 0, continueLoop: true, summary: `Feature ${requireString(decision.feature_id, 'feature_id')} formalized.` };
       case 'plan_task':
-        this.planTask(requireString(decision.feature_id, 'feature_id'));
-        return { exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${requireString(decision.feature_id, 'feature_id')}.` };
+        return this.planTask(requireString(decision.feature_id, 'feature_id'));
       case 'plan_subtask':
         this.planSubtask(requireString(decision.task_id, 'task_id'));
         return { exitCode: 0, continueLoop: true, summary: `Subtask prepared for ${requireString(decision.task_id, 'task_id')}.` };
@@ -891,13 +891,15 @@ export class CompassRoseOrchestrator {
     }
   }
 
-  private planTask(featureId: string): void {
+  private planTask(featureId: string): StepExecutionResult {
     this.ensureCleanWorktreeIfRequired(featureId);
     const feature = this.loadFeature(featureId);
+    const siblingFeatures = buildSiblingFeatureIndex(this.featuresRoot, featureId);
     const sourcePaths = [
       'src/contracts/planner/task-planning-prompt.md',
       'src/contracts/planner/input.md',
       'src/contracts/planner/output.md',
+      'src/contracts/planner/feature-scope-guard.md',
       'src/contracts/state/feature-state.md',
       'src/contracts/task/task.md',
       relativePath(this.repositoryRoot, feature.featurePath),
@@ -920,6 +922,7 @@ export class CompassRoseOrchestrator {
       '- `src/contracts/planner/task-planning-prompt.md`',
       '- `src/contracts/planner/input.md`',
       '- `src/contracts/planner/output.md`',
+      '- `src/contracts/planner/feature-scope-guard.md`',
       '- `src/contracts/state/feature-state.md`',
       '- `src/contracts/task/task.md`',
       `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
@@ -934,6 +937,11 @@ export class CompassRoseOrchestrator {
       '- `tests/`',
       ...this.buildRecoveryLessonPromptLines(featureId),
       '',
+      'Sibling features (do not duplicate their scope; name one in `scope_justification.belongs_to_other_feature` if the task you would otherwise plan actually belongs to it):',
+      ...(siblingFeatures.length > 0
+        ? siblingFeatures.map((sibling) => `- ${sibling.featureId}: ${sibling.title} — ${sibling.summary || 'no summary available'}`)
+        : ['- none']),
+      '',
       'Rules:',
       '- Generate exactly one atomic task.',
       '- Keep the task feature-scoped and reviewable.',
@@ -941,6 +949,7 @@ export class CompassRoseOrchestrator {
       '- Use `test_guided` for implementation tasks that produce code.',
       '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
       '- Any recovery lesson above is an unverified suggestion from a prior model call, not a confirmed requirement — only carry a suggested field, artifact, or mechanism into this task if it already exists in the contracts you were told to read; never invent a new manifest, validator, or artifact type to satisfy one.',
+      '- Fill `scope_justification` by following `src/contracts/planner/feature-scope-guard.md`. Set `belongs_to_other_feature` honestly if a sibling feature above describes the task\'s real subject more specifically than this feature\'s own scope.',
       '- Return JSON only and do not modify files.',
     ].join('\n');
 
@@ -967,6 +976,15 @@ export class CompassRoseOrchestrator {
       `planner:task-plan:${featureId}`,
     );
     const task = planned.task;
+
+    const belongsToOtherFeature = task.scope_justification?.belongs_to_other_feature ?? null;
+    if (belongsToOtherFeature) {
+      const reason = `Task planning for feature \`${featureId}\` proposed \`${task.title}\`, which the planner identified as belonging to feature \`${belongsToOtherFeature}\` instead of this feature's own declared scope. Refusing to write the task; formalize or advance \`${belongsToOtherFeature}\` before retrying.`;
+      console.error(`Blocked: ${reason}`);
+      this.recordBlockedFeature(featureId, reason);
+      return { exitCode: 2, continueLoop: false, summary: reason };
+    }
+
     validateTaskDeliverables(task, 'task');
     this.assertTaskIdIsUnused(feature.tasksDirectory, task.task_id, 'Task planning');
 
@@ -992,6 +1010,8 @@ export class CompassRoseOrchestrator {
         `proto: plan task ${task.task_id}`,
       );
     }
+
+    return { exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${featureId}.` };
   }
 
   private planSubtask(taskId: string): void {

@@ -21,7 +21,8 @@
         "development_policy",
         "quality_gates",
         "acceptance_criteria",
-        "expected_deliverables"
+        "expected_deliverables",
+        "scope_justification"
       ],
       "properties": {
         "task_id": { "type": "string" },
@@ -128,6 +129,25 @@
           "items": {
             "type": "string",
             "enum": ["code", "tests", "documentation"]
+          }
+        },
+        "scope_justification": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "included_by",
+            "excluded_by",
+            "belongs_to_other_feature"
+          ],
+          "properties": {
+            "included_by": { "type": "string" },
+            "excluded_by": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "belongs_to_other_feature": {
+              "type": ["string", "null"]
+            }
           }
         }
       }

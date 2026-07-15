@@ -22,6 +22,7 @@ The planner should read:
 
 - `src/contracts/planner/input.md`
 - `src/contracts/planner/output.md`
+- `src/contracts/planner/feature-scope-guard.md`
 - `src/contracts/task/task.md`
 - `src/contracts/state/feature-state.md`
 - the target feature's `feature.md`
@@ -30,6 +31,7 @@ The planner should read:
 - the relevant project state summary
 - recent recovery lessons for the active feature, when present
 - relevant repository paths for the current gap
+- the supplied sibling-feature index (every other feature's `feature_id`, `title`, and `summary`)
 
 ---
 
@@ -48,6 +50,7 @@ The planner must:
 - if this task is a later version of a previous task, set `previous_task_id` to the earlier task and preserve the earlier task as history; otherwise set it to `null`
 - reuse recent recovery lessons to tighten the first executable step, minimum progress evidence, or acceptance criteria when the feature has already learned from a blocked or corrected run
 - treat `lifecycle_state` as the primary operational decision input
+- fill `scope_justification` by following `src/contracts/planner/feature-scope-guard.md`
 
 The planner must not:
 
@@ -69,6 +72,7 @@ Your job is to generate the next atomic implementation task for a feature.
 Before responding, read and align with:
 - `src/contracts/planner/input.md`
 - `src/contracts/planner/output.md`
+- `src/contracts/planner/feature-scope-guard.md`
 - `src/contracts/task/task.md`
 - `src/contracts/state/feature-state.md`
 - the target feature's `feature.md`
@@ -76,6 +80,7 @@ Before responding, read and align with:
 - the target feature's `state.md`
 - the relevant project state summary
 - the relevant repository paths for this feature
+- the supplied sibling-feature index
 
 Use the provided planner input as intent plus reality.
 
@@ -94,6 +99,7 @@ Instructions:
 - Define `minimum_progress_evidence` as observable repository progress inside the allowed scope.
 - Include concrete acceptance criteria and quality gates.
 - Prefer feature-local scope.
+- Fill `scope_justification` by checking the task against the feature's own `## Scope` bullets and the supplied sibling-feature index, per `src/contracts/planner/feature-scope-guard.md`. If a sibling feature's summary describes the task's real subject more specifically, set `belongs_to_other_feature` to that feature's id honestly rather than leaving it null.
 - Do not generate future tasks, a roadmap, or a phase plan.
 
 Return:

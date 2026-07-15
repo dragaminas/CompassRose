@@ -67,6 +67,12 @@ planner_output:
       - code
       - tests
       - documentation
+
+    scope_justification:
+      included_by: string
+      excluded_by:
+        - string
+      belongs_to_other_feature: string | null
 ```
 
 ---
@@ -85,6 +91,7 @@ Every task must include:
 - `trace`
 - `scope.allowed_paths`
 - `acceptance_criteria`
+- `scope_justification`
 
 ---
 
@@ -107,6 +114,7 @@ The task must:
 - Keep `quality_gates.before_review` runnable in a plain shell on the target runtime.
 - Prefer portable commands that are expected to exist in the runtime environment.
 - Do not require optional tools unless the task context explicitly states they are available.
+- Follow `src/contracts/planner/feature-scope-guard.md` to fill in `scope_justification`: name the feature's own "Scope: includes" bullet the task satisfies in `included_by`, confirm it against every "does not include" bullet in `excluded_by`, and set `belongs_to_other_feature` to the sibling feature id if the task's real subject is described there instead.
 
 The task must not:
 
