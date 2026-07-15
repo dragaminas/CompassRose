@@ -1,0 +1,330 @@
+import { chmodSync, existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { dirname, join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, test } from 'vitest';
+
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const tsxBinary = join(repoRoot, 'node_modules', '.bin', 'tsx');
+
+const TARGET_FEATURE_ID = '000-scope-guard-target';
+const SIBLING_FEATURE_ID = '997-scope-guard-sibling';
+
+describe('feature scope guard', () => {
+  // Regression coverage for the incident described in
+  // src/contracts/planner/feature-scope-guard.md: a planner proposing a task that actually
+  // belongs to a sibling feature must be refused deterministically by the orchestrator, not
+  // silently written as a task for the wrong feature.
+  test('refuses a planned task whose scope_justification names a sibling feature, and blocks the feature instead', () => {
+    const workspace = prepareScopeGuardWorkspace();
+
+    try {
+      const result = runScopeGuardScenario(workspace.cloneRoot);
+
+      expect(result.exitCode).toBe(2);
+      expect(result.stdout).toContain(`Next step: plan_task (${TARGET_FEATURE_ID})`);
+      expect(`${result.stdout}${result.stderr}`).toContain(
+        `identified as belonging to feature \`${SIBLING_FEATURE_ID}\` instead of this feature's own declared scope`,
+      );
+
+      const tasksDirectory = join(workspace.cloneRoot, 'docs', 'features', TARGET_FEATURE_ID, 'tasks');
+      const writtenTasks = existsSync(tasksDirectory) ? readdirSync(tasksDirectory) : [];
+      expect(writtenTasks).toEqual([]);
+
+      const featureState = readFileSync(join(workspace.cloneRoot, 'docs', 'features', TARGET_FEATURE_ID, 'state.md'), 'utf8');
+      expect(featureState).toContain('## Lifecycle State\n\nblocked');
+      expect(featureState).toContain(SIBLING_FEATURE_ID);
+
+      const runSummary = JSON.parse(
+        readFileSync(join(workspace.cloneRoot, '.git', 'proto-compassrose', 'latest-run.json'), 'utf8'),
+      ) as { status?: string; exit_code?: number };
+      expect(runSummary.status).toBe('stopped');
+      expect(runSummary.exit_code).toBe(2);
+    } finally {
+      workspace.dispose();
+    }
+  }, 20000);
+});
+
+function prepareScopeGuardWorkspace(): { cloneRoot: string; dispose: () => void } {
+  const tempRoot = mkdtempSync(join(tmpdir(), 'compassrose-scope-guard-'));
+  const bareRoot = join(tempRoot, 'repo.git');
+  const cloneRoot = join(tempRoot, 'repo');
+
+  const cloneResult = spawnSync('git', ['clone', '--bare', '--quiet', repoRoot, bareRoot], {
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  if (cloneResult.status !== 0) {
+    throw new Error(`git clone --bare failed:\n${cloneResult.stderr || cloneResult.stdout}`);
+  }
+
+  const worktreeResult = spawnSync('git', ['clone', '--quiet', bareRoot, cloneRoot], {
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  if (worktreeResult.status !== 0) {
+    throw new Error(`git clone failed:\n${worktreeResult.stderr || worktreeResult.stdout}`);
+  }
+
+  copyTree(join(repoRoot, 'src'), join(cloneRoot, 'src'));
+  seedTargetFeature(cloneRoot);
+  seedSiblingFeature(cloneRoot);
+  writeExecutableScript(join(tempRoot, 'codex-mock.cjs'), CODEX_SCOPE_GUARD_MOCK);
+  writeExecutableScript(join(tempRoot, 'opencode-mock.cjs'), OPENCODE_STUB_MOCK);
+
+  return {
+    cloneRoot,
+    dispose: () => rmSync(tempRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }),
+  };
+}
+
+function runScopeGuardScenario(cloneRoot: string): {
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+} {
+  const tempRoot = dirname(cloneRoot);
+  const runResult = spawnSync(
+    tsxBinary,
+    ['src/cli/main.ts', '--no-commit', '--implementer', 'opencode'],
+    {
+      cwd: cloneRoot,
+      env: {
+        ...process.env,
+        PROTO_COMPASSROSE_CODEX_COMMAND: join(tempRoot, 'codex-mock.cjs'),
+        PROTO_COMPASSROSE_OPENCODE_COMMAND: join(tempRoot, 'opencode-mock.cjs'),
+        PROTO_COMPASSROSE_SKIP_CLEAN_CHECK: '1',
+      },
+      encoding: 'utf8',
+      maxBuffer: 20 * 1024 * 1024,
+      shell: process.platform === 'win32',
+    },
+  );
+
+  return {
+    exitCode: runResult.status,
+    stdout: runResult.stdout || '',
+    stderr: runResult.stderr || '',
+  };
+}
+
+function copyTree(sourceRoot: string, targetRoot: string): void {
+  if (!existsSync(sourceRoot)) {
+    return;
+  }
+
+  if (statSync(sourceRoot).isFile()) {
+    mkdirSync(dirname(targetRoot), { recursive: true });
+    writeFileSync(targetRoot, readFileSync(sourceRoot, 'utf8'), 'utf8');
+    return;
+  }
+
+  mkdirSync(targetRoot, { recursive: true });
+  for (const entry of readdirSync(sourceRoot)) {
+    copyTree(join(sourceRoot, entry), join(targetRoot, entry));
+  }
+}
+
+function seedTargetFeature(cloneRoot: string): void {
+  const featureRoot = join(cloneRoot, 'docs', 'features', TARGET_FEATURE_ID);
+  mkdirSync(featureRoot, { recursive: true });
+
+  writeFileSync(
+    join(featureRoot, 'request.md'),
+    `# Request: Scope Guard Test Target
+
+A synthetic feature used only by tests/orchestratorScopeGuard.test.ts to exercise the
+feature-scope guard without depending on real, evolving feature state.
+`,
+    'utf8',
+  );
+
+  writeFileSync(
+    join(featureRoot, 'feature.md'),
+    `# Feature: Scope Guard Test Target
+
+## Purpose
+
+A synthetic feature used only to test that the orchestrator refuses a planned task whose
+scope_justification names a sibling feature.
+
+## Scope
+
+This feature includes:
+
+- a narrow, self-contained deliverable that has nothing to do with orchestrator dispatch
+
+This feature does not include:
+
+- reimplementing feature selection, lifecycle dispatch, or CLI adapter invocation; that belongs
+  to \`${SIBLING_FEATURE_ID}\`
+`,
+    'utf8',
+  );
+
+  writeFileSync(
+    join(featureRoot, 'architecture.md'),
+    `# Architecture: Scope Guard Test Target
+
+No real architecture; this feature exists only for test fixtures.
+`,
+    'utf8',
+  );
+
+  writeFileSync(
+    join(featureRoot, 'state.md'),
+    `# State: Scope Guard Test Target
+
+## Lifecycle State
+
+task_planning_pending
+
+## Source Request
+
+\`request.md\`
+
+## Operational Status
+
+- formalization: complete
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
+- last_unblock_result: not_run
+
+## Current Reality
+
+The feature is formalized and ready for its first task to be planned.
+
+## Implemented Deliverables
+
+- feature formalization exists
+
+## Remaining Deliverables
+
+- plan the first task
+
+## Outline Progress
+
+- Formalize the feature: complete
+- Plan the first task: not started
+
+## Blocked By
+
+- None
+
+## Blocked From
+
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
+
+## Last Approved Change
+
+None yet.
+
+## Known Gaps
+
+- None
+
+## Next Planning Hint
+
+Plan the next task for this feature.
+`,
+    'utf8',
+  );
+}
+
+function seedSiblingFeature(cloneRoot: string): void {
+  const featureRoot = join(cloneRoot, 'docs', 'features', SIBLING_FEATURE_ID);
+  mkdirSync(featureRoot, { recursive: true });
+
+  writeFileSync(
+    join(featureRoot, 'request.md'),
+    `# Request: Scope Guard Test Sibling
+
+A synthetic sibling feature used only by tests/orchestratorScopeGuard.test.ts. It owns feature
+selection, lifecycle dispatch, and CLI adapter invocation so the scope-guard test target feature
+can name it in scope_justification.belongs_to_other_feature.
+`,
+    'utf8',
+  );
+}
+
+function writeExecutableScript(path: string, contents: string): void {
+  writeFileSync(path, contents, 'utf8');
+  chmodSync(path, 0o755);
+}
+
+const CODEX_SCOPE_GUARD_MOCK = `#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+
+const args = process.argv.slice(2);
+const outputPath = readArgValue(args, '-o');
+
+if (outputPath) {
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(
+    outputPath,
+    JSON.stringify({
+      task: {
+        task_id: 'F000-T01',
+        previous_task_id: null,
+        feature_id: '${TARGET_FEATURE_ID}',
+        title: 'Add feature-selection and lifecycle dispatch to the CLI entrypoint',
+        objective: 'Duplicate the orchestrator feature-selection and lifecycle-dispatch loop directly inside this feature.',
+        first_executable_step: 'Add a feature-selection scan to src/cli/main.ts.',
+        minimum_progress_evidence: ['src/cli/main.ts gains a feature-selection scan.'],
+        trace: {
+          roadmap_objective: 'Deterministic Orchestration',
+          feature_goal: 'Scope-guard test target feature goal.',
+          state_gap: 'The feature needs its next task planned.',
+        },
+        context: {
+          summary: 'Scope-guard test scenario: this task actually belongs to the sibling feature.',
+          relevant_paths: ['src/cli/main.ts'],
+          relevant_modules: ['CLI entrypoint'],
+        },
+        scope: {
+          allowed_paths: ['src/cli/main.ts'],
+          forbidden_paths: [],
+        },
+        constraints: [],
+        development_policy: { mode: 'test_guided' },
+        quality_gates: { before_review: ['npm test'] },
+        acceptance_criteria: ['n/a: this task is expected to be refused before it is written'],
+        expected_deliverables: ['code', 'tests'],
+        scope_justification: {
+          included_by: 'n/a - deliberately out of scope for this synthetic test feature',
+          excluded_by: [
+            'This feature does not include reimplementing feature selection, lifecycle dispatch, or CLI adapter invocation.',
+          ],
+          belongs_to_other_feature: '${SIBLING_FEATURE_ID}',
+        },
+      },
+    }, null, 2) + '\\n',
+    'utf8',
+  );
+}
+
+process.exit(0);
+
+function readArgValue(args, flag) {
+  const index = args.indexOf(flag);
+  if (index === -1) {
+    return null;
+  }
+
+  return args[index + 1] || null;
+}
+`;
+
+const OPENCODE_STUB_MOCK = `#!/usr/bin/env node
+process.exit(0);
+`;
