@@ -46,6 +46,7 @@ import type {
   RunSummary,
   StepExecutionResult,
   StepRunRecord,
+  WorkItemContext,
 } from '../contracts/runtime/protoRuntime.js';
 import type { ProjectConfiguration } from '../config/configTypes.js';
 import { readProjectConfiguration } from '../config/configReader.js';
@@ -1024,15 +1025,15 @@ export class CompassRoseOrchestrator {
   private planSubtask(taskId: string): void {
     const task = this.loadTask(taskId);
     this.ensureCleanWorktreeIfRequired(task.featureId);
-    const feature = this.loadFeature(task.featureId);
+    const owner = this.resolveWorkItemContext(task.featureId);
 
-    writeText(feature.statePath, this.updateFeatureStateDuringImplementation(feature.statePath, task.taskId));
+    writeText(owner.statePath, this.updateFeatureStateDuringImplementation(owner.statePath, task.taskId));
     writeText(this.projectStatePath, this.updateProjectStateDuringImplementation(task.featureId, task.taskId));
 
     if (this.options.commit) {
       this.git.commit(
         [
-          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, owner.statePath),
           relativePath(this.repositoryRoot, this.projectStatePath),
         ],
         `proto: prepare subtask ${task.taskId}`,
@@ -1041,14 +1042,14 @@ export class CompassRoseOrchestrator {
   }
 
   private planDoctorRecoveryTask(featureId: string, reason: string): void {
-    const feature = this.loadFeature(featureId);
-    const snapshot = this.readFeatureStateSnapshot(feature);
+    const owner = this.resolveWorkItemContext(featureId);
+    const snapshot = this.readFeatureStateSnapshot(owner);
     const recoveryActiveTask = snapshot.lifecycleState === 'implementation_failed'
-      ? this.resolveImplementationFailureActiveTask(feature, snapshot)
+      ? this.resolveImplementationFailureActiveTask(owner, snapshot)
       : null;
     const blocker = this.buildBlockerProfile(snapshot, reason);
     const restorationTarget = snapshot.lifecycleState === 'implementation_failed'
-      ? this.buildImplementationFailureRestorationTarget(feature, snapshot)
+      ? this.buildImplementationFailureRestorationTarget(owner, snapshot)
       : this.preferredRestorationTarget(snapshot);
     const sourcePaths = [
       'src/contracts/planner/doctor-recovery-planning-prompt.md',
@@ -1057,9 +1058,9 @@ export class CompassRoseOrchestrator {
       'src/contracts/state/feature-state.md',
       'src/contracts/task/doctor-recovery-task.md',
       'src/contracts/task/state-correction-task.md',
-      relativePath(this.repositoryRoot, feature.featurePath),
-      relativePath(this.repositoryRoot, feature.architecturePath),
-      relativePath(this.repositoryRoot, feature.statePath),
+      relativePath(this.repositoryRoot, owner.definitionPath),
+      ...(owner.architecturePath ? [relativePath(this.repositoryRoot, owner.architecturePath)] : []),
+      relativePath(this.repositoryRoot, owner.statePath),
       ...(recoveryActiveTask ? [`.git/proto-compassrose/implementation-attempts/${recoveryActiveTask}.json`] : []),
       'docs/compassrose/PROJECT_STATE.md',
       'docs/compassrose/CONFIG.md',
@@ -1077,9 +1078,9 @@ export class CompassRoseOrchestrator {
       '- `src/contracts/state/feature-state.md`',
       '- `src/contracts/task/doctor-recovery-task.md`',
       '- `src/contracts/task/state-correction-task.md`',
-      `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, owner.definitionPath)}\``,
+      ...(owner.architecturePath ? [`- \`${relativePath(this.repositoryRoot, owner.architecturePath)}\``] : []),
+      `- \`${relativePath(this.repositoryRoot, owner.statePath)}\``,
       ...(recoveryActiveTask ? [`- \`.git/proto-compassrose/implementation-attempts/${recoveryActiveTask}.json\``] : []),
       '- `docs/compassrose/PROJECT_STATE.md`',
       '- `docs/compassrose/CONFIG.md`',
@@ -1138,7 +1139,7 @@ export class CompassRoseOrchestrator {
     );
     const task = planned.task;
     validateTaskDeliverables(task, 'doctor recovery task');
-    this.assertTaskIdIsUnused(feature.tasksDirectory, task.task_id, 'Doctor recovery planning');
+    this.assertTaskIdIsUnused(owner.tasksDirectory, task.task_id, 'Doctor recovery planning');
 
     const doctorRecoveryMetadata: DoctorRecoveryTaskMetadata = {
       blocker,
@@ -1152,7 +1153,7 @@ export class CompassRoseOrchestrator {
       review_policy: 'no_review_loop',
     };
 
-    const taskPath = join(feature.tasksDirectory, buildTaskFileName(task.task_id, task.title));
+    const taskPath = join(owner.tasksDirectory, buildTaskFileName(task.task_id, task.title));
     const taskMarkdown = renderDoctorRecoveryTaskMarkdown(task, doctorRecoveryMetadata);
 
     writeText(taskPath, taskMarkdown);
@@ -1162,16 +1163,16 @@ export class CompassRoseOrchestrator {
     });
     this.writeBlockerProfile(featureId, task.task_id, blocker, doctorRecoveryMetadata.restoration_target, reason);
 
-    const updatedFeatureState = this.updateFeatureStateForDoctorRecovery(feature.statePath, task.task_id, restorationTarget);
+    const updatedFeatureState = this.updateFeatureStateForDoctorRecovery(owner.statePath, task.task_id, restorationTarget);
     const updatedProjectState = this.updateProjectStateForDoctorRecovery(featureId, task.task_id, restorationTarget.lifecycle_state);
-    writeText(feature.statePath, updatedFeatureState);
+    writeText(owner.statePath, updatedFeatureState);
     writeText(this.projectStatePath, updatedProjectState);
 
     if (this.options.commit) {
       this.git.commit(
         [
           relativePath(this.repositoryRoot, taskPath),
-          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, owner.statePath),
           relativePath(this.repositoryRoot, this.projectStatePath),
         ],
         `proto: plan doctor recovery ${featureId}`,
@@ -1183,7 +1184,7 @@ export class CompassRoseOrchestrator {
     this.planDoctorRecoveryTask(featureId, reason);
   }
 
-  private buildImplementationFailureRestorationTarget(feature: FeatureRecord, snapshot: FeatureStateSnapshot): RestorationTarget {
+  private buildImplementationFailureRestorationTarget(feature: Pick<WorkItemContext, 'id'>, snapshot: FeatureStateSnapshot): RestorationTarget {
     const activeTask = this.resolveImplementationFailureActiveTask(feature, snapshot);
     if (!activeTask) {
       throw new Error(`Cannot build an implementation-failure recovery target for ${feature.id} because no active task anchor could be recovered.`);
@@ -1198,16 +1199,16 @@ export class CompassRoseOrchestrator {
   }
 
   private diagnoseAndAutocorrect(featureId: string, reason: string): StepExecutionResult {
-    const feature = this.loadFeature(featureId);
-    const decision = this.runDiagnosticAutocorrection(feature, reason);
+    const owner = this.resolveWorkItemContext(featureId);
+    const decision = this.runDiagnosticAutocorrection(owner, reason);
     this.writeDiagnosticArtifact(decision);
 
     if (decision.next_step === 'correct_state') {
-      if (!statSafeIsFile(feature.statePath)) {
+      if (!statSafeIsFile(owner.statePath)) {
         return {
           exitCode: 2,
           continueLoop: false,
-          summary: `${decision.next_step_reason} The current runtime cannot generate a deterministic state-correction artifact because ${relativePath(this.repositoryRoot, feature.statePath)} is missing.`,
+          summary: `${decision.next_step_reason} The current runtime cannot generate a deterministic state-correction artifact because ${relativePath(this.repositoryRoot, owner.statePath)} is missing.`,
         };
       }
 
@@ -1220,7 +1221,7 @@ export class CompassRoseOrchestrator {
     }
 
     if (decision.next_step === 'plan_doctor_recovery') {
-      if (!this.tryReadFeatureStateSnapshot(feature)) {
+      if (!this.tryReadFeatureStateSnapshot(owner)) {
         return {
           exitCode: 2,
           continueLoop: false,
@@ -1236,7 +1237,7 @@ export class CompassRoseOrchestrator {
       };
     }
 
-    if (statSafeIsFile(feature.statePath)) {
+    if (statSafeIsFile(owner.statePath)) {
       try {
         this.recordBlockedFeature(featureId, decision.next_step_reason);
       } catch {
@@ -1252,7 +1253,7 @@ export class CompassRoseOrchestrator {
     };
   }
 
-  private runDiagnosticAutocorrection(feature: FeatureRecord, reason: string): DiagnosticAutocorrectionDecision {
+  private runDiagnosticAutocorrection(feature: WorkItemContext, reason: string): DiagnosticAutocorrectionDecision {
     const stateExists = statSafeIsFile(feature.statePath);
     const snapshot = stateExists ? this.tryReadFeatureStateSnapshot(feature) : null;
 
@@ -1437,7 +1438,7 @@ export class CompassRoseOrchestrator {
     };
   }
 
-  private buildMissingStateBlocker(feature: FeatureRecord, reason: string): BlockerProfile {
+  private buildMissingStateBlocker(feature: WorkItemContext, reason: string): BlockerProfile {
     return {
       kind: 'state_corruption',
       signature: buildBlockerSignature('state_corruption', 'unknown', reason, [feature.id]),
@@ -1451,7 +1452,7 @@ export class CompassRoseOrchestrator {
   }
 
   private buildDeterministicStateCorrectionDecision(
-    feature: FeatureRecord,
+    feature: WorkItemContext,
     blocker: BlockerProfile,
     reason: string,
   ): DiagnosticAutocorrectionDecision {
@@ -1475,7 +1476,7 @@ export class CompassRoseOrchestrator {
   }
 
   private buildDeterministicDoctorRecoveryDecision(
-    feature: FeatureRecord,
+    feature: WorkItemContext,
     snapshot: FeatureStateSnapshot,
     blocker: BlockerProfile,
     reason: string,
@@ -1510,7 +1511,7 @@ export class CompassRoseOrchestrator {
 
   private buildDeterministicStopDiagnosticDecision(
     blocker: BlockerProfile,
-    feature: FeatureRecord,
+    feature: WorkItemContext,
     targetPaths: readonly (string | null)[],
     reason: string,
     summary: string,
@@ -1532,7 +1533,7 @@ export class CompassRoseOrchestrator {
   }
 
   private ensureDiagnosticAutocorrectionDecision(
-    feature: FeatureRecord,
+    feature: WorkItemContext,
     reason: string,
     decision: DiagnosticAutocorrectionDecision,
   ): DiagnosticAutocorrectionDecision {
@@ -1586,7 +1587,7 @@ export class CompassRoseOrchestrator {
   }
 
   private buildDiagnosticFallbackDecision(
-    feature: FeatureRecord,
+    feature: WorkItemContext,
     reason: string,
     cause: string,
   ): DiagnosticAutocorrectionDecision {
@@ -1617,7 +1618,7 @@ export class CompassRoseOrchestrator {
     };
   }
 
-  private buildDiagnosticArtifactPromptLines(feature: FeatureRecord): string[] {
+  private buildDiagnosticArtifactPromptLines(feature: WorkItemContext): string[] {
     const lines: string[] = [];
     const inspection = statSafeIsFile(feature.statePath) ? this.tryReadFeatureStateSnapshot(feature) : null;
     const activeTaskCandidates = uniqueStrings([
@@ -1743,7 +1744,7 @@ export class CompassRoseOrchestrator {
     const artifact = this.loadTaskArtifact(taskId);
     const stateCorrection = artifact?.state_correction ?? null;
     const doctorRecovery = artifact?.doctor_recovery ?? artifact?.unblock ?? null;
-    const feature = this.loadFeature(task.featureId);
+    const owner = this.resolveWorkItemContext(task.featureId);
     const qualityResults = this.ensureQualityGateResults(task);
     const implementation = this.ensureImplementationAttempt(task);
     // Exclude the runtime's own state-doc bookkeeping (written live to the working tree by
@@ -1751,7 +1752,7 @@ export class CompassRoseOrchestrator {
     // reviewer mistakes orchestrator bookkeeping for an implementer scope violation. Same exclusion
     // captureImplementationAttempt and ensureImplementationAttempt already apply.
     const reviewDiffExcludedPaths = [
-      relativePath(this.repositoryRoot, feature.statePath),
+      relativePath(this.repositoryRoot, owner.statePath),
       relativePath(this.repositoryRoot, this.projectStatePath),
     ];
     const liveDiff = this.git.diffPatch(reviewDiffExcludedPaths);
@@ -1785,9 +1786,9 @@ export class CompassRoseOrchestrator {
       ...reviewContextPaths,
       ...implementationContextPaths,
       relativePath(this.repositoryRoot, task.path),
-      relativePath(this.repositoryRoot, feature.featurePath),
-      relativePath(this.repositoryRoot, feature.architecturePath),
-      relativePath(this.repositoryRoot, feature.statePath),
+      relativePath(this.repositoryRoot, owner.definitionPath),
+      ...(owner.architecturePath ? [relativePath(this.repositoryRoot, owner.architecturePath)] : []),
+      relativePath(this.repositoryRoot, owner.statePath),
       'docs/compassrose/CONFIG.md',
       diffPath,
       implementationPath,
@@ -1814,9 +1815,9 @@ export class CompassRoseOrchestrator {
       '- Read the implementer context artifacts before deciding whether the task was already satisfied or the context was too restrictive.',
       ...reviewContextPaths.map((item) => `- \`${item}\``),
       `- \`${relativePath(this.repositoryRoot, task.path)}\``,
-      `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, owner.definitionPath)}\``,
+      ...(owner.architecturePath ? [`- \`${relativePath(this.repositoryRoot, owner.architecturePath)}\``] : []),
+      `- \`${relativePath(this.repositoryRoot, owner.statePath)}\``,
       '- `docs/compassrose/CONFIG.md`',
       `- \`${diffPath}\``,
       `- \`${implementationPath}\``,
@@ -1875,7 +1876,7 @@ export class CompassRoseOrchestrator {
     );
     this.artifacts.writeJson(join('reviews', `${taskId}.json`), review);
     const taskInterfaceAnalysis = this.shouldAnalyzeTaskInterface(review)
-      ? this.analyzeTaskInterface(task, feature, review, implementation, qualityResults, tempDir, stateCorrection, doctorRecovery)
+      ? this.analyzeTaskInterface(task, owner, review, implementation, qualityResults, tempDir, stateCorrection, doctorRecovery)
       : null;
 
     if (taskInterfaceAnalysis && review.status !== 'approved') {
@@ -1884,16 +1885,16 @@ export class CompassRoseOrchestrator {
 
     if (review.status === 'approved') {
     const updatedFeatureState = stateCorrection
-        ? this.updateFeatureStateAfterStateCorrection(feature.statePath, task.taskId, stateCorrection)
+        ? this.updateFeatureStateAfterStateCorrection(owner.statePath, task.taskId, stateCorrection)
         : doctorRecovery
-          ? this.updateFeatureStateAfterDoctorRecovery(feature.statePath, task, doctorRecovery)
-          : this.updateFeatureStateAfterApprovedReview(feature.statePath, task);
+          ? this.updateFeatureStateAfterDoctorRecovery(owner.statePath, task, doctorRecovery)
+          : this.updateFeatureStateAfterApprovedReview(owner.statePath, task);
       const updatedProjectState = stateCorrection
         ? this.updateProjectStateAfterStateCorrection(task.featureId, stateCorrection)
         : doctorRecovery
           ? this.updateProjectStateAfterDoctorRecovery(task.featureId, task.taskId, doctorRecovery.restoration_target)
           : this.updateProjectStateAfterApprovedReview(task.featureId, task.taskId);
-      writeText(feature.statePath, updatedFeatureState);
+      writeText(owner.statePath, updatedFeatureState);
       writeText(this.projectStatePath, updatedProjectState);
 
       if (!stateCorrection && !doctorRecovery) {
@@ -1920,15 +1921,15 @@ export class CompassRoseOrchestrator {
       }
 
       const correction = review.correction_task;
-      this.assertTaskIdIsUnused(feature.tasksDirectory, correction.correction_task_id, 'Review correction-task authoring');
+      this.assertTaskIdIsUnused(owner.tasksDirectory, correction.correction_task_id, 'Review correction-task authoring');
       const correctionPath = this.writeCorrectionTask(correction);
       this.artifacts.writeJson(join('tasks', `${correction.correction_task_id}.json`), {
         task: correctionTaskToTask(correction),
       });
 
-      const updatedFeatureState = this.updateFeatureStateForCorrection(feature.statePath, task.taskId, correction.correction_task_id);
+      const updatedFeatureState = this.updateFeatureStateForCorrection(owner.statePath, task.taskId, correction.correction_task_id);
       const updatedProjectState = this.updateProjectStateForCorrection(task.featureId, correction.correction_task_id);
-      writeText(feature.statePath, updatedFeatureState);
+      writeText(owner.statePath, updatedFeatureState);
       writeText(this.projectStatePath, updatedProjectState);
 
       if (this.options.commit) {
@@ -2004,7 +2005,7 @@ export class CompassRoseOrchestrator {
     task: ParsedTaskDocument,
     doctorRecovery: DoctorRecoveryTaskMetadata,
   ): StepExecutionResult {
-    const feature = this.loadFeature(task.featureId);
+    const owner = this.resolveWorkItemContext(task.featureId);
     const recoveryLessonLines = this.buildRecoveryLessonPromptLines(task.featureId);
     const prompt = buildDoctorRecoveryPrompt(task, doctorRecovery, recoveryLessonLines);
     const sourcePaths = [
@@ -2051,7 +2052,7 @@ export class CompassRoseOrchestrator {
 
     if (attempt.status !== 'success') {
       return this.stopAfterDoctorRecoveryFailure(
-        feature,
+        owner,
         task,
         doctorRecovery,
         attempt.error ?? `Doctor recovery ${task.taskId} failed (${attempt.diagnostics.classification}).`,
@@ -2075,16 +2076,16 @@ export class CompassRoseOrchestrator {
         .filter((result) => result.status === 'failed')
         .map((result) => `${result.name}: ${result.output_summary}`);
       return this.stopAfterDoctorRecoveryFailure(
-        feature,
+        owner,
         task,
         doctorRecovery,
         `Doctor recovery ${task.taskId} failed its re-entry quality gates.\n${failures.join('\n')}`,
       );
     }
 
-    const updatedFeatureState = this.updateFeatureStateAfterDoctorRecovery(feature.statePath, task, doctorRecovery);
+    const updatedFeatureState = this.updateFeatureStateAfterDoctorRecovery(owner.statePath, task, doctorRecovery);
     const updatedProjectState = this.updateProjectStateAfterDoctorRecovery(task.featureId, task.taskId, doctorRecovery.restoration_target);
-    writeText(feature.statePath, updatedFeatureState);
+    writeText(owner.statePath, updatedFeatureState);
     writeText(this.projectStatePath, updatedProjectState);
 
     if (this.options.commit) {
@@ -2100,7 +2101,7 @@ export class CompassRoseOrchestrator {
   }
 
   private stopAfterDoctorRecoveryFailure(
-    feature: FeatureRecord,
+    owner: WorkItemContext,
     task: ParsedTaskDocument,
     doctorRecovery: DoctorRecoveryTaskMetadata,
     reason: string,
@@ -2136,7 +2137,7 @@ export class CompassRoseOrchestrator {
     if (this.options.commit) {
       this.git.commit(
         [
-          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, owner.statePath),
           relativePath(this.repositoryRoot, this.projectStatePath),
         ],
         `proto: stop doctor recovery ${task.taskId}`,
@@ -2157,7 +2158,7 @@ export class CompassRoseOrchestrator {
 
   private analyzeTaskInterface(
     task: ParsedTaskDocument,
-    feature: FeatureRecord,
+    owner: WorkItemContext,
     review: ReviewerOutput,
     implementation: ImplementationAttempt,
     qualityResults: readonly QualityGateResult[],
@@ -2178,9 +2179,9 @@ export class CompassRoseOrchestrator {
       'src/contracts/reviewer/output.md',
       'src/contracts/runtime/task-interface-analysis.md',
       relativePath(this.repositoryRoot, task.path),
-      relativePath(this.repositoryRoot, feature.featurePath),
-      relativePath(this.repositoryRoot, feature.architecturePath),
-      relativePath(this.repositoryRoot, feature.statePath),
+      relativePath(this.repositoryRoot, owner.definitionPath),
+      ...(owner.architecturePath ? [relativePath(this.repositoryRoot, owner.architecturePath)] : []),
+      relativePath(this.repositoryRoot, owner.statePath),
       'docs/compassrose/CONFIG.md',
       join(tempDir, 'implementation.json'),
       join(tempDir, 'quality-gates.json'),
@@ -2203,9 +2204,9 @@ export class CompassRoseOrchestrator {
       '- `src/contracts/reviewer/output.md`',
       '- `src/contracts/runtime/task-interface-analysis.md`',
       `- \`${relativePath(this.repositoryRoot, task.path)}\``,
-      `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, owner.definitionPath)}\``,
+      ...(owner.architecturePath ? [`- \`${relativePath(this.repositoryRoot, owner.architecturePath)}\``] : []),
+      `- \`${relativePath(this.repositoryRoot, owner.statePath)}\``,
       '- `docs/compassrose/CONFIG.md`',
       `- \`${join(tempDir, 'implementation.json')}\``,
       '- `implementation.implementation_notes` inside `implementation.json` (the field is named `implementation_notes`, not `notes`); if it is null or empty, treat that as an execution defect and report it explicitly.',
@@ -2264,9 +2265,9 @@ export class CompassRoseOrchestrator {
   private executeImplementation(task: ParsedTaskDocument, correction: boolean, stateCorrection: StateCorrectionTask | null): boolean {
     const recoveryLessonLines = this.buildRecoveryLessonPromptLines(task.featureId);
     const prompt = buildImplementerPrompt(task, correction, stateCorrection, recoveryLessonLines);
-    const feature = this.loadFeature(task.featureId);
+    const owner = this.resolveWorkItemContext(task.featureId);
     const implementationStatePaths = [
-      relativePath(this.repositoryRoot, feature.statePath),
+      relativePath(this.repositoryRoot, owner.statePath),
       relativePath(this.repositoryRoot, this.projectStatePath),
     ];
     const sourcePaths = [
@@ -2277,7 +2278,7 @@ export class CompassRoseOrchestrator {
       task.path,
       ...task.likelyAffectedFiles,
     ];
-    writeText(feature.statePath, this.updateFeatureStateDuringImplementation(feature.statePath, task.taskId));
+    writeText(owner.statePath, this.updateFeatureStateDuringImplementation(owner.statePath, task.taskId));
     writeText(this.projectStatePath, this.updateProjectStateDuringImplementation(task.featureId, task.taskId));
 
     const attempts: ImplementationAttempt[] = [];
@@ -2350,7 +2351,7 @@ export class CompassRoseOrchestrator {
 
     if (finalAttempt.status !== 'success') {
       const failureReason = finalAttempt.error ?? `Implementation for ${task.taskId} failed (${finalAttempt.diagnostics.classification}).`;
-      writeText(feature.statePath, this.updateFeatureStateAfterImplementationFailure(feature.statePath, task.taskId, failureReason));
+      writeText(owner.statePath, this.updateFeatureStateAfterImplementationFailure(owner.statePath, task.taskId, failureReason));
       writeText(this.projectStatePath, this.updateProjectStateAfterImplementationFailure(task.featureId, task.taskId, failureReason));
       this.writeRefinementFeedback(failureReason, {
         kind: correction ? 'correct_task' : 'implement_subtask',
@@ -2369,13 +2370,13 @@ export class CompassRoseOrchestrator {
 
     const passed = qualityResults.every((result) => result.status !== 'failed');
     const featureState = this.updateFeatureStateAfterImplementation(
-      feature.statePath,
+      owner.statePath,
       task.taskId,
       passed ? 'review_pending' : 'quality_failed',
       passed ? 'passed' : 'failed',
     );
     const projectState = this.updateProjectStateAfterImplementation(task.featureId, task.taskId, passed);
-    writeText(feature.statePath, featureState);
+    writeText(owner.statePath, featureState);
     writeText(this.projectStatePath, projectState);
 
     if (!passed) {
@@ -2468,15 +2469,15 @@ export class CompassRoseOrchestrator {
       return stored;
     }
 
-    const feature = this.loadFeature(task.featureId);
+    const owner = this.resolveWorkItemContext(task.featureId);
     const diff = this.git.diffPatch([
-      relativePath(this.repositoryRoot, feature.statePath),
+      relativePath(this.repositoryRoot, owner.statePath),
       relativePath(this.repositoryRoot, this.projectStatePath),
     ]);
     return {
       status: 'failed',
       changed_files: this.git.diffNameOnly([
-        relativePath(this.repositoryRoot, feature.statePath),
+        relativePath(this.repositoryRoot, owner.statePath),
         relativePath(this.repositoryRoot, this.projectStatePath),
       ]),
       git_diff: diff,
@@ -2536,9 +2537,9 @@ export class CompassRoseOrchestrator {
   }
 
   private writeCorrectionTask(correction: CorrectionTask): string {
-    const feature = this.loadFeature(correction.feature_id);
+    const owner = this.resolveWorkItemContext(correction.feature_id);
     const path = join(
-      feature.tasksDirectory,
+      owner.tasksDirectory,
       buildCorrectionTaskFileName(correction.correction_task_id, correction.title),
     );
 
@@ -2548,14 +2549,14 @@ export class CompassRoseOrchestrator {
   }
 
   private correctState(featureId: string, reason: string): void {
-    const feature = this.loadFeature(featureId);
-    const markdown = readUtf8(feature.statePath);
+    const owner = this.resolveWorkItemContext(featureId);
+    const markdown = readUtf8(owner.statePath);
     const lifecycleState = stripTicks(requireSection(markdown, 'Lifecycle State').trim());
     const operationalStatusSection = requireSection(markdown, 'Operational Status');
     const activeTask = stripTicks(parsePreferredStatusValue(operationalStatusSection, 'active_task') ?? 'none');
     const restoredActiveTask = activeTask !== 'none'
       ? activeTask
-      : this.resolveStateCorrectionActiveTask(feature, markdown);
+      : this.resolveStateCorrectionActiveTask(owner, markdown);
 
     if (activeTask === 'none') {
       console.error(
@@ -2563,8 +2564,8 @@ export class CompassRoseOrchestrator {
       );
     }
 
-    const stateCorrection = this.buildStateCorrectionTask(feature, restoredActiveTask, lifecycleState, reason);
-    this.assertTaskIdIsUnused(feature.tasksDirectory, stateCorrection.task_id, 'State correction planning');
+    const stateCorrection = this.buildStateCorrectionTask(owner, restoredActiveTask, lifecycleState, reason);
+    this.assertTaskIdIsUnused(owner.tasksDirectory, stateCorrection.task_id, 'State correction planning');
     const path = this.writeStateCorrectionTask(stateCorrection);
     this.artifacts.writeJson(join('tasks', `${stateCorrection.task_id}.json`), {
       task: stateCorrectionTaskToTask(stateCorrection),
@@ -2572,16 +2573,16 @@ export class CompassRoseOrchestrator {
     });
 
     const stateCorrectionTask = stateCorrectionTaskToTask(stateCorrection);
-    const updatedFeatureState = this.updateFeatureStateAfterStateCorrection(feature.statePath, stateCorrection.task_id, stateCorrection);
+    const updatedFeatureState = this.updateFeatureStateAfterStateCorrection(owner.statePath, stateCorrection.task_id, stateCorrection);
     const updatedProjectState = this.updateProjectStateAfterStateCorrection(featureId, stateCorrection);
-    writeText(feature.statePath, updatedFeatureState);
+    writeText(owner.statePath, updatedFeatureState);
     writeText(this.projectStatePath, updatedProjectState);
 
     if (this.options.commit) {
       this.git.commit(
         [
           relativePath(this.repositoryRoot, path),
-          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, owner.statePath),
           relativePath(this.repositoryRoot, this.projectStatePath),
         ],
         `proto: repair state for ${featureId}`,
@@ -2590,7 +2591,7 @@ export class CompassRoseOrchestrator {
     console.error(`State correction artifact ${stateCorrection.task_id} applied and recorded at ${relativePath(this.repositoryRoot, path)}.`);
   }
 
-  private resolveStateCorrectionActiveTask(feature: FeatureRecord, featureStateMarkdown: string): string {
+  private resolveStateCorrectionActiveTask(feature: Pick<WorkItemContext, 'id'>, featureStateMarkdown: string): string {
     const projectStateMarkdown = readUtf8(this.projectStatePath);
     const hintSources = [
       optionalSection(projectStateMarkdown, 'Pending'),
@@ -2632,7 +2633,7 @@ export class CompassRoseOrchestrator {
     return null;
   }
 
-  private resolveImplementationFailureActiveTask(feature: FeatureRecord, snapshot: FeatureStateSnapshot): string | null {
+  private resolveImplementationFailureActiveTask(feature: Pick<WorkItemContext, 'id'>, snapshot: FeatureStateSnapshot): string | null {
     return resolveImplementationFailureActiveTask(
       snapshot,
       () => this.resolveStateCorrectionActiveTaskFromArtifacts(feature.id),
@@ -2657,7 +2658,7 @@ export class CompassRoseOrchestrator {
   }
 
   private buildStateCorrectionTask(
-    feature: FeatureRecord,
+    feature: Pick<WorkItemContext, 'id' | 'statePath' | 'tasksDirectory'>,
     activeTaskId: string,
     lifecycleState: string,
     reason: string,
@@ -2742,9 +2743,9 @@ export class CompassRoseOrchestrator {
   }
 
   private writeStateCorrectionTask(stateCorrection: StateCorrectionTask): string {
-    const feature = this.loadFeature(stateCorrection.feature_id);
+    const owner = this.resolveWorkItemContext(stateCorrection.feature_id);
     const path = join(
-      feature.tasksDirectory,
+      owner.tasksDirectory,
       buildCorrectionTaskFileName(stateCorrection.task_id, stateCorrection.title),
     );
 
@@ -2753,7 +2754,7 @@ export class CompassRoseOrchestrator {
     return path;
   }
 
-  private readFeatureStateSnapshot(feature: FeatureRecord): FeatureStateSnapshot {
+  private readFeatureStateSnapshot(feature: Pick<WorkItemContext, 'statePath'>): FeatureStateSnapshot {
     const markdown = readUtf8(feature.statePath);
     const operationalStatus = requireSection(markdown, 'Operational Status');
     const blockedBySection = optionalSection(markdown, 'Blocked By');
@@ -2777,7 +2778,7 @@ export class CompassRoseOrchestrator {
     };
   }
 
-  private tryReadFeatureStateSnapshot(feature: FeatureRecord): FeatureStateSnapshot | null {
+  private tryReadFeatureStateSnapshot(feature: Pick<WorkItemContext, 'statePath'>): FeatureStateSnapshot | null {
     try {
       return this.readFeatureStateSnapshot(feature);
     } catch {
@@ -2821,11 +2822,11 @@ export class CompassRoseOrchestrator {
   }
 
   private recordBlockedFeature(featureId: string, reason: string, taskId: string | null = null): BlockerProfile {
-    const feature = this.loadFeature(featureId);
-    const snapshot = this.readFeatureStateSnapshot(feature);
+    const owner = this.resolveWorkItemContext(featureId);
+    const snapshot = this.readFeatureStateSnapshot(owner);
     const blocker = this.buildBlockerProfile(snapshot, reason);
     const restorationTarget = this.preferredRestorationTarget(snapshot);
-    this.persistBlockedFeature(featureId, taskId ?? (snapshot.activeTask === 'none' ? null : snapshot.activeTask), reason, blocker, restorationTarget, feature);
+    this.persistBlockedFeature(featureId, taskId ?? (snapshot.activeTask === 'none' ? null : snapshot.activeTask), reason, blocker, restorationTarget, owner);
     return blocker;
   }
 
@@ -2835,13 +2836,13 @@ export class CompassRoseOrchestrator {
     implementation: ImplementationAttempt,
     qualityResults: readonly QualityGateResult[],
   ): BlockerProfile {
-    const feature = this.loadFeature(task.featureId);
-    const snapshot = this.readFeatureStateSnapshot(feature);
+    const owner = this.resolveWorkItemContext(task.featureId);
+    const snapshot = this.readFeatureStateSnapshot(owner);
     const blocker = this.buildReviewBlockerProfile(review, implementation, qualityResults, snapshot);
     const restorationTarget = this.preferredRestorationTarget(snapshot);
     const reason = this.buildReviewBlockerReason(review, implementation, qualityResults);
 
-    this.persistBlockedFeature(task.featureId, task.taskId, reason, blocker, restorationTarget, feature);
+    this.persistBlockedFeature(task.featureId, task.taskId, reason, blocker, restorationTarget, owner);
     return blocker;
   }
 
@@ -2851,7 +2852,7 @@ export class CompassRoseOrchestrator {
     reason: string,
     blocker: BlockerProfile,
     restorationTarget: RestorationTarget,
-    feature: FeatureRecord,
+    feature: WorkItemContext,
   ): void {
     const blockedByLines = this.buildBlockedByLines(blocker, reason);
     const updatedFeatureState = this.updateFeatureStateForBlocked(
@@ -3059,6 +3060,43 @@ export class CompassRoseOrchestrator {
     return feature;
   }
 
+  private tryLoadFeature(featureId: string): FeatureRecord | null {
+    return this.listFeatures().find((item) => item.id === featureId) ?? null;
+  }
+
+  /**
+   * Resolves a task's owning work item (feature or fix) by trying the features root, then
+   * the fixes root, for the given id — no new "kind" field is threaded through task documents;
+   * a fix task simply carries its fix's directory id in the same `feature_id`/`## Parent
+   * Feature` slot a feature task already uses. Throws with the same failure mode as
+   * loadFeature() when the id resolves under neither root.
+   */
+  private resolveWorkItemContext(ownerId: string): WorkItemContext {
+    const feature = this.tryLoadFeature(ownerId);
+    if (feature) {
+      return {
+        id: feature.id,
+        directory: feature.directory,
+        requestPath: feature.requestPath,
+        definitionPath: feature.featurePath,
+        architecturePath: feature.architecturePath,
+        statePath: feature.statePath,
+        tasksDirectory: feature.tasksDirectory,
+      };
+    }
+
+    const fix = this.loadFix(ownerId);
+    return {
+      id: fix.id,
+      directory: fix.directory,
+      requestPath: fix.requestPath,
+      definitionPath: fix.fixPath,
+      architecturePath: null,
+      statePath: fix.statePath,
+      tasksDirectory: fix.tasksDirectory,
+    };
+  }
+
   private listFeatures(): FeatureRecord[] {
     if (!existsSync(this.featuresRoot)) {
       return [];
@@ -3111,8 +3149,8 @@ export class CompassRoseOrchestrator {
   private loadTask(taskId: string): ParsedTaskDocument {
     const stored = this.artifacts.readJson<StoredTaskArtifact>(join('tasks', `${taskId}.json`));
     if (stored) {
-      const feature = this.loadFeature(stored.task.feature_id);
-      const taskPath = this.findTaskDocumentPath(taskId, feature.tasksDirectory);
+      const owner = this.resolveWorkItemContext(stored.task.feature_id);
+      const taskPath = this.findTaskDocumentPath(taskId, owner.tasksDirectory);
       const parsed = parseTaskDocument(taskPath, readUtf8(taskPath));
       return {
         taskId: stored.task.task_id,

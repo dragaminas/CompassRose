@@ -31,6 +31,22 @@ export interface FeatureRecord {
 }
 
 /**
+ * Unified view of "whatever owns this task" — a feature or a fix — used by the generic
+ * execution machinery (implementation, review, blockers, doctor recovery) so it doesn't need
+ * to branch on which kind of work item it's handling. `architecturePath` is null for fixes,
+ * since a fix has no architecture.md.
+ */
+export interface WorkItemContext {
+  readonly id: string;
+  readonly directory: string;
+  readonly requestPath: string;
+  readonly definitionPath: string;
+  readonly architecturePath: string | null;
+  readonly statePath: string;
+  readonly tasksDirectory: string;
+}
+
+/**
  * Lightweight inventory record for a fix-request folder (see docs/fixes/README.md).
  * A fix has no architecture.md, unlike a feature.
  */
