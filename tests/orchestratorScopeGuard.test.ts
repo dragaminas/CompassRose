@@ -69,6 +69,7 @@ function prepareScopeGuardWorkspace(): { cloneRoot: string; dispose: () => void 
   }
 
   copyTree(join(repoRoot, 'src'), join(cloneRoot, 'src'));
+  neutralizeRealFeatureStates(cloneRoot);
   seedTargetFeature(cloneRoot);
   seedSiblingFeature(cloneRoot);
   writeExecutableScript(join(tempRoot, 'codex-mock.cjs'), CODEX_SCOPE_GUARD_MOCK);
@@ -124,6 +125,36 @@ function copyTree(sourceRoot: string, targetRoot: string): void {
   mkdirSync(targetRoot, { recursive: true });
   for (const entry of readdirSync(sourceRoot)) {
     copyTree(join(sourceRoot, entry), join(targetRoot, entry));
+  }
+}
+
+// determineNextStep()'s two-pass scheduler (src/orchestrator/orchestrator.ts) resumes ANY
+// feature already mid-execution (task_ready onward) before ever considering a startable one
+// like our synthetic TARGET_FEATURE_ID -- deliberately, so a severity-aware fix never starves
+// in-flight work. That means this scenario's "000 sorts first" assumption alone is no longer
+// enough: if a *real* committed feature happens to be mid-execution at the moment this test
+// clones HEAD (e.g. because a live orchestrator run is mid-task), Pass 1 would resume that
+// real feature instead of ever reaching our synthetic target in Pass 2. Neutralize every real
+// feature to `completed` inside the disposable clone only (never the real repo) so this
+// scenario is deterministic regardless of what the live repository happens to be doing.
+function neutralizeRealFeatureStates(cloneRoot: string): void {
+  const featuresRoot = join(cloneRoot, 'docs', 'features');
+  if (!existsSync(featuresRoot)) {
+    return;
+  }
+
+  for (const entry of readdirSync(featuresRoot)) {
+    const statePath = join(featuresRoot, entry, 'state.md');
+    if (!existsSync(statePath) || !statSync(statePath).isFile()) {
+      continue;
+    }
+
+    const markdown = readFileSync(statePath, 'utf8');
+    const neutralized = markdown.replace(
+      /(## Lifecycle State\s*\n\s*\n)\S+/,
+      '$1completed',
+    );
+    writeFileSync(statePath, neutralized, 'utf8');
   }
 }
 
