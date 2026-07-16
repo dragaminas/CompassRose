@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-task_planning_pending
+task_ready
 
 ## Source Request
 
@@ -11,7 +11,7 @@ task_planning_pending
 ## Operational Status
 
 - formalization: complete
-- active_task: none
+- active_task: F002-T15
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: not_run
@@ -59,6 +59,8 @@ Task `F002-T14` is now planned and ready to execute. Invoke the configured plann
 
 Tasks `F002-T10` through `F002-T14` (and the pending correction `F002-T14-C1`) are superseded, not completed and not silently discarded. They drifted outside this feature's own declared scope (`feature.md`'s "this feature does not include" list explicitly excludes "implementation of unrelated orchestration features beyond the configuration contract they depend on") and reconstructed — more thinly and with real bugs (no prompt construction, no heartbeat, no signal handling, a broken extension-based command interpreter) — behavior that already existed in `proto/protoCompassRose.ts`'s orchestrator: feature selection, lifecycle-transition persistence, and external-CLI-adapter invocation. Rather than complete that reimplementation, the real orchestrator (`PrototypeCompassRose`, renamed `CompassRoseOrchestrator`) was moved into `src/orchestrator/orchestrator.ts`, and `src/cli/main.ts`'s no-args path now constructs and runs it directly after this feature's own legitimate preflight chain (`F002-T04` through `F002-T09`: config load/validate, role/adapter wiring, platform check, dirty-worktree check) passes. `compassrose` (no args) reaches the same "no selectable feature" / feature-selection outcome the removed code produced, now backed by the real, already-battle-tested orchestration loop instead of a parallel, thinner copy of it.
 
+Task `F002-T15` is now planned and ready to execute. Handle missing project configuration during runtime preflight.
+
 ## Implemented Deliverables
 
 - the source feature request exists at `docs/features/002-configuration-model/request.md`
@@ -103,4 +105,4 @@ Subtask `F002-T13` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Plan the next task for this feature against its actual declared scope (`request.md`/`feature.md`), now that `F002-T10`-`F002-T14`'s orchestration-adjacent goals are met by the real orchestrator instead.
+Execute `F002-T15` when the current execution mode allows it.
