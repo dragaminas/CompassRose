@@ -34,13 +34,16 @@ export class GitClient {
   constructor(private readonly repositoryRoot: string) {}
 
   ensureCleanWorktree(allowedDirtyPrefixes: readonly string[] = []): void {
-    const dirtyPaths = this.dirtyPaths();
-    const disallowedPaths = dirtyPaths.filter((path) => !isPathAllowedByPrefix(path, allowedDirtyPrefixes));
+    const disallowedPaths = this.findDisallowedDirtyPaths(allowedDirtyPrefixes);
     if (disallowedPaths.length > 0) {
       throw new Error(
         `Prototype run requires a clean worktree before mutating steps. Disallowed dirty paths: ${disallowedPaths.join(', ')}.`,
       );
     }
+  }
+
+  findDisallowedDirtyPaths(allowedDirtyPrefixes: readonly string[] = []): string[] {
+    return this.dirtyPaths().filter((path) => !isPathAllowedByPrefix(path, allowedDirtyPrefixes));
   }
 
   dirtyPaths(): string[] {

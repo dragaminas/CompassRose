@@ -1117,6 +1117,54 @@ export class CompassRoseOrchestrator {
     ]);
   }
 
+  /**
+   * Used by src/cli/main.ts's git_policy preflight instead of a blind "any dirty file fails"
+   * check. git_policy's own setting name -- require_clean_worktree_BEFORE_TASK -- only makes
+   * sense as a gate on STARTING new task-level work; it was previously enforced unconditionally
+   * on every invocation, which meant a legitimately interrupted run (killed rather than
+   * gracefully stopped, or resumed after any crash) could never resume without the
+   * PROTO_COMPASSROSE_SKIP_CLEAN_CHECK escape hatch, even though the dirty tree was exactly the
+   * active task's own recognized in-progress work -- exactly what
+   * src/contracts/runtime/operation-loop.md's "Recovery After Interruption" section already
+   * promises the runtime handles.
+   *
+   * Returns the empty array when the run is clear to proceed: either the tree is fully clean,
+   * or `determineNextStep()`'s next decision continues an already-active task/fix (in which
+   * case dirty paths are allowed under the active work item's own docs directory,
+   * PROJECT_STATE.md, and the active task's own declared `allowed_paths`). Returns the list of
+   * genuinely disallowed dirty paths when the next decision would start brand new work
+   * (`plan_feature`/`plan_task`/`plan_fix`/`plan_fix_task`), which still requires a fully clean
+   * tree, or when dirty paths fall outside an active task's own recognized footprint.
+   */
+  findDisallowedDirtyPaths(): string[] {
+    const dirtyPaths = this.git.dirtyPaths();
+    if (dirtyPaths.length === 0) {
+      return [];
+    }
+
+    const decision = this.determineNextStep();
+    const startingNewWorkKinds: readonly StepKind[] = ['plan_feature', 'plan_task', 'plan_fix', 'plan_fix_task'];
+    if (startingNewWorkKinds.includes(decision.kind)) {
+      return dirtyPaths;
+    }
+
+    const allowedPrefixes: string[] = ['docs/compassrose/PROJECT_STATE.md'];
+    if (decision.feature_id) {
+      allowedPrefixes.push(`docs/features/${decision.feature_id}/`, `docs/fixes/${decision.feature_id}/`);
+    }
+
+    if (decision.task_id) {
+      try {
+        const task = this.loadTask(decision.task_id);
+        allowedPrefixes.push(...task.allowedPaths);
+      } catch {
+        // Fall back to the docs-only allowlist above if the active task can't be loaded.
+      }
+    }
+
+    return this.git.findDisallowedDirtyPaths(allowedPrefixes);
+  }
+
   private planFeature(featureId: string): void {
     this.ensureCleanWorktreeIfRequired(featureId);
     const feature = this.loadFeature(featureId);

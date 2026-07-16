@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { resolve, join } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
 import { readProjectConfiguration, validateRuntimePreconditions } from '../config/configReader.js';
@@ -12,19 +12,6 @@ export interface CliEnvironment {
   readonly cwd?: string;
   readonly stdout?: (message: string) => void;
   readonly stderr?: (message: string) => void;
-}
-
-function checkDirtyWorktree(gitRoot: string): boolean {
-  try {
-    const output = execFileSync('git', ['status', '--porcelain'], {
-      cwd: gitRoot,
-      encoding: 'utf8',
-    });
-    const lines = output.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
-    return lines.length > 0;
-  } catch {
-    return false;
-  }
 }
 
 export function main(argv: string[] = process.argv.slice(2), environment: CliEnvironment = {}): number {
@@ -60,6 +47,10 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     return 1;
   }
   const configPath = join(gitRoot, 'docs/compassrose/CONFIG.md');
+  if (!existsSync(configPath)) {
+    stderr('runtime preflight: configuration: docs/compassrose/CONFIG.md is absent');
+    return 1;
+  }
   const configResult = readProjectConfiguration(configPath);
 
   if (!configResult.ok) {
@@ -96,14 +87,25 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
   // that deliberately seed pre-existing (uncommitted) fixture state can bypass both checks
   // with one flag instead of needing a second, main.ts-specific one.
   const skipCleanWorktreeCheck = process.env.PROTO_COMPASSROSE_SKIP_CLEAN_CHECK === '1';
+
+  const orchestrator = new CompassRoseOrchestrator({ ...options, cwd: gitRoot });
+
   if (requireClean && !allowDirty && !skipCleanWorktreeCheck) {
-    if (checkDirtyWorktree(gitRoot)) {
+    // require_clean_worktree_BEFORE_TASK only makes sense as a gate on starting new
+    // task-level work, not on every invocation: a legitimately interrupted run (killed
+    // rather than gracefully stopped) must be able to resume from its own active task's
+    // in-progress dirty tree, per the "Recovery After Interruption" contract in
+    // src/contracts/runtime/operation-loop.md. findDisallowedDirtyPaths() defers to
+    // determineNextStep() to tell "starting new work" (fully clean required) apart from
+    // "continuing the active task" (dirty paths allowed within that task's own footprint).
+    const disallowedPaths = orchestrator.findDisallowedDirtyPaths();
+    if (disallowedPaths.length > 0) {
       stderr('runtime preflight: git_policy: worktree is not clean and require_clean_worktree_before_task is enabled');
+      stderr(`runtime preflight: git_policy: disallowed dirty paths: ${disallowedPaths.join(', ')}`);
       return 1;
     }
   }
 
-  const orchestrator = new CompassRoseOrchestrator({ ...options, cwd: gitRoot });
   return orchestrator.run();
 }
 

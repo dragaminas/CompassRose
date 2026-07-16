@@ -106,10 +106,10 @@ describe('main([]) — configuration-backed runtime preflight', () => {
   });
 
   test('returns 0 and prints preflight message when all runtime preconditions pass', () => {
-    const workspace = createTempWorkspace({
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-    });
-    copyContractsIntoWorkspace(workspace.root);
+    // Needs a real, clean git repo (not the bare `.git`-marker workspace other tests in this
+    // file use): findDisallowedDirtyPaths() genuinely runs `git status` once preflight passes
+    // and control reaches the orchestrator.
+    const workspace = createTempGitWorkspace();
 
     try {
       const stderrMessages: string[] = [];
@@ -123,6 +123,31 @@ describe('main([]) — configuration-backed runtime preflight', () => {
       // decision directly via console.log rather than through the injected stdout callback.
       expect(exitCode).toBe(0);
       expect(stderrMessages.length).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+});
+
+describe('main([]) — missing project configuration', () => {
+  test('returns non-zero and emits runtime-preflight diagnostic when CONFIG.md is absent', () => {
+    const workspace = createTempWorkspace({
+      '.git/dummy': '',
+    });
+
+    try {
+      const stderrMessages: string[] = [];
+      const exitCode = main([], {
+        cwd: workspace.root,
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      const allStderr = stderrMessages.join('\n');
+      expect(allStderr).toContain('runtime preflight');
+      expect(allStderr).toContain('CONFIG.md');
+      expect(stderrMessages.length).toBeGreaterThan(0);
     } finally {
       workspace.dispose();
     }
@@ -179,10 +204,8 @@ describe('main([]) — runtime preconditions', () => {
 
 describe('main([]) — nested directory from repo root', () => {
   test('resolves CONFIG.md from repo root when invoked from a nested subdirectory with passing preflight', () => {
-    const workspace = createTempWorkspace({
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-    });
-    copyContractsIntoWorkspace(workspace.root);
+    // Needs a real, clean git repo -- see the comment on the identically-shaped test above.
+    const workspace = createTempGitWorkspace();
 
     const nestedDir = join(workspace.root, 'src', 'deeply', 'nested');
     mkdirSync(nestedDir, { recursive: true });
@@ -326,10 +349,8 @@ describe('main([]) — role-to-adapter wiring validation', () => {
   });
 
   test('passes with valid external_cli wiring for all enabled roles', () => {
-    const workspace = createTempWorkspace({
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-    });
-    copyContractsIntoWorkspace(workspace.root);
+    // Needs a real, clean git repo -- see the comment on the first "preflight passes" test above.
+    const workspace = createTempGitWorkspace();
 
     try {
       const stdoutMessages: string[] = [];
