@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-task_ready
+implementation_running
 
 ## Source Request
 
@@ -105,4 +105,4 @@ Subtask `F002-T13` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Execute `F002-T15` when the current execution mode allows it.
+Recover or finish subtask implementation of `F002-T15` before allowing review or new planning.
