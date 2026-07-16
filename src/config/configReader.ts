@@ -703,6 +703,16 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
     }
   }
 
+  if (!('git_policy' in optionalPolicySections)) {
+    optionalPolicySections['git_policy'] = {
+      require_clean_worktree_before_task: true,
+      review_target: 'git_diff',
+      allow_dirty_worktree: false,
+      branch_per_task: 'disabled',
+      commit_after_task: 'disabled',
+    };
+  }
+
   return ok(Object.assign({
     project: {
       ...projectSection,
@@ -734,6 +744,7 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
       config: documentationSection.config,
       contracts_root: documentationSection.contracts_root,
     },
+    git_policy: optionalPolicySections['git_policy'] as GitPolicySection,
     ...optionalPolicySections,
   }, extraConfigurationFields) as ProjectConfiguration);
 }

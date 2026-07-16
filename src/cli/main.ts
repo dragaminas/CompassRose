@@ -81,10 +81,6 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
   }
 
   const gitPolicy = configResult.value.git_policy;
-  if (!gitPolicy) {
-    stderr('runtime preflight: configuration: git_policy section is required');
-    return 1;
-  }
   const requireClean = gitPolicy.require_clean_worktree_before_task;
   const allowDirty = gitPolicy.allow_dirty_worktree;
   // Same escape hatch CompassRoseOrchestrator already honors internally, so e2e scenarios

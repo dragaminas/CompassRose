@@ -62,6 +62,11 @@ describe('project configuration loader', () => {
       expect(result.value.documentation.project_state).toBe('docs/compassrose/PROJECT_STATE.md');
       expect(result.value.documentation.config).toBe('docs/compassrose/CONFIG.md');
       expect(result.value.documentation.contracts_root).toBe('src/contracts');
+      expect(result.value.git_policy.require_clean_worktree_before_task).toBe(true);
+      expect(result.value.git_policy.review_target).toBe('git_diff');
+      expect(result.value.git_policy.allow_dirty_worktree).toBe(false);
+      expect(result.value.git_policy.branch_per_task).toBe('disabled');
+      expect(result.value.git_policy.commit_after_task).toBe('disabled');
     } finally {
       workspace.dispose();
     }
@@ -86,6 +91,28 @@ describe('project configuration loader', () => {
       expect(result.value.project.documentation_root).toBe('docs');
       expect(result.value.commands.build).toBe('npm run build');
       expect(result.value.adapters.external_cli.type).toBe('external_cli');
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('preserves existing top-level platform values from canonical configuration', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+
+      expect(Array.isArray(result.value.project.supported_platforms)).toBe(true);
+      expect(result.value.project.supported_platforms.length).toBeGreaterThan(0);
     } finally {
       workspace.dispose();
     }

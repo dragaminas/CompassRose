@@ -114,7 +114,7 @@ export interface ProjectConfiguration {
   readonly documentation: DocumentationSection;
   readonly execution?: ExecutionSection;
   readonly roles?: RolesSection;
-  readonly git_policy?: GitPolicySection;
+  readonly git_policy: GitPolicySection;
   readonly development_policy?: DevelopmentPolicySection;
   readonly review_policy?: ReviewPolicySection;
   readonly quality_gates?: QualityGatesSection;
