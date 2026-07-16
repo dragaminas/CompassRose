@@ -111,8 +111,7 @@ describe('project configuration loader', () => {
         return;
       }
 
-      expect(Array.isArray(result.value.project.supported_platforms)).toBe(true);
-      expect(result.value.project.supported_platforms.length).toBeGreaterThan(0);
+      expect(result.value.project.supported_platforms).toEqual(['linux', 'windows']);
     } finally {
       workspace.dispose();
     }
