@@ -431,27 +431,6 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
     return err(issues);
   }
 
-  const externalCliCommand =
-    typeof externalCliSection['command'] === 'string'
-      ? externalCliSection['command']
-      : '';
-  const externalCliArgs: string[] =
-    Array.isArray(externalCliSection['args'])
-      ? (externalCliSection['args'] as string[])
-      : [];
-  const externalCliStdin =
-    typeof externalCliSection['stdin'] === 'boolean'
-      ? externalCliSection['stdin']
-      : false;
-  const externalCliInputFileArgument =
-    typeof externalCliSection['input_file_argument'] === 'string'
-      ? externalCliSection['input_file_argument']
-      : '';
-  const externalCliOutputFile =
-    typeof externalCliSection['output_file'] === 'string'
-      ? externalCliSection['output_file']
-      : '';
-
   const commands = {
     typecheck: requireCommandValue(commandsSection, 'typecheck', 'commands.typecheck', issues),
     tests: requireCommandValue(commandsSection, 'tests', 'commands.tests', issues),
@@ -491,12 +470,94 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
     return err(issues);
   }
 
-  const externalCliTypeTyped: 'external_cli' = externalCliType as 'external_cli';
+  const hasExternalCliCommand = 'command' in externalCliSection;
+  if (hasExternalCliCommand && typeof externalCliSection['command'] !== 'string') {
+    issues.push({
+      field: 'adapters.external_cli.command',
+      message: 'Present field adapters.external_cli.command must be a string.',
+    });
+  }
+
+  const hasExternalCliArgs = 'args' in externalCliSection;
+  if (hasExternalCliArgs) {
+    if (!Array.isArray(externalCliSection['args'])) {
+      issues.push({
+        field: 'adapters.external_cli.args',
+        message: 'Present field adapters.external_cli.args must be an array.',
+      });
+    } else {
+      for (let i = 0; i < (externalCliSection['args'] as unknown[]).length; i++) {
+        if (typeof (externalCliSection['args'] as unknown[])[i] !== 'string') {
+          issues.push({
+            field: 'adapters.external_cli.args',
+            message: 'Present field adapters.external_cli.args must contain only strings.',
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  const hasExternalCliStdin = 'stdin' in externalCliSection;
+  if (hasExternalCliStdin && typeof externalCliSection['stdin'] !== 'boolean') {
+    issues.push({
+      field: 'adapters.external_cli.stdin',
+      message: 'Present field adapters.external_cli.stdin must be a boolean.',
+    });
+  }
+
+  const hasExternalCliInputFile = 'input_file_argument' in externalCliSection;
+  if (hasExternalCliInputFile && typeof externalCliSection['input_file_argument'] !== 'string') {
+    issues.push({
+      field: 'adapters.external_cli.input_file_argument',
+      message: 'Present field adapters.external_cli.input_file_argument must be a string.',
+    });
+  }
+
+  const hasExternalCliOutputFile = 'output_file' in externalCliSection;
+  if (hasExternalCliOutputFile && typeof externalCliSection['output_file'] !== 'string') {
+    issues.push({
+      field: 'adapters.external_cli.output_file',
+      message: 'Present field adapters.external_cli.output_file must be a string.',
+    });
+  }
+
+  if (issues.length > 0) {
+    return err(issues);
+  }
+
+  const externalCliCommand =
+    typeof externalCliSection['command'] === 'string'
+      ? externalCliSection['command']
+      : '';
+  const externalCliArgs: string[] =
+    Array.isArray(externalCliSection['args'])
+      ? (externalCliSection['args'] as string[])
+      : [];
+  const externalCliStdin =
+    typeof externalCliSection['stdin'] === 'boolean'
+      ? externalCliSection['stdin']
+      : false;
+  const externalCliInputFileArgument =
+    typeof externalCliSection['input_file_argument'] === 'string'
+      ? externalCliSection['input_file_argument']
+      : '';
+  const externalCliOutputFile =
+    typeof externalCliSection['output_file'] === 'string'
+      ? externalCliSection['output_file']
+      : '';
 
   const optionalPolicySections: Record<string, unknown> = {};
 
   if ('execution' in parsedConfiguration) {
-    const executionSection = parsedConfiguration['execution'] as Record<string, unknown>;
+    const executionValue = parsedConfiguration['execution'];
+    if (!isRecord(executionValue)) {
+      return err([{
+        field: 'execution',
+        message: 'Optional section execution must be an object when present.',
+      }]);
+    }
+    const executionSection = executionValue;
     const executionIssues: ConfigurationIssue[] = [];
     const executionMode = validateExecutionMode(executionSection, executionIssues);
     const taskGeneration = requireNonEmptyString(executionSection, 'task_generation', 'execution.task_generation', executionIssues);
@@ -522,7 +583,14 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
   }
 
   if ('roles' in parsedConfiguration) {
-    const rolesSection = parsedConfiguration['roles'] as Record<string, unknown>;
+    const rolesValue = parsedConfiguration['roles'];
+    if (!isRecord(rolesValue)) {
+      return err([{
+        field: 'roles',
+        message: 'Optional section roles must be an object when present.',
+      }]);
+    }
+    const rolesSection = rolesValue;
     const rolesIssues: ConfigurationIssue[] = [];
     const roles = validateRolesSection(rolesSection, rolesIssues);
 
@@ -534,7 +602,14 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
   }
 
   if ('git_policy' in parsedConfiguration) {
-    const gitPolicySection = parsedConfiguration['git_policy'] as Record<string, unknown>;
+    const gitPolicyValue = parsedConfiguration['git_policy'];
+    if (!isRecord(gitPolicyValue)) {
+      return err([{
+        field: 'git_policy',
+        message: 'Optional section git_policy must be an object when present.',
+      }]);
+    }
+    const gitPolicySection = gitPolicyValue;
     const gitPolicyIssues: ConfigurationIssue[] = [];
     const gitPolicy = validateGitPolicySection(gitPolicySection, gitPolicyIssues);
 
@@ -546,7 +621,14 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
   }
 
   if ('development_policy' in parsedConfiguration) {
-    const developmentPolicySection = parsedConfiguration['development_policy'] as Record<string, unknown>;
+    const developmentPolicyValue = parsedConfiguration['development_policy'];
+    if (!isRecord(developmentPolicyValue)) {
+      return err([{
+        field: 'development_policy',
+        message: 'Optional section development_policy must be an object when present.',
+      }]);
+    }
+    const developmentPolicySection = developmentPolicyValue;
     const developmentPolicyIssues: ConfigurationIssue[] = [];
     const developmentPolicy = validateDevelopmentPolicySection(developmentPolicySection, developmentPolicyIssues);
 
@@ -558,7 +640,14 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
   }
 
   if ('review_policy' in parsedConfiguration) {
-    const reviewPolicySection = parsedConfiguration['review_policy'] as Record<string, unknown>;
+    const reviewPolicyValue = parsedConfiguration['review_policy'];
+    if (!isRecord(reviewPolicyValue)) {
+      return err([{
+        field: 'review_policy',
+        message: 'Optional section review_policy must be an object when present.',
+      }]);
+    }
+    const reviewPolicySection = reviewPolicyValue;
     const reviewPolicyIssues: ConfigurationIssue[] = [];
     const reviewPolicy = validateReviewPolicySection(reviewPolicySection, reviewPolicyIssues);
 
@@ -570,7 +659,14 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
   }
 
   if ('quality_gates' in parsedConfiguration) {
-    const qualityGatesSection = parsedConfiguration['quality_gates'] as Record<string, unknown>;
+    const qualityGatesValue = parsedConfiguration['quality_gates'];
+    if (!isRecord(qualityGatesValue)) {
+      return err([{
+        field: 'quality_gates',
+        message: 'Optional section quality_gates must be an object when present.',
+      }]);
+    }
+    const qualityGatesSection = qualityGatesValue;
     const qualityGatesIssues: ConfigurationIssue[] = [];
     const qualityGates = validateQualityGatesSection(qualityGatesSection, qualityGatesIssues);
 
@@ -582,7 +678,14 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
   }
 
   if ('limits' in parsedConfiguration) {
-    const limitsSection = parsedConfiguration['limits'] as Record<string, unknown>;
+    const limitsValue = parsedConfiguration['limits'];
+    if (!isRecord(limitsValue)) {
+      return err([{
+        field: 'limits',
+        message: 'Optional section limits must be an object when present.',
+      }]);
+    }
+    const limitsSection = limitsValue;
     const limitsIssues: ConfigurationIssue[] = [];
     const limits = validateLimitsSection(limitsSection, limitsIssues);
 
@@ -593,36 +696,46 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
     optionalPolicySections['limits'] = limits;
   }
 
-  return ok(Object.assign(
-    {
-      project: {
-        ...projectSection,
-        name: projectName,
-        supported_platforms: supportedPlatforms,
-        documentation_root: documentationRoot,
-      },
-      adapters: {
-        ...adaptersSection,
-        external_cli: {
-          type: 'external_cli' as 'external_cli',
-          command: externalCliCommand,
-          args: externalCliArgs,
-          stdin: externalCliStdin,
-          input_file_argument: externalCliInputFileArgument,
-          output_file: externalCliOutputFile,
-        },
-      },
-      commands: {
-        ...commandsSection,
-        ...commands,
-      },
-      documentation: {
-        ...documentationSection,
-        ...documentation,
+  const extraConfigurationFields: Record<string, unknown> = {};
+  for (const key of Object.keys(parsedConfiguration)) {
+    if (key !== 'project' && key !== 'adapters' && key !== 'commands' && key !== 'documentation') {
+      extraConfigurationFields[key] = parsedConfiguration[key];
+    }
+  }
+
+  return ok(Object.assign({
+    project: {
+      ...projectSection,
+      name: projectName,
+      supported_platforms: supportedPlatforms,
+      documentation_root: documentationRoot,
+    },
+    adapters: {
+      ...adaptersSection,
+      external_cli: {
+        type: 'external_cli' as 'external_cli',
+        command: externalCliCommand,
+        args: externalCliArgs,
+        stdin: externalCliStdin,
+        input_file_argument: externalCliInputFileArgument,
+        output_file: externalCliOutputFile,
       },
     },
-    optionalPolicySections,
-  ));
+    commands: {
+      typecheck: commandsSection.typecheck,
+      tests: commandsSection.tests,
+      lint: commandsSection.lint,
+      build: commandsSection.build,
+    },
+    documentation: {
+      ...documentationSection,
+      roadmap: documentationSection.roadmap,
+      project_state: documentationSection.project_state,
+      config: documentationSection.config,
+      contracts_root: documentationSection.contracts_root,
+    },
+    ...optionalPolicySections,
+  }, extraConfigurationFields) as ProjectConfiguration);
 }
 
 function requireObjectSection(

@@ -379,6 +379,109 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
     }
   });
 
+  test('rejects malformed present optional adapter fields', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'docs/compassrose/CONFIG.md': [
+          '# CompassRose Project Configuration',
+          '',
+          '## Configuration',
+          '',
+          '```yaml',
+          'project:',
+          '  name: compassrose',
+          '  supported_platforms:',
+          '    - linux',
+          '    - windows',
+          '  documentation_root: docs',
+          '',
+          'adapters:',
+          '  external_cli:',
+          '    type: external_cli',
+          '    command: 42',
+          '',
+          'commands:',
+          '  typecheck: "npm run typecheck"',
+          '  tests: "npm test"',
+          '  lint: ""',
+          '  build: ""',
+          '',
+          'documentation:',
+          '  roadmap: docs/ROADMAP.md',
+          '  project_state: docs/compassrose/PROJECT_STATE.md',
+          '  config: docs/compassrose/CONFIG.md',
+          '  contracts_root: src/contracts',
+          '```',
+        ].join('\n'),
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+
+      expect(result.ok).toBe(false);
+      if (result.ok) {
+        return;
+      }
+
+      expect(result.error.some((issue) => issue.field === 'adapters.external_cli.command')).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('rejects non-object optional policy sections', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'docs/compassrose/CONFIG.md': [
+          '# CompassRose Project Configuration',
+          '',
+          '## Configuration',
+          '',
+          '```yaml',
+          'project:',
+          '  name: compassrose',
+          '  supported_platforms:',
+          '    - linux',
+          '    - windows',
+          '  documentation_root: docs',
+          '',
+          'execution: null',
+          '',
+          'adapters:',
+          '  external_cli:',
+          '    type: external_cli',
+          '',
+          'commands:',
+          '  typecheck: "npm run typecheck"',
+          '  tests: "npm test"',
+          '  lint: ""',
+          '  build: ""',
+          '',
+          'documentation:',
+          '  roadmap: docs/ROADMAP.md',
+          '  project_state: docs/compassrose/PROJECT_STATE.md',
+          '  config: docs/compassrose/CONFIG.md',
+          '  contracts_root: src/contracts',
+          '```',
+        ].join('\n'),
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+
+      expect(result.ok).toBe(false);
+      if (result.ok) {
+        return;
+      }
+
+      expect(result.error.some((issue) => issue.field === 'execution')).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
   test('rejects boolean value in review_policy.record_skipped_review when string expected is not enforced (boolean is valid)', () => {
     const workspace = createTempWorkspace({
       files: {

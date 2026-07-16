@@ -78,11 +78,11 @@ export interface ProjectSection {
 
 export interface ExternalCliAdapterSection {
   readonly type: 'external_cli';
-  readonly command: string;
-  readonly args: readonly string[];
-  readonly stdin: boolean;
-  readonly input_file_argument: string;
-  readonly output_file: string;
+  readonly command?: string;
+  readonly args?: readonly string[];
+  readonly stdin?: boolean;
+  readonly input_file_argument?: string;
+  readonly output_file?: string;
   readonly [key: string]: unknown;
 }
 
