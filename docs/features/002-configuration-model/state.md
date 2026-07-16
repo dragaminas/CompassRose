@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+task_ready
 
 ## Source Request
 
@@ -11,7 +11,7 @@ formalized
 ## Operational Status
 
 - formalization: complete
-- active_task: none
+- active_task: F002-T16
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
@@ -61,6 +61,8 @@ Tasks `F002-T10` through `F002-T14` (and the pending correction `F002-T14-C1`) a
 
 Task `F002-T15` is now planned and ready to execute. Handle missing project configuration during runtime preflight.
 
+Task `F002-T16` is now planned and ready to execute. Align loader with the documented Doctor MVP boundary.
+
 ## Implemented Deliverables
 
 - the source feature request exists at `docs/features/002-configuration-model/request.md`
@@ -105,4 +107,4 @@ Subtask `F002-T15` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Plan the next task that advances this feature from the remaining gap.
+Execute `F002-T16` when the current execution mode allows it.
