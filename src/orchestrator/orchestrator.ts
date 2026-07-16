@@ -1632,7 +1632,7 @@ export class CompassRoseOrchestrator {
       '- `docs/compassrose/CONFIG.md`',
       '- `src/contracts/runtime/operation-loop.md`',
       ...this.buildLatestDiagnosticPromptLines(featureId),
-      ...this.buildRecoveryLessonPromptLines(featureId),
+      ...this.buildRecoveryLessonPromptLines(featureId, restorationTarget.active_task),
       '',
       'Blocker context:',
       `- kind: ${blocker.kind}`,
@@ -2552,7 +2552,7 @@ export class CompassRoseOrchestrator {
     doctorRecovery: DoctorRecoveryTaskMetadata,
   ): StepExecutionResult {
     const owner = this.resolveWorkItemContext(task.featureId);
-    const recoveryLessonLines = this.buildRecoveryLessonPromptLines(task.featureId);
+    const recoveryLessonLines = this.buildRecoveryLessonPromptLines(task.featureId, task.taskId);
     const prompt = buildDoctorRecoveryPrompt(task, doctorRecovery, recoveryLessonLines);
     const sourcePaths = [
       'src/contracts/runtime/doctor-recovery-execution-prompt.md',
@@ -2809,7 +2809,7 @@ export class CompassRoseOrchestrator {
   }
 
   private executeImplementation(task: ParsedTaskDocument, correction: boolean, stateCorrection: StateCorrectionTask | null): boolean {
-    const recoveryLessonLines = this.buildRecoveryLessonPromptLines(task.featureId);
+    const recoveryLessonLines = this.buildRecoveryLessonPromptLines(task.featureId, task.taskId);
     const prompt = buildImplementerPrompt(task, correction, stateCorrection, recoveryLessonLines);
     const owner = this.resolveWorkItemContext(task.featureId);
     const implementationStatePaths = [
@@ -4276,9 +4276,31 @@ export class CompassRoseOrchestrator {
     };
   }
 
-  private loadLatestRecoveryLesson(featureId: string): RecoveryLesson | null {
+  /**
+   * `activeTaskId`, when given, additionally requires the lesson to be about the SAME task
+   * anchor currently being recovered (see primaryTaskAnchorFromId) -- not just the same
+   * feature. `latest-recovery-lesson.json` is a single file overwritten only when a NEW
+   * lesson is recorded, so without this check a stale lesson from an unrelated, long-finished
+   * task keeps getting fed into doctor-recovery prompts for every later, unrelated failure on
+   * that feature until something else happens to overwrite it. Confirmed in practice: a
+   * two-day-old lesson from F002-T14 (part of the orchestration-adjacent work later
+   * superseded by embedding the real orchestrator) was still "latest" for feature
+   * 002-configuration-model and got surfaced, verbatim task_interface_adjustments and all,
+   * while diagnosing an unrelated F002-T15 quality-gate failure -- producing a doctor-recovery
+   * task that proposed "fixing" since-deleted code.
+   *
+   * Callers planning a brand NEW task (planTask/planFixTask) intentionally omit
+   * `activeTaskId`, since learning from the feature's most recent lesson regardless of which
+   * task it was about is the intended, existing behavior there -- only doctor-recovery
+   * (which is fixing one specific active task) needs this narrower match.
+   */
+  private loadLatestRecoveryLesson(featureId: string, activeTaskId?: string | null): RecoveryLesson | null {
     const lesson = this.artifacts.readJson<RecoveryLesson>('latest-recovery-lesson.json');
     if (!lesson || lesson.feature_id !== featureId) {
+      return null;
+    }
+
+    if (activeTaskId && primaryTaskAnchorFromId(lesson.task_id) !== primaryTaskAnchorFromId(activeTaskId)) {
       return null;
     }
 
@@ -4294,9 +4316,14 @@ export class CompassRoseOrchestrator {
     return diagnostic;
   }
 
-  private loadLatestRefinement(featureId: string): RefinementFeedback | null {
+  private loadLatestRefinement(featureId: string, activeTaskId?: string | null): RefinementFeedback | null {
     const feedback = this.artifacts.readJson<RefinementFeedback>('latest-refinement.json');
     if (!feedback || feedback.selected_step?.feature_id !== featureId) {
+      return null;
+    }
+
+    const refinementTaskId = feedback.selected_step?.task_id;
+    if (activeTaskId && refinementTaskId && primaryTaskAnchorFromId(refinementTaskId) !== primaryTaskAnchorFromId(activeTaskId)) {
       return null;
     }
 
@@ -4325,10 +4352,10 @@ export class CompassRoseOrchestrator {
     ];
   }
 
-  private buildRecoveryLessonPromptLines(featureId: string): string[] {
-    const lesson = this.loadLatestRecoveryLesson(featureId);
+  private buildRecoveryLessonPromptLines(featureId: string, activeTaskId?: string | null): string[] {
+    const lesson = this.loadLatestRecoveryLesson(featureId, activeTaskId);
     if (!lesson) {
-      const refinement = this.loadLatestRefinement(featureId);
+      const refinement = this.loadLatestRefinement(featureId, activeTaskId);
       if (!refinement) {
         return [];
       }
