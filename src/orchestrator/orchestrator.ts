@@ -1113,7 +1113,11 @@ export class CompassRoseOrchestrator {
 
     this.git.ensureCleanWorktree([
       'docs/compassrose/PROJECT_STATE.md',
-      `docs/features/${featureId}/`,
+      // No trailing slash: isPathAllowedByPrefix (gitClient.ts) appends its own '/' when
+      // checking a directory prefix, so a prefix that already ends in '/' never matches
+      // anything inside it (a latent bug found and fixed alongside findDisallowedDirtyPaths()
+      // below, which had the same mistake).
+      `docs/features/${featureId}`,
     ]);
   }
 
@@ -1150,7 +1154,7 @@ export class CompassRoseOrchestrator {
 
     const allowedPrefixes: string[] = ['docs/compassrose/PROJECT_STATE.md'];
     if (decision.feature_id) {
-      allowedPrefixes.push(`docs/features/${decision.feature_id}/`, `docs/fixes/${decision.feature_id}/`);
+      allowedPrefixes.push(`docs/features/${decision.feature_id}`, `docs/fixes/${decision.feature_id}`);
     }
 
     if (decision.task_id) {
