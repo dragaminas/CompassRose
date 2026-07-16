@@ -3,7 +3,70 @@ import { describe, expect, test } from 'vitest';
 import { readProjectConfiguration } from '../src/config/configReader.js';
 import { createTempWorkspace, readFixtureConfigMarkdown } from './testUtils.js';
 
+const minimalMvpConfig = [
+  '# CompassRose Project Configuration',
+  '',
+  '## Configuration',
+  '',
+  '```yaml',
+  'project:',
+  '  name: compassrose',
+  '  supported_platforms:',
+  '    - linux',
+  '    - windows',
+  '  documentation_root: docs',
+  '',
+  'adapters:',
+  '  external_cli:',
+  '    type: external_cli',
+  '',
+  'commands:',
+  '  typecheck: "npm run typecheck"',
+  '  tests: "npm test"',
+  '  lint: ""',
+  '  build: ""',
+  '',
+  'documentation:',
+  '  roadmap: docs/ROADMAP.md',
+  '  project_state: docs/compassrose/PROJECT_STATE.md',
+  '  config: docs/compassrose/CONFIG.md',
+  '  contracts_root: src/contracts',
+  '```',
+].join('\n');
+
 describe('project configuration loader', () => {
+  test('accepts a minimal MVP configuration with only required fields', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'docs/compassrose/CONFIG.md': minimalMvpConfig,
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+
+      expect(result.value.project.name).toBe('compassrose');
+      expect(result.value.project.supported_platforms).toEqual(['linux', 'windows']);
+      expect(result.value.project.documentation_root).toBe('docs');
+      expect(result.value.adapters.external_cli.type).toBe('external_cli');
+      expect(result.value.commands.typecheck).toBe('npm run typecheck');
+      expect(result.value.commands.tests).toBe('npm test');
+      expect(result.value.commands.lint).toBe('');
+      expect(result.value.commands.build).toBe('');
+      expect(result.value.documentation.roadmap).toBe('docs/ROADMAP.md');
+      expect(result.value.documentation.project_state).toBe('docs/compassrose/PROJECT_STATE.md');
+      expect(result.value.documentation.config).toBe('docs/compassrose/CONFIG.md');
+      expect(result.value.documentation.contracts_root).toBe('src/contracts');
+    } finally {
+      workspace.dispose();
+    }
+  });
+
   test('loads the canonical project-local configuration from CONFIG.md', () => {
     const workspace = createTempWorkspace({
       files: {

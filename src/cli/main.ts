@@ -80,7 +80,10 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     return 1;
   }
 
-  const gitPolicy = configResult.value.git_policy;
+  const gitPolicy = configResult.value.git_policy ?? {
+    require_clean_worktree_before_task: true,
+    allow_dirty_worktree: false,
+  };
   const requireClean = gitPolicy.require_clean_worktree_before_task;
   const allowDirty = gitPolicy.allow_dirty_worktree;
   // Same escape hatch CompassRoseOrchestrator already honors internally, so e2e scenarios

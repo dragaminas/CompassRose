@@ -426,36 +426,31 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
     'adapters.external_cli.type',
     issues
   );
-  const externalCliCommand = requireStringValue(
-    externalCliSection,
-    'command',
-    'adapters.external_cli.command',
-    issues
-  );
-  const externalCliArgs = requireStringArrayValue(
-    externalCliSection,
-    'args',
-    'adapters.external_cli.args',
-    issues
-  );
-  const externalCliStdin = requireBooleanValue(
-    externalCliSection,
-    'stdin',
-    'adapters.external_cli.stdin',
-    issues
-  );
-  const externalCliInputFileArgument = requireStringValue(
-    externalCliSection,
-    'input_file_argument',
-    'adapters.external_cli.input_file_argument',
-    issues
-  );
-  const externalCliOutputFile = requireStringValue(
-    externalCliSection,
-    'output_file',
-    'adapters.external_cli.output_file',
-    issues
-  );
+
+  if (issues.length > 0) {
+    return err(issues);
+  }
+
+  const externalCliCommand =
+    typeof externalCliSection['command'] === 'string'
+      ? externalCliSection['command']
+      : '';
+  const externalCliArgs: string[] =
+    Array.isArray(externalCliSection['args'])
+      ? (externalCliSection['args'] as string[])
+      : [];
+  const externalCliStdin =
+    typeof externalCliSection['stdin'] === 'boolean'
+      ? externalCliSection['stdin']
+      : false;
+  const externalCliInputFileArgument =
+    typeof externalCliSection['input_file_argument'] === 'string'
+      ? externalCliSection['input_file_argument']
+      : '';
+  const externalCliOutputFile =
+    typeof externalCliSection['output_file'] === 'string'
+      ? externalCliSection['output_file']
+      : '';
 
   const commands = {
     typecheck: requireCommandValue(commandsSection, 'typecheck', 'commands.typecheck', issues),
@@ -496,90 +491,26 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
     return err(issues);
   }
 
-  const executionSection = requireObjectSection(parsedConfiguration, 'execution', 'execution', issues);
-  const executionMode = validateExecutionMode(executionSection, issues);
-  const taskGeneration = requireNonEmptyString(executionSection, 'task_generation', 'execution.task_generation', issues);
-  const repositoryIsSourceOfTruth = requireBooleanValue(executionSection, 'repository_is_source_of_truth', 'execution.repository_is_source_of_truth', issues);
-  const plannerUsesRepositoryState = requireBooleanValue(executionSection, 'planner_uses_repository_state', 'execution.planner_uses_repository_state', issues);
-  const orchestratorUsesAi = requireBooleanValue(executionSection, 'orchestrator_uses_ai', 'execution.orchestrator_uses_ai', issues);
-  const runtimeContract = requireNonEmptyString(executionSection, 'runtime_contract', 'execution.runtime_contract', issues);
-  const featureStateContract = requireNonEmptyString(executionSection, 'feature_state_contract', 'execution.feature_state_contract', issues);
+  const externalCliTypeTyped: 'external_cli' = externalCliType as 'external_cli';
 
-  if (issues.length > 0) {
-    return err(issues);
-  }
+  const optionalPolicySections: Record<string, unknown> = {};
 
-  const rolesSection = requireObjectSection(parsedConfiguration, 'roles', 'roles', issues);
-  const roles = validateRolesSection(rolesSection, issues);
+  if ('execution' in parsedConfiguration) {
+    const executionSection = parsedConfiguration['execution'] as Record<string, unknown>;
+    const executionIssues: ConfigurationIssue[] = [];
+    const executionMode = validateExecutionMode(executionSection, executionIssues);
+    const taskGeneration = requireNonEmptyString(executionSection, 'task_generation', 'execution.task_generation', executionIssues);
+    const repositoryIsSourceOfTruth = requireBooleanValue(executionSection, 'repository_is_source_of_truth', 'execution.repository_is_source_of_truth', executionIssues);
+    const plannerUsesRepositoryState = requireBooleanValue(executionSection, 'planner_uses_repository_state', 'execution.planner_uses_repository_state', executionIssues);
+    const orchestratorUsesAi = requireBooleanValue(executionSection, 'orchestrator_uses_ai', 'execution.orchestrator_uses_ai', executionIssues);
+    const runtimeContract = requireNonEmptyString(executionSection, 'runtime_contract', 'execution.runtime_contract', executionIssues);
+    const featureStateContract = requireNonEmptyString(executionSection, 'feature_state_contract', 'execution.feature_state_contract', executionIssues);
 
-  if (issues.length > 0) {
-    return err(issues);
-  }
+    if (executionIssues.length > 0) {
+      return err(executionIssues);
+    }
 
-  const gitPolicySection = requireObjectSection(parsedConfiguration, 'git_policy', 'git_policy', issues);
-  const gitPolicy = validateGitPolicySection(gitPolicySection, issues);
-
-  if (issues.length > 0) {
-    return err(issues);
-  }
-
-  const developmentPolicySection = requireObjectSection(parsedConfiguration, 'development_policy', 'development_policy', issues);
-  const developmentPolicy = validateDevelopmentPolicySection(developmentPolicySection, issues);
-
-  if (issues.length > 0) {
-    return err(issues);
-  }
-
-  const reviewPolicySection = requireObjectSection(parsedConfiguration, 'review_policy', 'review_policy', issues);
-  const reviewPolicy = validateReviewPolicySection(reviewPolicySection, issues);
-
-  if (issues.length > 0) {
-    return err(issues);
-  }
-
-  const qualityGatesSection = requireObjectSection(parsedConfiguration, 'quality_gates', 'quality_gates', issues);
-  const qualityGates = validateQualityGatesSection(qualityGatesSection, issues);
-
-  if (issues.length > 0) {
-    return err(issues);
-  }
-
-  const limitsSection = requireObjectSection(parsedConfiguration, 'limits', 'limits', issues);
-  const limits = validateLimitsSection(limitsSection, issues);
-
-  if (issues.length > 0) {
-    return err(issues);
-  }
-
-  return ok({
-    ...parsedConfiguration,
-    project: {
-      ...projectSection,
-      name: projectName,
-      supported_platforms: supportedPlatforms,
-      documentation_root: documentationRoot,
-    },
-    adapters: {
-      ...adaptersSection,
-      external_cli: {
-        ...externalCliSection,
-        type: 'external_cli',
-        command: externalCliCommand,
-        args: externalCliArgs,
-        stdin: externalCliStdin,
-        input_file_argument: externalCliInputFileArgument,
-        output_file: externalCliOutputFile,
-      },
-    },
-    commands: {
-      ...commandsSection,
-      ...commands,
-    },
-    documentation: {
-      ...documentationSection,
-      ...documentation,
-    },
-    execution: {
+    optionalPolicySections['execution'] = {
       mode: executionMode,
       task_generation: taskGeneration,
       repository_is_source_of_truth: repositoryIsSourceOfTruth,
@@ -587,14 +518,111 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
       orchestrator_uses_ai: orchestratorUsesAi,
       runtime_contract: runtimeContract,
       feature_state_contract: featureStateContract,
+    };
+  }
+
+  if ('roles' in parsedConfiguration) {
+    const rolesSection = parsedConfiguration['roles'] as Record<string, unknown>;
+    const rolesIssues: ConfigurationIssue[] = [];
+    const roles = validateRolesSection(rolesSection, rolesIssues);
+
+    if (rolesIssues.length > 0) {
+      return err(rolesIssues);
+    }
+
+    optionalPolicySections['roles'] = roles;
+  }
+
+  if ('git_policy' in parsedConfiguration) {
+    const gitPolicySection = parsedConfiguration['git_policy'] as Record<string, unknown>;
+    const gitPolicyIssues: ConfigurationIssue[] = [];
+    const gitPolicy = validateGitPolicySection(gitPolicySection, gitPolicyIssues);
+
+    if (gitPolicyIssues.length > 0) {
+      return err(gitPolicyIssues);
+    }
+
+    optionalPolicySections['git_policy'] = gitPolicy;
+  }
+
+  if ('development_policy' in parsedConfiguration) {
+    const developmentPolicySection = parsedConfiguration['development_policy'] as Record<string, unknown>;
+    const developmentPolicyIssues: ConfigurationIssue[] = [];
+    const developmentPolicy = validateDevelopmentPolicySection(developmentPolicySection, developmentPolicyIssues);
+
+    if (developmentPolicyIssues.length > 0) {
+      return err(developmentPolicyIssues);
+    }
+
+    optionalPolicySections['development_policy'] = developmentPolicy;
+  }
+
+  if ('review_policy' in parsedConfiguration) {
+    const reviewPolicySection = parsedConfiguration['review_policy'] as Record<string, unknown>;
+    const reviewPolicyIssues: ConfigurationIssue[] = [];
+    const reviewPolicy = validateReviewPolicySection(reviewPolicySection, reviewPolicyIssues);
+
+    if (reviewPolicyIssues.length > 0) {
+      return err(reviewPolicyIssues);
+    }
+
+    optionalPolicySections['review_policy'] = reviewPolicy;
+  }
+
+  if ('quality_gates' in parsedConfiguration) {
+    const qualityGatesSection = parsedConfiguration['quality_gates'] as Record<string, unknown>;
+    const qualityGatesIssues: ConfigurationIssue[] = [];
+    const qualityGates = validateQualityGatesSection(qualityGatesSection, qualityGatesIssues);
+
+    if (qualityGatesIssues.length > 0) {
+      return err(qualityGatesIssues);
+    }
+
+    optionalPolicySections['quality_gates'] = qualityGates;
+  }
+
+  if ('limits' in parsedConfiguration) {
+    const limitsSection = parsedConfiguration['limits'] as Record<string, unknown>;
+    const limitsIssues: ConfigurationIssue[] = [];
+    const limits = validateLimitsSection(limitsSection, limitsIssues);
+
+    if (limitsIssues.length > 0) {
+      return err(limitsIssues);
+    }
+
+    optionalPolicySections['limits'] = limits;
+  }
+
+  return ok(Object.assign(
+    {
+      project: {
+        ...projectSection,
+        name: projectName,
+        supported_platforms: supportedPlatforms,
+        documentation_root: documentationRoot,
+      },
+      adapters: {
+        ...adaptersSection,
+        external_cli: {
+          type: 'external_cli' as 'external_cli',
+          command: externalCliCommand,
+          args: externalCliArgs,
+          stdin: externalCliStdin,
+          input_file_argument: externalCliInputFileArgument,
+          output_file: externalCliOutputFile,
+        },
+      },
+      commands: {
+        ...commandsSection,
+        ...commands,
+      },
+      documentation: {
+        ...documentationSection,
+        ...documentation,
+      },
     },
-    roles,
-    git_policy: gitPolicy,
-    development_policy: developmentPolicy,
-    review_policy: reviewPolicy,
-    quality_gates: qualityGates,
-    limits: limits,
-  });
+    optionalPolicySections,
+  ));
 }
 
 function requireObjectSection(
@@ -965,30 +993,36 @@ function requireNonNegativeInteger(
 export function validateRuntimePreconditions(configuration: ProjectConfiguration): ConfigurationIssue[] {
   const issues: ConfigurationIssue[] = [];
 
-  const executionMode = configuration.execution.mode;
-  if (!VALID_EXECUTION_MODES.has(executionMode)) {
-    issues.push({
-      field: 'execution.mode',
-      message: `Unsupported execution mode: ${executionMode}. Must be one of: interactive, semi_automatic, automatic.`,
-    });
-  }
-
-  const requiredRoles = ['planner', 'implementer', 'reviewer'] as const;
-  for (const role of requiredRoles) {
-    const entry = configuration.roles[role];
-    if (!entry.enabled) {
+  if (configuration.execution) {
+    const executionMode = configuration.execution.mode;
+    if (!VALID_EXECUTION_MODES.has(executionMode)) {
       issues.push({
-        field: `roles.${role}.enabled`,
-        message: `Required role ${role} is disabled. The MVP runtime requires the planner role to be enabled.`,
+        field: 'execution.mode',
+        message: `Unsupported execution mode: ${executionMode}. Must be one of: interactive, semi_automatic, automatic.`,
       });
     }
   }
 
-  if (configuration.git_policy.require_clean_worktree_before_task && configuration.git_policy.allow_dirty_worktree) {
-    issues.push({
-      field: 'git_policy',
-      message: 'Conflicting git policy: require_clean_worktree_before_task is true but allow_dirty_worktree is also true.',
-    });
+  if (configuration.roles) {
+    const requiredRoles = ['planner', 'implementer', 'reviewer'] as const;
+    for (const role of requiredRoles) {
+      const entry = configuration.roles[role];
+      if (!entry.enabled) {
+        issues.push({
+          field: `roles.${role}.enabled`,
+          message: `Required role ${role} is disabled. The MVP runtime requires the planner role to be enabled.`,
+        });
+      }
+    }
+  }
+
+  if (configuration.git_policy) {
+    if (configuration.git_policy.require_clean_worktree_before_task && configuration.git_policy.allow_dirty_worktree) {
+      issues.push({
+        field: 'git_policy',
+        message: 'Conflicting git policy: require_clean_worktree_before_task is true but allow_dirty_worktree is also true.',
+      });
+    }
   }
 
   const adapterKeys = new Set<string>();
@@ -996,25 +1030,27 @@ export function validateRuntimePreconditions(configuration: ProjectConfiguration
     adapterKeys.add(key);
   }
 
-  const requiredRoleKeys = ['planner', 'implementer', 'reviewer'] as const;
-  for (const role of requiredRoleKeys) {
-    const entry = configuration.roles[role];
-    if (entry.enabled) {
-      if (!entry.adapter) {
-        issues.push({
-          field: `roles.${role}.adapter`,
-          message: `Enabled role ${role} has no adapter configured.`,
-        });
-      } else if (!adapterKeys.has(entry.adapter)) {
-        issues.push({
-          field: `roles.${role}.adapter`,
-          message: `Enabled role ${role} references adapter '${entry.adapter}' which is not defined in adapters section.`,
-        });
-      } else if (entry.adapter !== 'external_cli') {
-        issues.push({
-          field: `roles.${role}.adapter`,
-          message: `Enabled role ${role} uses adapter '${entry.adapter}', but only the generic 'external_cli' adapter is supported in the MVP.`,
-        });
+  if (configuration.roles) {
+    const requiredRoleKeys = ['planner', 'implementer', 'reviewer'] as const;
+    for (const role of requiredRoleKeys) {
+      const entry = configuration.roles[role];
+      if (entry.enabled) {
+        if (!entry.adapter) {
+          issues.push({
+            field: `roles.${role}.adapter`,
+            message: `Enabled role ${role} has no adapter configured.`,
+          });
+        } else if (!adapterKeys.has(entry.adapter)) {
+          issues.push({
+            field: `roles.${role}.adapter`,
+            message: `Enabled role ${role} references adapter '${entry.adapter}' which is not defined in adapters section.`,
+          });
+        } else if (entry.adapter !== 'external_cli') {
+          issues.push({
+            field: `roles.${role}.adapter`,
+            message: `Enabled role ${role} uses adapter '${entry.adapter}', but only the generic 'external_cli' adapter is supported in the MVP.`,
+          });
+        }
       }
     }
   }

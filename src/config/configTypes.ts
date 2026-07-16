@@ -112,13 +112,13 @@ export interface ProjectConfiguration {
   readonly adapters: AdaptersSection;
   readonly commands: CommandsSection;
   readonly documentation: DocumentationSection;
-  readonly execution: ExecutionSection;
-  readonly roles: RolesSection;
-  readonly git_policy: GitPolicySection;
-  readonly development_policy: DevelopmentPolicySection;
-  readonly review_policy: ReviewPolicySection;
-  readonly quality_gates: QualityGatesSection;
-  readonly limits: LimitsSection;
+  readonly execution?: ExecutionSection;
+  readonly roles?: RolesSection;
+  readonly git_policy?: GitPolicySection;
+  readonly development_policy?: DevelopmentPolicySection;
+  readonly review_policy?: ReviewPolicySection;
+  readonly quality_gates?: QualityGatesSection;
+  readonly limits?: LimitsSection;
   readonly [key: string]: unknown;
 }
 
