@@ -1,100 +1,52 @@
-# Proto CompassRose
+# proto/
 
-Minimal launcher for the prototype runtime loop.
+This folder no longer holds a runtime. The orchestrator that used to live here as
+`protoCompassRose.ts` is now embedded in the real application at
+`src/orchestrator/orchestrator.ts`, launched via `src/cli/main.ts`. Its behavior is
+specified in `src/contracts/runtime/operation-loop.md`, not in this folder.
 
-## Run
+What's left here is the end-to-end test infrastructure that exercises the real CLI as a
+black box: clone the repo, mock `codex`/`opencode`, spawn `tsx src/cli/main.ts`, assert on
+the resulting files and exit codes.
 
-```bash
-npm run proto -- run --no-commit
-```
+## Files
 
-Useful variants:
+- `protoCompassRose.e2e.ts` — the full scenario harness. Clones this repository into a temp
+  worktree, seeds a fixture state for `docs/features/002-configuration-model/`, writes mock
+  `codex`/`opencode` executables, and spawns the real CLI against it.
+- `protoCompassRose.smoke.e2e.ts` — a lighter smoke test: one control-flow pass
+  (`implementer -> reviewer`) to catch wiring regressions fast.
+- `tsconfig.json` — scoped typecheck config covering these two files plus `src/`.
 
-```bash
-npm run proto:run
-npm run proto:loop
-npm run proto:loop:codex
-npm run proto -- run
-```
-
-## CLI
-
-- `run`: execute one prototype pass.
-- `run-once`: same as `run`.
-- `--loop`: keep running additional passes until the prototype stops.
-- `--no-commit`: do not create git commits after planning, recovery checkpoints, or approved review.
-- `--cwd <path>`: start from a different working directory inside the repo.
-- `--implementer <codex|opencode>`: choose which CLI implements tasks. `opencode` remains the default. When you choose `codex`, CompassRose leaves the model unset unless you override `PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL`, so the backend can use its active default.
-- `Ctrl-C`, `SIGINT`, or `SIGTERM`: request a controlled stop. The prototype writes a stopped run summary and preserves the current task or state checkpoint for the next pass.
-
-If you want to compare behavior with the Codex CLI instead of OpenCode, run `npm run proto:loop:codex` or pass `--implementer codex`. The planner/reviewer side still honors `PROTO_COMPASSROSE_CODEX_MODEL`, and the implementer can be pinned independently with `PROTO_COMPASSROSE_CODEX_IMPLEMENTER_MODEL`. Set `PROTO_COMPASSROSE_CODEX_PLANNER_MODEL` if you want the planner/reviewer pass to use a different Codex model.
-
-When review returns `changes_required`, `proto:loop` now records a recovery lesson and continues into the generated correction task instead of forcing a manual restart.
-
-Planning-style recovery steps such as `correct_state` checkpoint their state/task documents in the default commit mode, and the runtime applies the canonical state repair directly before resuming.
-
-Implementation attempts now require `implementation_notes` in the stored artifact. The reviewer uses them as lightweight execution context, and missing notes are treated as a failed attempt.
-
-If you interrupt `proto:loop`, the process stops cleanly at the current safe checkpoint instead of converting the interruption into an implementation failure.
-
-## Typecheck
+## Running
 
 ```bash
+npm run proto:e2e              # standard scenario
+npm run proto:e2e:codex        # standard scenario, codex as the implementer
+npm run proto:e2e:unblock      # PROTO_E2E_SCENARIO=unblock
+npm run proto:smoke
 npm run proto:typecheck
 ```
 
-## E2E Smoke Test
+Other scenarios are selected via `PROTO_E2E_SCENARIO`, e.g.:
 
 ```bash
-npm run proto:e2e
+PROTO_E2E_SCENARIO=recoverable-review-blocked npm run proto:e2e
 ```
 
-This runs the prototype against fake `codex` and `opencode` binaries in a temporary clone so you can verify the orchestration path without touching the real tools.
+Available scenarios (see `protoCompassRose.e2e.ts` for the full list and what each one
+seeds): `standard`, `unblock`, `recoverable-review-blocked`, `terminal-review-blocked`,
+`interface-gap`, `state-correction-missing-active-task`, `unblock-doc-code-mismatch`.
 
-To verify the `codex` implementer path specifically, run:
+Useful env vars: `PROTO_E2E_IMPLEMENTER` (`codex`|`opencode`), `PROTO_E2E_COMMIT=1`.
 
-```bash
-npm run proto:e2e:codex
-```
+If a run fails, both harnesses print `temp workspace preserved at <path>` instead of
+cleaning up — inspect that directory (cloned repo, mock scripts, call logs) to see exactly
+what the CLI did.
 
-For a smaller control-flow check that only verifies the `codex -> opencode -> codex` sequence, use:
+## Where the real docs live
 
-```bash
-npm run proto:smoke
-```
-
-To exercise the unblock path specifically, run:
-
-```bash
-npm run proto:e2e:unblock
-```
-
-The smoke harness sets `PROTO_COMPASSROSE_SKIP_CLEAN_CHECK=1` so the prototype can exercise the control flow inside a temporary test workspace.
-
-`proto:loop` now prints agent start/end markers plus captured `stdout` and `stderr`, which makes it easier to tell active agent work from a stalled loop.
-
-When the selector finds malformed but repairable feature state, the prototype now creates and applies a state correction artifact instead of ending the run as a terminal blocker.
-
-When the selector finds a recoverable blocker, the prototype now creates a blocker profile plus an unblock task, then restores the suspended lifecycle state after the unblock task is approved.
-
-## Diagnostics
-
-Prototype artifacts are written under `.git/proto-compassrose/`:
-
-- `latest-run.json`
-- `latest-refinement.md`
-- `latest-refinement.json`
-- `latest-recovery-lesson.md`
-- `latest-recovery-lesson.json`
-- `logs/agent-contexts/`
-- `recovery-lessons/`
-- `task-interface-analysis/`
-- `blockers/`
-- `runs/`
-- `refinement/`
-
-If the script fails, start by checking `latest-refinement.md` and the matching run summary in `runs/`.
-
-For recovery-oriented failures, also inspect `latest-recovery-lesson.md` and the matching JSON artifact under `recovery-lessons/`.
-
-The `logs/agent-contexts/` artifacts record the exact prompt, tool snapshot, configuration snapshot, and workspace snapshot that were sent to each external agent.
+- Runtime/loop contract: `src/contracts/runtime/operation-loop.md`
+- Orchestrator implementation: `src/orchestrator/orchestrator.ts`
+- Work-item vocabulary (feature/fix/task/subtask/...): `src/contracts/runtime/work-item-taxonomy.md`
+- Fix-request lifecycle: `docs/fixes/README.md`
