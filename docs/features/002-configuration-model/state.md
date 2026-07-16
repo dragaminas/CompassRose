@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+implementation_running
 
 ## Source Request
 
@@ -13,11 +13,11 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T15
 - active_correction_task: none
-- active_unblock_task: F002-T15-DOCTOR-RECOVERY-R1
-- last_implementation_result: passed
-- last_quality_gate_result: failed
-- last_review_result: blocked
-- last_unblock_result: not_run
+- active_unblock_task: none
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
+- last_unblock_result: passed
 
 ## Current Reality
 
@@ -90,10 +90,10 @@ Task `F002-T15` is now planned and ready to execute. Handle missing project conf
 
 ## Blocked From
 
-- lifecycle_state: `implementation_running`
-- active_task: `F002-T15`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
@@ -105,4 +105,4 @@ Subtask `F002-T13` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T15-DOCTOR-RECOVERY-R1` next.
+Recover or finish subtask implementation of `F002-T15` before allowing review or new planning.

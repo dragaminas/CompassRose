@@ -17,7 +17,6 @@ In progress
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T10-DOCTOR-RECOVERY-R2`; the active task pointer was restored to `F002-T10`.
 - Feature `002-configuration-model` now has a planned next task, `F002-T15`, ready to execute.
 - Tasks `F002-T10` through `F002-T14` (and the pending correction `F002-T14-C1`) are superseded by embedding proto's orchestrator (`PrototypeCompassRose`, renamed `CompassRoseOrchestrator`) into `src/orchestrator/orchestrator.ts` and wiring `src/cli/main.ts` to run it directly; see `docs/features/002-configuration-model/state.md` for the full account. The active task pointer for this feature is now `none`; its lifecycle state is `task_planning_pending`.
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T15-DOCTOR-RECOVERY-R1`, to resolve a recoverable blocker and restore `implementation_running`.
 
 ## Implemented
 
@@ -30,7 +29,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T15-DOCTOR-RECOVERY-R1` for the active feature.
+- Recover or finish implementation for `F002-T15`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -47,4 +46,4 @@ Subtask `F002-T13` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T15-DOCTOR-RECOVERY-R1` from the captured `implementation_running` state.
+The active feature is `002-configuration-model`, and subtask execution for `F002-T15` is in progress.
