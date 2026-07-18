@@ -19,6 +19,7 @@ function seedSchemas(root: string): void {
     'src/contracts/reviewer/output.schema.json': '{"type":"object","title":"reviewer_output"}',
     'src/contracts/runtime/task-interface-analysis.schema.json': '{"type":"object","title":"task_interface_analysis"}',
     'src/contracts/runtime/diagnostic-autocorrection.schema.json': '{"type":"object","title":"diagnostic_autocorrection"}',
+    'src/contracts/planner/task-requests-backfill-output.schema.json': '{"type":"object","title":"task_requests_backfill"}',
   };
 
   for (const [relativePath, contents] of Object.entries(schemaFiles)) {
@@ -29,7 +30,7 @@ function seedSchemas(root: string): void {
 }
 
 describe('ContractRegistry', () => {
-  test('loads all six structured schemas on construction', () => {
+  test('loads all seven structured schemas on construction', () => {
     workspace = createTempWorkspace();
     seedSchemas(workspace.root);
     const registry = new ContractRegistry(workspace.root);
@@ -40,6 +41,7 @@ describe('ContractRegistry', () => {
     expect(registry.schema<{ title: string }>('reviewer_output').title).toBe('reviewer_output');
     expect(registry.schema<{ title: string }>('task_interface_analysis').title).toBe('task_interface_analysis');
     expect(registry.schema<{ title: string }>('diagnostic_autocorrection').title).toBe('diagnostic_autocorrection');
+    expect(registry.schema<{ title: string }>('task_requests_backfill').title).toBe('task_requests_backfill');
   });
 
   test('refresh reports no reload and no restart when nothing changed', () => {

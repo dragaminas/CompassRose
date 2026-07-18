@@ -74,6 +74,22 @@ export interface TaskRequest {
   readonly sibling_check: TaskRequestSiblingCheck;
 }
 
+/**
+ * Backfill-only shape: a TaskRequest plus which already-existing task anchors (see
+ * primaryTaskAnchorFromId in src/orchestrator/runtimeHelpers.ts) it accounts for. Used solely
+ * by the one-time backfillTaskRequests() reconciliation (src/orchestrator/taskRequests.ts) for
+ * a feature formalized before task requests existed -- covers_existing_task_ids is stripped
+ * before the result is persisted as a plain TaskRequest[] (see stripBackfillMetadata), so every
+ * other consumer only ever sees the canonical TaskRequest shape regardless of how it was made.
+ */
+export interface BackfilledTaskRequest extends TaskRequest {
+  readonly covers_existing_task_ids: readonly string[];
+}
+
+export interface TaskRequestBackfillOutput {
+  readonly task_requests: readonly BackfilledTaskRequest[];
+}
+
 export type PlannerLifecycleState =
   | "formalization_pending"
   | "formalized"

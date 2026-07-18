@@ -1,6 +1,15 @@
-import { describe, expect, test } from 'vitest';
-import { checkTaskRequestContainment, selectNextTaskRequest, withWidenedScope } from '../src/orchestrator/taskRequests.js';
-import type { TaskRequest } from '../src/contracts/planner/plannerContracts.js';
+import { join } from 'node:path';
+import { afterEach, describe, expect, test } from 'vitest';
+import {
+  checkTaskRequestContainment,
+  listExistingTaskIds,
+  reconcileBackfilledTaskRequests,
+  selectNextTaskRequest,
+  stripBackfillMetadata,
+  withWidenedScope,
+} from '../src/orchestrator/taskRequests.js';
+import type { BackfilledTaskRequest, TaskRequest } from '../src/contracts/planner/plannerContracts.js';
+import { createTempWorkspace, type TempWorkspace } from './testUtils.js';
 
 function buildTaskRequest(overrides: Partial<TaskRequest> = {}): TaskRequest {
   return {
@@ -89,5 +98,117 @@ describe('withWidenedScope', () => {
     const requests = [buildTaskRequest({ id: '1', scope: { allowed_paths: ['src/config'], forbidden_paths: [] } })];
     const widened = withWidenedScope(requests, '1', ['src/config']);
     expect(widened[0]?.scope.allowed_paths).toEqual(['src/config']);
+  });
+});
+
+function buildBackfilledTaskRequest(overrides: Partial<BackfilledTaskRequest> = {}): BackfilledTaskRequest {
+  return { ...buildTaskRequest(), covers_existing_task_ids: [], ...overrides };
+}
+
+describe('listExistingTaskIds', () => {
+  let workspace: TempWorkspace | undefined;
+
+  afterEach(() => {
+    workspace?.dispose();
+    workspace = undefined;
+  });
+
+  test('reads the Task ID of every task document in the directory', () => {
+    workspace = createTempWorkspace({
+      files: {
+        'tasks/001-add-the-loader.md': [
+          '# Task 001: Add the loader',
+          '',
+          '## Task ID',
+          '`F001-T01`',
+          '',
+          '## Parent Feature',
+          '`001-widgets`',
+          '',
+          '## Goal',
+          'Load configuration.',
+          '',
+          '## Scope',
+          'Allowed:',
+          '- `src/config/loader.ts`',
+          '',
+          'Forbidden:',
+          '',
+        ].join('\n'),
+        'tasks/002-wire-it-up.md': [
+          '# Task 002: Wire it up',
+          '',
+          '## Task ID',
+          '`F001-T02`',
+          '',
+          '## Parent Feature',
+          '`001-widgets`',
+          '',
+          '## Goal',
+          'Wire the loader in.',
+          '',
+          '## Scope',
+          'Allowed:',
+          '- `src/orchestrator/orchestrator.ts`',
+          '',
+          'Forbidden:',
+          '',
+        ].join('\n'),
+      },
+    });
+
+    expect(listExistingTaskIds(join(workspace.root, 'tasks')).sort()).toEqual(['F001-T01', 'F001-T02']);
+  });
+
+  test('returns an empty array when the tasks directory does not exist', () => {
+    workspace = createTempWorkspace();
+    expect(listExistingTaskIds(join(workspace.root, 'tasks'))).toEqual([]);
+  });
+
+  test('skips files that are not parseable task documents', () => {
+    workspace = createTempWorkspace({
+      files: {
+        'tasks/not-a-task.md': '# Just some notes\n\nNothing structured here.\n',
+      },
+    });
+
+    expect(listExistingTaskIds(join(workspace.root, 'tasks'))).toEqual([]);
+  });
+});
+
+describe('reconcileBackfilledTaskRequests', () => {
+  test('ok when every existing anchor is covered and no covering request is not_started', () => {
+    const backfilled = [
+      buildBackfilledTaskRequest({ id: '1', status: 'complete', covers_existing_task_ids: ['F001-T01'] }),
+      buildBackfilledTaskRequest({ id: '2', status: 'not_started', covers_existing_task_ids: [] }),
+    ];
+    expect(reconcileBackfilledTaskRequests(backfilled, ['F001-T01'])).toEqual({ ok: true, reason: null });
+  });
+
+  test('fails when an existing anchor is not covered by any backfilled request', () => {
+    const backfilled = [buildBackfilledTaskRequest({ id: '1', status: 'not_started', covers_existing_task_ids: [] })];
+    const result = reconcileBackfilledTaskRequests(backfilled, ['F001-T01']);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain('F001-T01');
+  });
+
+  test('fails when a covering request is left not_started', () => {
+    const backfilled = [buildBackfilledTaskRequest({ id: '1', status: 'not_started', covers_existing_task_ids: ['F001-T01'] })];
+    const result = reconcileBackfilledTaskRequests(backfilled, ['F001-T01']);
+    expect(result.ok).toBe(false);
+    expect(result.reason).toContain('1');
+  });
+
+  test('ok when there are no existing anchors at all', () => {
+    expect(reconcileBackfilledTaskRequests([], [])).toEqual({ ok: true, reason: null });
+  });
+});
+
+describe('stripBackfillMetadata', () => {
+  test('removes covers_existing_task_ids from every request', () => {
+    const backfilled = [buildBackfilledTaskRequest({ covers_existing_task_ids: ['F001-T01'] })];
+    const stripped = stripBackfillMetadata(backfilled);
+    expect(stripped[0]).not.toHaveProperty('covers_existing_task_ids');
+    expect(stripped[0]?.id).toBe('1');
   });
 });

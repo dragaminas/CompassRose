@@ -72,6 +72,7 @@ function prepareScopeGuardWorkspace(): { cloneRoot: string; dispose: () => void 
   neutralizeRealFeatureStates(cloneRoot);
   seedTargetFeature(cloneRoot);
   seedSiblingFeature(cloneRoot);
+  seedTaskRequestArtifact(cloneRoot);
   writeExecutableScript(join(tempRoot, 'codex-mock.cjs'), CODEX_SCOPE_GUARD_MOCK);
   writeExecutableScript(join(tempRoot, 'opencode-mock.cjs'), OPENCODE_STUB_MOCK);
 
@@ -285,6 +286,27 @@ can name it in scope_justification.belongs_to_other_feature.
 `,
     'utf8',
   );
+}
+
+// planTask() now backfills task_requests once for a feature with no task-requests artifact
+// (see backfillTaskRequests() in orchestrator.ts), via a *different* structured schema
+// (task_requests_backfill) than this test's mock understands. Seed the artifact directly so
+// this scenario keeps exercising exactly what it always has -- planTaskFromRequest()'s
+// belongs_to_other_feature check -- rather than accidentally also exercising backfill.
+function seedTaskRequestArtifact(cloneRoot: string): void {
+  const artifactPath = join(cloneRoot, '.git', 'proto-compassrose', 'task-requests', `${TARGET_FEATURE_ID}.json`);
+  mkdirSync(dirname(artifactPath), { recursive: true });
+  const taskRequests = [
+    {
+      id: '1',
+      title: 'Add feature-selection and lifecycle dispatch to the CLI entrypoint',
+      objective: 'Scope-guard test scenario: this task request is (incorrectly) elaborated as belonging to the sibling feature.',
+      scope: { allowed_paths: ['src/cli/main.ts'], forbidden_paths: [] },
+      status: 'not_started',
+      sibling_check: { considered_features: [SIBLING_FEATURE_ID], belongs_to_other_feature: null },
+    },
+  ];
+  writeFileSync(artifactPath, `${JSON.stringify(taskRequests, null, 2)}\n`, 'utf8');
 }
 
 function writeExecutableScript(path: string, contents: string): void {

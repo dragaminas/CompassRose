@@ -34,6 +34,7 @@ import type {
   StoredTaskArtifact,
   TaskInterfaceAnalysis,
   TaskRequest,
+  TaskRequestBackfillOutput,
   ReviewableDiffHandoff,
   ExpectedDeliverable,
   UnblockTaskMetadata,
@@ -149,7 +150,14 @@ import {
   writeText,
 } from './runtimeHelpers.js';
 import { buildSiblingFeatureIndex } from '../planner/siblingFeatureIndex.js';
-import { checkTaskRequestContainment, selectNextTaskRequest, withWidenedScope } from './taskRequests.js';
+import {
+  checkTaskRequestContainment,
+  listExistingTaskIds,
+  reconcileBackfilledTaskRequests,
+  selectNextTaskRequest,
+  stripBackfillMetadata,
+  withWidenedScope,
+} from './taskRequests.js';
 export { parseTaskDocument };
 import {
   escapeRegExp,
@@ -1360,23 +1368,112 @@ export class CompassRoseOrchestrator {
   }
 
   /**
-   * Dispatches to the deterministic, bounded-scope path when the feature has a task-requests
-   * artifact (see planFeature()) with something left to elaborate, or to the legacy free-form
-   * path otherwise -- a feature formalized before this mechanism existed (no artifact), or one
-   * whose task requests are all complete/superseded (the fixed plan didn't anticipate needing
-   * more; Phase 4's backfill removes the "no artifact" half of this fork for good).
+   * Single steady-state path: ensure a task-requests artifact exists (backfilling it once, if
+   * this feature was formalized before task requests existed), then deterministically elaborate
+   * the next one. If every task request is already complete/superseded, the fixed plan didn't
+   * anticipate needing more work here -- block rather than silently inventing new scope.
    */
   private planTask(featureId: string): StepExecutionResult {
     this.ensureCleanWorktreeIfRequired(featureId);
     const feature = this.loadFeature(featureId);
-    const taskRequests = this.artifacts.readJson<TaskRequest[]>(join('task-requests', `${featureId}.json`));
-    const nextRequest = taskRequests ? selectNextTaskRequest(taskRequests) : null;
+    const existingTaskRequests = this.artifacts.readJson<TaskRequest[]>(join('task-requests', `${featureId}.json`));
 
-    if (taskRequests && nextRequest) {
-      return this.planTaskFromRequest(featureId, feature, nextRequest, taskRequests);
+    let taskRequests: TaskRequest[];
+    if (existingTaskRequests) {
+      taskRequests = existingTaskRequests;
+    } else {
+      const backfilled = this.backfillTaskRequests(featureId, feature);
+      if (!Array.isArray(backfilled)) {
+        return backfilled;
+      }
+      taskRequests = backfilled;
     }
 
-    return this.planTaskFreely(featureId, feature);
+    const nextRequest = selectNextTaskRequest(taskRequests);
+    if (!nextRequest) {
+      const reason = `Task planning for feature \`${featureId}\` was invoked, but every pre-declared task request is already complete or superseded. Formalize additional task requests before continuing.`;
+      console.error(`Blocked: ${reason}`);
+      this.recordBlockedFeature(featureId, reason);
+      this.commitDirtyWorktreeIfConfigured(`proto: record exhausted task requests block for feature ${featureId}`);
+      return { exitCode: 2, continueLoop: false, summary: reason };
+    }
+
+    return this.planTaskFromRequest(featureId, feature, nextRequest, taskRequests);
+  }
+
+  /**
+   * One-time reconstruction of task_requests for a feature formalized before this mechanism
+   * existed: the fixed reference is `feature.md`'s own Scope/Implementation Outline plus the
+   * deterministically pre-computed list of task anchors that already exist under
+   * `tasksDirectory` (ground truth handed to the planner, not guessed). The result is verified
+   * (reconcileBackfilledTaskRequests) before being persisted -- every existing task anchor must
+   * be accounted for, or the feature is blocked instead of silently starting from an baseline
+   * that doesn't match repository reality.
+   */
+  private backfillTaskRequests(featureId: string, feature: FeatureRecord): TaskRequest[] | StepExecutionResult {
+    const existingTaskAnchors = uniqueStrings(listExistingTaskIds(feature.tasksDirectory).map(primaryTaskAnchorFromId));
+    const sourcePaths = [
+      relativePath(this.repositoryRoot, feature.featurePath),
+      relativePath(this.repositoryRoot, feature.statePath),
+    ];
+    const prompt = [
+      'Act as the CompassRose Planner.',
+      '',
+      `Feature \`${featureId}\` was formalized before task requests existed as a structured concept. Reconstruct its \`task_requests\` from its existing Scope and Implementation Outline.`,
+      '',
+      'Read only:',
+      `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
+      '',
+      'Ground truth: task anchors that already exist for this feature (authoritative repository fact -- do not guess beyond this list, and do not omit any of it):',
+      ...(existingTaskAnchors.length > 0 ? existingTaskAnchors.map((anchor) => `- ${anchor}`) : ['- none']),
+      '',
+      'Return a `task_requests` array reconstructing this feature\'s implementation outline as pre-declared, locked-in scope boundaries (see `TaskRequest` in `src/contracts/planner/plannerContracts.ts`).',
+      '',
+      'Rules:',
+      '- Every task anchor listed above as ground truth must appear in exactly one task request\'s `covers_existing_task_ids`.',
+      '- A task request whose `covers_existing_task_ids` is non-empty must have `status` `complete` or `in_progress` -- never `not_started`.',
+      '- A task request with an empty `covers_existing_task_ids` must have `status` `not_started`.',
+      '- Every `allowed_paths` list must include both the primary implementation path prefix and a paired test path prefix.',
+      '- Fill `sibling_check` honestly; if `feature.md` doesn\'t give enough information to check against siblings, set `considered_features` to an empty list and `belongs_to_other_feature` to `null` rather than guessing.',
+      '- Do not modify files.',
+    ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'planner',
+      kind: 'task_planning',
+      label: `planner:task-requests-backfill:${featureId}`,
+      feature_id: featureId,
+      task_id: null,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'task_requests_backfill',
+      },
+    }));
+
+    const backfilled = this.codex.runStructured<TaskRequestBackfillOutput>(
+      prompt,
+      this.contracts.schema('task_requests_backfill'),
+      [],
+      `planner:task-requests-backfill:${featureId}`,
+    );
+
+    const reconciliation = reconcileBackfilledTaskRequests(backfilled.task_requests, existingTaskAnchors);
+    if (!reconciliation.ok) {
+      const reason = `Backfilling task requests for feature \`${featureId}\` couldn't reconcile them against existing tasks: ${reconciliation.reason}.`;
+      console.error(`Blocked: ${reason}`);
+      this.recordBlockedFeature(featureId, reason);
+      this.commitDirtyWorktreeIfConfigured(`proto: record task-request backfill block for feature ${featureId}`);
+      return { exitCode: 2, continueLoop: false, summary: reason };
+    }
+
+    const taskRequests = stripBackfillMetadata(backfilled.task_requests);
+    this.artifacts.writeJson(join('task-requests', `${featureId}.json`), taskRequests);
+    return taskRequests;
   }
 
   private blockIfBelongsToOtherFeature(featureId: string, task: PlannedTask): StepExecutionResult | null {
