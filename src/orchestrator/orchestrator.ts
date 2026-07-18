@@ -68,6 +68,7 @@ import {
   capTaskFileNameLength,
   humanCorrectionNumber,
   humanTaskNumber,
+  limitStateCorrectionTaskId,
 } from '../task/taskId.js';
 import {
   assertTaskIdIsUnused,
@@ -209,6 +210,13 @@ const ORCHESTRATOR_RUNTIME_CRITICAL_PATHS: readonly string[] = [
   'src/runtime/controlledStop.ts',
 ];
 
+export class StateCorrectionLimitReachedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StateCorrectionLimitReachedError';
+  }
+}
+
 export class CompassRoseOrchestrator {
   private readonly repositoryRoot: string;
   private readonly git: GitClient;
@@ -224,6 +232,7 @@ export class CompassRoseOrchestrator {
   private readonly featuresRoot: string;
   private readonly fixesRoot: string;
   private readonly maxTasksPerRun: number;
+  private readonly maxReviewIterations: number;
   private readonly runId: string;
   private readonly codexCommand: string;
   private readonly opencodeCommand: string;
@@ -283,6 +292,7 @@ export class CompassRoseOrchestrator {
     this.featuresRoot = featuresRoot;
     this.fixesRoot = fixesRoot;
     this.maxTasksPerRun = readPositiveInteger(limits, 'max_tasks_per_run') ?? Number.POSITIVE_INFINITY;
+    this.maxReviewIterations = readPositiveInteger(limits, 'max_review_iterations') ?? 1;
     this.runId = createRunId();
     this.startedAt = new Date().toISOString();
   }
@@ -1090,9 +1100,17 @@ export class CompassRoseOrchestrator {
       case 'plan_subtask':
         this.planSubtask(requireString(decision.task_id, 'task_id'));
         return { exitCode: 0, continueLoop: true, summary: `Subtask prepared for ${requireString(decision.task_id, 'task_id')}.` };
-      case 'correct_state':
-        this.correctState(requireString(decision.feature_id, 'feature_id'), decision.reason);
-        return { exitCode: 0, continueLoop: true, summary: `State correction task created for feature ${requireString(decision.feature_id, 'feature_id')}.` };
+      case 'correct_state': {
+        try {
+          this.correctState(requireString(decision.feature_id, 'feature_id'), decision.reason);
+          return { exitCode: 0, continueLoop: true, summary: `State correction task created for feature ${requireString(decision.feature_id, 'feature_id')}.` };
+        } catch (error) {
+          if (error instanceof StateCorrectionLimitReachedError) {
+            return { exitCode: 2, continueLoop: false, summary: error.message };
+          }
+          throw error;
+        }
+      }
       case 'doctor_recovery_task':
         return this.runDoctorRecoveryTask(requireString(decision.task_id, 'task_id'));
       case 'unblock_task':
@@ -3404,8 +3422,27 @@ export class CompassRoseOrchestrator {
     return path;
   }
 
+  /**
+   * Public accessor: builds the next state-correction task id for `activeTaskId`, bounded
+   * by the configured correction depth (limits.max_review_iterations). Returns null when
+   * the correction limit has already been reached.
+   */
+  buildStateCorrectionTaskId(tasksDirectory: string, activeTaskId: string): string | null {
+    return limitStateCorrectionTaskId(tasksDirectory, activeTaskId, this.maxReviewIterations);
+  }
+
   private correctState(featureId: string, reason: string): void {
     const owner = this.resolveWorkItemContext(featureId);
+
+    // Enforce the configured correction depth limit before allocating a new correction ID.
+    // At the limit, refuse to create any correction artifact or mutate state.
+    const correctionId = this.buildStateCorrectionTaskId(owner.tasksDirectory, owner.id);
+    if (correctionId === null) {
+      throw new StateCorrectionLimitReachedError(
+        `Correction iteration limit reached for feature ${featureId} after ${this.maxReviewIterations} correction(s) for anchor ${owner.id}; refusing to create another near-duplicate state-correction task.`,
+      );
+    }
+
     const markdown = readUtf8(owner.statePath);
     const lifecycleState = stripTicks(requireSection(markdown, 'Lifecycle State').trim());
     const operationalStatusSection = requireSection(markdown, 'Operational Status');

@@ -77,3 +77,37 @@ export function humanCorrectionNumber(correctionTaskId: string): string {
 
   return `${String(Number.parseInt(taskNumber, 10)).padStart(3, '0')}.${Number.parseInt(correctionNumber, 10)}`;
 }
+
+/**
+ * Wraps buildStateCorrectionTaskId with a finite correction-bound ceiling.
+ *
+ * Returns the next deterministic correction task id when the number of
+ * existing corrections for `activeTaskId` is strictly less than `limit`.
+ * Returns `null` when the boundary is reached or `limit` is non-positive.
+ */
+export function limitStateCorrectionTaskId(
+  tasksDirectory: string,
+  activeTaskId: string,
+  limit: number,
+): string | null {
+  if (limit <= 0) {
+    return null;
+  }
+
+  if (!isDirectory(tasksDirectory)) {
+    if (limit >= 1) {
+      return `${activeTaskId}-C1`;
+    }
+    return null;
+  }
+
+  const candidate = buildStateCorrectionTaskId(tasksDirectory, activeTaskId);
+  const match = candidate.match(/-C(\d+)$/);
+  const nextNumber = match?.[1] ? Number.parseInt(match[1], 10) : 0;
+
+  if (nextNumber > limit) {
+    return null;
+  }
+
+  return candidate;
+}
