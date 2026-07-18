@@ -39,14 +39,19 @@ describe('task-request backfill for a legacy feature', () => {
       expect(persisted[0]?.status).toBe('complete');
       expect(persisted[0]?.covers_existing_task_ids).toBeUndefined();
       expect(persisted[1]?.id).toBe('2');
-      // Phase 4 does not yet flip status after a task is written (see Phase 5): the
-      // task-requests artifact still shows "2" as not_started even though its task now
-      // exists, since status is only ever set by planFeature()/backfillTaskRequests() so far.
-      expect(persisted[1]?.status).toBe('not_started');
+      // Phase 5: updateFeatureStateForTaskPlan flips status to in_progress as soon as the
+      // task is written (completion happens later, on review approval).
+      expect(persisted[1]?.status).toBe('in_progress');
 
       const tasksDirectory = join(workspace.cloneRoot, 'docs', 'features', TARGET_FEATURE_ID, 'tasks');
       const writtenTasks = readdirSync(tasksDirectory);
       expect(writtenTasks.length).toBe(2);
+
+      // Phase 5: `## Outline Progress` in state.md is regenerated from the task-requests
+      // artifact, not hand-edited -- it must reflect the same in_progress flip as the JSON.
+      const featureState = readFileSync(join(workspace.cloneRoot, 'docs', 'features', TARGET_FEATURE_ID, 'state.md'), 'utf8');
+      expect(featureState).toContain('- 1. Add the loader: complete');
+      expect(featureState).toContain('- 2. Wire the loader into the orchestrator: in progress');
     } finally {
       workspace.dispose();
     }

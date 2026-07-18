@@ -248,6 +248,15 @@ export interface PlannedTask {
   // which build this shape for rendering an existing correction, not a new proposal), but
   // required in output.schema.json so a genuine planner_output response always includes it.
   readonly scope_justification?: TaskScopeJustification;
+  /**
+   * The id of the TaskRequest this task elaborates, or null (fix tasks; a feature task planned
+   * before task requests existed). Set deterministically by the orchestrator itself in
+   * planTaskFromRequest -- not trusted from the LLM's own echo -- so
+   * updateFeatureStateAfterApprovedReview can later look up which task request to mark
+   * `complete` in the task-requests JSON artifact, by reading this same stored task artifact
+   * back (see StoredTaskArtifact), without needing to parse anything out of rendered markdown.
+   */
+  readonly source_task_request_id?: string | null;
 }
 
 export interface PlannerOutput {

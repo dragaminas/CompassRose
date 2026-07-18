@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { BackfilledTaskRequest, TaskRequest } from '../contracts/planner/plannerContracts.js';
+import type { BackfilledTaskRequest, TaskRequest, TaskRequestStatus } from '../contracts/planner/plannerContracts.js';
 import { pathsExceedingPrefixes } from '../shared/pathPrefix.js';
 import { uniqueStrings } from '../shared/arrays.js';
 import { parseTaskDocument } from '../task/taskDocument.js';
@@ -55,6 +55,20 @@ export function withWidenedScope(
         }
       : request,
   );
+}
+
+/**
+ * Flips one task request's status by id, leaving every other request untouched -- the
+ * code-driven counterpart to state.md's `## Outline Progress`, which is only ever regenerated
+ * from this artifact, never hand-edited after formalization (see updateFeatureStateForTaskPlan/
+ * updateFeatureStateAfterApprovedReview in orchestrator.ts).
+ */
+export function withUpdatedStatus(
+  requests: readonly TaskRequest[],
+  requestId: string,
+  status: TaskRequestStatus,
+): TaskRequest[] {
+  return requests.map((request) => (request.id === requestId ? { ...request, status } : request));
 }
 
 /**

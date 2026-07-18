@@ -22,7 +22,8 @@
         "quality_gates",
         "acceptance_criteria",
         "expected_deliverables",
-        "scope_justification"
+        "scope_justification",
+        "source_task_request_id"
       ],
       "properties": {
         "task_id": { "type": "string" },
@@ -153,6 +154,9 @@
               "type": ["string", "null"]
             }
           }
+        },
+        "source_task_request_id": {
+          "type": ["string", "null"]
         }
       }
     }

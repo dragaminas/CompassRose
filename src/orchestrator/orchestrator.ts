@@ -35,6 +35,7 @@ import type {
   TaskInterfaceAnalysis,
   TaskRequest,
   TaskRequestBackfillOutput,
+  TaskRequestStatus,
   ReviewableDiffHandoff,
   ExpectedDeliverable,
   UnblockTaskMetadata,
@@ -104,6 +105,7 @@ import {
   renderCorrectionTaskMarkdown,
   renderDoctorRecoveryTaskMarkdown,
   renderImplementationOutlineMarkdown,
+  renderOutlineProgressMarkdown,
   renderStateCorrectionTaskMarkdown,
   renderTaskMarkdown,
   renderUnblockTaskMarkdown,
@@ -156,6 +158,7 @@ import {
   reconcileBackfilledTaskRequests,
   selectNextTaskRequest,
   stripBackfillMetadata,
+  withUpdatedStatus,
   withWidenedScope,
 } from './taskRequests.js';
 export { parseTaskDocument };
@@ -1506,7 +1509,12 @@ export class CompassRoseOrchestrator {
     }
   }
 
-  private finalizeTaskPlan(featureId: string, feature: FeatureRecord, planned: PlannerOutput): StepExecutionResult {
+  private finalizeTaskPlan(
+    featureId: string,
+    feature: FeatureRecord,
+    planned: PlannerOutput,
+    taskRequestLink: { featureId: string; taskRequestId: string } | null = null,
+  ): StepExecutionResult {
     const task = planned.task;
     validateTaskDeliverables(task, 'task');
     this.assertTaskIdIsUnused(feature.tasksDirectory, task.task_id, 'Task planning');
@@ -1517,7 +1525,7 @@ export class CompassRoseOrchestrator {
     writeText(taskPath, taskMarkdown);
     this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), planned);
 
-    const updatedFeatureState = this.updateFeatureStateForTaskPlan(feature.statePath, task.task_id, task.title);
+    const updatedFeatureState = this.updateFeatureStateForTaskPlan(feature.statePath, task.task_id, task.title, taskRequestLink);
     const updatedProjectState = this.updateProjectStateForTaskPlan(featureId, task.task_id);
 
     writeText(feature.statePath, updatedFeatureState);
@@ -1695,6 +1703,7 @@ export class CompassRoseOrchestrator {
       '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
       '- Any recovery lesson above is an unverified suggestion from a prior model call, not a confirmed requirement — only carry a suggested field, artifact, or mechanism into this task if it already exists in the contracts you were told to read; never invent a new manifest, validator, or artifact type to satisfy one.',
       '- Set `scope_justification.included_by` to this task request\'s own objective and `excluded_by` to this task request\'s own forbidden paths; set `belongs_to_other_feature` only in the rare case that elaboration reveals this task request itself belongs to a different feature than formalization assumed; set `deviation_reason` per the rule above (an honest reason, or `null` if you stayed within bounds).',
+      `- Set \`source_task_request_id\` to \`${taskRequest.id}\`.`,
       '- Return JSON only and do not modify files.',
     ].join('\n');
 
@@ -1714,12 +1723,15 @@ export class CompassRoseOrchestrator {
       },
     }));
 
-    const planned = this.codex.runStructured<PlannerOutput>(
+    const rawPlanned = this.codex.runStructured<PlannerOutput>(
       prompt,
       this.contracts.schema('planner_output'),
       [],
       `planner:task-plan:${featureId}`,
     );
+    // Deterministic, not trusted from the LLM's own echo: this is the exact request we asked
+    // it to elaborate, known with certainty regardless of what it echoed back.
+    const planned: PlannerOutput = { task: { ...rawPlanned.task, source_task_request_id: taskRequest.id } };
     const task = planned.task;
 
     const blocked = this.blockIfBelongsToOtherFeature(featureId, task);
@@ -1747,7 +1759,7 @@ export class CompassRoseOrchestrator {
       );
     }
 
-    return this.finalizeTaskPlan(featureId, feature, planned);
+    return this.finalizeTaskPlan(featureId, feature, planned, { featureId, taskRequestId: taskRequest.id });
   }
 
   /**
@@ -1807,6 +1819,7 @@ export class CompassRoseOrchestrator {
       '- Prefix the task id `FX` instead of `F` (e.g. `FX' + fixId.split('-')[0] + '-T01`), so a task id alone always tells a human it belongs to a fix, not a feature.',
       '- Any recovery lesson above is an unverified suggestion from a prior model call, not a confirmed requirement — only carry a suggested field, artifact, or mechanism into this task if it already exists in the contracts you were told to read; never invent a new manifest, validator, or artifact type to satisfy one.',
       '- Set `scope_justification.belongs_to_other_feature` to `null`; that check is feature-only.',
+      '- Set `source_task_request_id` to `null`; task requests are feature-only.',
       '- Return JSON only and do not modify files.',
     ].join('\n');
 
@@ -1826,12 +1839,14 @@ export class CompassRoseOrchestrator {
       },
     }));
 
-    const planned = this.codex.runStructured<PlannerOutput>(
+    const rawPlanned = this.codex.runStructured<PlannerOutput>(
       prompt,
       this.contracts.schema('planner_output'),
       [],
       `planner:fix-task-plan:${fixId}`,
     );
+    // Deterministic, not trusted from the LLM's own echo -- fixes never have task requests.
+    const planned: PlannerOutput = { task: { ...rawPlanned.task, source_task_request_id: null } };
     const task = planned.task;
 
     validateTaskDeliverables(task, 'task');
@@ -4177,7 +4192,12 @@ export class CompassRoseOrchestrator {
     return markdown;
   }
 
-  private updateFeatureStateForTaskPlan(featureStatePath: string, taskId: string, title: string): string {
+  private updateFeatureStateForTaskPlan(
+    featureStatePath: string,
+    taskId: string,
+    title: string,
+    taskRequestLink: { featureId: string; taskRequestId: string } | null = null,
+  ): string {
     let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'task_ready');
     markdown = replaceOperationalStatus(markdown, {
@@ -4198,7 +4218,35 @@ export class CompassRoseOrchestrator {
       `Task \`${taskId}\` is now planned and ready to execute. ${title}.`,
     );
     markdown = replaceSection(markdown, 'Next Planning Hint', `Execute \`${taskId}\` when the current execution mode allows it.`);
+
+    if (taskRequestLink) {
+      markdown = this.markTaskRequestStatus(markdown, taskRequestLink.featureId, taskRequestLink.taskRequestId, 'in_progress');
+    }
+
     return markdown;
+  }
+
+  /**
+   * Flips one task request's status in its feature's task-requests JSON artifact and
+   * regenerates `## Outline Progress` in the given state.md content from the updated array --
+   * the code-driven counterpart to `## Outline Progress`, never hand-edited by the planner
+   * after formalization. A no-op (returns markdown unchanged) if the feature has no
+   * task-requests artifact at all, e.g. a fix (fixes never reach here with a non-null link).
+   */
+  private markTaskRequestStatus(
+    markdown: string,
+    featureId: string,
+    taskRequestId: string,
+    status: TaskRequestStatus,
+  ): string {
+    const taskRequests = this.artifacts.readJson<TaskRequest[]>(join('task-requests', `${featureId}.json`));
+    if (!taskRequests) {
+      return markdown;
+    }
+
+    const updated = withUpdatedStatus(taskRequests, taskRequestId, status);
+    this.artifacts.writeJson(join('task-requests', `${featureId}.json`), updated);
+    return replaceSection(markdown, 'Outline Progress', renderOutlineProgressMarkdown(updated));
   }
 
   private updateFeatureStateAfterImplementation(
@@ -4317,6 +4365,12 @@ export class CompassRoseOrchestrator {
     ].join('\n'));
     markdown = replaceSection(markdown, 'Last Approved Change', `Subtask \`${task.taskId}\` was approved by the prototype orchestrator.`);
     markdown = replaceSection(markdown, 'Next Planning Hint', 'Plan the next task that advances this feature from the remaining gap.');
+
+    const sourceTaskRequestId = this.artifacts.readJson<PlannerOutput>(join('tasks', `${task.taskId}.json`))?.task?.source_task_request_id ?? null;
+    if (sourceTaskRequestId) {
+      markdown = this.markTaskRequestStatus(markdown, task.featureId, sourceTaskRequestId, 'complete');
+    }
+
     return markdown;
   }
 

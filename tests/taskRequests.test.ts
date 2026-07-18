@@ -6,6 +6,7 @@ import {
   reconcileBackfilledTaskRequests,
   selectNextTaskRequest,
   stripBackfillMetadata,
+  withUpdatedStatus,
   withWidenedScope,
 } from '../src/orchestrator/taskRequests.js';
 import type { BackfilledTaskRequest, TaskRequest } from '../src/contracts/planner/plannerContracts.js';
@@ -98,6 +99,18 @@ describe('withWidenedScope', () => {
     const requests = [buildTaskRequest({ id: '1', scope: { allowed_paths: ['src/config'], forbidden_paths: [] } })];
     const widened = withWidenedScope(requests, '1', ['src/config']);
     expect(widened[0]?.scope.allowed_paths).toEqual(['src/config']);
+  });
+});
+
+describe('withUpdatedStatus', () => {
+  test('flips only the named request\'s status', () => {
+    const requests = [
+      buildTaskRequest({ id: '1', status: 'not_started' }),
+      buildTaskRequest({ id: '2', status: 'not_started' }),
+    ];
+    const updated = withUpdatedStatus(requests, '1', 'in_progress');
+    expect(updated.find((r) => r.id === '1')?.status).toBe('in_progress');
+    expect(updated.find((r) => r.id === '2')?.status).toBe('not_started');
   });
 });
 
