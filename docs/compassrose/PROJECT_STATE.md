@@ -10,10 +10,7 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `task-interface-gap-formalized-task-planning-for-feature-002-configuration-model-proposed-bound-c`.
-- Blocker recoverability: agent.
-- Feature `002-configuration-model` was suspended from `formalized`; the active task pointer remains `none`.
-- Blocking task context: none
+- Feature `002-configuration-model` was blocked when task planning correctly refused a proposal that belonged to `016-correction-task-flow`, but the runtime misrouted the block toward doctor-recovery instead of toward that sibling feature (a separate, now-tracked bug in `classifyBlockerKind`). Restored directly to `formalized` (the recorded restoration target) instead of running a doctor-recovery task against the misdiagnosed reason.
 
 ## Implemented
 
@@ -26,8 +23,7 @@ In progress
 
 ## Pending
 
-- Plan a doctor recovery task for the active feature.
-- Restore the captured `formalized` state after the blocker is resolved.
+- Plan the next task for the active feature, avoiding scope claimed by `016-correction-task-flow`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -40,8 +36,8 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 
 ## Known Gaps
 
-- None currently tracked at the project level.
+- `classifyBlockerKind` misroutes a sibling-feature scope-guard block toward doctor-recovery instead of toward formalizing the named sibling feature (regex over-match on "scope"). Tracked as a separate fix request.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `task-interface-gap-formalized-task-planning-for-feature-002-configuration-model-proposed-bound-c` and then restore `formalized`.
+The active feature is `002-configuration-model`, and its next valid action is the next task-planning pass.

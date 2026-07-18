@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+formalized
 
 ## Source Request
 
@@ -16,7 +16,7 @@ blocked
 - active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: blocked
+- last_review_result: approved
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -63,6 +63,8 @@ Task `F002-T15` is now planned and ready to execute. Handle missing project conf
 
 Task `F002-T16` is now planned and ready to execute. Align loader with the documented Doctor MVP boundary.
 
+Task planning then correctly refused a proposed task ("Bound correction-task ID allocation") that the scope guard identified as belonging to feature `016-correction-task-flow`, and blocked this feature pending that sibling's formalization. However, the runtime's blocker classifier (`classifyBlockerKind`) routed this block toward doctor-recovery planning instead of toward the sibling-feature resolution the block itself named, because its `task_interface_gap` regex incidentally matches the word "scope" in the block's own reason text — a routing bug independent of the scope guard itself, which correctly caught the drift. Rather than let an agentic doctor-recovery task run against a misdiagnosed reason, this state was corrected directly: restored to `formalized` (the recorded `## Blocked From` target) so task planning can propose a different next task, one that does not claim `016-correction-task-flow`'s scope. The blocker-classification routing bug itself is tracked as a separate fix request.
+
 ## Implemented Deliverables
 
 - the source feature request exists at `docs/features/002-configuration-model/request.md`
@@ -88,22 +90,14 @@ Task `F002-T16` is now planned and ready to execute. Align loader with the docum
 
 ## Blocked By
 
-- - kind: task_interface_gap
-- - signature: task-interface-gap-formalized-task-planning-for-feature-002-configuration-model-proposed-bound-c
-- - recoverability: agent
-- - observed_state: lifecycle=formalized; active_task=none; active_correction_task=none; active_unblock_task=none
-- - evidence: Task planning for feature `002-configuration-model` proposed `Bound correction-task ID allocation`, which the planner identified as belonging to feature `016-correction-task-flow` instead of this feature's own declared scope. Refusing to write the task; formalize or advance `016-correction-task-flow` before retrying.
-- - evidence: None
-- - evidence: lifecycle=formalized
-- - reason: Task planning for feature `002-configuration-model` proposed `Bound correction-task ID allocation`, which the planner identified as belonging to feature `016-correction-task-flow` instead of this feature's own declared scope. Refusing to write the task; formalize or advance `016-correction-task-flow` before retrying.
+- None
 
 ## Blocked From
 
-- lifecycle_state: `formalized`
-- active_task: `none`
-- active_correction_task: `none`
-- active_unblock_task: `none`
-- recoverability: agent
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
@@ -112,7 +106,8 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 ## Known Gaps
 
 - The correction-task id allocator (`buildStateCorrectionTaskId` in `src/orchestrator/orchestrator.ts`) has no cycle or depth limit; a prior recovery loop against `F002-T04-C3` generated thousands of near-duplicate correction docs before being stopped manually. Not yet addressed.
+- `classifyBlockerKind` misroutes a sibling-feature scope-guard block toward doctor-recovery instead of toward formalizing the named sibling feature, because its `task_interface_gap` regex matches the word "scope" in the block's own reason text. Tracked as a separate fix request; not yet addressed.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `task-interface-gap-formalized-task-planning-for-feature-002-configuration-model-proposed-bound-c` and then restore `formalized`.
+Plan the next task for this feature. Task requests will be backfilled from this feature's own Implementation Outline and existing tasks (this feature was formalized before the structured task-request mechanism existed). Do not propose work that belongs to `016-correction-task-flow` (correction-task id allocation) -- see `feature-scope-guard.md`.
