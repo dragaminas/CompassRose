@@ -70,6 +70,7 @@ This feature is considered implemented when:
 2. Stabilize the project-local configuration contract and any gaps in `docs/compassrose/CONFIG.md`
 3. Implement configuration loading and validation for the documented MVP scope
 4. Connect configuration validation to the doctor/runtime flow and update state based on approved behavior
+5. Add a cycle/depth limit to the correction-task id allocator (`buildStateCorrectionTaskId`)
 
 ## Relationship to CompassRose Principles
 

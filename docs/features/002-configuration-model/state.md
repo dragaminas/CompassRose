@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+formalized
 
 ## Source Request
 
@@ -16,7 +16,7 @@ blocked
 - active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: blocked
+- last_review_result: approved
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -65,6 +65,8 @@ Task `F002-T16` is now planned and ready to execute. Align loader with the docum
 
 Task planning then correctly refused a proposed task ("Bound correction-task ID allocation") that the scope guard identified as belonging to feature `016-correction-task-flow`, and blocked this feature pending that sibling's formalization. However, the runtime's blocker classifier (`classifyBlockerKind`) routed this block toward doctor-recovery planning instead of toward the sibling-feature resolution the block itself named, because its `task_interface_gap` regex incidentally matches the word "scope" in the block's own reason text — a routing bug independent of the scope guard itself, which correctly caught the drift. Rather than let an agentic doctor-recovery task run against a misdiagnosed reason, this state was corrected directly: restored to `formalized` (the recorded `## Blocked From` target) so task planning can propose a different next task, one that does not claim `016-correction-task-flow`'s scope. The blocker-classification routing bug itself is tracked as a separate fix request.
 
+Restoring to `formalized` triggered the structured task-request backbone's one-time backfill for this feature (never formalized with task requests). The backfill correctly reconstructed 4 task requests from this feature's own `## Implementation Outline`, all already `complete`, and correctly blocked rather than inventing a 5th task out of nothing -- but this feature's outline had never been updated to include its one remaining known gap (the correction-task id allocator's missing cycle/depth limit). This is the second real instance of the same misrouting bug (see the fix request above, now broadened to cover both instances): the exhaustion block's reason didn't match any `classifyBlockerKind` regex, fell through to `kind: unknown`, and still generated a generic doctor-recovery hint instead of "declare another task request." Resolved directly: added task request `F002-TR05` (add the missing cycle/depth limit) to both the task-requests artifact and this feature's Implementation Outline, and restored `formalized` again.
+
 ## Implemented Deliverables
 
 - the source feature request exists at `docs/features/002-configuration-model/request.md`
@@ -86,26 +88,18 @@ Task planning then correctly refused a proposed task ("Bound correction-task ID 
 - Stabilize the project-local configuration contract and any gaps in `docs/compassrose/CONFIG.md`: complete
 - Implement configuration loading and validation for the documented MVP scope: complete
 - Connect configuration validation to the doctor/runtime flow and update state based on approved behavior: complete
-- Repair malformed operational-status entries in feature state: completed
+- Add a cycle/depth limit to the correction-task id allocator: not started
 
 ## Blocked By
 
-- - kind: unknown
-- - signature: unknown-formalized-task-planning-for-feature-002-configuration-model-was-invoked-but-every-pre-d
-- - recoverability: agent
-- - observed_state: lifecycle=formalized; active_task=none; active_correction_task=none; active_unblock_task=none
-- - evidence: Task planning for feature `002-configuration-model` was invoked, but every pre-declared task request is already complete or superseded. Formalize additional task requests before continuing.
-- - evidence: None
-- - evidence: lifecycle=formalized
-- - reason: Task planning for feature `002-configuration-model` was invoked, but every pre-declared task request is already complete or superseded. Formalize additional task requests before continuing.
+- None
 
 ## Blocked From
 
-- lifecycle_state: `formalized`
-- active_task: `none`
-- active_correction_task: `none`
-- active_unblock_task: `none`
-- recoverability: agent
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
@@ -113,9 +107,8 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 
 ## Known Gaps
 
-- The correction-task id allocator (`buildStateCorrectionTaskId` in `src/orchestrator/orchestrator.ts`) has no cycle or depth limit; a prior recovery loop against `F002-T04-C3` generated thousands of near-duplicate correction docs before being stopped manually. Not yet addressed.
-- `classifyBlockerKind` misroutes a sibling-feature scope-guard block toward doctor-recovery instead of toward formalizing the named sibling feature, because its `task_interface_gap` regex matches the word "scope" in the block's own reason text. Tracked as a separate fix request; not yet addressed.
+- `classifyBlockerKind` misroutes a blocked-feature recovery hint toward doctor-recovery instead of the actual right action, when the call site already knows precisely what's wrong (sibling-feature scope, or exhausted task requests). Tracked as fix `001-blocked-feature-scope-misclassification`; not yet addressed.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `unknown-formalized-task-planning-for-feature-002-configuration-model-was-invoked-but-every-pre-d` and then restore `formalized`.
+Plan the next task for this feature: task request `F002-TR05` (add a cycle/depth limit to the correction-task id allocator).

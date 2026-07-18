@@ -10,10 +10,7 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `unknown-formalized-task-planning-for-feature-002-configuration-model-was-invoked-but-every-pre-d`.
-- Blocker recoverability: agent.
-- Feature `002-configuration-model` was suspended from `formalized`; the active task pointer remains `none`.
-- Blocking task context: none
+- Feature `002-configuration-model` hit a second instance of the same blocked-feature misrouting bug: its one-time task-request backfill correctly found all 4 of its (stale) outlined items already complete and blocked rather than inventing new work, but the block was routed generically instead of toward "declare another task request." Resolved directly: added task request `F002-TR05` (the correction-task-id-allocator cycle/depth-limit gap, already known) and restored `formalized`.
 
 ## Implemented
 
@@ -26,8 +23,7 @@ In progress
 
 ## Pending
 
-- Plan a doctor recovery task for the active feature.
-- Restore the captured `formalized` state after the blocker is resolved.
+- Plan the next task for the active feature (task request `F002-TR05`).
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -40,8 +36,8 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 
 ## Known Gaps
 
-- `classifyBlockerKind` misroutes a sibling-feature scope-guard block toward doctor-recovery instead of toward formalizing the named sibling feature (regex over-match on "scope"). Tracked as a separate fix request.
+- `classifyBlockerKind` misroutes a blocked-feature recovery hint toward doctor-recovery instead of the actual right action (seen twice: sibling-feature scope, and exhausted task requests). Tracked as fix `001-blocked-feature-scope-misclassification`.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `unknown-formalized-task-planning-for-feature-002-configuration-model-was-invoked-but-every-pre-d` and then restore `formalized`.
+The active feature is `002-configuration-model`, and its next valid action is the next task-planning pass (task request `F002-TR05`).
