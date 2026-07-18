@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { uniqueStrings } from '../shared/arrays.js';
+import { isPathAllowedByPrefix } from '../shared/pathPrefix.js';
 import { ControlledStopError, stopExitCodeForSignal } from '../runtime/controlledStop.js';
 
 function parseGitPathList(output: string): string[] {
@@ -24,10 +25,6 @@ function parseGitStatusPaths(output: string): string[] {
       return renameSeparator === -1 ? pathSpec : pathSpec.slice(renameSeparator + 4).trim();
     })
     .filter((path) => path.length > 0);
-}
-
-function isPathAllowedByPrefix(path: string, allowedPrefixes: readonly string[]): boolean {
-  return allowedPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
 export class GitClient {

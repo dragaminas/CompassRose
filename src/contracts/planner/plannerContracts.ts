@@ -36,6 +36,43 @@ export interface PlannedFixDocs {
 
 export type FixSeverity = "critical" | "high" | "medium" | "low";
 
+export type TaskRequestStatus = "not_started" | "in_progress" | "complete" | "superseded";
+
+export interface TaskRequestScope {
+  readonly allowed_paths: readonly string[];
+  readonly forbidden_paths: readonly string[];
+}
+
+/**
+ * Distinct from TaskScopeJustification below on purpose: this check runs once per task
+ * request at feature-formalization time, holistically, while the planner has full
+ * feature+architecture context (see src/planner/siblingFeatureIndex.ts). The
+ * scope_justification check on PlannedTask runs again later, per task, at elaboration
+ * time, as a rarer secondary fallback. Sharing one field name across both stages would
+ * make logs/errors ambiguous about which stage caught a given case.
+ */
+export interface TaskRequestSiblingCheck {
+  readonly considered_features: readonly string[];
+  readonly belongs_to_other_feature: string | null;
+}
+
+/**
+ * A pre-declared, locked-in boundary for a future task, produced once during feature
+ * formalization (see PlannedFeatureDocs.task_requests) rather than invented fresh by
+ * every later planTask() call. This is the structural anti-drift mechanism: later
+ * task elaboration is constrained to stay within `scope`, checked deterministically
+ * (see allPathsAllowedByPrefix/pathsExceedingPrefixes in src/shared/pathPrefix.ts)
+ * instead of relying solely on the planner's own self-reported honesty.
+ */
+export interface TaskRequest {
+  readonly id: string;
+  readonly title: string;
+  readonly objective: string;
+  readonly scope: TaskRequestScope;
+  readonly status: TaskRequestStatus;
+  readonly sibling_check: TaskRequestSiblingCheck;
+}
+
 export type PlannerLifecycleState =
   | "formalization_pending"
   | "formalized"
