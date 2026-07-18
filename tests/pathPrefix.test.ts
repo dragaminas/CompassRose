@@ -14,8 +14,12 @@ describe('isPathAllowedByPrefix', () => {
     expect(isPathAllowedByPrefix('src/config-extra/loader.ts', ['src/config'])).toBe(false);
   });
 
-  test('does not match when the prefix itself carries a trailing slash', () => {
-    expect(isPathAllowedByPrefix('src/config/loader.ts', ['src/config/'])).toBe(false);
+  test('matches even when the prefix itself carries a trailing slash', () => {
+    expect(isPathAllowedByPrefix('src/config/loader.ts', ['src/config/'])).toBe(true);
+  });
+
+  test('still matches the directory prefix itself with a trailing slash', () => {
+    expect(isPathAllowedByPrefix('src/config', ['src/config/'])).toBe(true);
   });
 
   test('returns false when no prefixes are given', () => {

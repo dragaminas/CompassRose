@@ -1,11 +1,19 @@
+function stripTrailingSlash(prefix: string): string {
+  return prefix.endsWith('/') ? prefix.slice(0, -1) : prefix;
+}
+
 /**
  * True when `path` is exactly one of `allowedPrefixes`, or lives under one of them as a
- * directory. Prefixes must not have a trailing slash — `isPathAllowedByPrefix('a/b', ['a'])`
- * is true, but `isPathAllowedByPrefix('a/b', ['a/'])` is false by construction, since the
- * check appends its own separator.
+ * directory. A prefix's own trailing slash (if any) is normalized away first — real callers
+ * (an LLM-authored task or task-request scope, a human-written CONFIG.md allowlist) routinely
+ * write directory entries with a trailing slash (`"tests/"`), and this must still match a file
+ * under it (`"tests/foo.test.ts"`) rather than silently failing on the resulting double slash.
  */
 export function isPathAllowedByPrefix(path: string, allowedPrefixes: readonly string[]): boolean {
-  return allowedPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
+  return allowedPrefixes.some((rawPrefix) => {
+    const prefix = stripTrailingSlash(rawPrefix);
+    return path === prefix || path.startsWith(`${prefix}/`);
+  });
 }
 
 /**
