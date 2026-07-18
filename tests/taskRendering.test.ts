@@ -4,13 +4,27 @@ import {
   correctionTaskToTask,
   renderCorrectionTaskMarkdown,
   renderDoctorRecoveryTaskMarkdown,
+  renderImplementationOutlineMarkdown,
+  renderOutlineProgressMarkdown,
   renderStateCorrectionTaskMarkdown,
   renderTaskMarkdown,
   renderUnblockTaskMarkdown,
   stateCorrectionTaskToTask,
 } from '../src/orchestrator/taskRendering.js';
-import type { PlannedTask } from '../src/contracts/planner/plannerContracts.js';
+import type { PlannedTask, TaskRequest } from '../src/contracts/planner/plannerContracts.js';
 import type { CorrectionTask, DoctorRecoveryTaskMetadata, StateCorrectionTask } from '../src/contracts/task/taskContracts.js';
+
+function buildTaskRequest(overrides: Partial<TaskRequest> = {}): TaskRequest {
+  return {
+    id: '1',
+    title: 'Add the config loader',
+    objective: 'Load and validate configuration from CONFIG.md.',
+    scope: { allowed_paths: ['src/config/', 'tests/'], forbidden_paths: [] },
+    status: 'not_started',
+    sibling_check: { considered_features: [], belongs_to_other_feature: null },
+    ...overrides,
+  };
+}
 
 function buildTask(overrides: Partial<PlannedTask> = {}): PlannedTask {
   return {
@@ -35,6 +49,45 @@ function buildTask(overrides: Partial<PlannedTask> = {}): PlannedTask {
 describe('bulletList', () => {
   test('formats each item as a markdown bullet', () => {
     expect(bulletList(['a', 'b'])).toBe('- a\n- b');
+  });
+});
+
+describe('renderImplementationOutlineMarkdown', () => {
+  test('renders each task request as a sub-heading with its objective and scope', () => {
+    const markdown = renderImplementationOutlineMarkdown([
+      buildTaskRequest(),
+      buildTaskRequest({ id: '2', title: 'Wire the loader into the orchestrator', scope: { allowed_paths: ['src/orchestrator/'], forbidden_paths: ['docs/'] } }),
+    ]);
+
+    expect(markdown).toContain('### 1. Add the config loader');
+    expect(markdown).toContain('Load and validate configuration from CONFIG.md.');
+    expect(markdown).toContain('- `src/config/`');
+    expect(markdown).toContain('- `tests/`');
+    expect(markdown).toContain('### 2. Wire the loader into the orchestrator');
+    expect(markdown).toContain('- `docs/`');
+  });
+
+  test('renders an empty outline when there are no task requests', () => {
+    const markdown = renderImplementationOutlineMarkdown([]);
+    expect(markdown).not.toContain('###');
+  });
+});
+
+describe('renderOutlineProgressMarkdown', () => {
+  test('renders one status bullet per task request', () => {
+    const markdown = renderOutlineProgressMarkdown([
+      buildTaskRequest({ status: 'complete' }),
+      buildTaskRequest({ id: '2', title: 'Wire it up', status: 'in_progress' }),
+      buildTaskRequest({ id: '3', title: 'Docs', status: 'superseded' }),
+    ]);
+
+    expect(markdown).toBe(
+      [
+        '- 1. Add the config loader: complete',
+        '- 2. Wire it up: in progress',
+        '- 3. Docs: superseded',
+      ].join('\n'),
+    );
   });
 });
 

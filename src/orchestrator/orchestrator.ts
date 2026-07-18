@@ -101,6 +101,7 @@ import {
   correctionTaskToTask,
   renderCorrectionTaskMarkdown,
   renderDoctorRecoveryTaskMarkdown,
+  renderImplementationOutlineMarkdown,
   renderStateCorrectionTaskMarkdown,
   renderTaskMarkdown,
   renderUnblockTaskMarkdown,
@@ -1172,6 +1173,7 @@ export class CompassRoseOrchestrator {
   private planFeature(featureId: string): void {
     this.ensureCleanWorktreeIfRequired(featureId);
     const feature = this.loadFeature(featureId);
+    const siblingFeatures = buildSiblingFeatureIndex(this.featuresRoot, featureId);
     const sourcePaths = [
       'src/contracts/planner/feature-planning-prompt.md',
       relativePath(this.repositoryRoot, feature.requestPath),
@@ -1182,6 +1184,7 @@ export class CompassRoseOrchestrator {
       'docs/templates/architecture.md',
       'docs/templates/state.md',
       'src/contracts/state/feature-state.md',
+      'src/contracts/planner/feature-scope-guard.md',
       'docs/ROADMAP.md',
       'docs/SAD.md',
       'docs/ADR.md',
@@ -1202,12 +1205,28 @@ export class CompassRoseOrchestrator {
       '- `docs/templates/architecture.md`',
       '- `docs/templates/state.md`',
       '- `src/contracts/state/feature-state.md`',
+      '- `src/contracts/planner/feature-scope-guard.md`',
       '- `docs/ROADMAP.md`',
       '- `docs/SAD.md`',
       '- `docs/ADR.md`',
       '- `docs/DMS.md`',
       '',
-      'Return JSON with complete Markdown for `feature.md`, `architecture.md`, and `state.md`.',
+      'Sibling features (use these to fill each task request\'s `sibling_check`; do not pre-claim scope one of them already owns):',
+      ...(siblingFeatures.length > 0
+        ? siblingFeatures.map((sibling) => `- ${sibling.featureId}: ${sibling.title} — ${sibling.summary || 'no summary available'}`)
+        : ['- none']),
+      '',
+      'Return JSON with complete Markdown for `feature.md`, `architecture.md`, and `state.md`, plus `task_requests`.',
+      '',
+      'Rules for `task_requests`:',
+      '- Break the feature\'s implementation into a fixed, ordered series of task requests — pre-declared, locked-in boundaries for future tasks, not the tasks themselves.',
+      '- Give each one an `id` matching its position ("1", "2", ...), a `title`, and an `objective` narrower than the feature\'s own goal but broader than a single task.',
+      '- Decide `scope.allowed_paths`/`forbidden_paths` for each holistically, now, while you have full feature and architecture context — this boundary constrains whatever later plans that request into an actual task.',
+      '- Every `allowed_paths` list must include both the primary implementation path prefix and a paired test path prefix (e.g. `src/config/` and `tests/`), since elaboration will need to add tests whose exact filenames aren\'t known yet.',
+      '- Fill `sibling_check` by applying `src/contracts/planner/feature-scope-guard.md`\'s reasoning to this task request specifically: set `belongs_to_other_feature` honestly if a sibling feature above describes it more specifically than this feature\'s own scope, and list every sibling you actually considered in `considered_features`.',
+      '- Set every `status` to `not_started`.',
+      '- Do not hand-author `feature.md`\'s `## Implementation Outline` section carefully — the orchestrator regenerates it deterministically from `task_requests`; a placeholder there is fine.',
+      '',
       'Do not modify files.',
     ].join('\n');
 
@@ -1233,9 +1252,15 @@ export class CompassRoseOrchestrator {
       [],
       `planner:feature-plan:${featureId}`,
     );
-    writeText(feature.featurePath, ensureTrailingNewline(planned.feature_md));
+    const featureMarkdownWithOutline = replaceSection(
+      planned.feature_md,
+      'Implementation Outline',
+      renderImplementationOutlineMarkdown(planned.task_requests),
+    );
+    writeText(feature.featurePath, ensureTrailingNewline(featureMarkdownWithOutline));
     writeText(feature.architecturePath, ensureTrailingNewline(planned.architecture_md));
     writeText(feature.statePath, ensureTrailingNewline(planned.state_md));
+    this.artifacts.writeJson(join('task-requests', `${featureId}.json`), planned.task_requests);
 
     const updatedProjectState = this.updateProjectStateForFeaturePlan(featureId);
     writeText(this.projectStatePath, updatedProjectState);

@@ -1,4 +1,4 @@
-import type { PlannedTask } from '../contracts/planner/plannerContracts.js';
+import type { PlannedTask, TaskRequest } from '../contracts/planner/plannerContracts.js';
 import type {
   CorrectionTask,
   DoctorRecoveryTaskMetadata,
@@ -9,6 +9,56 @@ import { humanCorrectionNumber, humanTaskNumber } from '../task/taskId.js';
 
 export function bulletList(items: readonly string[]): string {
   return items.map((item) => `- ${item}`).join('\n');
+}
+
+const TASK_REQUEST_STATUS_LABEL: Record<TaskRequest['status'], string> = {
+  not_started: 'not started',
+  in_progress: 'in progress',
+  complete: 'complete',
+  superseded: 'superseded',
+};
+
+/**
+ * Renders the `## Implementation Outline` section body for feature.md from a feature's
+ * task_requests. This is the authoritative, code-generated rendering — planFeature()
+ * discards whatever prose the planner hand-authored for this section and splices this in
+ * instead (see replaceSection in src/markdown/sections.ts), so the JSON artifact and the
+ * human-visible outline can never disagree.
+ */
+export function renderImplementationOutlineMarkdown(requests: readonly TaskRequest[]): string {
+  const intro = [
+    "This section lists the feature's pre-declared task requests: fixed, locked-in boundaries",
+    'decided once at formalization time. Each is elaborated into an executable task in turn —',
+    'see `state.md`\'s `## Outline Progress` for current status.',
+    '',
+  ];
+
+  const items = requests.flatMap((request) => [
+    `### ${request.id}. ${request.title}`,
+    '',
+    request.objective,
+    '',
+    'Allowed:',
+    ...request.scope.allowed_paths.map((path) => `- \`${path}\``),
+    '',
+    'Forbidden:',
+    ...request.scope.forbidden_paths.map((path) => `- \`${path}\``),
+    '',
+  ]);
+
+  return [...intro, ...items].join('\n').trimEnd();
+}
+
+/**
+ * Renders the `## Outline Progress` section body for state.md from a feature's
+ * task_requests — a derived view, kept in sync with task_requests[].status by code (see
+ * updateFeatureStateForTaskPlan/updateFeatureStateAfterApprovedReview in orchestrator.ts),
+ * never hand-authored by the planner after initial formalization.
+ */
+export function renderOutlineProgressMarkdown(requests: readonly TaskRequest[]): string {
+  return requests
+    .map((request) => `- ${request.id}. ${request.title}: ${TASK_REQUEST_STATUS_LABEL[request.status]}`)
+    .join('\n');
 }
 
 export function renderTaskMarkdown(task: PlannedTask): string {

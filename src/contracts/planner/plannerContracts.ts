@@ -20,6 +20,7 @@ export interface PlannedFeatureDocs {
   readonly architecture_md: string;
   readonly state_md: string;
   readonly summary: string;
+  readonly task_requests: readonly TaskRequest[];
 }
 
 /**
