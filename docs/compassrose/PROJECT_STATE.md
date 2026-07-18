@@ -10,13 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `state-corruption-unblock-pending-doctor-recovery-f002-t10-doctor-recovery-r1-failed-its-re-entry`.
+- Feature `002-configuration-model` is blocked by `task-interface-gap-formalized-task-planning-for-feature-002-configuration-model-proposed-bound-c`.
 - Blocker recoverability: agent.
-- Feature `002-configuration-model` was suspended from `implementation_running`; the active task pointer remains `F002-T10`.
-- Blocking task context: `F002-T10-DOCTOR-RECOVERY-R1`
-- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T10-DOCTOR-RECOVERY-R2`; the active task pointer was restored to `F002-T10`.
-- Feature `002-configuration-model` now has a planned next task, `F002-T16`, ready to execute.
-- Tasks `F002-T10` through `F002-T14` (and the pending correction `F002-T14-C1`) are superseded by embedding proto's orchestrator (`PrototypeCompassRose`, renamed `CompassRoseOrchestrator`) into `src/orchestrator/orchestrator.ts` and wiring `src/cli/main.ts` to run it directly; see `docs/features/002-configuration-model/state.md` for the full account. The active task pointer for this feature is now `none`; its lifecycle state is `task_planning_pending`.
+- Feature `002-configuration-model` was suspended from `formalized`; the active task pointer remains `none`.
+- Blocking task context: none
 
 ## Implemented
 
@@ -29,7 +26,8 @@ In progress
 
 ## Pending
 
-- Plan the next implementation task for the active feature.
+- Plan a doctor recovery task for the active feature.
+- Restore the captured `formalized` state after the blocker is resolved.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -46,4 +44,4 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is the next task-planning pass.
+Plan a doctor recovery task for blocker `task-interface-gap-formalized-task-planning-for-feature-002-configuration-model-proposed-bound-c` and then restore `formalized`.

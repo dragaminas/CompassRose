@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+blocked
 
 ## Source Request
 
@@ -16,8 +16,8 @@ formalized
 - active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: approved
-- last_unblock_result: passed
+- last_review_result: blocked
+- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -88,14 +88,22 @@ Task `F002-T16` is now planned and ready to execute. Align loader with the docum
 
 ## Blocked By
 
-- None
+- - kind: task_interface_gap
+- - signature: task-interface-gap-formalized-task-planning-for-feature-002-configuration-model-proposed-bound-c
+- - recoverability: agent
+- - observed_state: lifecycle=formalized; active_task=none; active_correction_task=none; active_unblock_task=none
+- - evidence: Task planning for feature `002-configuration-model` proposed `Bound correction-task ID allocation`, which the planner identified as belonging to feature `016-correction-task-flow` instead of this feature's own declared scope. Refusing to write the task; formalize or advance `016-correction-task-flow` before retrying.
+- - evidence: None
+- - evidence: lifecycle=formalized
+- - reason: Task planning for feature `002-configuration-model` proposed `Bound correction-task ID allocation`, which the planner identified as belonging to feature `016-correction-task-flow` instead of this feature's own declared scope. Refusing to write the task; formalize or advance `016-correction-task-flow` before retrying.
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `formalized`
+- active_task: `none`
+- active_correction_task: `none`
+- active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -107,4 +115,4 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 
 ## Next Planning Hint
 
-Plan the next task that advances this feature from the remaining gap.
+Plan a doctor recovery task for blocker `task-interface-gap-formalized-task-planning-for-feature-002-configuration-model-proposed-bound-c` and then restore `formalized`.
