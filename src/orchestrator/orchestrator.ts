@@ -33,6 +33,7 @@ import type {
   StepKind,
   StoredTaskArtifact,
   TaskInterfaceAnalysis,
+  TaskRequest,
   ReviewableDiffHandoff,
   ExpectedDeliverable,
   UnblockTaskMetadata,
@@ -148,6 +149,7 @@ import {
   writeText,
 } from './runtimeHelpers.js';
 import { buildSiblingFeatureIndex } from '../planner/siblingFeatureIndex.js';
+import { checkTaskRequestContainment, selectNextTaskRequest, withWidenedScope } from './taskRequests.js';
 export { parseTaskDocument };
 import {
   escapeRegExp,
@@ -1357,9 +1359,94 @@ export class CompassRoseOrchestrator {
     }
   }
 
+  /**
+   * Dispatches to the deterministic, bounded-scope path when the feature has a task-requests
+   * artifact (see planFeature()) with something left to elaborate, or to the legacy free-form
+   * path otherwise -- a feature formalized before this mechanism existed (no artifact), or one
+   * whose task requests are all complete/superseded (the fixed plan didn't anticipate needing
+   * more; Phase 4's backfill removes the "no artifact" half of this fork for good).
+   */
   private planTask(featureId: string): StepExecutionResult {
     this.ensureCleanWorktreeIfRequired(featureId);
     const feature = this.loadFeature(featureId);
+    const taskRequests = this.artifacts.readJson<TaskRequest[]>(join('task-requests', `${featureId}.json`));
+    const nextRequest = taskRequests ? selectNextTaskRequest(taskRequests) : null;
+
+    if (taskRequests && nextRequest) {
+      return this.planTaskFromRequest(featureId, feature, nextRequest, taskRequests);
+    }
+
+    return this.planTaskFreely(featureId, feature);
+  }
+
+  private blockIfBelongsToOtherFeature(featureId: string, task: PlannedTask): StepExecutionResult | null {
+    const belongsToOtherFeature = task.scope_justification?.belongs_to_other_feature ?? null;
+    if (!belongsToOtherFeature) {
+      return null;
+    }
+
+    const reason = `Task planning for feature \`${featureId}\` proposed \`${task.title}\`, which the planner identified as belonging to feature \`${belongsToOtherFeature}\` instead of this feature's own declared scope. Refusing to write the task; formalize or advance \`${belongsToOtherFeature}\` before retrying.`;
+    console.error(`Blocked: ${reason}`);
+    this.recordBlockedFeature(featureId, reason);
+    this.commitDirtyWorktreeIfConfigured(`proto: record scope-guard block for feature ${featureId}`);
+    return { exitCode: 2, continueLoop: false, summary: reason };
+  }
+
+  /**
+   * persistBlockedFeature() only writes state.md/PROJECT_STATE.md to disk -- it doesn't commit
+   * them. Every blocking path needs this same sweep-and-commit so a block never leaves the
+   * worktree dirty for the next step's clean-worktree precondition (mirrors reviewTask()'s
+   * blocked-review path, which already does this).
+   */
+  private commitDirtyWorktreeIfConfigured(message: string): void {
+    if (!this.options.commit) {
+      return;
+    }
+
+    const changedFiles = this.git.diffNameOnly();
+    if (changedFiles.length > 0) {
+      this.git.commit(changedFiles, message);
+    }
+  }
+
+  private finalizeTaskPlan(featureId: string, feature: FeatureRecord, planned: PlannerOutput): StepExecutionResult {
+    const task = planned.task;
+    validateTaskDeliverables(task, 'task');
+    this.assertTaskIdIsUnused(feature.tasksDirectory, task.task_id, 'Task planning');
+
+    const taskPath = join(feature.tasksDirectory, buildTaskFileName(task.task_id, task.title));
+    const taskMarkdown = renderTaskMarkdown(task);
+
+    writeText(taskPath, taskMarkdown);
+    this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), planned);
+
+    const updatedFeatureState = this.updateFeatureStateForTaskPlan(feature.statePath, task.task_id, task.title);
+    const updatedProjectState = this.updateProjectStateForTaskPlan(featureId, task.task_id);
+
+    writeText(feature.statePath, updatedFeatureState);
+    writeText(this.projectStatePath, updatedProjectState);
+
+    if (this.options.commit) {
+      this.git.commit(
+        [
+          relativePath(this.repositoryRoot, taskPath),
+          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+        ],
+        `proto: plan task ${task.task_id}`,
+      );
+    }
+
+    return { exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${featureId}.` };
+  }
+
+  /**
+   * Legacy path: invents task scope fresh, exactly as planTask() always has, relying solely on
+   * the self-reported scope_justification.belongs_to_other_feature check. Used only when the
+   * feature has no task-requests artifact yet, or has exhausted the ones it has -- see
+   * planTask()'s dispatch comment. Phase 4's backfill is meant to retire the "no artifact" case.
+   */
+  private planTaskFreely(featureId: string, feature: FeatureRecord): StepExecutionResult {
     const siblingFeatures = buildSiblingFeatureIndex(this.featuresRoot, featureId);
     const sourcePaths = [
       'src/contracts/planner/task-planning-prompt.md',
@@ -1415,7 +1502,102 @@ export class CompassRoseOrchestrator {
       '- Use `test_guided` for implementation tasks that produce code.',
       '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
       '- Any recovery lesson above is an unverified suggestion from a prior model call, not a confirmed requirement — only carry a suggested field, artifact, or mechanism into this task if it already exists in the contracts you were told to read; never invent a new manifest, validator, or artifact type to satisfy one.',
-      '- Fill `scope_justification` by following `src/contracts/planner/feature-scope-guard.md`. Set `belongs_to_other_feature` honestly if a sibling feature above describes the task\'s real subject more specifically than this feature\'s own scope.',
+      '- Fill `scope_justification` by following `src/contracts/planner/feature-scope-guard.md`. Set `belongs_to_other_feature` honestly if a sibling feature above describes the task\'s real subject more specifically than this feature\'s own scope. Set `deviation_reason` to `null` -- it only applies when elaborating a pre-declared task request.',
+      '- Return JSON only and do not modify files.',
+    ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'planner',
+      kind: 'task_planning',
+      label: `planner:task-plan:${featureId}`,
+      feature_id: featureId,
+      task_id: null,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'planner_output',
+      },
+    }));
+
+    const planned = this.codex.runStructured<PlannerOutput>(
+      prompt,
+      this.contracts.schema('planner_output'),
+      [],
+      `planner:task-plan:${featureId}`,
+    );
+
+    const blocked = this.blockIfBelongsToOtherFeature(featureId, planned.task);
+    if (blocked) {
+      return blocked;
+    }
+
+    return this.finalizeTaskPlan(featureId, feature, planned);
+  }
+
+  /**
+   * Deterministic path: elaborates exactly one pre-declared task request (see
+   * PlannedFeatureDocs.task_requests) into a task, within its already-vetted, locked-in scope
+   * boundary -- the structural anti-drift mechanism this backbone plan exists to build. The
+   * planner still needs real repository context to elaborate first_executable_step,
+   * acceptance_criteria, etc., but only for the paths this task request already declared, not
+   * the whole feature's context -- bounding what a single planning step needs to reason about.
+   */
+  private planTaskFromRequest(
+    featureId: string,
+    feature: FeatureRecord,
+    taskRequest: TaskRequest,
+    taskRequests: readonly TaskRequest[],
+  ): StepExecutionResult {
+    const sourcePaths = [
+      'src/contracts/planner/task-planning-prompt.md',
+      'src/contracts/planner/input.md',
+      'src/contracts/planner/output.md',
+      'src/contracts/state/feature-state.md',
+      'src/contracts/task/task.md',
+      relativePath(this.repositoryRoot, feature.featurePath),
+      relativePath(this.repositoryRoot, feature.statePath),
+      'docs/compassrose/PROJECT_STATE.md',
+      'docs/compassrose/CONFIG.md',
+      'src/contracts/runtime/operation-loop.md',
+      ...taskRequest.scope.allowed_paths,
+    ];
+    const prompt = [
+      'Act as the CompassRose Planner.',
+      '',
+      `Elaborate pre-declared task request ${taskRequest.id} ("${taskRequest.title}") for feature \`${featureId}\` into one executable task.`,
+      '',
+      'Read only:',
+      '- `src/contracts/planner/task-planning-prompt.md`',
+      '- `src/contracts/planner/input.md`',
+      '- `src/contracts/planner/output.md`',
+      '- `src/contracts/state/feature-state.md`',
+      '- `src/contracts/task/task.md`',
+      `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
+      '- `docs/compassrose/PROJECT_STATE.md`',
+      '- `docs/compassrose/CONFIG.md`',
+      '- `src/contracts/runtime/operation-loop.md`',
+      ...taskRequest.scope.allowed_paths.map((path) => `- \`${path}\``),
+      ...this.buildRecoveryLessonPromptLines(featureId),
+      '',
+      "This task request's pre-declared, locked-in boundary (decided once at feature formalization time):",
+      `- objective: ${taskRequest.objective}`,
+      'Allowed:',
+      ...taskRequest.scope.allowed_paths.map((path) => `- \`${path}\``),
+      'Forbidden:',
+      ...taskRequest.scope.forbidden_paths.map((path) => `- \`${path}\``),
+      '',
+      'Rules:',
+      '- Generate exactly one atomic task that elaborates this task request. Do not invent a different scope.',
+      '- Keep `task.scope.allowed_paths` within the boundary above. If you genuinely must go beyond it, set `scope_justification.deviation_reason` to an honest, specific reason instead of silently expanding.',
+      '- If this task is a later version of an earlier task, set `previous_task_id` to that earlier task so the earlier task remains historical evidence; otherwise set it to `null`.',
+      '- Use `test_guided` for implementation tasks that produce code.',
+      '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
+      '- Any recovery lesson above is an unverified suggestion from a prior model call, not a confirmed requirement — only carry a suggested field, artifact, or mechanism into this task if it already exists in the contracts you were told to read; never invent a new manifest, validator, or artifact type to satisfy one.',
+      '- Set `scope_justification.included_by` to this task request\'s own objective and `excluded_by` to this task request\'s own forbidden paths; set `belongs_to_other_feature` only in the rare case that elaboration reveals this task request itself belongs to a different feature than formalization assumed; set `deviation_reason` per the rule above (an honest reason, or `null` if you stayed within bounds).',
       '- Return JSON only and do not modify files.',
     ].join('\n');
 
@@ -1443,41 +1625,32 @@ export class CompassRoseOrchestrator {
     );
     const task = planned.task;
 
-    const belongsToOtherFeature = task.scope_justification?.belongs_to_other_feature ?? null;
-    if (belongsToOtherFeature) {
-      const reason = `Task planning for feature \`${featureId}\` proposed \`${task.title}\`, which the planner identified as belonging to feature \`${belongsToOtherFeature}\` instead of this feature's own declared scope. Refusing to write the task; formalize or advance \`${belongsToOtherFeature}\` before retrying.`;
-      console.error(`Blocked: ${reason}`);
-      this.recordBlockedFeature(featureId, reason);
-      return { exitCode: 2, continueLoop: false, summary: reason };
+    const blocked = this.blockIfBelongsToOtherFeature(featureId, task);
+    if (blocked) {
+      return blocked;
     }
 
-    validateTaskDeliverables(task, 'task');
-    this.assertTaskIdIsUnused(feature.tasksDirectory, task.task_id, 'Task planning');
+    const containment = checkTaskRequestContainment(task.scope.allowed_paths, taskRequest);
+    if (!containment.withinBounds) {
+      const deviationReason = task.scope_justification?.deviation_reason ?? null;
+      if (!deviationReason) {
+        const reason = `Task planning for feature \`${featureId}\` elaborated task request ${taskRequest.id} ("${taskRequest.title}") with scope exceeding its pre-declared boundary: \`${containment.exceedingPaths.join('`, `')}\` ${containment.exceedingPaths.length === 1 ? 'is' : 'are'} not covered by \`${taskRequest.scope.allowed_paths.join('`, `')}\`. Refusing to write the task; either stay within the pre-declared boundary or set scope_justification.deviation_reason.`;
+        console.error(`Blocked: ${reason}`);
+        this.recordBlockedFeature(featureId, reason);
+        this.commitDirtyWorktreeIfConfigured(`proto: record scope-boundary block for feature ${featureId}`);
+        return { exitCode: 2, continueLoop: false, summary: reason };
+      }
 
-    const taskPath = join(feature.tasksDirectory, buildTaskFileName(task.task_id, task.title));
-    const taskMarkdown = renderTaskMarkdown(task);
-
-    writeText(taskPath, taskMarkdown);
-    this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), planned);
-
-    const updatedFeatureState = this.updateFeatureStateForTaskPlan(feature.statePath, task.task_id, task.title);
-    const updatedProjectState = this.updateProjectStateForTaskPlan(featureId, task.task_id);
-
-    writeText(feature.statePath, updatedFeatureState);
-    writeText(this.projectStatePath, updatedProjectState);
-
-    if (this.options.commit) {
-      this.git.commit(
-        [
-          relativePath(this.repositoryRoot, taskPath),
-          relativePath(this.repositoryRoot, feature.statePath),
-          relativePath(this.repositoryRoot, this.projectStatePath),
-        ],
-        `proto: plan task ${task.task_id}`,
+      console.log(
+        `Task request ${taskRequest.id} scope widened for feature ${featureId} (deviation_reason: ${deviationReason}): ${containment.exceedingPaths.join(', ')}`,
+      );
+      this.artifacts.writeJson(
+        join('task-requests', `${featureId}.json`),
+        withWidenedScope(taskRequests, taskRequest.id, containment.exceedingPaths),
       );
     }
 
-    return { exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${featureId}.` };
+    return this.finalizeTaskPlan(featureId, feature, planned);
   }
 
   /**

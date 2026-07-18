@@ -7,6 +7,20 @@ grounded, so a task that quietly extends beyond its feature's declared scope —
 that actually belongs to a sibling feature — is caught at planning time instead of accumulating
 one plausible-looking task at a time.
 
+This same reasoning now runs at two points, not one:
+
+- **Once per task request, at feature formalization time** (`planFeature()`), filling that task
+  request's own `sibling_check` (see `src/contracts/planner/plannerContracts.ts`'s `TaskRequest`)
+  while the planner has full feature-and-architecture context — cheaper than re-deriving it fresh
+  for every later task, and the mechanism this document was originally written for.
+- **Once per task, at elaboration time** (`planTask()`), filling `scope_justification` as before —
+  now a rarer secondary fallback, since the task request it elaborates was already vetted once.
+  Elaboration also enforces a second, independent, deterministic check that has nothing to do with
+  siblings: whether the elaborated task's `scope.allowed_paths` stays within its task request's own
+  pre-declared boundary (see `src/orchestrator/taskRequests.ts`'s `checkTaskRequestContainment`). An
+  honest `scope_justification.deviation_reason` lets a task legitimately widen that boundary instead
+  of being silently rejected or silently allowed to drift.
+
 This exists because of a real incident: `002-configuration-model` (a feature whose own `feature.md`
 explicitly excludes "implementation of unrelated orchestration features beyond the configuration
 contract they depend on") drifted across five consecutive tasks into feature selection, lifecycle
@@ -78,6 +92,18 @@ The planner must not:
 When `belongs_to_other_feature` is non-null, the orchestrator refuses to write the proposed task
 document. Instead, it records the target feature as blocked, pending the named sibling feature's
 formalization, using the same blocker/state-update machinery as any other recoverable blocker (see
-`src/orchestrator/orchestrator.ts`'s `planTask`/`planSubtask`). This is deterministic and does not
-depend on the planner "getting it right" beyond honestly reporting what it found — the enforcement
-is what actually stops the drift; the planner's job is only to surface the match.
+`src/orchestrator/orchestrator.ts`'s `planTaskFreely`/`planTaskFromRequest`/`planSubtask`). This is
+deterministic and does not depend on the planner "getting it right" beyond honestly reporting what
+it found — the enforcement is what actually stops the drift; the planner's job is only to surface
+the match.
+
+When a task elaborates a pre-declared task request, a second, independent check applies: the
+orchestrator itself compares `task.scope.allowed_paths` against that task request's own
+`scope.allowed_paths` (directory-prefix containment, not exact-set equality — see
+`src/shared/pathPrefix.ts`). This check does not depend on the planner reporting anything at all;
+it is computed from the two scope lists directly. If the elaborated task exceeds its boundary and
+`scope_justification.deviation_reason` is null, the orchestrator refuses to write the task and
+blocks the feature, citing exactly which paths exceeded the boundary. If `deviation_reason` is set,
+the orchestrator accepts the widened task and persists the wider boundary back into the task
+request's own `allowed_paths`, so later rendering and later task requests both see the feature's
+current, real boundaries rather than a stale one from formalization time.

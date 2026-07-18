@@ -52,11 +52,19 @@ that is ready to start.
 
 ### task request
 
-A single visible item in the feature outline that describes one intended next unit of work.
+A single visible item in the feature outline: a fixed, pre-declared, locked-in scope boundary
+(`{id, title, objective, scope, status, sibling_check}` — see
+`src/contracts/planner/plannerContracts.ts`'s `TaskRequest`) decided once, holistically, when the
+feature or fix is formalized.
 
-It helps the user see the expected path ahead.
+It helps the user see the expected path ahead, and it constrains whatever task later elaborates it:
+task planning may not invent scope beyond a task request's declared boundary without an honest,
+explicit `scope_justification.deviation_reason` (see `src/orchestrator/taskRequests.ts`'s
+`checkTaskRequestContainment`, enforced deterministically by the orchestrator, not by trusting the
+planner's self-report alone).
 
-It is informational only and cannot be dispatched to an executor.
+It is still not itself an executable artifact and cannot be dispatched to an executor — only the
+`task` that a later task-planning pass elaborates from it is.
 
 ### task
 
@@ -114,3 +122,4 @@ It may touch docs, state, source, or tests only as needed for deterministic re-e
 - `correction task`, `state correction task`, and `doctor recovery task` are temporary recovery artifacts.
 - CompassRose must not treat a work-item outline as a long-lived executable task list.
 - A visible work-item outline may show the intended number of implementation steps, but the runtime still generates only the next executable task.
+- A task request is a binding boundary for the next executable task, not a task itself: it constrains what task planning may propose, but the runtime still elaborates and dispatches exactly one task at a time, deterministically selected as the next task request that isn't already `complete`/`superseded`.

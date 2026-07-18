@@ -200,6 +200,15 @@ export interface TaskScopeJustification {
   readonly included_by: string;
   readonly excluded_by: readonly string[];
   readonly belongs_to_other_feature: string | null;
+  /**
+   * Set only when this task elaborates a pre-declared TaskRequest and genuinely must exceed
+   * its locked-in `scope.allowed_paths` boundary (see src/orchestrator/taskRequests.ts's
+   * checkTaskRequestContainment). An honest, specific reason here lets the orchestrator widen
+   * the task request's own boundary instead of either silently allowing drift or refusing a
+   * legitimately necessary task. Absent or null when no task request is in play, or when the
+   * task stays within its declared boundary.
+   */
+  readonly deviation_reason: string | null;
 }
 
 export interface PlannedTask {

@@ -137,7 +137,8 @@
           "required": [
             "included_by",
             "excluded_by",
-            "belongs_to_other_feature"
+            "belongs_to_other_feature",
+            "deviation_reason"
           ],
           "properties": {
             "included_by": { "type": "string" },
@@ -146,6 +147,9 @@
               "items": { "type": "string" }
             },
             "belongs_to_other_feature": {
+              "type": ["string", "null"]
+            },
+            "deviation_reason": {
               "type": ["string", "null"]
             }
           }
