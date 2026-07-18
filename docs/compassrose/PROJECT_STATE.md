@@ -11,6 +11,7 @@ In progress
 ## Current Reality
 
 - Feature `002-configuration-model` hit a second instance of the same blocked-feature misrouting bug: its one-time task-request backfill correctly found all 4 of its (stale) outlined items already complete and blocked rather than inventing new work, but the block was routed generically instead of toward "declare another task request." Resolved directly: added task request `F002-TR05` (the correction-task-id-allocator cycle/depth-limit gap, already known) and restored `formalized`.
+- Feature `002-configuration-model` now has a planned next task, `F002-T17`, ready to execute.
 
 ## Implemented
 
@@ -23,7 +24,7 @@ In progress
 
 ## Pending
 
-- Plan the next task for the active feature (task request `F002-TR05`).
+- Execute `F002-T17` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -40,4 +41,4 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is the next task-planning pass (task request `F002-TR05`).
+The active feature is `002-configuration-model`, and its next valid action is to execute `F002-T17`.

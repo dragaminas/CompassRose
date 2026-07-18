@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+task_ready
 
 ## Source Request
 
@@ -11,7 +11,7 @@ formalized
 ## Operational Status
 
 - formalization: complete
-- active_task: none
+- active_task: F002-T17
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
@@ -67,6 +67,8 @@ Task planning then correctly refused a proposed task ("Bound correction-task ID 
 
 Restoring to `formalized` triggered the structured task-request backbone's one-time backfill for this feature (never formalized with task requests). The backfill correctly reconstructed 4 task requests from this feature's own `## Implementation Outline`, all already `complete`, and correctly blocked rather than inventing a 5th task out of nothing -- but this feature's outline had never been updated to include its one remaining known gap (the correction-task id allocator's missing cycle/depth limit). This is the second real instance of the same misrouting bug (see the fix request above, now broadened to cover both instances): the exhaustion block's reason didn't match any `classifyBlockerKind` regex, fell through to `kind: unknown`, and still generated a generic doctor-recovery hint instead of "declare another task request." Resolved directly: added task request `F002-TR05` (add the missing cycle/depth limit) to both the task-requests artifact and this feature's Implementation Outline, and restored `formalized` again.
 
+Task `F002-T17` is now planned and ready to execute. Add a cycle/depth limit to the correction-task ID allocator.
+
 ## Implemented Deliverables
 
 - the source feature request exists at `docs/features/002-configuration-model/request.md`
@@ -84,11 +86,11 @@ Restoring to `formalized` triggered the structured task-request backbone's one-t
 
 ## Outline Progress
 
-- Formalize the configuration model in canonical feature documents: complete
-- Stabilize the project-local configuration contract and any gaps in `docs/compassrose/CONFIG.md`: complete
-- Implement configuration loading and validation for the documented MVP scope: complete
-- Connect configuration validation to the doctor/runtime flow and update state based on approved behavior: complete
-- Add a cycle/depth limit to the correction-task id allocator: not started
+- F002-TR01. Formalize the configuration model in canonical feature documents: complete
+- F002-TR02. Stabilize the project-local configuration contract: complete
+- F002-TR03. Implement MVP configuration loading and validation: complete
+- F002-TR04. Connect configuration validation to the doctor/runtime flow: complete
+- F002-TR05. Add a cycle/depth limit to the correction-task id allocator: in progress
 
 ## Blocked By
 
@@ -111,4 +113,4 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 
 ## Next Planning Hint
 
-Plan the next task for this feature: task request `F002-TR05` (add a cycle/depth limit to the correction-task id allocator).
+Execute `F002-T17` when the current execution mode allows it.
