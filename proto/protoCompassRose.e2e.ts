@@ -10,7 +10,13 @@ import type { AgentToolName } from '../src/contracts/runtime/agentContext.js';
 // correction task id from (see resolveStateCorrectionActiveTaskFromArtifacts in src/orchestrator/orchestrator.ts).
 // Every assertion below must derive its expected file names from this constant instead of re-typing
 // the task id, or a rename here will silently stop matching what the runtime actually produces.
-const STATE_CORRECTION_FALLBACK_TASK_ID = 'F002-T05';
+//
+// This scenario runs against a real clone of this repository, so the task-id chosen here must
+// never collide with a real historical correction under docs/features/002-configuration-model/tasks/
+// (buildStateCorrectionTaskId scans that directory for existing `<id>-C<n>` references and picks the
+// next number, regardless of whether they came from this fixture or real project history). An
+// out-of-range task number keeps this fixture-only anchor from ever landing on a real task.
+const STATE_CORRECTION_FALLBACK_TASK_ID = 'F002-T997';
 
 function taskNumberSlug(taskId: string): string {
   const taskNumber = taskId.match(/-T(\d+)$/)?.[1];
@@ -702,6 +708,39 @@ function seedStateCorrectionFallbackTaskArtifact(cloneRoot: string): void {
         task_id: STATE_CORRECTION_FALLBACK_TASK_ID,
       },
     }, null, 2)}\n`,
+    'utf8',
+  );
+
+  // findTaskDocumentPath() requires a real task document (matched by its `## Task ID` section,
+  // not by file name) once the runtime resumes the anchor task after the state-correction step.
+  // STATE_CORRECTION_FALLBACK_TASK_ID is a fixture-only id chosen precisely so it can never match
+  // a real historical task, so unlike a real task number it has no pre-existing document in the
+  // cloned repository's history - this scenario has to seed its own minimal one.
+  const featureTasksDirectory = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'tasks');
+  mkdirSync(featureTasksDirectory, { recursive: true });
+  const taskNumber = taskNumberSlug(STATE_CORRECTION_FALLBACK_TASK_ID);
+  writeFileSync(
+    join(featureTasksDirectory, `${taskNumber}-state-correction-fixture-anchor.md`),
+    `# Task ${taskNumber}: State correction fixture anchor
+
+## Task ID
+\`${STATE_CORRECTION_FALLBACK_TASK_ID}\`
+
+## Parent Feature
+\`002-configuration-model\`
+
+## Goal
+Fixture-only task document for the 'state-correction-missing-active-task' e2e scenario; it exists
+so the runtime can resolve a real task document after correctState() uses this id as the fallback
+repair anchor.
+
+## Scope
+Allowed:
+- \`docs/features/002-configuration-model/tasks/\`
+
+Forbidden:
+- all other paths
+`,
     'utf8',
   );
 }
