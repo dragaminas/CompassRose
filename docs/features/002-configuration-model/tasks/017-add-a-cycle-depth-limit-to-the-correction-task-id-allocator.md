@@ -30,16 +30,9 @@ Create tests/stateCorrectionLimit.test.ts with failing coverage for deterministi
 Allowed:
 - `src/orchestrator/orchestrator.ts`
 - `src/orchestrator/runtimeHelpers.ts`
-- `src/task/taskId.ts`
 - `tests/`
 
 Forbidden:
-
-Note: `src/task/taskId.ts` was added to this task's scope directly, after the implementer's
-actual diff added a pure helper (`limitStateCorrectionTaskId`) there -- a legitimate, necessary
-touch the original scope had simply drawn too narrowly around, caught by the CLI's own
-dirty-worktree preflight (comparing the live diff against this task's declared `allowedPaths`)
-before review ever ran.
 
 ## Constraints
 - Generate and implement exactly this one atomic task; do not split it into follow-up tasks.

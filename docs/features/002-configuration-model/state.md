@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+unblock_pending
 
 ## Source Request
 
@@ -13,10 +13,10 @@ implementation_running
 - formalization: complete
 - active_task: F002-T17-C1
 - active_correction_task: none
-- active_unblock_task: none
-- last_implementation_result: not_run
-- last_quality_gate_result: unknown
-- last_review_result: not_run
+- active_unblock_task: F002-T17-C1-DOCTOR-RECOVERY-R1
+- last_implementation_result: passed
+- last_quality_gate_result: failed
+- last_review_result: blocked
 - last_unblock_result: not_run
 
 ## Current Reality
@@ -98,10 +98,10 @@ Task `F002-T17` is now planned and ready to execute. Add a cycle/depth limit to 
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `implementation_running`
+- active_task: `F002-T17-C1`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -113,4 +113,4 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 
 ## Next Planning Hint
 
-Recover or finish subtask implementation of `F002-T17-C1` before allowing review or new planning.
+Execute doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R1` next.
