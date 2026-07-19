@@ -88,6 +88,7 @@ import {
 } from '../state/restorationTarget.js';
 import { buildBlockerSignature, classifyBlockerKind } from '../state/blockerClassification.js';
 import { uniqueStrings } from '../shared/arrays.js';
+import { isPathAllowedByPrefix } from '../shared/pathPrefix.js';
 import { ControlledStopError, stopExitCodeForSignal } from '../runtime/controlledStop.js';
 import { GitClient } from '../git/gitClient.js';
 import { ArtifactStore } from '../artifacts/artifactStore.js';
@@ -1201,6 +1202,64 @@ export class CompassRoseOrchestrator {
     return this.git.findDisallowedDirtyPaths(allowedPrefixes);
   }
 
+  /**
+   * Reconciles the worktree when a new active task/scope is about to supersede a specific
+   * previous task (`previousTaskId`) whose own attempt is being abandoned -- e.g. a
+   * doctor-recovery task, or a state correction whose scope is always just the state docs,
+   * replacing a failed implementation whose allowed_paths were wider. Left alone, that leftover
+   * dirty diff falls outside every future run's active-task allowlist and blocks git_policy's
+   * require_clean_worktree_before_task preflight in src/cli/main.ts forever, requiring manual
+   * intervention. The abandoned attempt's diff is already archived under
+   * .git/proto-compassrose/diffs/<taskId>.patch by the time a task reaches quality-gate failure
+   * (see runQualityGates's callers), so discarding it here is safe.
+   *
+   * Deliberately narrow: only dirty paths that were within `previousTaskId`'s OWN declared
+   * allowed_paths are ever candidates for discarding. A dirty file that was never that task's to
+   * touch -- an unrelated in-progress edit, config change, or anything else -- is left alone no
+   * matter how "out of the new scope" it looks, so this can never silently discard something
+   * this specific recovery didn't cause. No-ops when `previousTaskId` is unset/'none' or can't be
+   * loaded, since without a trusted old footprint there's nothing safe to reconcile.
+   */
+  private reconcileDirtyPathsForNewScope(featureId: string, previousTaskId: string | null, newAllowedPaths: readonly string[]): void {
+    if (!previousTaskId || previousTaskId === 'none') {
+      return;
+    }
+
+    const dirtyPaths = this.git.dirtyPaths();
+    if (dirtyPaths.length === 0) {
+      return;
+    }
+
+    let previousAllowedPaths: readonly string[];
+    try {
+      previousAllowedPaths = this.loadTask(previousTaskId).allowedPaths;
+    } catch {
+      return;
+    }
+
+    const withinPreviousFootprint = dirtyPaths.filter((path) => isPathAllowedByPrefix(path, previousAllowedPaths));
+    if (withinPreviousFootprint.length === 0) {
+      return;
+    }
+
+    const newAllowedPrefixes = [
+      'docs/compassrose/PROJECT_STATE.md',
+      `docs/features/${featureId}`,
+      `docs/fixes/${featureId}`,
+      ...newAllowedPaths,
+    ];
+
+    const orphaned = withinPreviousFootprint.filter((path) => !isPathAllowedByPrefix(path, newAllowedPrefixes));
+    if (orphaned.length === 0) {
+      return;
+    }
+
+    console.error(
+      `Reconciling worktree for ${featureId}: discarding ${orphaned.length} dirty path(s) left by superseded attempt ${previousTaskId}, outside the new active task's scope (already archived under .git/proto-compassrose/diffs/): ${orphaned.join(', ')}`,
+    );
+    this.git.discardDirtyPaths(orphaned);
+  }
+
   private planFeature(featureId: string): void {
     this.ensureCleanWorktreeIfRequired(featureId);
     const feature = this.loadFeature(featureId);
@@ -2014,6 +2073,7 @@ export class CompassRoseOrchestrator {
     const task = planned.task;
     validateTaskDeliverables(task, 'doctor recovery task');
     this.assertTaskIdIsUnused(owner.tasksDirectory, task.task_id, 'Doctor recovery planning');
+    this.reconcileDirtyPathsForNewScope(featureId, snapshot.activeTask, task.scope.allowed_paths);
 
     const doctorRecoveryMetadata: DoctorRecoveryTaskMetadata = {
       blocker,
@@ -3459,6 +3519,7 @@ export class CompassRoseOrchestrator {
 
     const stateCorrection = this.buildStateCorrectionTask(owner, restoredActiveTask, lifecycleState, reason);
     this.assertTaskIdIsUnused(owner.tasksDirectory, stateCorrection.task_id, 'State correction planning');
+    this.reconcileDirtyPathsForNewScope(featureId, activeTask, stateCorrection.scope.allowed_paths);
     const path = this.writeStateCorrectionTask(stateCorrection);
     this.artifacts.writeJson(join('tasks', `${stateCorrection.task_id}.json`), {
       task: stateCorrectionTaskToTask(stateCorrection),

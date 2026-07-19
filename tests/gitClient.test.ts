@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
-import { writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { afterEach, describe, expect, test } from 'vitest';
 import { createTempWorkspace, type TempWorkspace } from './testUtils.js';
 import { GitClient } from '../src/git/gitClient.js';
@@ -147,5 +147,58 @@ describe('GitClient', () => {
     const client = new GitClient(workspace.root);
 
     expect(() => client.commit(['README.md'], 'no-op')).toThrow(/No staged changes found for commit/);
+  });
+
+  test('discardDirtyPaths restores a modified tracked file back to HEAD', () => {
+    workspace = createTempWorkspace({ files: { 'README.md': 'hello\n' } });
+    initGitRepo(workspace.root);
+    commitAll(workspace.root, 'initial commit');
+    writeFileSync(join(workspace.root, 'README.md'), 'changed\n', 'utf8');
+
+    const client = new GitClient(workspace.root);
+    client.discardDirtyPaths(['README.md']);
+
+    expect(client.dirtyPaths()).toEqual([]);
+    expect(readFileSync(join(workspace.root, 'README.md'), 'utf8').replace(/\r\n/g, '\n')).toBe('hello\n');
+  });
+
+  test('discardDirtyPaths unstages and restores a staged tracked file', () => {
+    workspace = createTempWorkspace({ files: { 'README.md': 'hello\n' } });
+    initGitRepo(workspace.root);
+    commitAll(workspace.root, 'initial commit');
+    writeFileSync(join(workspace.root, 'README.md'), 'changed\n', 'utf8');
+    execFileSync('git', ['add', 'README.md'], { cwd: workspace.root });
+
+    const client = new GitClient(workspace.root);
+    client.discardDirtyPaths(['README.md']);
+
+    expect(client.dirtyPaths()).toEqual([]);
+    expect(readFileSync(join(workspace.root, 'README.md'), 'utf8').replace(/\r\n/g, '\n')).toBe('hello\n');
+  });
+
+  test('discardDirtyPaths deletes an untracked file', () => {
+    workspace = createTempWorkspace({ files: { 'README.md': 'hello\n' } });
+    initGitRepo(workspace.root);
+    commitAll(workspace.root, 'initial commit');
+    writeFileSync(join(workspace.root, 'new.txt'), 'new\n', 'utf8');
+
+    const client = new GitClient(workspace.root);
+    client.discardDirtyPaths(['new.txt']);
+
+    expect(client.dirtyPaths()).toEqual([]);
+    expect(existsSync(join(workspace.root, 'new.txt'))).toBe(false);
+  });
+
+  test('discardDirtyPaths only touches the given paths, leaving other dirty paths intact', () => {
+    workspace = createTempWorkspace({ files: { 'README.md': 'hello\n', 'keep.md': 'keep\n' } });
+    initGitRepo(workspace.root);
+    commitAll(workspace.root, 'initial commit');
+    writeFileSync(join(workspace.root, 'README.md'), 'changed\n', 'utf8');
+    writeFileSync(join(workspace.root, 'keep.md'), 'also changed\n', 'utf8');
+
+    const client = new GitClient(workspace.root);
+    client.discardDirtyPaths(['README.md']);
+
+    expect(client.dirtyPaths()).toEqual(['keep.md']);
   });
 });

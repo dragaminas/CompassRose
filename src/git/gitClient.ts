@@ -47,6 +47,20 @@ export class GitClient {
     return parseGitStatusPaths(this.execGit(['status', '--porcelain']));
   }
 
+  /**
+   * Discards working-tree and index changes for `paths` back to `HEAD`, deleting any of them
+   * that turn out to be untracked entirely (`checkout HEAD --` no-ops/fails harmlessly on a path
+   * HEAD never had, so `clean -f -d` is what actually removes it). Used to reconcile the
+   * worktree when a new active task's scope supersedes a previous, now-abandoned attempt whose
+   * own dirty diff falls outside that new scope.
+   */
+  discardDirtyPaths(paths: readonly string[]): void {
+    for (const path of paths) {
+      this.execGitAllowStatus(['checkout', 'HEAD', '--', path], [0, 1]);
+      this.execGitAllowStatus(['clean', '-f', '-d', '--', path], [0, 1]);
+    }
+  }
+
   diffNameOnly(excludedPaths: readonly string[] = []): string[] {
     const pathspecArgs = this.buildPathspecArgs(excludedPaths);
     return uniqueStrings([
