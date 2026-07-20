@@ -10,9 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `002-configuration-model` hit a second instance of the same blocked-feature misrouting bug: its one-time task-request backfill correctly found all 4 of its (stale) outlined items already complete and blocked rather than inventing new work, but the block was routed generically instead of toward "declare another task request." Resolved directly: added task request `F002-TR05` (the correction-task-id-allocator cycle/depth-limit gap, already known) and restored `formalized`.
-- Feature `002-configuration-model` now has a planned next task, `F002-T17`, ready to execute.
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T17-C1-DOCTOR-RECOVERY-R1`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `002-configuration-model` is blocked by `state-corruption-unblock-pending-doctor-recovery-f002-t17-c1-doctor-recovery-r1-failed-its-re-en`.
+- Blocker recoverability: agent.
+- Feature `002-configuration-model` was suspended from `implementation_running`; the active task pointer remains `F002-T17-C1`.
+- Blocking task context: `F002-T17-C1-DOCTOR-RECOVERY-R1`
 
 ## Implemented
 
@@ -25,7 +26,8 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R1` for the active feature.
+- Plan a doctor recovery task for the active feature.
+- Restore the captured `implementation_running` state after the blocker is resolved.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -42,4 +44,4 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R1` from the captured `implementation_running` state.
+Plan a doctor recovery task for blocker `state-corruption-unblock-pending-doctor-recovery-f002-t17-c1-doctor-recovery-r1-failed-its-re-en` and then restore `implementation_running`.
