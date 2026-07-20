@@ -1,0 +1,292 @@
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { afterEach, describe, expect, test } from 'vitest';
+import type { ParsedTaskDocument } from '../src/contracts/task/taskContracts.js';
+import type { QualityGateResult } from '../src/contracts/runtime/attempts.js';
+import type { FeatureInspection, FeatureRecord, StepExecutionResult, WorkItemContext } from '../src/contracts/runtime/protoRuntime.js';
+import type { StepDecision } from '../src/contracts/runtime/stepDecision.js';
+import { CompassRoseOrchestrator } from '../src/orchestrator/orchestrator.js';
+import { copyContractsIntoWorkspace, createTempWorkspace, readFixtureConfigMarkdown, type TempWorkspace } from './testUtils.js';
+
+const PROJECT_STATE_SEED = `# CompassRose Project State
+
+## Status
+
+active
+
+## Active Feature
+
+\`none\`
+
+## Current Reality
+
+- Fixture workspace for blocking-fix workflow tests.
+
+## Pending
+
+- Nothing pending.
+
+## Blocked
+
+- Nothing blocked.
+
+## Last Approved Change
+
+None yet.
+
+## Known Gaps
+
+None.
+
+## Next Planning Hint
+
+None.
+`;
+
+function featureStateSeed(activeTask: string): string {
+  return `# State: Fixture Feature
+
+## Lifecycle State
+
+implementation_running
+
+## Source Request
+
+\`request.md\`
+
+## Operational Status
+
+- formalization: complete
+- active_task: ${activeTask}
+- active_correction_task: none
+- active_unblock_task: none
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
+- last_unblock_result: not_run
+
+## Current Reality
+
+Fixture state for testing the blocking-fix workflow.
+
+## Implemented Deliverables
+
+- None yet.
+
+## Remaining Deliverables
+
+- None yet.
+
+## Outline Progress
+
+- Fixture task request: not started
+
+## Blocked By
+
+- None
+
+## Blocked From
+
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
+
+## Last Approved Change
+
+None
+
+## Known Gaps
+
+- None
+
+## Next Planning Hint
+
+None
+`;
+}
+
+function taskDoc(taskId: string, featureId: string): string {
+  return `# Task: Fixture task
+
+## Task ID
+\`${taskId}\`
+
+## Parent Feature
+\`${featureId}\`
+
+## Goal
+Fixture task for blocking-fix workflow tests.
+
+## Scope
+Allowed:
+- \`src/allowed.ts\`
+
+Forbidden:
+- all other paths
+
+## Quality Gates to Run
+\`\`\`bash
+echo unused
+\`\`\`
+`;
+}
+
+function createWorkspace(featureId: string, taskId: string): TempWorkspace {
+  const workspace = createTempWorkspace({
+    files: {
+      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'docs/compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
+      [`docs/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
+      [`docs/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
+      [`docs/features/${featureId}/state.md`]: featureStateSeed(taskId),
+      [`docs/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId),
+    },
+  });
+  copyContractsIntoWorkspace(workspace.root);
+  mkdirSync(join(workspace.root, 'src'), { recursive: true });
+  writeFileSync(join(workspace.root, 'src', 'allowed.ts'), 'export const allowed = true;\n', 'utf8');
+
+  execFileSync('git', ['init', '--quiet'], { cwd: workspace.root });
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: workspace.root });
+  execFileSync('git', ['config', 'user.name', 'Test'], { cwd: workspace.root });
+  execFileSync('git', ['add', '-A'], { cwd: workspace.root });
+  execFileSync('git', ['commit', '--quiet', '-m', 'initial commit'], { cwd: workspace.root });
+
+  return workspace;
+}
+
+function waivedResult(command: string, referencedPath: string): QualityGateResult {
+  return {
+    name: command,
+    command,
+    status: 'waived',
+    output_summary:
+      `Waived: this command already fails the same way on a clean checkout of HEAD, and its failure output `
+      + `names no path within this task's allowed_paths or changed files -- referenced instead: ${referencedPath}.`,
+  };
+}
+
+interface BlockingFixAccess {
+  loadTask(taskId: string): ParsedTaskDocument;
+  resolveWorkItemContext(featureId: string): WorkItemContext;
+  blockOnUnrelatedFixFailure(owner: WorkItemContext, task: ParsedTaskDocument, qualityResults: readonly QualityGateResult[]): StepExecutionResult;
+  listFeatures(): FeatureRecord[];
+  inspectFeature(feature: FeatureRecord): FeatureInspection;
+  determineNextStep(): StepDecision;
+}
+
+function asAccess(orchestrator: CompassRoseOrchestrator): BlockingFixAccess {
+  return orchestrator as unknown as BlockingFixAccess;
+}
+
+function listFixDirectories(root: string): string[] {
+  const fixesRoot = join(root, 'docs', 'fixes');
+  return existsSync(fixesRoot) ? readdirSync(fixesRoot) : [];
+}
+
+let workspace: TempWorkspace | undefined;
+
+afterEach(() => {
+  workspace?.dispose();
+  workspace = undefined;
+});
+
+describe('blockOnUnrelatedFixFailure', () => {
+  test('files a new high-severity fix and blocks the feature on it', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const owner = access.resolveWorkItemContext('fixture-feature');
+    const task = access.loadTask('F001-T01');
+    const command = "node -e \"console.error('FAIL tests/unrelated.test.ts:1:1'); process.exit(1)\"";
+
+    const result = access.blockOnUnrelatedFixFailure(owner, task, [waivedResult(command, 'tests/unrelated.test.ts')]);
+
+    expect(result.exitCode).toBe(2);
+    expect(result.continueLoop).toBe(false);
+
+    const fixDirectories = listFixDirectories(workspace.root);
+    expect(fixDirectories).toHaveLength(1);
+    const [fixId] = fixDirectories;
+
+    const fixState = readFileSync(join(workspace.root, 'docs', 'fixes', fixId, 'state.md'), 'utf8');
+    expect(fixState).toContain('task_planning_pending');
+    expect(fixState).toMatch(/- severity: high/);
+    expect(fixState).toMatch(/- owning_feature: none/);
+
+    const requestMarkdown = readFileSync(join(workspace.root, 'docs', 'fixes', fixId, 'request.md'), 'utf8');
+    expect(requestMarkdown).toContain('tests/unrelated.test.ts');
+    expect(requestMarkdown).toMatch(/Signature: `[0-9a-f]{12}`/);
+    expect(existsSync(join(workspace.root, 'docs', 'fixes', fixId, 'fix.md'))).toBe(true);
+
+    const featureState = readFileSync(join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'), 'utf8');
+    expect(featureState.match(/## Lifecycle State\n\n(\S+)/)?.[1]).toBe('blocked');
+    expect(featureState).toContain(`- blocked_on_fix: ${fixId}`);
+  });
+
+  test('reuses the existing fix for the same signature instead of filing a duplicate', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const owner = access.resolveWorkItemContext('fixture-feature');
+    const task = access.loadTask('F001-T01');
+    const command = "node -e \"console.error('FAIL tests/unrelated.test.ts:1:1'); process.exit(1)\"";
+
+    access.blockOnUnrelatedFixFailure(owner, task, [waivedResult(command, 'tests/unrelated.test.ts')]);
+    const firstRunFixes = listFixDirectories(workspace.root);
+    expect(firstRunFixes).toHaveLength(1);
+
+    // A second, unrelated task hits the exact same command/path signature.
+    access.blockOnUnrelatedFixFailure(owner, task, [waivedResult(command, 'tests/unrelated.test.ts')]);
+    const secondRunFixes = listFixDirectories(workspace.root);
+
+    expect(secondRunFixes).toHaveLength(1);
+    expect(secondRunFixes).toEqual(firstRunFixes);
+  });
+
+  test('the scheduler moves on to the filed fix instead of re-diagnosing the blocked feature', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const owner = access.resolveWorkItemContext('fixture-feature');
+    const task = access.loadTask('F001-T01');
+    const command = "node -e \"console.error('FAIL tests/unrelated.test.ts:1:1'); process.exit(1)\"";
+
+    access.blockOnUnrelatedFixFailure(owner, task, [waivedResult(command, 'tests/unrelated.test.ts')]);
+
+    const decision = access.determineNextStep();
+
+    expect(decision.feature_id).not.toBe('fixture-feature');
+    expect(decision.kind).toBe('plan_fix_task');
+  });
+
+  test('resumes the feature deterministically once the blocking fix reaches completed', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const owner = access.resolveWorkItemContext('fixture-feature');
+    const task = access.loadTask('F001-T01');
+    const command = "node -e \"console.error('FAIL tests/unrelated.test.ts:1:1'); process.exit(1)\"";
+
+    access.blockOnUnrelatedFixFailure(owner, task, [waivedResult(command, 'tests/unrelated.test.ts')]);
+    const [fixId] = listFixDirectories(workspace.root);
+
+    // Simulate the fix's own task chain having reached completed.
+    const fixStatePath = join(workspace.root, 'docs', 'fixes', fixId, 'state.md');
+    writeFileSync(fixStatePath, readFileSync(fixStatePath, 'utf8').replace('task_planning_pending', 'completed'), 'utf8');
+
+    const feature = access.listFeatures().find((candidate) => candidate.id === 'fixture-feature');
+    expect(feature).toBeDefined();
+    const inspection = access.inspectFeature(feature as FeatureRecord);
+
+    expect(inspection.kind).not.toBe('blocked_on_fix');
+    expect(inspection.kind).toBe('implementation_running');
+    expect(inspection.snapshot?.activeTask).toBe('F001-T01');
+
+    const featureState = readFileSync(join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'), 'utf8');
+    expect(featureState).toContain('- blocked_on_fix: none');
+    expect(featureState.match(/## Lifecycle State\n\n(\S+)/)?.[1]).toBe('implementation_running');
+  });
+});

@@ -79,6 +79,7 @@ export type WorkItemInspectionKind =
   | 'quality_failed'
   | 'review_failed'
   | 'blocked'
+  | 'blocked_on_fix'
   | 'completed'
   | 'malformed';
 

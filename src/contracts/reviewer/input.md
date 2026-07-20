@@ -101,7 +101,7 @@ reviewer_input:
     quality_gates:
       - name: string
         command: string
-        status: passed | failed | skipped
+        status: passed | failed | skipped | waived
         output_summary: string
 
   feature_context:
@@ -123,7 +123,10 @@ The Reviewer must:
 
 - Check acceptance criteria.
 - Check scope boundaries.
-- Check quality gate results.
+- Check quality gate results. A `waived` gate is not a defect of this task: the runtime already
+  confirmed the failure is preexisting and unrelated to this task's own scope, and has separately
+  filed or reused a fix for it outside this review. Treat a `waived` gate the same as `passed` for
+  approval purposes; do not propose a correction task for it.
 - Check the reviewable-diff handoff details before treating a missing diff as a failure.
 - Consider implementation diagnostics when the diff is empty or incomplete.
 - Consider minimum progress evidence before treating an implementation attempt as reviewable.

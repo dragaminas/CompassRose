@@ -3,6 +3,7 @@ import { dirname, join, relative as relativePath, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 import type {
   BlockerKind,
   BlockerProfile,
@@ -510,7 +511,10 @@ export class CompassRoseOrchestrator {
   }
 
   private isContinuingInspectionKind(kind: WorkItemInspectionKind): boolean {
-    return kind !== 'completed' && !this.isStartableInspectionKind(kind);
+    // 'blocked_on_fix' is deliberately neither startable nor continuing: it must be invisible to
+    // both scheduler passes while the blocking fix is unresolved, so other features/fixes keep
+    // making progress instead of this one being retried (and re-diagnosed) every run.
+    return kind !== 'completed' && kind !== 'blocked_on_fix' && !this.isStartableInspectionKind(kind);
   }
 
   private static readonly FIX_SEVERITY_RANK: Record<FixSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -681,6 +685,10 @@ export class CompassRoseOrchestrator {
           correction_task_id: inspection.snapshot?.activeCorrectionTask ?? null,
           reason: inspection.reason,
         };
+      case 'blocked_on_fix':
+        throw new Error(
+          `Feature ${feature.id} reached selectStepForFeature with kind 'blocked_on_fix', which determineNextStep's continuing/startable filters should never allow through.`,
+        );
       default:
         return assertNever(inspection.kind);
     }
@@ -842,12 +850,27 @@ export class CompassRoseOrchestrator {
           reason: `Feature ${feature.id} is in review_failed and needs diagnosis/autocorrection before normal execution can resume.`,
           snapshot,
         };
-      case 'blocked':
+      case 'blocked': {
+        const blockingFixId = this.readBlockedOnFix(feature.statePath);
+        if (blockingFixId) {
+          if (this.isFixResolved(blockingFixId)) {
+            this.resumeWorkItemBlockedOnFix(feature, snapshot, blockingFixId);
+            return this.inspectFeature(feature);
+          }
+
+          return {
+            kind: 'blocked_on_fix',
+            reason: `Feature ${feature.id} is blocked pending fix ${blockingFixId}; skipping until it resolves instead of re-diagnosing every run.`,
+            snapshot,
+          };
+        }
+
         return {
           kind: 'blocked',
           reason: `Feature ${feature.id} is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.`,
           snapshot,
         };
+      }
       case 'completed':
         return {
           kind: 'completed',
@@ -973,8 +996,25 @@ export class CompassRoseOrchestrator {
         return { kind: 'quality_failed', reason: `Fix ${fix.id} is in quality_failed and needs diagnosis/autocorrection before normal execution can resume.`, snapshot, severity, owningFeature };
       case 'review_failed':
         return { kind: 'review_failed', reason: `Fix ${fix.id} is in review_failed and needs diagnosis/autocorrection before normal execution can resume.`, snapshot, severity, owningFeature };
-      case 'blocked':
+      case 'blocked': {
+        const blockingFixId = this.readBlockedOnFix(fix.statePath);
+        if (blockingFixId) {
+          if (this.isFixResolved(blockingFixId)) {
+            this.resumeWorkItemBlockedOnFix(fix, snapshot, blockingFixId);
+            return this.inspectFix(fix);
+          }
+
+          return {
+            kind: 'blocked_on_fix',
+            reason: `Fix ${fix.id} is blocked pending fix ${blockingFixId}; skipping until it resolves instead of re-diagnosing every run.`,
+            snapshot,
+            severity,
+            owningFeature,
+          };
+        }
+
         return { kind: 'blocked', reason: `Fix ${fix.id} is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.`, snapshot, severity, owningFeature };
+      }
       case 'completed':
         return { kind: 'completed', reason: `Fix ${fix.id} is completed.`, snapshot, severity, owningFeature };
       default:
@@ -1082,6 +1122,10 @@ export class CompassRoseOrchestrator {
           correction_task_id: inspection.snapshot?.activeCorrectionTask ?? null,
           reason: inspection.reason,
         };
+      case 'blocked_on_fix':
+        throw new Error(
+          `Fix ${fix.id} reached selectStepForFix with kind 'blocked_on_fix', which determineNextStep's continuing/startable filters should never allow through.`,
+        );
       default:
         return assertNever(inspection.kind);
     }
@@ -2632,14 +2676,9 @@ export class CompassRoseOrchestrator {
 
   private implementTask(taskId: string): StepExecutionResult {
     const task = this.loadTask(taskId);
-    const failed = this.executeImplementation(task, false, null);
-    return failed
-      ? {
-          exitCode: 0,
-          continueLoop: true,
-          summary: `Implementation for ${taskId} failed; doctor recovery planning will continue.`,
-        }
-      : {
+    const result = this.executeImplementation(task, false, null);
+    return result
+      ?? {
           exitCode: 0,
           continueLoop: true,
           summary: `Implementation completed for ${taskId}.`,
@@ -2649,14 +2688,9 @@ export class CompassRoseOrchestrator {
   private correctTask(correctionTaskId: string): StepExecutionResult {
     const task = this.loadTask(correctionTaskId);
     const artifact = this.loadTaskArtifact(correctionTaskId);
-    const failed = this.executeImplementation(task, true, artifact?.state_correction ?? null);
-    return failed
-      ? {
-          exitCode: 0,
-          continueLoop: true,
-          summary: `Correction implementation for ${correctionTaskId} failed; doctor recovery planning will continue.`,
-        }
-      : {
+    const result = this.executeImplementation(task, true, artifact?.state_correction ?? null);
+    return result
+      ?? {
           exitCode: 0,
           continueLoop: true,
           summary: `Correction implementation completed for ${correctionTaskId}.`,
@@ -3005,6 +3039,10 @@ export class CompassRoseOrchestrator {
     const qualityResults = this.runQualityGates(task);
     this.throwIfControlledStopRequested();
     this.artifacts.writeJson(join('quality-gates', `${task.taskId}.json`), qualityResults);
+    if (qualityResults.some((result) => result.status === 'waived')) {
+      return this.blockOnUnrelatedFixFailure(owner, task, qualityResults);
+    }
+
     const passed = qualityResults.every((result) => result.status !== 'failed');
     if (!passed) {
       const failures = qualityResults
@@ -3197,7 +3235,13 @@ export class CompassRoseOrchestrator {
     return analysis;
   }
 
-  private executeImplementation(task: ParsedTaskDocument, correction: boolean, stateCorrection: StateCorrectionTask | null): boolean {
+  /**
+   * Returns `null` on ordinary success (caller builds its own success StepExecutionResult).
+   * Returns a `StepExecutionResult` directly for every terminal outcome that needs its own
+   * distinct handling: implementation failure (doctor recovery continues), or a confirmed
+   * unrelated/pre-existing quality-gate failure (blocked on a newly filed or reused fix instead).
+   */
+  private executeImplementation(task: ParsedTaskDocument, correction: boolean, stateCorrection: StateCorrectionTask | null): StepExecutionResult | null {
     const recoveryLessonLines = this.buildRecoveryLessonPromptLines(task.featureId, task.taskId);
     const prompt = buildImplementerPrompt(task, correction, stateCorrection, recoveryLessonLines);
     const owner = this.resolveWorkItemContext(task.featureId);
@@ -3296,12 +3340,22 @@ export class CompassRoseOrchestrator {
         reason: failureReason,
       });
       console.error(`Implementation for ${task.taskId} failed; recovery will continue through doctor recovery planning.`);
-      return true;
+      return {
+        exitCode: 0,
+        continueLoop: true,
+        summary: correction
+          ? `Correction implementation for ${task.taskId} failed; doctor recovery planning will continue.`
+          : `Implementation for ${task.taskId} failed; doctor recovery planning will continue.`,
+      };
     }
 
     const qualityResults = this.runQualityGates(task);
     this.throwIfControlledStopRequested();
     this.artifacts.writeJson(join('quality-gates', `${task.taskId}.json`), qualityResults);
+
+    if (qualityResults.some((result) => result.status === 'waived')) {
+      return this.blockOnUnrelatedFixFailure(owner, task, qualityResults);
+    }
 
     const passed = qualityResults.every((result) => result.status !== 'failed');
     const featureState = this.updateFeatureStateAfterImplementation(
@@ -3328,10 +3382,16 @@ export class CompassRoseOrchestrator {
         reason: failureReason,
       });
       console.error(`Quality gates failed after implementing ${task.taskId}; recovery will continue through doctor recovery planning.`);
-      return true;
+      return {
+        exitCode: 0,
+        continueLoop: true,
+        summary: correction
+          ? `Correction implementation for ${task.taskId} failed; doctor recovery planning will continue.`
+          : `Implementation for ${task.taskId} failed; doctor recovery planning will continue.`,
+      };
     }
 
-    return false;
+    return null;
   }
 
   private persistImplementationAttemptArtifacts(
@@ -3522,6 +3582,354 @@ export class CompassRoseOrchestrator {
         + `failure output names no path within this task's allowed_paths (${task.allowedPaths.join(', ')}) `
         + `or changed files (${changedFiles.join(', ') || 'none'}) -- referenced instead: ${referencedPaths.join(', ')}.`,
     } satisfies QualityGateResult;
+  }
+
+  /**
+   * Handles a confirmed-unrelated quality-gate failure by filing (or reusing) its own bounded
+   * fix and blocking the active feature/fix on it, instead of letting the task continue to
+   * review. Deliberately does NOT let the task's own reviewer see this failure at all: an
+   * earlier version of this mechanism marked the gate `waived` and let the task proceed, but the
+   * waived output_summary named exactly which file/system was broken, and nothing stopped the
+   * reviewer from proposing a `correction_task` scoped to THAT file -- a correction completely
+   * outside the active task's own frame. Filing a separate, independently-scoped fix and
+   * stopping before review closes that hole at the source rather than validating the
+   * reviewer's output after the fact.
+   */
+  private blockOnUnrelatedFixFailure(
+    owner: WorkItemContext,
+    task: ParsedTaskDocument,
+    qualityResults: readonly QualityGateResult[],
+  ): StepExecutionResult {
+    const waived = qualityResults.find((result) => result.status === 'waived');
+    if (!waived) {
+      throw new Error(`blockOnUnrelatedFixFailure called for ${task.taskId} without a waived quality-gate result.`);
+    }
+
+    const referencedPaths = extractReferencedPaths(waived.output_summary);
+    const fixId = this.fileOrReuseBlockingFix(waived.command, referencedPaths);
+    const reason =
+      `Task ${task.taskId} hit a quality-gate failure (\`${waived.command}\`) confirmed unrelated to and preexisting `
+      + `its own scope; filed/reused fix \`${fixId}\` and stopped instead of continuing to review or generating a `
+      + 'correction for it.';
+
+    this.recordBlockedFeature(task.featureId, reason, task.taskId);
+    writeText(owner.statePath, replaceOperationalStatus(readUtf8(owner.statePath), { blocked_on_fix: fixId }));
+
+    if (this.options.commit) {
+      this.git.commit(
+        [
+          relativePath(this.repositoryRoot, owner.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+          relativePath(this.repositoryRoot, join(this.fixesRoot, fixId)),
+        ],
+        `proto: file blocking fix ${fixId} for ${task.taskId}`,
+      );
+    }
+
+    console.error(reason);
+    return {
+      exitCode: 2,
+      continueLoop: false,
+      summary: reason,
+    };
+  }
+
+  /**
+   * Deterministically scaffolds a new fix (request.md + fix.md + state.md, no LLM call --
+   * the defect is already precisely known: which command, which unrelated paths, and that it
+   * reproduces against a clean baseline) describing a confirmed pre-existing/unrelated
+   * quality-gate failure, or returns the id of an existing fix already filed for the same
+   * signature so repeated hits of the same defect never spawn duplicates. Left in
+   * `task_planning_pending` with no tasks/ yet: diagnosing and actually fixing an arbitrary
+   * pre-existing bug needs real reasoning, so the normal fix-task planning flow takes it from
+   * here.
+   */
+  private fileOrReuseBlockingFix(command: string, referencedPaths: readonly string[]): string {
+    const signature = this.computeGateFailureSignature(command, referencedPaths);
+    const existing = this.findExistingFixForSignature(signature);
+    if (existing) {
+      return existing;
+    }
+
+    const primaryPath = referencedPaths[0] ?? 'the system';
+    const fixId = this.nextFixId(slugify(`pre-existing failure in ${primaryPath}`));
+    const fixDirectory = join(this.fixesRoot, fixId);
+
+    const requestMarkdown = [
+      `# Request: Pre-existing failure in \`${primaryPath}\``,
+      '',
+      `Signature: \`${signature}\``,
+      '',
+      '## What happened',
+      '',
+      `While executing an unrelated task, the quality-gate command \`${command}\` failed. The `
+        + 'failure was confirmed to be pre-existing and unrelated to that task: none of the paths '
+        + "its output referenced fell within the task's own allowed scope or changed files, and "
+        + 'the same command still fails the same way on a clean checkout of the repository (i.e. '
+        + "before that task's own diff existed).",
+      '',
+      '## Evidence',
+      '',
+      `- Command: \`${command}\``,
+      `- Referenced path(s): ${referencedPaths.length > 0 ? referencedPaths.map((path) => `\`${path}\``).join(', ') : 'none extracted'}`,
+      '- Reproduces against a clean checkout of HEAD (confirmed via a stash/rerun/restore baseline check).',
+      '',
+      '## Scope',
+      '',
+      'This fix includes:',
+      '',
+      `- Diagnosing and repairing the root cause of \`${command}\` failing.`,
+      '',
+      'This fix does not include:',
+      '',
+      '- Any work belonging to the task that first surfaced this failure; that task is unrelated and unblocks automatically once this fix reaches `completed`.',
+    ].join('\n');
+
+    const fixMarkdown = [
+      `# Fix: Pre-existing failure in \`${primaryPath}\``,
+      '',
+      '## Status',
+      '',
+      'Planned',
+      '',
+      '## Severity',
+      '',
+      'high',
+      '',
+      '## Owning Feature',
+      '',
+      'none',
+      '',
+      '## Purpose',
+      '',
+      `Repair the pre-existing, unrelated failure in \`${command}\` that is blocking unrelated task chains.`,
+      '',
+      '## Problem',
+      '',
+      `\`${command}\` fails on a clean checkout of the repository, unrelated to any task currently in progress. `
+        + `Referenced path(s): ${referencedPaths.length > 0 ? referencedPaths.map((path) => `\`${path}\``).join(', ') : 'none extracted'}.`,
+      '',
+      '## Scope',
+      '',
+      'This fix includes:',
+      '',
+      `- Diagnosing and repairing the root cause of \`${command}\` failing.`,
+      '',
+      'This fix does not include:',
+      '',
+      '- Any work belonging to the task chain that discovered it.',
+      '',
+      '## Acceptance Criteria',
+      '',
+      `- \`${command}\` passes on a clean checkout of the repository.`,
+      '',
+      '## Implementation Deliverables',
+      '',
+      '- A code or configuration change that repairs the root cause.',
+      '',
+      '## Completion Criteria',
+      '',
+      'This fix is considered resolved when:',
+      '',
+      `- \`${command}\` passes cleanly, and every feature/fix blocked on this fix id can resume.`,
+      '',
+      '## Implementation Outline',
+      '',
+      `1. Diagnose why \`${command}\` fails and repair the root cause.`,
+      '',
+      '## Related Documents',
+      '',
+      '- `state.md`',
+    ].join('\n');
+
+    const stateMarkdown = [
+      `# State: Pre-existing failure in \`${primaryPath}\``,
+      '',
+      '## Lifecycle State',
+      '',
+      'task_planning_pending',
+      '',
+      '## Source Request',
+      '',
+      '`request.md`',
+      '',
+      '## Operational Status',
+      '',
+      '- formalization: complete',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+      '- severity: high',
+      '- owning_feature: none',
+      '- last_implementation_result: not_run',
+      '- last_quality_gate_result: unknown',
+      '- last_review_result: not_run',
+      '- last_unblock_result: not_run',
+      '',
+      '## Current Reality',
+      '',
+      `\`${command}\` fails on a clean checkout of the repository, confirmed unrelated to any single task.`,
+      '',
+      '## Implemented Deliverables',
+      '',
+      '- None yet.',
+      '',
+      '## Remaining Deliverables',
+      '',
+      `- Diagnose and repair the root cause of \`${command}\` failing.`,
+      '',
+      '## Outline Progress',
+      '',
+      `- Diagnose and repair \`${command}\`: not started`,
+      '',
+      '## Blocked By',
+      '',
+      '- None',
+      '',
+      '## Blocked From',
+      '',
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+      '',
+      '## Last Approved Change',
+      '',
+      'None',
+      '',
+      '## Known Gaps',
+      '',
+      '- None',
+      '',
+      '## Next Planning Hint',
+      '',
+      `Plan the first task for fix \`${fixId}\`: diagnose and repair \`${command}\`.`,
+    ].join('\n');
+
+    writeText(join(fixDirectory, 'request.md'), requestMarkdown);
+    writeText(join(fixDirectory, 'fix.md'), fixMarkdown);
+    writeText(join(fixDirectory, 'state.md'), stateMarkdown);
+
+    return fixId;
+  }
+
+  private computeGateFailureSignature(command: string, referencedPaths: readonly string[]): string {
+    return createHash('sha1').update(`${command}::${referencedPaths[0] ?? ''}`).digest('hex').slice(0, 12);
+  }
+
+  private findExistingFixForSignature(signature: string): string | null {
+    for (const fix of this.listFixes()) {
+      if (!statSafeIsFile(fix.requestPath)) {
+        continue;
+      }
+
+      if (readUtf8(fix.requestPath).includes(`Signature: \`${signature}\``)) {
+        return fix.id;
+      }
+    }
+
+    return null;
+  }
+
+  private nextFixId(slug: string): string {
+    const highestNumber = this.listFixes().reduce((max, fix) => {
+      const match = fix.id.match(/^(\d+)-/);
+      const number = match?.[1] ? Number.parseInt(match[1], 10) : 0;
+      return Math.max(max, number);
+    }, 0);
+
+    return `${String(highestNumber + 1).padStart(3, '0')}-${slug}`;
+  }
+
+  /**
+   * Reads the `blocked_on_fix` Operational Status field a `blocked` feature/fix may carry
+   * (mirrors `owning_feature`'s own accessor pattern, see readFixSeverityAndOwnership) --
+   * `none`/absent means this `blocked` state has nothing to do with the fix-blocking mechanism.
+   */
+  private readBlockedOnFix(statePath: string): string | null {
+    try {
+      const markdown = readUtf8(statePath);
+      const operationalStatus = requireSection(markdown, 'Operational Status');
+      const raw = stripTicks(parsePreferredStatusValue(operationalStatus, 'blocked_on_fix') ?? 'none');
+      return raw === 'none' || raw === '' ? null : raw;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Fails safe (treats the fix as unresolved) when the fix can't be found or read, so a
+   * transient error never silently resumes a feature whose blocking defect might still be real.
+   */
+  private isFixResolved(fixId: string): boolean {
+    const fix = this.listFixes().find((candidate) => candidate.id === fixId);
+    if (!fix || !statSafeIsFile(fix.statePath)) {
+      return false;
+    }
+
+    try {
+      return this.readFeatureStateSnapshot(fix).lifecycleState === 'completed';
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Deterministically restores a feature/fix once the fix it was blocked on reaches
+   * `completed` -- no LLM call, same shape as updateFeatureStateAfterDoctorRecovery's own
+   * restoration write. Its quality gates should now pass cleanly since the actual defect is
+   * repaired.
+   */
+  private resumeWorkItemBlockedOnFix(owner: Pick<WorkItemContext, 'id' | 'statePath'>, snapshot: FeatureStateSnapshot, fixId: string): void {
+    const restorationTarget = this.preferredRestorationTarget(snapshot);
+    writeText(owner.statePath, this.updateFeatureStateAfterFixResolved(owner.statePath, restorationTarget, fixId));
+    writeText(this.projectStatePath, this.updateProjectStateAfterFixResolved(owner.id, fixId, restorationTarget));
+
+    if (this.options.commit) {
+      this.git.commit(
+        [
+          relativePath(this.repositoryRoot, owner.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+        ],
+        `proto: resume ${owner.id} after fix ${fixId} completed`,
+      );
+    }
+  }
+
+  private updateFeatureStateAfterFixResolved(featureStatePath: string, restorationTarget: RestorationTarget, fixId: string): string {
+    let markdown = readUtf8(featureStatePath);
+    markdown = replaceSection(markdown, 'Lifecycle State', restorationTarget.lifecycle_state);
+    markdown = replaceOperationalStatus(markdown, {
+      active_task: restorationTarget.active_task,
+      active_correction_task: restorationTarget.active_correction_task,
+      active_unblock_task: restorationTarget.active_unblock_task,
+      blocked_on_fix: 'none',
+    });
+    markdown = replaceSection(markdown, 'Blocked By', '- None');
+    markdown = replaceSection(markdown, 'Blocked From', [
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+    ].join('\n'));
+    markdown = replaceSection(markdown, 'Last Approved Change', `Fix \`${fixId}\` reached completed; resumed automatically.`);
+    markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(restorationTarget, restorationTarget.active_task, 'doctor'));
+    return markdown;
+  }
+
+  private updateProjectStateAfterFixResolved(ownerId: string, fixId: string, restorationTarget: RestorationTarget): string {
+    let markdown = readUtf8(this.projectStatePath);
+    markdown = setOrInsertSection(markdown, 'Active Feature', `\`${ownerId}\``);
+    markdown = replaceSection(markdown, 'Pending', bulletList(restorationTargetProjectPendingLines(restorationTarget, restorationTarget.active_task, 'doctor')));
+    markdown = replaceSection(markdown, 'Last Approved Change', `Fix \`${fixId}\` reached completed; \`${ownerId}\` resumed automatically.`);
+    markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(restorationTarget, restorationTarget.active_task, 'doctor'));
+    markdown = upsertBulletInSection(
+      markdown,
+      'Current Reality',
+      `- \`${ownerId}\` resumed after a blocking fix`,
+      `- \`${ownerId}\` resumed after fix \`${fixId}\` reached completed; the active task pointer was restored to \`${restorationTarget.active_task}\`.`,
+    );
+    return markdown;
   }
 
   private ensureQualityGateResults(task: ParsedTaskDocument): QualityGateResult[] {
