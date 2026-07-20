@@ -67,3 +67,44 @@ export function errorMessage(error: unknown): string {
 export function assertNever(value: never): never {
   throw new Error(`Unhandled value: ${String(value)}`);
 }
+
+const ANSI_ESCAPE_PATTERN = /\x1b\[[0-9;]*m/g;
+// Matches repo-relative-looking source/test/doc paths, optionally followed by :line or
+// :line:col (as vitest/node stack traces print them), e.g. "tests/foo.test.ts:12:34".
+// Deliberately only matches forward-slash paths built from ASCII path characters: an absolute
+// Windows path (backslashes) won't match, which is fine -- extractReferencedPaths() is a
+// best-effort signal used only to decide whether a gate failure is safe to double-check against
+// a clean baseline, and it is safer to extract nothing than to guess wrong.
+const REFERENCED_PATH_PATTERN = /([A-Za-z0-9_.\/-]+\.(?:ts|tsx|js|jsx|mjs|cjs|json|md))(?::\d+(?::\d+)?)?/g;
+
+/**
+ * Best-effort extraction of source/test file paths a failing command's output points to (e.g.
+ * vitest's "FAIL tests/foo.test.ts" summary lines, or a stack trace's "at ... (path:line:col)").
+ * Used to judge whether a quality-gate failure is plausibly related to a task's own allowed_paths
+ * before spending the cost of confirming it against a clean baseline. `node_modules` paths are
+ * excluded since a failure inside a dependency is never attributable to the task's own scope.
+ */
+export function extractReferencedPaths(output: string): string[] {
+  const stripped = output.replace(ANSI_ESCAPE_PATTERN, '');
+  const paths = new Set<string>();
+
+  for (const match of stripped.matchAll(REFERENCED_PATH_PATTERN)) {
+    const path = match[1];
+    if (!path || path.includes('node_modules/')) {
+      continue;
+    }
+
+    // A match immediately preceded by a backslash is a fragment of a longer absolute Windows
+    // path this pattern can't safely reconstruct (e.g. "orchestrator.ts" out of
+    // "C:\repo\src\orchestrator\orchestrator.ts") -- discard it rather than treat a truncated
+    // basename as if it were the real repo-relative path.
+    const precedingChar = match.index !== undefined && match.index > 0 ? stripped[match.index - 1] : undefined;
+    if (precedingChar === '\\') {
+      continue;
+    }
+
+    paths.add(path);
+  }
+
+  return [...paths];
+}

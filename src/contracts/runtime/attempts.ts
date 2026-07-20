@@ -21,7 +21,13 @@ export type DiagnosticClassification =
 export interface QualityGateResult {
   readonly name: string;
   readonly command: string;
-  readonly status: "passed" | "failed" | "skipped";
+  /**
+   * "waived" means the command exited non-zero, but the failure was confirmed to already exist
+   * on a clean checkout of the active task's own baseline (before its diff) and to be unrelated
+   * to the task's allowed_paths -- so it is not this task's defect and must not block it. See
+   * reclassifyUnrelatedGateFailure() in src/orchestrator/orchestrator.ts.
+   */
+  readonly status: "passed" | "failed" | "skipped" | "waived";
   readonly output_summary: string;
 }
 

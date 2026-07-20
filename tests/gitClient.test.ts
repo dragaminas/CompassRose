@@ -201,4 +201,58 @@ describe('GitClient', () => {
 
     expect(client.dirtyPaths()).toEqual(['keep.md']);
   });
+
+  test('runAgainstCleanBaseline runs fn against HEAD and restores the dirty diff afterward', () => {
+    workspace = createTempWorkspace({ files: { 'README.md': 'hello\n' } });
+    initGitRepo(workspace.root);
+    commitAll(workspace.root, 'initial commit');
+    writeFileSync(join(workspace.root, 'README.md'), 'changed\n', 'utf8');
+    writeFileSync(join(workspace.root, 'new.txt'), 'new\n', 'utf8');
+
+    const client = new GitClient(workspace.root);
+    const seenDuringBaseline = client.runAgainstCleanBaseline(() => ({
+      readmeContent: readFileSync(join(workspace.root, 'README.md'), 'utf8').replace(/\r\n/g, '\n'),
+      newTxtExists: existsSync(join(workspace.root, 'new.txt')),
+    }));
+
+    expect(seenDuringBaseline).toEqual({ readmeContent: 'hello\n', newTxtExists: false });
+    // The dirty diff must be back afterward, unharmed.
+    expect(client.dirtyPaths().sort()).toEqual(['README.md', 'new.txt']);
+    expect(readFileSync(join(workspace.root, 'README.md'), 'utf8').replace(/\r\n/g, '\n')).toBe('changed\n');
+    expect(existsSync(join(workspace.root, 'new.txt'))).toBe(true);
+  });
+
+  test('runAgainstCleanBaseline restores the dirty diff even when fn throws', () => {
+    workspace = createTempWorkspace({ files: { 'README.md': 'hello\n' } });
+    initGitRepo(workspace.root);
+    commitAll(workspace.root, 'initial commit');
+    writeFileSync(join(workspace.root, 'README.md'), 'changed\n', 'utf8');
+
+    const client = new GitClient(workspace.root);
+    expect(() =>
+      client.runAgainstCleanBaseline(() => {
+        throw new Error('boom');
+      }),
+    ).toThrow('boom');
+
+    expect(client.dirtyPaths()).toEqual(['README.md']);
+    expect(readFileSync(join(workspace.root, 'README.md'), 'utf8').replace(/\r\n/g, '\n')).toBe('changed\n');
+  });
+
+  test('runAgainstCleanBaseline returns null and does nothing when the worktree is already clean', () => {
+    workspace = createTempWorkspace({ files: { 'README.md': 'hello\n' } });
+    initGitRepo(workspace.root);
+    commitAll(workspace.root, 'initial commit');
+
+    const client = new GitClient(workspace.root);
+    let called = false;
+    const result = client.runAgainstCleanBaseline(() => {
+      called = true;
+      return 'unused';
+    });
+
+    expect(result).toBeNull();
+    expect(called).toBe(false);
+    expect(client.dirtyPaths()).toEqual([]);
+  });
 });

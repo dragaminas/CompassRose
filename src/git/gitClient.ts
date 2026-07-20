@@ -61,6 +61,27 @@ export class GitClient {
     }
   }
 
+  /**
+   * Runs `fn` against a clean checkout of `HEAD` by temporarily stashing every current change
+   * (tracked and untracked), then restoring the stash afterward -- even if `fn` throws. Used to
+   * confirm whether a quality-gate failure already existed before the active task's own diff, so
+   * a pre-existing/unrelated failure is never mistaken for a defect this task introduced. Returns
+   * `null` (and leaves the worktree untouched) when there is nothing to stash, since a clean
+   * baseline and the current tree are then identical anyway.
+   */
+  runAgainstCleanBaseline<T>(fn: () => T): T | null {
+    if (this.dirtyPaths().length === 0) {
+      return null;
+    }
+
+    this.execGitAllowStatus(['stash', 'push', '-u', '-m', 'compassrose-baseline-check'], [0]);
+    try {
+      return fn();
+    } finally {
+      this.execGitAllowStatus(['stash', 'pop'], [0]);
+    }
+  }
+
   diffNameOnly(excludedPaths: readonly string[] = []): string[] {
     const pathspecArgs = this.buildPathspecArgs(excludedPaths);
     return uniqueStrings([

@@ -7,6 +7,7 @@ import {
   compareFeatureIds,
   createRunId,
   errorMessage,
+  extractReferencedPaths,
   isRecord,
   primaryTaskAnchorFromId,
   readPositiveInteger,
@@ -133,5 +134,47 @@ describe('errorMessage', () => {
 describe('assertNever', () => {
   test('throws with the stringified value', () => {
     expect(() => assertNever('unexpected' as never)).toThrow(/Unhandled value: unexpected/);
+  });
+});
+
+describe('extractReferencedPaths', () => {
+  const ESC = String.fromCharCode(27);
+
+  test('extracts a plain repo-relative path with a :line:col suffix', () => {
+    const output = 'FAIL tests/protoBlockerFlows.test.ts:154:27\nsome other line';
+    expect(extractReferencedPaths(output)).toEqual(['tests/protoBlockerFlows.test.ts']);
+  });
+
+  test('strips ANSI color codes before matching, as real vitest output contains them', () => {
+    const output = [
+      `${ESC}[1m${ESC}[31mFAIL${ESC}[39m${ESC}[22m tests/protoBlockerFlows.test.ts`,
+      `${ESC}[36m ${ESC}[2m❯${ESC}[22m tests/protoBlockerFlows.test.ts:${ESC}[2m154:27${ESC}[22m${ESC}[39m`,
+    ].join('\n');
+
+    expect(extractReferencedPaths(output)).toEqual(['tests/protoBlockerFlows.test.ts']);
+  });
+
+  test('deduplicates repeated references to the same path', () => {
+    const output = 'tests/foo.test.ts:1:1\ntests/foo.test.ts:2:2\ntests/foo.test.ts';
+    expect(extractReferencedPaths(output)).toEqual(['tests/foo.test.ts']);
+  });
+
+  test('extracts multiple distinct paths', () => {
+    const output = 'FAIL tests/a.test.ts:1:1\nFAIL tests/b.test.ts:2:2';
+    expect(extractReferencedPaths(output).sort()).toEqual(['tests/a.test.ts', 'tests/b.test.ts']);
+  });
+
+  test('excludes node_modules paths', () => {
+    const output = 'at Object.<anonymous> (node_modules/vitest/dist/index.js:12:3)\ntests/foo.test.ts:1:1';
+    expect(extractReferencedPaths(output)).toEqual(['tests/foo.test.ts']);
+  });
+
+  test('returns an empty array when no path-like text is present', () => {
+    expect(extractReferencedPaths('all good, no failures here')).toEqual([]);
+  });
+
+  test('does not match an absolute Windows path with backslashes', () => {
+    const output = 'C:\\Users\\Eric\\repo\\src\\orchestrator\\orchestrator.ts:3446:13';
+    expect(extractReferencedPaths(output)).toEqual([]);
   });
 });

@@ -144,6 +144,7 @@ import {
   compareFeatureIds,
   createRunId,
   errorMessage,
+  extractReferencedPaths,
   isRecord,
   primaryTaskAnchorFromId,
   readPositiveInteger,
@@ -3433,21 +3434,33 @@ export class CompassRoseOrchestrator {
     };
   }
 
+  private runShellCommand(command: string): { readonly status: number | null; readonly stdout: string; readonly stderr: string } {
+    const result = spawnSync(command, {
+      cwd: this.repositoryRoot,
+      shell: true,
+      encoding: 'utf8',
+      maxBuffer: 10 * 1024 * 1024,
+    });
+
+    if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
+      throw new ControlledStopError(
+        `Controlled stop requested while running quality gate ${command}.`,
+        stopExitCodeForSignal(result.signal),
+        result.signal,
+      );
+    }
+
+    return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+  }
+
   private runQualityGates(task: ParsedTaskDocument): QualityGateResult[] {
     return task.qualityGates.map((command) => {
-      const result = spawnSync(command, {
-        cwd: this.repositoryRoot,
-        shell: true,
-        encoding: 'utf8',
-        maxBuffer: 10 * 1024 * 1024,
-      });
-
-      if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
-        throw new ControlledStopError(
-          `Controlled stop requested while running quality gate ${command}.`,
-          stopExitCodeForSignal(result.signal),
-          result.signal,
-        );
+      const result = this.runShellCommand(command);
+      if (result.status !== 0) {
+        const waived = this.tryWaiveUnrelatedGateFailure(task, command, result.stdout, result.stderr);
+        if (waived) {
+          return waived;
+        }
       }
 
       return {
@@ -3457,6 +3470,58 @@ export class CompassRoseOrchestrator {
         output_summary: summarizeCommandOutput(result.stdout, result.stderr),
       } satisfies QualityGateResult;
     });
+  }
+
+  /**
+   * Reclassifies a failing quality-gate command as `waived` when the failure is confirmed to be
+   * unrelated to this task: none of the paths its output references fall within this task's own
+   * `allowedPaths` or its actual changed files, AND the same command still fails against a clean
+   * checkout of `HEAD` (i.e. it already failed before this task's diff existed). This is what
+   * stops a narrowly-scoped correction/doctor-recovery task from being rejected by an unrelated,
+   * pre-existing failure elsewhere in a broad gate like `npm test` -- see the "gate/scope
+   * mismatch" finding (cause F) in the fragility diagnosis at
+   * C:\Users\Eric\.claude\plans\atomic-strolling-rivest.md: two real multi-round recovery chains
+   * (F002-T07-C2, F002-T10) needed a second, near-duplicate round only because their correct
+   * first fix was rejected by a test failure entirely outside what that task was allowed to touch.
+   *
+   * Deliberately conservative: returns `null` (stays `failed`) whenever the output doesn't clearly
+   * name a file, when any named file IS in scope, or when the baseline re-run can't reproduce the
+   * same failure -- a false "failed" costs an extra recovery round; a false "waived" would let a
+   * real regression through uncontested.
+   */
+  private tryWaiveUnrelatedGateFailure(
+    task: ParsedTaskDocument,
+    command: string,
+    stdout: string,
+    stderr: string,
+  ): QualityGateResult | null {
+    const referencedPaths = extractReferencedPaths(`${stdout}\n${stderr}`);
+    if (referencedPaths.length === 0) {
+      return null;
+    }
+
+    const changedFiles = this.git.diffNameOnly();
+    const inScope = referencedPaths.some(
+      (path) => isPathAllowedByPrefix(path, task.allowedPaths) || changedFiles.includes(path),
+    );
+    if (inScope) {
+      return null;
+    }
+
+    const baselineStatus = this.git.runAgainstCleanBaseline(() => this.runShellCommand(command).status);
+    if (baselineStatus === null || baselineStatus === 0) {
+      return null;
+    }
+
+    return {
+      name: command,
+      command,
+      status: 'waived',
+      output_summary:
+        `Waived: this command already fails the same way on a clean checkout of HEAD, and its `
+        + `failure output names no path within this task's allowed_paths (${task.allowedPaths.join(', ')}) `
+        + `or changed files (${changedFiles.join(', ') || 'none'}) -- referenced instead: ${referencedPaths.join(', ')}.`,
+    } satisfies QualityGateResult;
   }
 
   private ensureQualityGateResults(task: ParsedTaskDocument): QualityGateResult[] {
