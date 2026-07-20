@@ -62,6 +62,7 @@ import { resolveRepositoryRelativePath } from '../filesystem/pathResolver.js';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { normalizeTextForWrite, readUtf8 } from '../filesystem/textNormalization.js';
 import { parseTaskDocument, storedTaskArtifactFromDocument } from '../task/taskDocument.js';
+import { sanitizeAllowedPaths, validateQualityGateRefs } from '../task/taskContentValidation.js';
 import {
   buildCorrectionTaskFileName,
   buildStateCorrectionTaskId,
@@ -1662,7 +1663,13 @@ export class CompassRoseOrchestrator {
     planned: PlannerOutput,
     taskRequestLink: { featureId: string; taskRequestId: string } | null = null,
   ): StepExecutionResult {
-    const task = planned.task;
+    const scopeSanitization = sanitizeAllowedPaths(planned.task.scope.allowed_paths);
+    this.logScopeSanitizationNotices(scopeSanitization.notices);
+    const task: PlannedTask = {
+      ...planned.task,
+      scope: { ...planned.task.scope, allowed_paths: scopeSanitization.allowedPaths },
+    };
+    const sanitizedPlanned: PlannerOutput = { ...planned, task };
     validateTaskDeliverables(task, 'task');
     this.assertTaskIdIsUnused(feature.tasksDirectory, task.task_id, 'Task planning');
 
@@ -1670,7 +1677,7 @@ export class CompassRoseOrchestrator {
     const taskMarkdown = renderTaskMarkdown(task);
 
     this.writeTaskDocument(taskPath, taskMarkdown);
-    this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), planned);
+    this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), sanitizedPlanned);
 
     const updatedFeatureState = this.updateFeatureStateForTaskPlan(feature.statePath, task.task_id, task.title, taskRequestLink);
     const updatedProjectState = this.updateProjectStateForTaskPlan(featureId, task.task_id);
@@ -1992,8 +1999,16 @@ export class CompassRoseOrchestrator {
       [],
       `planner:fix-task-plan:${fixId}`,
     );
+    const scopeSanitization = sanitizeAllowedPaths(rawPlanned.task.scope.allowed_paths);
+    this.logScopeSanitizationNotices(scopeSanitization.notices);
     // Deterministic, not trusted from the LLM's own echo -- fixes never have task requests.
-    const planned: PlannerOutput = { task: { ...rawPlanned.task, source_task_request_id: null } };
+    const planned: PlannerOutput = {
+      task: {
+        ...rawPlanned.task,
+        source_task_request_id: null,
+        scope: { ...rawPlanned.task.scope, allowed_paths: scopeSanitization.allowedPaths },
+      },
+    };
     const task = planned.task;
 
     validateTaskDeliverables(task, 'task');
@@ -2153,8 +2168,17 @@ export class CompassRoseOrchestrator {
       [],
       `planner:doctor-recovery:${featureId}`,
     );
-    const task = planned.task;
+    const scopeSanitization = sanitizeAllowedPaths(planned.task.scope.allowed_paths);
+    this.logScopeSanitizationNotices(scopeSanitization.notices);
+    const task: PlannedTask = {
+      ...planned.task,
+      scope: { ...planned.task.scope, allowed_paths: scopeSanitization.allowedPaths },
+    };
     validateTaskDeliverables(task, 'doctor recovery task');
+    // Doctor recovery IS a correction/recovery of a specific prior task -- unlike a first-time
+    // task's own gates, a bare-HEAD `git diff --exit-code` here can only ever pass by leaving
+    // the very thing this recovery exists to undo untouched. See validateQualityGateRefs.
+    validateQualityGateRefs(task.quality_gates.before_review, 'doctor recovery task');
     this.assertTaskIdIsUnused(owner.tasksDirectory, task.task_id, 'Doctor recovery planning');
     this.reconcileDirtyPathsForNewScope(featureId, snapshot.activeTask, task.scope.allowed_paths);
 
@@ -2176,6 +2200,7 @@ export class CompassRoseOrchestrator {
     this.writeTaskDocument(taskPath, taskMarkdown);
     this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), {
       ...planned,
+      task,
       doctor_recovery: doctorRecoveryMetadata,
     });
     this.writeBlockerProfile(featureId, task.task_id, blocker, doctorRecoveryMetadata.restoration_target, reason);
@@ -2945,7 +2970,17 @@ export class CompassRoseOrchestrator {
         throw new Error(`Review for ${taskId} returned changes_required without a correction task.`);
       }
 
-      const correction = review.correction_task;
+      const rawCorrection = review.correction_task;
+      const correctionScopeSanitization = sanitizeAllowedPaths(rawCorrection.scope.allowed_paths);
+      this.logScopeSanitizationNotices(correctionScopeSanitization.notices);
+      // A correction task IS by definition a correction/recovery of the task under review --
+      // unlike that original task's own gates, a bare-HEAD `git diff --exit-code` here can only
+      // ever pass by leaving the very thing this correction exists to undo untouched.
+      validateQualityGateRefs(rawCorrection.quality_gates.before_review, 'correction task');
+      const correction: CorrectionTask = {
+        ...rawCorrection,
+        scope: { ...rawCorrection.scope, allowed_paths: correctionScopeSanitization.allowedPaths },
+      };
       this.assertTaskIdIsUnused(owner.tasksDirectory, correction.correction_task_id, 'Review correction-task authoring');
       const correctionPath = this.writeCorrectionTask(correction);
       this.artifacts.writeJson(join('tasks', `${correction.correction_task_id}.json`), {
@@ -4115,6 +4150,12 @@ export class CompassRoseOrchestrator {
   private writeTaskDocument(path: string, markdown: string): void {
     writeText(path, markdown);
     this.runtimeAuthoredTaskPaths.add(relativePath(this.repositoryRoot, path));
+  }
+
+  private logScopeSanitizationNotices(notices: readonly string[]): void {
+    for (const notice of notices) {
+      console.warn(`[task-content-validation] ${notice}`);
+    }
   }
 
   private writeCorrectionTask(correction: CorrectionTask): string {
