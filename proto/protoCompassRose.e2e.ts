@@ -180,7 +180,10 @@ function main(): number {
   // history once the e2e harness clones the current repository as its test workspace.
   const correctionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-C90.json');
   const taskInterfaceAnalysisPath = join(cloneRoot, '.git', 'proto-compassrose', 'task-interface-analysis', 'F002-T04.json');
-  const recoveryLessonPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-recovery-lesson.json');
+  // Per-task file, not the old singleton `latest-recovery-lesson.json` -- that file only ever
+  // held whichever lesson was recorded most recently and got dropped in favor of an accumulating,
+  // cross-anchor reader (see loadRecentRecoveryLessons in src/orchestrator/orchestrator.ts).
+  const recoveryLessonPath = join(cloneRoot, '.git', 'proto-compassrose', 'recovery-lessons', 'F002-T04.json');
   const diagnosticPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-diagnostic.json');
   const refinementPath = join(cloneRoot, '.git', 'proto-compassrose', 'latest-refinement.json');
   const implementationArtifactPath = join(cloneRoot, '.git', 'proto-compassrose', 'implementations', 'F002-T04.json');

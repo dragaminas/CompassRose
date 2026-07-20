@@ -63,6 +63,7 @@ import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { normalizeTextForWrite, readUtf8 } from '../filesystem/textNormalization.js';
 import { parseTaskDocument, storedTaskArtifactFromDocument } from '../task/taskDocument.js';
 import { sanitizeAllowedPaths, validateQualityGateRefs } from '../task/taskContentValidation.js';
+import { classifyRecoveryLessonCategory } from './recoveryLessons.js';
 import {
   buildCorrectionTaskFileName,
   buildStateCorrectionTaskId,
@@ -2664,49 +2665,6 @@ export class CompassRoseOrchestrator {
     };
   }
 
-  private buildDiagnosticArtifactPromptLines(feature: WorkItemContext): string[] {
-    const lines: string[] = [];
-    const inspection = statSafeIsFile(feature.statePath) ? this.tryReadFeatureStateSnapshot(feature) : null;
-    const activeTaskCandidates = uniqueStrings([
-      inspection?.activeTask ?? 'none',
-      inspection?.activeCorrectionTask ?? 'none',
-      inspection?.activeUnblockTask ?? 'none',
-    ].filter((value) => value !== 'none'));
-
-    for (const taskId of activeTaskCandidates) {
-      const taskPath = this.tryFindTaskDocumentPath(taskId, feature.tasksDirectory);
-      if (taskPath) {
-        lines.push(`- \`${relativePath(this.repositoryRoot, taskPath)}\``);
-      }
-
-      const artifactPaths = [
-        join(this.repositoryRoot, '.git', 'proto-compassrose', 'implementations', `${taskId}.json`),
-        join(this.repositoryRoot, '.git', 'proto-compassrose', 'implementation-attempts', `${taskId}.json`),
-        join(this.repositoryRoot, '.git', 'proto-compassrose', 'quality-gates', `${taskId}.json`),
-        join(this.repositoryRoot, '.git', 'proto-compassrose', 'reviews', `${taskId}.json`),
-        join(this.repositoryRoot, '.git', 'proto-compassrose', 'task-interface-analysis', `${taskId}.json`),
-      ];
-
-      for (const artifactPath of artifactPaths) {
-        if (statSafeIsFile(artifactPath)) {
-          lines.push(`- \`${relativePath(this.repositoryRoot, artifactPath)}\``);
-        }
-      }
-    }
-
-    const latestRecoveryLesson = join(this.repositoryRoot, '.git', 'proto-compassrose', 'latest-recovery-lesson.json');
-    if (statSafeIsFile(latestRecoveryLesson)) {
-      lines.push(`- \`${relativePath(this.repositoryRoot, latestRecoveryLesson)}\``);
-    }
-
-    const latestRefinement = join(this.repositoryRoot, '.git', 'proto-compassrose', 'latest-refinement.json');
-    if (statSafeIsFile(latestRefinement)) {
-      lines.push(`- \`${relativePath(this.repositoryRoot, latestRefinement)}\``);
-    }
-
-    return uniqueStrings(lines);
-  }
-
   private writeDiagnosticArtifact(decision: DiagnosticAutocorrectionDecision): void {
     const markdown = [
       `# Diagnostic: ${decision.feature_id}`,
@@ -2883,6 +2841,7 @@ export class CompassRoseOrchestrator {
       reviewDiff.source === 'fallback'
         ? '- The provided diff is a fallback capture from the commit created during the attempt; use it to diagnose the attempted change, not as proof that handoff requirements were satisfied.'
         : null,
+      ...this.buildRecoveryLessonPromptLines(task.featureId, task.taskId),
       '',
       'Rules:',
       '- Validate objective, acceptance criteria, scope, constraints, and quality gates.',
@@ -5360,9 +5319,7 @@ export class CompassRoseOrchestrator {
   ): RecoveryLesson {
     const lesson = this.buildRecoveryLesson(task, review, implementation, qualityResults, analysis, correctionTaskId);
     this.artifacts.writeJson(join('recovery-lessons', `${task.taskId}.json`), lesson);
-    this.artifacts.writeJson('latest-recovery-lesson.json', lesson);
     this.artifacts.writeText(join('recovery-lessons', `${task.taskId}.md`), this.renderRecoveryLessonMarkdown(lesson));
-    this.artifacts.writeText('latest-recovery-lesson.md', this.renderRecoveryLessonMarkdown(lesson));
     return lesson;
   }
 
@@ -5388,6 +5345,13 @@ export class CompassRoseOrchestrator {
       .filter((result) => result.status === 'failed')
       .map((result) => `${result.name}: ${result.output_summary}`);
 
+    const category = classifyRecoveryLessonCategory({
+      scopeIsolationNotes,
+      qualityGateFailures,
+      implementerLimitations: analysis.implementer_limitations,
+      recommendedAction: analysis.recommended_action,
+    });
+
     return {
       run_id: this.runId,
       created_at: new Date().toISOString(),
@@ -5395,6 +5359,7 @@ export class CompassRoseOrchestrator {
       task_id: task.taskId,
       correction_task_id: correctionTaskId,
       review_status: review.status,
+      category,
       summary: review.summary,
       implementation_notes: implementation.implementation_notes,
       review_findings: review.findings.map((finding) => `[${finding.severity}] ${finding.message}`),
@@ -5409,34 +5374,40 @@ export class CompassRoseOrchestrator {
   }
 
   /**
-   * `activeTaskId`, when given, additionally requires the lesson to be about the SAME task
-   * anchor currently being recovered (see primaryTaskAnchorFromId) -- not just the same
-   * feature. `latest-recovery-lesson.json` is a single file overwritten only when a NEW
-   * lesson is recorded, so without this check a stale lesson from an unrelated, long-finished
-   * task keeps getting fed into doctor-recovery prompts for every later, unrelated failure on
-   * that feature until something else happens to overwrite it. Confirmed in practice: a
-   * two-day-old lesson from F002-T14 (part of the orchestration-adjacent work later
-   * superseded by embedding the real orchestrator) was still "latest" for feature
-   * 002-configuration-model and got surfaced, verbatim task_interface_adjustments and all,
-   * while diagnosing an unrelated F002-T15 quality-gate failure -- producing a doctor-recovery
-   * task that proposed "fixing" since-deleted code.
+   * Reads every recorded lesson for `featureId` (not just the single most-recently-written one),
+   * across every task anchor, and returns the most recent `limit`. This is what lets a lesson
+   * learned on one task chain inform a later, unrelated chain instead of only ever being visible
+   * while its own anchor is active -- real evidence in this repository's own recovery-lessons
+   * history shows the same defect (implementer context artifacts missing at the supplied paths)
+   * recurring verbatim across four distinct, unrelated anchors (F002-T09, T10, T12, T16) because
+   * the old single-overwritten-file design could only ever surface whichever one was most recent.
    *
-   * Callers planning a brand NEW task (planTask/planFixTask) intentionally omit
-   * `activeTaskId`, since learning from the feature's most recent lesson regardless of which
-   * task it was about is the intended, existing behavior there -- only doctor-recovery
-   * (which is fixing one specific active task) needs this narrower match.
+   * When `activeTaskId` is given, lessons about that SAME anchor (see primaryTaskAnchorFromId)
+   * are sorted first -- still the most directly relevant lesson for a doctor-recovery task fixing
+   * one specific active task -- but unlike the old design, a same-anchor match is a sort
+   * preference now, not an exclusive filter that discards every other lesson.
    */
-  private loadLatestRecoveryLesson(featureId: string, activeTaskId?: string | null): RecoveryLesson | null {
-    const lesson = this.artifacts.readJson<RecoveryLesson>('latest-recovery-lesson.json');
-    if (!lesson || lesson.feature_id !== featureId) {
-      return null;
-    }
+  private loadRecentRecoveryLessons(featureId: string, activeTaskId?: string | null, limit = 5): RecoveryLesson[] {
+    const lessons = this.artifacts
+      .listFiles('recovery-lessons')
+      .filter((entry) => entry.name.endsWith('.json'))
+      .map((entry) => this.artifacts.readJson<RecoveryLesson>(join('recovery-lessons', entry.name)))
+      .filter((lesson): lesson is RecoveryLesson => lesson !== null && lesson.feature_id === featureId);
 
-    if (activeTaskId && primaryTaskAnchorFromId(lesson.task_id) !== primaryTaskAnchorFromId(activeTaskId)) {
-      return null;
-    }
+    const sameAnchor = activeTaskId ? primaryTaskAnchorFromId(activeTaskId) : null;
+    lessons.sort((a, b) => {
+      if (sameAnchor) {
+        const aMatches = primaryTaskAnchorFromId(a.task_id) === sameAnchor;
+        const bMatches = primaryTaskAnchorFromId(b.task_id) === sameAnchor;
+        if (aMatches !== bMatches) {
+          return aMatches ? -1 : 1;
+        }
+      }
 
-    return lesson;
+      return b.created_at.localeCompare(a.created_at);
+    });
+
+    return lessons.slice(0, limit);
   }
 
   private loadLatestDiagnostic(featureId: string): DiagnosticAutocorrectionDecision | null {
@@ -5485,8 +5456,8 @@ export class CompassRoseOrchestrator {
   }
 
   private buildRecoveryLessonPromptLines(featureId: string, activeTaskId?: string | null): string[] {
-    const lesson = this.loadLatestRecoveryLesson(featureId, activeTaskId);
-    if (!lesson) {
+    const lessons = this.loadRecentRecoveryLessons(featureId, activeTaskId);
+    if (lessons.length === 0) {
       const refinement = this.loadLatestRefinement(featureId, activeTaskId);
       if (!refinement) {
         return [];
@@ -5516,8 +5487,42 @@ export class CompassRoseOrchestrator {
 
     const lines = [
       '',
-      'Recent recovery lesson (advisory only — produced by a prior review/analysis model call and not independently verified; treat it as a hypothesis to check against the contracts listed above, not as a confirmed requirement):',
-      `- task_id: ${lesson.task_id}`,
+      `Recent recovery lessons for this feature (${lessons.length} shown, most relevant first — advisory only, produced by prior review/analysis model calls and not independently verified; treat each as a hypothesis to check against the contracts listed above, not a confirmed requirement):`,
+      ...this.describeRecurringRecoveryLessonCategories(lessons),
+    ];
+
+    for (const lesson of lessons) {
+      lines.push('', `- lesson for task_id ${lesson.task_id} (category: ${lesson.category}):`);
+      lines.push(...this.renderRecoveryLessonDetailLines(lesson));
+    }
+
+    return lines;
+  }
+
+  /**
+   * Surfaces, as an explicit callout, when 2+ of the shown lessons share the same primary
+   * defect category -- the concrete signal causa E's redesign exists to expose (this
+   * repository's own recovery-lessons history has a real recurring defect spanning four
+   * unrelated task anchors that the old single-lesson design never once surfaced together).
+   */
+  private describeRecurringRecoveryLessonCategories(lessons: readonly RecoveryLesson[]): string[] {
+    const countByCategory = new Map<string, number>();
+    for (const lesson of lessons) {
+      countByCategory.set(lesson.category, (countByCategory.get(lesson.category) ?? 0) + 1);
+    }
+
+    const recurring = [...countByCategory.entries()].filter(([, count]) => count > 1);
+    if (recurring.length === 0) {
+      return [];
+    }
+
+    return recurring.map(
+      ([category, count]) => `- recurring_category: ${count} of the last ${lessons.length} lessons for this feature are categorized "${category}" -- consider whether this is a systemic gap rather than a one-off mistake.`,
+    );
+  }
+
+  private renderRecoveryLessonDetailLines(lesson: RecoveryLesson): string[] {
+    const lines = [
       `- review_status: ${lesson.review_status}`,
       `- summary: ${lesson.summary}`,
       `- implementation_notes: ${lesson.implementation_notes ?? 'none'}`,
@@ -5581,6 +5586,7 @@ export class CompassRoseOrchestrator {
       `- run_id: \`${lesson.run_id}\``,
       `- correction_task_id: \`${lesson.correction_task_id ?? 'none'}\``,
       `- review_status: ${lesson.review_status}`,
+      `- category: ${lesson.category}`,
       `- summary: ${lesson.summary}`,
       '',
       '## Scope Isolation',
