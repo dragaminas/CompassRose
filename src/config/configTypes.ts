@@ -57,6 +57,7 @@ export interface LimitsSection {
   readonly max_tasks_per_run: number;
   readonly max_retries_per_task: number;
   readonly max_review_iterations: number;
+  readonly max_recovery_iterations: number;
   readonly stop_on_quality_gate_failure: boolean;
   readonly stop_on_review_failure: boolean;
 }

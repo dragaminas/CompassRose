@@ -1075,6 +1075,7 @@ function validateLimitsSection(section: Record<string, unknown>, issues: Configu
   const maxTasksPerRun = requireNonNegativeInteger(section, 'max_tasks_per_run', 'limits.max_tasks_per_run', issues);
   const maxRetriesPerTask = requireNonNegativeInteger(section, 'max_retries_per_task', 'limits.max_retries_per_task', issues);
   const maxReviewIterations = requireNonNegativeInteger(section, 'max_review_iterations', 'limits.max_review_iterations', issues);
+  const maxRecoveryIterations = requireNonNegativeInteger(section, 'max_recovery_iterations', 'limits.max_recovery_iterations', issues);
   const stopOnQualityGateFailure = requireBooleanValue(section, 'stop_on_quality_gate_failure', 'limits.stop_on_quality_gate_failure', issues);
   const stopOnReviewFailure = requireBooleanValue(section, 'stop_on_review_failure', 'limits.stop_on_review_failure', issues);
 
@@ -1083,6 +1084,7 @@ function validateLimitsSection(section: Record<string, unknown>, issues: Configu
       max_tasks_per_run: 0,
       max_retries_per_task: 0,
       max_review_iterations: 0,
+      max_recovery_iterations: 0,
       stop_on_quality_gate_failure: false,
       stop_on_review_failure: false,
     };
@@ -1092,6 +1094,7 @@ function validateLimitsSection(section: Record<string, unknown>, issues: Configu
     max_tasks_per_run: maxTasksPerRun,
     max_retries_per_task: maxRetriesPerTask,
     max_review_iterations: maxReviewIterations,
+    max_recovery_iterations: maxRecoveryIterations,
     stop_on_quality_gate_failure: stopOnQualityGateFailure,
     stop_on_review_failure: stopOnReviewFailure,
   };

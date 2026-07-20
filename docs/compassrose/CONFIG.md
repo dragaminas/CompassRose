@@ -114,6 +114,7 @@ limits:
   max_tasks_per_run: 50
   max_retries_per_task: 1
   max_review_iterations: 1
+  max_recovery_iterations: 3
   stop_on_quality_gate_failure: true
   stop_on_review_failure: true
 

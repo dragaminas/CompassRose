@@ -220,6 +220,13 @@ export class StateCorrectionLimitReachedError extends Error {
   }
 }
 
+export class DoctorRecoveryLimitReachedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DoctorRecoveryLimitReachedError';
+  }
+}
+
 export class CompassRoseOrchestrator {
   private readonly repositoryRoot: string;
   private readonly git: GitClient;
@@ -236,6 +243,7 @@ export class CompassRoseOrchestrator {
   private readonly fixesRoot: string;
   private readonly maxTasksPerRun: number;
   private readonly maxReviewIterations: number;
+  private readonly maxRecoveryIterations: number;
   private readonly runId: string;
   private readonly codexCommand: string;
   private readonly opencodeCommand: string;
@@ -296,6 +304,7 @@ export class CompassRoseOrchestrator {
     this.fixesRoot = fixesRoot;
     this.maxTasksPerRun = readPositiveInteger(limits, 'max_tasks_per_run') ?? Number.POSITIVE_INFINITY;
     this.maxReviewIterations = readPositiveInteger(limits, 'max_review_iterations') ?? 1;
+    this.maxRecoveryIterations = readPositiveInteger(limits, 'max_recovery_iterations') ?? 3;
     this.runId = createRunId();
     this.startedAt = new Date().toISOString();
   }
@@ -1159,9 +1168,18 @@ export class CompassRoseOrchestrator {
       }
       case 'doctor_recovery_task':
         return this.runDoctorRecoveryTask(requireString(decision.task_id, 'task_id'));
-      case 'unblock_task':
-        this.planDoctorRecoveryTask(requireString(decision.feature_id, 'feature_id'), decision.reason);
-        return { exitCode: 0, continueLoop: true, summary: `Doctor recovery task planned for feature ${requireString(decision.feature_id, 'feature_id')}.` };
+      case 'unblock_task': {
+        const unblockFeatureId = requireString(decision.feature_id, 'feature_id');
+        try {
+          this.planDoctorRecoveryTask(unblockFeatureId, decision.reason);
+          return { exitCode: 0, continueLoop: true, summary: `Doctor recovery task planned for feature ${unblockFeatureId}.` };
+        } catch (error) {
+          if (error instanceof DoctorRecoveryLimitReachedError) {
+            return { exitCode: 2, continueLoop: false, summary: error.message };
+          }
+          throw error;
+        }
+      }
       case 'diagnose_autocorrect':
         return this.diagnoseAndAutocorrect(requireString(decision.feature_id, 'feature_id'), decision.reason);
       case 'implement_task':
@@ -2022,6 +2040,19 @@ export class CompassRoseOrchestrator {
   private planDoctorRecoveryTask(featureId: string, reason: string): void {
     const owner = this.resolveWorkItemContext(featureId);
     const snapshot = this.readFeatureStateSnapshot(owner);
+
+    // Enforce the configured recovery-cycle depth limit before spending a planner call: the
+    // catastrophic 2026-06-28 incident (2,804 unbounded correction commits in one day) was this
+    // same unbounded-loop failure mode on the sibling correction path -- see
+    // limitStateCorrectionTaskId/StateCorrectionLimitReachedError for that guard. This is the
+    // twin guard for doctor-recovery/unblock cycles, which had no ceiling at all.
+    const priorAttempts = this.readDoctorRecoveryAttempts(owner.statePath);
+    if (priorAttempts >= this.maxRecoveryIterations) {
+      throw new DoctorRecoveryLimitReachedError(
+        `Doctor recovery iteration limit reached for feature ${featureId} after ${this.maxRecoveryIterations} attempt(s) recovering the same blocked state; refusing to plan another doctor recovery task.`,
+      );
+    }
+
     const recoveryActiveTask = snapshot.lifecycleState === 'implementation_failed'
       ? this.resolveImplementationFailureActiveTask(owner, snapshot)
       : null;
@@ -2142,7 +2173,7 @@ export class CompassRoseOrchestrator {
     });
     this.writeBlockerProfile(featureId, task.task_id, blocker, doctorRecoveryMetadata.restoration_target, reason);
 
-    const updatedFeatureState = this.updateFeatureStateForDoctorRecovery(owner.statePath, task.task_id, restorationTarget);
+    const updatedFeatureState = this.updateFeatureStateForDoctorRecovery(owner.statePath, task.task_id, restorationTarget, priorAttempts + 1);
     const updatedProjectState = this.updateProjectStateForDoctorRecovery(featureId, task.task_id, restorationTarget.lifecycle_state);
     writeText(owner.statePath, updatedFeatureState);
     writeText(this.projectStatePath, updatedProjectState);
@@ -2157,10 +2188,6 @@ export class CompassRoseOrchestrator {
         `proto: plan doctor recovery ${featureId}`,
       );
     }
-  }
-
-  private planUnblockTask(featureId: string, reason: string): void {
-    this.planDoctorRecoveryTask(featureId, reason);
   }
 
   private buildImplementationFailureRestorationTarget(feature: Pick<WorkItemContext, 'id'>, snapshot: FeatureStateSnapshot): RestorationTarget {
@@ -2208,7 +2235,15 @@ export class CompassRoseOrchestrator {
         };
       }
 
-      this.planDoctorRecoveryTask(featureId, decision.next_step_reason);
+      try {
+        this.planDoctorRecoveryTask(featureId, decision.next_step_reason);
+      } catch (error) {
+        if (error instanceof DoctorRecoveryLimitReachedError) {
+          return { exitCode: 2, continueLoop: false, summary: error.message };
+        }
+        throw error;
+      }
+
       return {
         exitCode: 0,
         continueLoop: true,
@@ -3858,6 +3893,26 @@ export class CompassRoseOrchestrator {
   }
 
   /**
+   * Counts how many doctor-recovery attempts have already been made for whatever is currently
+   * blocked/failed, entirely independent of how the LLM planner names each recovery task (real
+   * chains observed this session, e.g. "F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R7", nest
+   * unpredictably and can't be parsed back into a stable anchor). The runtime owns this counter
+   * completely: planDoctorRecoveryTask() increments it before every attempt, and
+   * updateFeatureStateAfterDoctorRecovery() resets it to 0 once a recovery actually succeeds.
+   */
+  private readDoctorRecoveryAttempts(statePath: string): number {
+    try {
+      const markdown = readUtf8(statePath);
+      const operationalStatus = requireSection(markdown, 'Operational Status');
+      const raw = stripTicks(parsePreferredStatusValue(operationalStatus, 'doctor_recovery_attempts') ?? '0');
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
    * Fails safe (treats the fix as unresolved) when the fix can't be found or read, so a
    * transient error never silently resumes a feature whose blocking defect might still be real.
    */
@@ -4994,6 +5049,7 @@ export class CompassRoseOrchestrator {
     featureStatePath: string,
     taskId: string,
     restorationTarget: RestorationTarget,
+    doctorRecoveryAttempts: number,
   ): string {
     let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'unblock_pending');
@@ -5002,6 +5058,7 @@ export class CompassRoseOrchestrator {
       active_unblock_task: taskId,
       last_review_result: 'blocked',
       last_unblock_result: 'not_run',
+      doctor_recovery_attempts: String(doctorRecoveryAttempts),
     });
     markdown = replaceSection(markdown, 'Blocked From', [
       `- lifecycle_state: \`${restorationTarget.lifecycle_state}\``,
@@ -5011,14 +5068,6 @@ export class CompassRoseOrchestrator {
     ].join('\n'));
     markdown = replaceSection(markdown, 'Next Planning Hint', `Execute doctor recovery task \`${taskId}\` next.`);
     return markdown;
-  }
-
-  private updateFeatureStateForUnblock(
-    featureStatePath: string,
-    taskId: string,
-    restorationTarget: RestorationTarget,
-  ): string {
-    return this.updateFeatureStateForDoctorRecovery(featureStatePath, taskId, restorationTarget);
   }
 
   private updateFeatureStateAfterStateCorrection(
@@ -5062,6 +5111,9 @@ export class CompassRoseOrchestrator {
       last_quality_gate_result: 'passed',
       last_review_result: 'skipped',
       last_unblock_result: 'passed',
+      // This recovery attempt actually worked -- reset the depth counter so a later, unrelated
+      // failure starts its own fresh budget instead of inheriting this one's exhausted count.
+      doctor_recovery_attempts: '0',
     });
     markdown = replaceSection(markdown, 'Blocked By', '- None');
     markdown = replaceSection(markdown, 'Blocked From', [
