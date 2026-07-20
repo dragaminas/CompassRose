@@ -3644,7 +3644,8 @@ export class CompassRoseOrchestrator {
   }
 
   private runQualityGates(task: ParsedTaskDocument): QualityGateResult[] {
-    return task.qualityGates.map((command) => {
+    const commands = [...task.qualityGates, ...this.coreRuntimeSmokeGateCommands()];
+    return commands.map((command) => {
       const result = this.runShellCommand(command);
       if (result.status !== 0) {
         const waived = this.tryWaiveUnrelatedGateFailure(task, command, result.stdout, result.stderr);
@@ -3660,6 +3661,23 @@ export class CompassRoseOrchestrator {
         output_summary: summarizeCommandOutput(result.stdout, result.stderr),
       } satisfies QualityGateResult;
     });
+  }
+
+  /**
+   * Standard gate injected deterministically -- never something the task itself declares --
+   * whenever the diff touches core runtime code (src/orchestrator/, src/cli/, src/task/). vitest
+   * tolerates CommonJS-style `require()` inside an ESM module through its own CJS interop; a
+   * real ESM loader does not (see scripts/runtimeSmokeTest.mjs, which imports src/cli/main.ts --
+   * and therefore its whole transitive module graph -- under tsx's real loader). That gap let a
+   * `require('node:fs')` regression pass every vitest-based gate this session and crash
+   * correctState() under the real CLI; this closes it without relying on any task author (LLM or
+   * human) to remember to ask for it.
+   */
+  private coreRuntimeSmokeGateCommands(): readonly string[] {
+    const coreRuntimePrefixes = ['src/orchestrator/', 'src/cli/', 'src/task/'];
+    const changedFiles = this.git.diffNameOnly();
+    const touchesCoreRuntime = changedFiles.some((path) => isPathAllowedByPrefix(path, coreRuntimePrefixes));
+    return touchesCoreRuntime ? ['node_modules/.bin/tsx scripts/runtimeSmokeTest.mjs src/cli/main.ts'] : [];
   }
 
   /**

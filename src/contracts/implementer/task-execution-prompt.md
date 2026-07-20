@@ -35,6 +35,7 @@ The implementer must:
 - end every attempt with a short `## Implementation Notes` section that justifies the outcome, written in your own final reply text rather than only inside an edited file — the runtime parses it from what you say, not from a diff
 - stay within allowed paths
 - respect forbidden paths
+- treat this repository as pure ESM (`"type": "module"`): never use `require()`, `module.exports`, `__dirname`, or `__filename` in `src/`; use `import`/`export` and `import.meta.url` instead — vitest's CJS interop tolerates `require()` in a `.ts` file, but the real CLI run under a real ESM loader does not, and will crash
 - satisfy the acceptance criteria
 - follow the declared development policy
 - run or support the required quality gates when possible
@@ -81,6 +82,7 @@ Instructions:
 - Do not stop after reading context; continue until there is repository evidence matching `minimum_progress_evidence` or an explicit blocker.
 - Stay within `scope.allowed_paths`.
 - Do not modify `scope.forbidden_paths`.
+- This repository is pure ESM (`"type": "module"`). Never use `require()`, `module.exports`, `__dirname`, or `__filename`; use `import`/`export` and `import.meta.url` instead. vitest tolerates `require()` in a `.ts` file through its own CJS interop, but the real CLI run under a real ESM loader does not, and will crash.
 - Leave the reviewable diff visible in the live worktree for handoff unless the task contract explicitly allows a different handoff mode.
 - Satisfy the task objective and acceptance criteria.
 - Follow the declared development policy.
