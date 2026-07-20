@@ -71,7 +71,21 @@ function main(): number {
   // `git status` report files as modified even though the content matches HEAD byte for
   // byte. Re-add now, before scenario seeding introduces real (intentional) dirtiness, so
   // later "worktree is clean" assertions reflect only what the run itself leaves behind.
+  //
+  // Commit this baseline (rather than leaving it merely staged) so HEAD actually reflects the
+  // scenario's intended starting point: copyTree above mirrors whatever repoRoot's own working
+  // tree currently looks like (which may itself be mid-edit during interactive development, not
+  // just committed history), and pinScenarioConfigLimits always rewrites CONFIG.md. Left
+  // uncommitted, both would surface as part of every subsequent `git diff`/`diffNameOnly` call
+  // for the rest of the run -- including the runtime's own review-time scope check, which reads
+  // that diff to decide whether the *task's own* changes stayed within its declared
+  // allowed_paths. --allow-empty covers the rare case where neither step changed anything.
   spawnSync('git', ['add', '-A'], { cwd: cloneRoot, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
+  spawnSync('git', ['commit', '--quiet', '--allow-empty', '-m', 'e2e scenario baseline'], {
+    cwd: cloneRoot,
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
 
   const codexMock = join(tempRoot, 'codex-mock.cjs');
   const opencodeMock = join(tempRoot, 'opencode-mock.cjs');
@@ -699,6 +713,12 @@ function seedMalformedFeatureState(cloneRoot: string): void {
 function seedStateCorrectionFallbackTaskArtifact(cloneRoot: string): void {
   const artifactsRoot = join(cloneRoot, '.git', 'proto-compassrose', 'tasks');
   mkdirSync(artifactsRoot, { recursive: true });
+  // loadTask() prefers this cached artifact's own fields (scope included) over the live .md
+  // document it's meant to mirror -- see the "task snapshot caching" gotcha. The scope below must
+  // therefore match what the .md fixture written just below actually declares
+  // (docs/features/002-configuration-model/tasks/), not SEEDED_TASK's unrelated real scope,
+  // or the runtime's deterministic review-time scope check will flag this fixture's own task
+  // document as an out-of-scope change.
   writeFileSync(
     join(artifactsRoot, `${STATE_CORRECTION_FALLBACK_TASK_ID}.json`),
     `${JSON.stringify({
@@ -706,6 +726,12 @@ function seedStateCorrectionFallbackTaskArtifact(cloneRoot: string): void {
       task: {
         ...SEEDED_TASK.task,
         task_id: STATE_CORRECTION_FALLBACK_TASK_ID,
+        scope: {
+          // 'proto/' covers the mock opencode implementer's own marker file convention (see
+          // OPENCODE_MOCK_SCRIPT), which is not real implementation work either.
+          allowed_paths: ['docs/features/002-configuration-model/tasks/', 'proto/'],
+          forbidden_paths: ['all other paths'],
+        },
       },
     }, null, 2)}\n`,
     'utf8',
@@ -737,6 +763,7 @@ repair anchor.
 ## Scope
 Allowed:
 - \`docs/features/002-configuration-model/tasks/\`
+- \`proto/\`
 
 Forbidden:
 - all other paths
@@ -1614,6 +1641,12 @@ const SEEDED_TASK = {
         'src/doctor/doctorCommand.ts',
         'tests/configReader.test.ts',
         'tests/doctorCommand.test.ts',
+        // The mock opencode implementer (OPENCODE_MOCK_SCRIPT below) never actually edits the
+        // paths above -- it proves it ran by writing a scenario marker file under proto/
+        // instead. Without this, the runtime's own deterministic review-time scope check
+        // (reviewTask() in src/orchestrator/orchestrator.ts) correctly flags that marker as an
+        // out-of-scope change, since a real implementer would never legitimately need to.
+        'proto/',
       ],
       forbidden_paths: [
         'docs/compassrose/CONFIG.md',

@@ -89,7 +89,7 @@ import {
 } from '../state/restorationTarget.js';
 import { buildBlockerSignature, classifyBlockerKind } from '../state/blockerClassification.js';
 import { uniqueStrings } from '../shared/arrays.js';
-import { isPathAllowedByPrefix } from '../shared/pathPrefix.js';
+import { isPathAllowedByPrefix, pathsExceedingPrefixes } from '../shared/pathPrefix.js';
 import { ControlledStopError, stopExitCodeForSignal } from '../runtime/controlledStop.js';
 import { GitClient } from '../git/gitClient.js';
 import { ArtifactStore } from '../artifacts/artifactStore.js';
@@ -250,6 +250,13 @@ export class CompassRoseOrchestrator {
   private readonly startedAt: string;
   private readonly stepRecords: StepRunRecord[] = [];
   private readonly completedPrimaryTaskAnchors = new Set<string>();
+  // Every task-document path this process itself has authored (plan_task/plan_fix_task/
+  // doctor-recovery/correction/state-correction writers below), so the review-time scope check
+  // (reviewTask()) can tell "the runtime's own bookkeeping from an earlier step in this run" apart
+  // from "an implementer wrote to a task document outside its declared scope" -- the latter is
+  // exactly the class of bug causa A exists to catch, so this must stay narrow: only paths this
+  // process itself is known to have written, never a blanket directory exclusion.
+  private readonly runtimeAuthoredTaskPaths = new Set<string>();
   private agentInvocationCount = 0;
   private stopRequested = false;
   private stopReason: string | null = null;
@@ -1662,7 +1669,7 @@ export class CompassRoseOrchestrator {
     const taskPath = join(feature.tasksDirectory, buildTaskFileName(task.task_id, task.title));
     const taskMarkdown = renderTaskMarkdown(task);
 
-    writeText(taskPath, taskMarkdown);
+    this.writeTaskDocument(taskPath, taskMarkdown);
     this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), planned);
 
     const updatedFeatureState = this.updateFeatureStateForTaskPlan(feature.statePath, task.task_id, task.title, taskRequestLink);
@@ -1995,7 +2002,7 @@ export class CompassRoseOrchestrator {
     const taskPath = join(fix.tasksDirectory, buildTaskFileName(task.task_id, task.title));
     const taskMarkdown = renderTaskMarkdown(task);
 
-    writeText(taskPath, taskMarkdown);
+    this.writeTaskDocument(taskPath, taskMarkdown);
     this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), planned);
 
     const updatedFixState = this.updateFeatureStateForTaskPlan(fix.statePath, task.task_id, task.title);
@@ -2166,7 +2173,7 @@ export class CompassRoseOrchestrator {
     const taskPath = join(owner.tasksDirectory, buildTaskFileName(task.task_id, task.title));
     const taskMarkdown = renderDoctorRecoveryTaskMarkdown(task, doctorRecoveryMetadata);
 
-    writeText(taskPath, taskMarkdown);
+    this.writeTaskDocument(taskPath, taskMarkdown);
     this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), {
       ...planned,
       doctor_recovery: doctorRecoveryMetadata,
@@ -2758,7 +2765,21 @@ export class CompassRoseOrchestrator {
     const reviewDiffExcludedPaths = [
       relativePath(this.repositoryRoot, owner.statePath),
       relativePath(this.repositoryRoot, this.projectStatePath),
+      relativePath(this.repositoryRoot, owner.definitionPath),
+      ...(owner.architecturePath ? [relativePath(this.repositoryRoot, owner.architecturePath)] : []),
+      ...this.runtimeAuthoredTaskPaths,
     ];
+    // Deterministic scope check, before the reviewer is ever invoked: a diff that reaches into
+    // paths outside the task's own allowed_paths is a fact the runtime can establish with
+    // certainty from the diff alone (see pathsExceedingPrefixes) -- it should never depend on an
+    // LLM reviewer noticing it in prose. This is the same "never trust the model where a
+    // deterministic check exists" principle behind blockOnUnrelatedFixFailure below.
+    const changedFiles = this.git.diffNameOnly(reviewDiffExcludedPaths);
+    const outOfScopePaths = pathsExceedingPrefixes(changedFiles, task.allowedPaths);
+    if (outOfScopePaths.length > 0) {
+      return this.blockOnDeterministicScopeViolation(owner, task, outOfScopePaths);
+    }
+
     const liveDiff = this.git.diffPatch(reviewDiffExcludedPaths);
     const reviewDiff = selectReviewableDiffForReview(liveDiff, implementation);
     const agentContextRoot = join('logs', 'agent-contexts', this.runId);
@@ -3002,6 +3023,80 @@ export class CompassRoseOrchestrator {
       exitCode: 1,
       continueLoop: false,
       summary: taskInterfaceAnalysis ? `${review.summary} Task-interface analysis was recorded.` : review.summary,
+    };
+  }
+
+  /**
+   * Deterministic counterpart to the reviewer's own scope check: skips the reviewer entirely
+   * (never spends the call, never risks it approving or mishandling the leak) and writes a
+   * correction task whose only job is to remove the out-of-scope changes. Reuses the same
+   * correction-id allocator and depth limit as ordinary reviewer-authored corrections
+   * (buildStateCorrectionTaskId), so a task that keeps leaking scope on every retry still
+   * terminates instead of looping forever.
+   */
+  private blockOnDeterministicScopeViolation(
+    owner: WorkItemContext,
+    task: ParsedTaskDocument,
+    outOfScopePaths: readonly string[],
+  ): StepExecutionResult {
+    const correctionTaskId = this.buildStateCorrectionTaskId(owner.tasksDirectory, task.taskId);
+    if (correctionTaskId === null) {
+      return {
+        exitCode: 2,
+        continueLoop: false,
+        summary: `Correction iteration limit reached for feature ${task.featureId} after ${this.maxReviewIterations} correction(s) for anchor ${task.taskId}; refusing to create another scope-violation correction task for out-of-scope paths ${outOfScopePaths.join(', ')}.`,
+      };
+    }
+
+    const outOfScopeList = outOfScopePaths.join(', ');
+    const correction: CorrectionTask = {
+      parent_task_id: task.taskId,
+      correction_task_id: correctionTaskId,
+      feature_id: task.featureId,
+      title: `Remove out-of-scope changes from ${task.taskId}`,
+      objective: `The reviewable diff for \`${task.taskId}\` touched paths outside its own declared allowed_paths. Revert or remove those changes so the diff stays within the task's original scope.`,
+      first_executable_step: `Revert or remove the changes to ${outOfScopeList} so the diff for \`${task.taskId}\` touches only ${task.allowedPaths.join(', ')}.`,
+      minimum_progress_evidence: [
+        `\`git diff\` for the active worktree no longer touches ${outOfScopeList}.`,
+      ],
+      review_findings: [
+        `Deterministic scope check: the reviewable diff for \`${task.taskId}\` includes ${outOfScopeList}, which fall outside its declared allowed_paths (${task.allowedPaths.join(', ')}).`,
+      ],
+      scope: {
+        allowed_paths: [...task.allowedPaths, ...outOfScopePaths],
+        forbidden_paths: task.forbiddenPaths,
+      },
+      constraints: [
+        `Only remove or revert the changes in ${outOfScopeList}; do not add new functionality there.`,
+        'Preserve the already-correct changes within the task\'s original allowed_paths.',
+      ],
+      acceptance_criteria: [
+        `The final diff for \`${task.taskId}\` touches only paths within ${task.allowedPaths.join(', ')}.`,
+      ],
+      quality_gates: { before_review: task.qualityGates },
+    };
+
+    this.assertTaskIdIsUnused(owner.tasksDirectory, correction.correction_task_id, 'Deterministic scope-violation correction authoring');
+    const correctionPath = this.writeCorrectionTask(correction);
+    this.artifacts.writeJson(join('tasks', `${correction.correction_task_id}.json`), {
+      task: correctionTaskToTask(correction),
+    });
+
+    const updatedFeatureState = this.updateFeatureStateForCorrection(owner.statePath, task.taskId, correction.correction_task_id);
+    const updatedProjectState = this.updateProjectStateForCorrection(task.featureId, correction.correction_task_id);
+    writeText(owner.statePath, updatedFeatureState);
+    writeText(this.projectStatePath, updatedProjectState);
+
+    if (this.options.commit) {
+      const changedFiles = this.git.diffNameOnly();
+      this.git.commit(changedFiles, `proto: request correction ${correction.correction_task_id}`);
+    }
+
+    console.log(`Deterministic scope check requested correction task ${correction.correction_task_id} at ${relativePath(this.repositoryRoot, correctionPath)}.`);
+    return {
+      exitCode: 0,
+      continueLoop: true,
+      summary: `Deterministic scope check found out-of-scope paths (${outOfScopeList}) in the diff for ${task.taskId}; requested correction task ${correction.correction_task_id} without invoking the reviewer.`,
     };
   }
 
@@ -3998,6 +4093,12 @@ export class CompassRoseOrchestrator {
     return fresh;
   }
 
+  /** See runtimeAuthoredTaskPaths above for why every task-document writer routes through this. */
+  private writeTaskDocument(path: string, markdown: string): void {
+    writeText(path, markdown);
+    this.runtimeAuthoredTaskPaths.add(relativePath(this.repositoryRoot, path));
+  }
+
   private writeCorrectionTask(correction: CorrectionTask): string {
     const owner = this.resolveWorkItemContext(correction.feature_id);
     const path = join(
@@ -4006,7 +4107,7 @@ export class CompassRoseOrchestrator {
     );
 
     const markdown = renderCorrectionTaskMarkdown(correction);
-    writeText(path, markdown);
+    this.writeTaskDocument(path, markdown);
     return path;
   }
 
@@ -4232,7 +4333,7 @@ export class CompassRoseOrchestrator {
     );
 
     const markdown = renderStateCorrectionTaskMarkdown(stateCorrection);
-    writeText(path, markdown);
+    this.writeTaskDocument(path, markdown);
     return path;
   }
 

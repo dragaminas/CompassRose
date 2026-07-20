@@ -73,6 +73,18 @@ function prepareFixLifecycleWorkspace(): { root: string; dispose: () => void } {
     'utf8',
   );
 
+  // Commit the mock scripts along with the rest of the fixture, before running the CLI: with
+  // --no-commit, nothing the run itself does ever gets committed, so anything left uncommitted
+  // here would sit in every `git diff` taken for the rest of the run -- including the runtime's
+  // own deterministic review-time scope check, which would otherwise see these two mock scripts
+  // as an out-of-scope change belonging to whatever task happens to be under review.
+  const codexMock = join(root, 'codex-mock.cjs');
+  const opencodeMock = join(root, 'opencode-mock.cjs');
+  writeFileSync(codexMock, CODEX_MOCK_SCRIPT, 'utf8');
+  chmodSync(codexMock, 0o755);
+  writeFileSync(opencodeMock, OPENCODE_MOCK_SCRIPT, 'utf8');
+  chmodSync(opencodeMock, 0o755);
+
   const commit = spawnSync('git', ['add', '-A'], { cwd: root, encoding: 'utf8' });
   if (commit.status !== 0) {
     throw new Error(`git add failed:\n${commit.stderr || commit.stdout}`);
@@ -81,13 +93,6 @@ function prepareFixLifecycleWorkspace(): { root: string; dispose: () => void } {
   if (commitResult.status !== 0) {
     throw new Error(`git commit failed:\n${commitResult.stderr || commitResult.stdout}`);
   }
-
-  const codexMock = join(root, 'codex-mock.cjs');
-  const opencodeMock = join(root, 'opencode-mock.cjs');
-  writeFileSync(codexMock, CODEX_MOCK_SCRIPT, 'utf8');
-  chmodSync(codexMock, 0o755);
-  writeFileSync(opencodeMock, OPENCODE_MOCK_SCRIPT, 'utf8');
-  chmodSync(opencodeMock, 0o755);
 
   return {
     root,
