@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+blocked
 
 ## Source Request
 
@@ -13,7 +13,7 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T17-C1
 - active_correction_task: none
-- active_unblock_task: F002-T17-C1-DOCTOR-RECOVERY-R2
+- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: failed
 - last_review_result: blocked
@@ -96,25 +96,17 @@ Task `F002-T17` is now planned and ready to execute. Add a cycle/depth limit to 
 ## Blocked By
 
 - - kind: state_corruption
-- - signature: state-corruption-unblock-pending-doctor-recovery-f002-t17-c1-doctor-recovery-r1-failed-its-re-en
+- - signature: state-corruption-unblock-pending-doctor-recovery-f002-t17-c1-doctor-recovery-r2-failed-its-re-en
 - - recoverability: agent
-- - observed_state: lifecycle=unblock_pending; active_task=F002-T17-C1; active_correction_task=none; active_unblock_task=F002-T17-C1-DOCTOR-RECOVERY-R1
-- - evidence: Doctor recovery F002-T17-C1-DOCTOR-RECOVERY-R1 failed its re-entry quality gates.
-npm test: [32m- 0[39m
-[31m+ 1[39m
-
-[36m [2m❯[22m tests/protoBlockerFlows.test.ts:[2m154:27[22m[39m
-    [90m152|[39m     const result = runProtoScenario('state-correction-missing-active-t…
-    [90m153|[39m
-    [90m154|[39m     [34mexpect[39m(result[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m0[39m)[33m;[39m
-    [90m   |[39m                           [31m^[39m
-    [90m155|[39m     expect(result.stdout).toContain('PASS: state correction artifact w…
-    [90m156|[39m     expect(result.stdout).toContain('PASS: state correction document w…
-
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯[22m[39m
-- - evidence: None
+- - observed_state: lifecycle=unblock_pending; active_task=F002-T17-C1; active_correction_task=none; active_unblock_task=F002-T17-C1-DOCTOR-RECOVERY-R2
+- - evidence: Doctor recovery F002-T17-C1-DOCTOR-RECOVERY-R2 failed its re-entry quality gates.
+node_modules/.bin/tsx scripts/runtimeSmokeTest.mjs src/cli/main.ts: "node_modules" no se reconoce como un comando interno o externo,
+programa o archivo por lotes ejecutable.
+- - evidence: - kind: state_corruption
+- - evidence: - signature: state-corruption-unblock-pending-doctor-recovery-f002-t17-c1-doctor-recovery-r1-failed-its-re-en
+- - evidence: - recoverability: agent
 - - evidence: lifecycle=unblock_pending
-- - reason: Doctor recovery F002-T17-C1-DOCTOR-RECOVERY-R1 failed its re-entry quality gates. | npm test: [32m- 0[39m | [31m+ 1[39m | [36m [2m❯[22m tests/protoBlockerFlows.test.ts:[2m154:27[22m[39m | [90m152|[39m     const result = runProtoScenario('state-correction-missing-active-t… | [90m153|[39m | [90m154|[39m     [34mexpect[39m(result[33m.[39mstatus)[33m.[39m[34mtoBe[39m([34m0[39m)[33m;[39m | [90m   |[39m                           [31m^[39m | [90m155|[39m     expect(result.stdout).toContain('PASS: state correction artifact w… | [90m156|[39m     expect(result.stdout).toContain('PASS: state correction document w… | [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/11]⎯[22m[39m
+- - reason: Doctor recovery F002-T17-C1-DOCTOR-RECOVERY-R2 failed its re-entry quality gates. | node_modules/.bin/tsx scripts/runtimeSmokeTest.mjs src/cli/main.ts: "node_modules" no se reconoce como un comando interno o externo, | programa o archivo por lotes ejecutable.
 
 ## Blocked From
 
@@ -122,6 +114,7 @@ npm test: [32m- 0[39m
 - active_task: `F002-T17-C1`
 - active_correction_task: `none`
 - active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -133,4 +126,4 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R2` next.
+Plan a doctor recovery task for blocker `state-corruption-unblock-pending-doctor-recovery-f002-t17-c1-doctor-recovery-r2-failed-its-re-en` and then restore `implementation_running`.
