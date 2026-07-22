@@ -230,6 +230,22 @@ export class DoctorRecoveryLimitReachedError extends Error {
   }
 }
 
+/**
+ * A planned doctor recovery task failed deterministic content validation (unenforceable quality
+ * gate ref, missing deliverables, colliding task id, etc.) -- an expected, recurring planner-output
+ * defect (see taskContentValidation.ts's own history of these), not a runtime programming bug. Like
+ * DoctorRecoveryLimitReachedError, this must surface as a clean diagnostic stop rather than an
+ * uncaught crash: the run can be safely retried (nothing has been written yet at this point in
+ * planDoctorRecoveryTask), and a raw stack trace tells the operator nothing the validation error's
+ * own message doesn't already say better.
+ */
+export class DoctorRecoveryPlanningRejectedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DoctorRecoveryPlanningRejectedError';
+  }
+}
+
 export class CompassRoseOrchestrator {
   private readonly repositoryRoot: string;
   private readonly git: GitClient;
@@ -1187,7 +1203,7 @@ export class CompassRoseOrchestrator {
           this.planDoctorRecoveryTask(unblockFeatureId, decision.reason);
           return { exitCode: 0, continueLoop: true, summary: `Doctor recovery task planned for feature ${unblockFeatureId}.` };
         } catch (error) {
-          if (error instanceof DoctorRecoveryLimitReachedError) {
+          if (error instanceof DoctorRecoveryLimitReachedError || error instanceof DoctorRecoveryPlanningRejectedError) {
             return { exitCode: 2, continueLoop: false, summary: error.message };
           }
           throw error;
@@ -2173,18 +2189,26 @@ export class CompassRoseOrchestrator {
       [],
       `planner:doctor-recovery:${featureId}`,
     );
-    const scopeSanitization = sanitizeAllowedPaths(planned.task.scope.allowed_paths);
-    this.logScopeSanitizationNotices(scopeSanitization.notices);
-    const task: PlannedTask = {
-      ...planned.task,
-      scope: { ...planned.task.scope, allowed_paths: scopeSanitization.allowedPaths },
-    };
-    validateTaskDeliverables(task, 'doctor recovery task');
-    // Doctor recovery IS a correction/recovery of a specific prior task -- unlike a first-time
-    // task's own gates, a bare-HEAD `git diff --exit-code` here can only ever pass by leaving
-    // the very thing this recovery exists to undo untouched. See validateQualityGateRefs.
-    validateQualityGateRefs(task.quality_gates.before_review, 'doctor recovery task');
-    this.assertTaskIdIsUnused(owner.tasksDirectory, task.task_id, 'Doctor recovery planning');
+    let task: PlannedTask;
+    try {
+      const scopeSanitization = sanitizeAllowedPaths(planned.task.scope.allowed_paths);
+      this.logScopeSanitizationNotices(scopeSanitization.notices);
+      task = {
+        ...planned.task,
+        scope: { ...planned.task.scope, allowed_paths: scopeSanitization.allowedPaths },
+      };
+      validateTaskDeliverables(task, 'doctor recovery task');
+      // Doctor recovery IS a correction/recovery of a specific prior task -- unlike a first-time
+      // task's own gates, a bare-HEAD `git diff --exit-code` here can only ever pass by leaving
+      // the very thing this recovery exists to undo untouched. See validateQualityGateRefs.
+      validateQualityGateRefs(task.quality_gates.before_review, 'doctor recovery task');
+      this.assertTaskIdIsUnused(owner.tasksDirectory, task.task_id, 'Doctor recovery planning');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new DoctorRecoveryPlanningRejectedError(
+        `Planned doctor recovery task for feature ${featureId} failed content validation: ${message}`,
+      );
+    }
     this.reconcileDirtyPathsForNewScope(featureId, snapshot.activeTask, task.scope.allowed_paths);
 
     const doctorRecoveryMetadata: DoctorRecoveryTaskMetadata = {
@@ -2275,7 +2299,7 @@ export class CompassRoseOrchestrator {
       try {
         this.planDoctorRecoveryTask(featureId, decision.next_step_reason);
       } catch (error) {
-        if (error instanceof DoctorRecoveryLimitReachedError) {
+        if (error instanceof DoctorRecoveryLimitReachedError || error instanceof DoctorRecoveryPlanningRejectedError) {
           return { exitCode: 2, continueLoop: false, summary: error.message };
         }
         throw error;

@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { ParsedTaskDocument } from '../src/contracts/task/taskContracts.js';
+import type { StepDecision } from '../src/contracts/runtime/stepDecision.js';
 import { CompassRoseOrchestrator } from '../src/orchestrator/orchestrator.js';
 import { copyContractsIntoWorkspace, createTempWorkspace, readFixtureConfigMarkdown, type TempWorkspace } from './testUtils.js';
 
@@ -206,6 +207,7 @@ function baseDoctorRecoveryTaskJson(overrides: Record<string, unknown> = {}): Re
 interface WiringAccess {
   loadTask(taskId: string): ParsedTaskDocument;
   planDoctorRecoveryTask(featureId: string, reason: string): void;
+  executeStep(decision: StepDecision): { exitCode: number; continueLoop: boolean; summary: string };
 }
 
 function asAccess(orchestrator: CompassRoseOrchestrator): WiringAccess {
@@ -255,6 +257,41 @@ describe('task-content validation wiring (planDoctorRecoveryTask)', () => {
     expect(() => asAccess(orchestrator).planDoctorRecoveryTask('fixture-feature', 'quality gates failed')).toThrow(
       /git diff ... --exit-code.*no explicit ref/,
     );
+
+    const tasksDir = join(workspace.root, 'docs', 'features', 'fixture-feature', 'tasks');
+    expect(readdirSync(tasksDir)).toEqual(['001-fixture-task.md']);
+  });
+
+  test('an unenforceable quality gate surfaces as a clean diagnostic stop through executeStep, not an uncaught crash', () => {
+    // Regression test: this same rejection used to escape planDoctorRecoveryTask() as a bare
+    // Error, which executeStep()'s `unblock_task` branch only guarded against
+    // DoctorRecoveryLimitReachedError -- so it propagated uncaught and crashed the whole process
+    // instead of the controlled { exitCode: 2, continueLoop: false } stop every other planning
+    // rejection on this path produces.
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    const taskJson = baseDoctorRecoveryTaskJson({
+      quality_gates: { before_review: ['git diff --name-only --exit-code -- src/allowed.ts'] },
+    });
+    vi.stubEnv('PROTO_COMPASSROSE_CODEX_COMMAND', writePlannerOutputMock(workspace.root, taskJson));
+
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const decision: StepDecision = {
+      kind: 'unblock_task',
+      feature_id: 'fixture-feature',
+      task_id: null,
+      correction_task_id: null,
+      reason: 'quality gates failed',
+    };
+
+    let result: { exitCode: number; continueLoop: boolean; summary: string } | undefined;
+    expect(() => {
+      result = asAccess(orchestrator).executeStep(decision);
+    }).not.toThrow();
+
+    expect(result).toBeDefined();
+    expect(result?.exitCode).toBe(2);
+    expect(result?.continueLoop).toBe(false);
+    expect(result?.summary).toMatch(/git diff ... --exit-code.*no explicit ref/);
 
     const tasksDir = join(workspace.root, 'docs', 'features', 'fixture-feature', 'tasks');
     expect(readdirSync(tasksDir)).toEqual(['001-fixture-task.md']);
