@@ -30,7 +30,7 @@ describe('OpenCodeCli.run', () => {
     expect(result.ok).toBe(true);
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('saw:implement the task');
-    expect(result.commandInvoked).toContain('--dangerously-skip-permissions');
+    expect(result.commandInvoked).toContain('--auto');
   });
 
   test('returns ok:false with captured stderr on non-zero exit', () => {

@@ -21,7 +21,14 @@ export class OpenCodeCli {
     const stderrPath = join(tempDir, 'stderr.log');
     writeFileSync(promptPath, prompt, 'utf8');
 
-    const args = ['run', '--dir', this.repositoryRoot, '--dangerously-skip-permissions'];
+    // `opencode run --help` has no `--dangerously-skip-permissions` flag (that name comes from a
+    // different CLI's convention); this installed CLI's actual auto-approve flag is `--auto`.
+    // The wrong flag name means yargs silently ignores it, so opencode never actually gets
+    // permission to write/edit files non-interactively -- it just talks about what it would do
+    // and exits with no diff, which is indistinguishable from a "did nothing" implementation
+    // failure. Found live: two consecutive doctor-recovery/implementer runs against this same
+    // task produced zero file changes despite reporting success.
+    const args = ['run', '--dir', this.repositoryRoot, '--auto'];
     const model = resolveOpenCodeModel();
     if (model) {
       args.push('-m', model);
