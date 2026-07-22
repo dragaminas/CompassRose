@@ -33,3 +33,29 @@ The numeric prefix is only a fix-local ordering convenience — it does not impl
 fix is planned before CompassRose starts any new feature work, though it never interrupts a
 feature task that is already mid-execution. `medium`/`low` severity fixes are ordinary backlog,
 scheduled after all feature work that is ready to start.
+
+A fix's severity is unknown until formalization sets it explicitly. Until then, CompassRose
+fails safe upward: any fix missing `state.md` (a fresh, unformalized request) or carrying an
+unparsable `severity` value is treated as `critical`, not `medium`. A newly-detected defect must
+never quietly compete in ordinary backlog before anyone has judged how serious it actually is.
+
+## Automatically filed fixes
+
+CompassRose can file a fix on its own, without a human writing `request.md`, in two situations:
+
+- **A quality-gate failure proven pre-existing and unrelated to the task that hit it**
+  (`blockOnUnrelatedFixFailure`): filed at `severity: high`, because the defect is real but
+  already deterministically proven — the gate command demonstrably fails the same way on a clean
+  checkout, with no reference to the failing task's own scope.
+- **A rejection the doctor classifies as systemic rather than a bounded implementation issue**
+  (`file_blocking_fix`, see `src/contracts/runtime/diagnostic-autocorrection.md`): filed at
+  `severity: critical`, always. This fires only when a `quality_failed`, `review_failed`, or
+  `blocked` rejection cannot be resolved into a bounded doctor recovery task — i.e. the defect is
+  outside the blocked feature/fix's own frame entirely (architectural, framework-level). Because
+  the evidence for this case is inherently less certain than the proven quality-gate case above,
+  it always outranks it, per the fail-safe-upward rule.
+
+Either way, the fix's own scope explicitly excludes the work of the item that surfaced it, and
+that item is set `blocked_on_fix` pointing at the new fix — it resumes automatically once the fix
+reaches `completed`, and in the meantime the scheduler moves on to other available work instead of
+re-diagnosing the same blocker every run.

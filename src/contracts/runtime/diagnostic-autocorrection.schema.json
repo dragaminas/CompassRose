@@ -7,7 +7,8 @@
     "blocker",
     "next_step",
     "next_step_reason",
-    "interface_response"
+    "interface_response",
+    "systemic_blocker"
   ],
   "properties": {
     "feature_id": { "type": "string" },
@@ -50,7 +51,8 @@
       "enum": [
         "correct_state",
         "plan_doctor_recovery",
-        "stop_with_diagnostic"
+        "stop_with_diagnostic",
+        "file_blocking_fix"
       ]
     },
     "next_step_reason": { "type": "string" },
@@ -73,6 +75,22 @@
           "items": { "type": "string" }
         }
       }
+    },
+    "systemic_blocker": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["title", "evidence_summary", "scope_note", "severity"],
+          "properties": {
+            "title": { "type": "string" },
+            "evidence_summary": { "type": "string" },
+            "scope_note": { "type": "string" },
+            "severity": { "type": "string", "enum": ["critical"] }
+          }
+        }
+      ]
     }
   }
 }

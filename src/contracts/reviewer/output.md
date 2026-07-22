@@ -113,6 +113,12 @@ The blocker description should be specific enough to decide whether the task int
 
 The implementation attempt is invalid or unusable.
 
+The orchestrator persists this as lifecycle `review_failed` and runs diagnostic/autocorrection
+against it, exactly like a `blocked` result — it is not a silent dead end. Diagnostic/
+autocorrection may resolve it with a bounded doctor recovery task, or, if the evidence shows a
+systemic defect outside this task's own frame, file a new blocking fix instead (see
+`src/contracts/runtime/diagnostic-autocorrection.md`).
+
 ---
 
 ## Rules

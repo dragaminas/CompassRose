@@ -176,6 +176,12 @@ function seedFix(root: string, id: string, lifecycleState: string, severity: str
   writeFileSync(join(dir, 'state.md'), fixState(lifecycleState, severity, owningFeature), 'utf8');
 }
 
+function seedRawFixRequest(root: string, id: string): void {
+  const dir = join(root, 'docs', 'fixes', id);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, 'request.md'), `# Request: ${id}\n\nFresh, unformalized request.\n`, 'utf8');
+}
+
 describe('scheduler priority: features vs fixes', () => {
   test('a continuing (in-flight) feature wins over a lower-numbered startable feature', () => {
     const workspace = createWorkspace({ 'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown() });
@@ -276,6 +282,23 @@ describe('scheduler priority: features vs fixes', () => {
 
       expect(decision.kind).toBe('plan_fix_task');
       expect(decision.feature_id).toBe('002-critical-severity-fix');
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('a fresh, unformalized fix request defaults to critical and preempts an existing medium fix', () => {
+    const workspace = createWorkspace({ 'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown() });
+    copyContractsIntoWorkspace(workspace.root);
+
+    try {
+      seedFix(workspace.root, '001-medium-fix', 'task_planning_pending', 'medium');
+      seedRawFixRequest(workspace.root, '002-fresh-fix-request');
+
+      const decision = buildOrchestrator(workspace.root).determineNextStep();
+
+      expect(decision.kind).toBe('plan_fix');
+      expect(decision.feature_id).toBe('002-fresh-fix-request');
     } finally {
       workspace.dispose();
     }

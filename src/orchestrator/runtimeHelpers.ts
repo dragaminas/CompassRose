@@ -1,6 +1,8 @@
-import { dirname } from 'node:path';
-import { mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { normalizeTextForWrite } from '../filesystem/textNormalization.js';
+import { isDirectory } from '../filesystem/pathResolver.js';
+import { escapeRegExp } from '../markdown/sections.js';
 
 export function compareFeatureIds(left: string, right: string): number {
   const leftNumber = Number.parseInt(left.split('-')[0] ?? '0', 10);
@@ -107,4 +109,51 @@ export function extractReferencedPaths(output: string): string[] {
   }
 
   return [...paths];
+}
+
+function correctionSuffixDepth(anchor: string): number {
+  return anchor.match(/-C\d+/g)?.length ?? 0;
+}
+
+function highestCorrectionNumber(tasksDirectory: string, anchor: string): number {
+  if (!isDirectory(tasksDirectory)) {
+    return 0;
+  }
+
+  const pattern = new RegExp('`' + escapeRegExp(anchor) + '-C(\\d+)(?:-C\\d+)*`', 'g');
+  let highest = 0;
+
+  for (const entry of readdirSync(tasksDirectory)) {
+    if (!entry.endsWith('.md')) {
+      continue;
+    }
+
+    const markdown = readFileSync(join(tasksDirectory, entry), 'utf8');
+    for (const match of markdown.matchAll(pattern)) {
+      highest = Math.max(highest, Number.parseInt(match[1] ?? '0', 10));
+    }
+  }
+
+  return highest;
+}
+
+/**
+ * Returns the next state-correction task id when both the active anchor depth
+ * and its same-anchor correction count remain below the configured limit.
+ */
+export function limitStateCorrectionTaskId(
+  tasksDirectory: string,
+  anchor: string,
+  limit: number,
+): string | null {
+  if (limit <= 0 || correctionSuffixDepth(anchor) >= limit) {
+    return null;
+  }
+
+  const highest = highestCorrectionNumber(tasksDirectory, anchor);
+  if (highest >= limit) {
+    return null;
+  }
+
+  return `${anchor}-C${highest + 1}`;
 }

@@ -81,6 +81,11 @@ function prepareWorkspace(): { cloneRoot: string; dispose: () => void } {
 
   copyTree(join(repoRoot, 'src'), join(cloneRoot, 'src'));
   rmSync(join(cloneRoot, 'docs', 'features'), { recursive: true, force: true });
+  // Real, still-unformalized fixes committed in this repo's own docs/fixes now default to
+  // 'critical' severity (fail-safe upward -- see readFixSeverityAndOwnership) until formalized,
+  // so they would otherwise outrank this scenario's synthetic feature in the clone and hijack
+  // the run. Remove them; this test only exercises feature task-request backfill.
+  rmSync(join(cloneRoot, 'docs', 'fixes'), { recursive: true, force: true });
   seedTargetFeature(cloneRoot);
   writeExecutableScript(join(tempRoot, 'codex-mock.cjs'), CODEX_BACKFILL_MOCK);
   writeExecutableScript(join(tempRoot, 'opencode-mock.cjs'), OPENCODE_STUB_MOCK);

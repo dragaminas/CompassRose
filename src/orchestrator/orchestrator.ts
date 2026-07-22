@@ -33,6 +33,7 @@ import type {
   StepDecision,
   StepKind,
   StoredTaskArtifact,
+  SystemicBlockerRequest,
   TaskInterfaceAnalysis,
   TaskRequest,
   TaskRequestBackfillOutput,
@@ -71,7 +72,6 @@ import {
   capTaskFileNameLength,
   humanCorrectionNumber,
   humanTaskNumber,
-  limitStateCorrectionTaskId,
 } from '../task/taskId.js';
 import {
   assertTaskIdIsUnused,
@@ -149,6 +149,7 @@ import {
   errorMessage,
   extractReferencedPaths,
   isRecord,
+  limitStateCorrectionTaskId,
   primaryTaskAnchorFromId,
   readPositiveInteger,
   readRecordString,
@@ -909,14 +910,17 @@ export class CompassRoseOrchestrator {
       const markdown = readUtf8(fix.statePath);
       const operationalStatus = requireSection(markdown, 'Operational Status');
       const rawSeverity = stripTicks(parsePreferredStatusValue(operationalStatus, 'severity') ?? '').toLowerCase();
+      // Fail safe upward: an unset/unparsable severity is unknown, not ordinary -- treat it as
+      // 'critical' until formalization narrows it, so a fresh defect competes for the
+      // critical/high fast lane instead of quietly landing in FIFO backlog.
       const severity: FixSeverity = rawSeverity === 'critical' || rawSeverity === 'high' || rawSeverity === 'medium' || rawSeverity === 'low'
         ? rawSeverity
-        : 'medium';
+        : 'critical';
       const rawOwningFeature = stripTicks(parsePreferredStatusValue(operationalStatus, 'owning_feature') ?? 'none');
       const owningFeature = rawOwningFeature === 'none' || rawOwningFeature === '' ? null : rawOwningFeature;
       return { severity, owningFeature };
     } catch {
-      return { severity: 'medium', owningFeature: null };
+      return { severity: 'critical', owningFeature: null };
     }
   }
 
@@ -2284,6 +2288,50 @@ export class CompassRoseOrchestrator {
       };
     }
 
+    if (decision.next_step === 'file_blocking_fix' && decision.systemic_blocker) {
+      const systemicBlocker = decision.systemic_blocker;
+      const fixId = this.fileOrReuseBlockingFix({
+        signature: this.computeSystemicBlockerSignature(featureId, systemicBlocker),
+        titleSubject: systemicBlocker.title,
+        severity: systemicBlocker.severity,
+        whatHappened: systemicBlocker.evidence_summary,
+        evidenceLines: [`- ${systemicBlocker.evidence_summary}`, `- Diagnosed while resolving: ${featureId}.`],
+        outlineStep: `Diagnosing and repairing: ${systemicBlocker.title}.`,
+        scopeExcludes: systemicBlocker.scope_note,
+        problem: systemicBlocker.evidence_summary,
+        acceptanceCriterion: `The systemic defect described in \`${systemicBlocker.title}\` no longer reproduces.`,
+        completionCriterion: `The defect is repaired, and every feature/fix blocked on this fix id can resume.`,
+        currentReality: systemicBlocker.evidence_summary,
+        nextPlanningHint: `diagnose and repair: ${systemicBlocker.title}.`,
+      });
+      const reason =
+        `Diagnostic/autocorrection classified the blocker on ${featureId} as systemic rather than a bounded `
+        + `implementation issue; filed/reused fix \`${fixId}\` and stopped instead of attempting a bounded doctor recovery.`;
+
+      if (statSafeIsFile(owner.statePath)) {
+        this.recordBlockedFeature(featureId, reason);
+        this.setBlockedOnFix(owner, fixId);
+      }
+
+      if (this.options.commit) {
+        this.git.commit(
+          [
+            relativePath(this.repositoryRoot, owner.statePath),
+            relativePath(this.repositoryRoot, this.projectStatePath),
+            relativePath(this.repositoryRoot, join(this.fixesRoot, fixId)),
+          ],
+          `proto: file blocking fix ${fixId} for ${featureId}`,
+        );
+      }
+
+      console.error(reason);
+      return {
+        exitCode: 2,
+        continueLoop: false,
+        summary: reason,
+      };
+    }
+
     if (statSafeIsFile(owner.statePath)) {
       try {
         this.recordBlockedFeature(featureId, decision.next_step_reason);
@@ -2392,18 +2440,7 @@ export class CompassRoseOrchestrator {
 
     if (snapshot.lifecycleState === 'quality_failed' || snapshot.lifecycleState === 'review_failed' || snapshot.lifecycleState === 'blocked') {
       if (blocker.recoverability === 'terminal' || blocker.recoverability === 'human') {
-        return this.buildDeterministicStopDiagnosticDecision(
-          blocker,
-          feature,
-          [
-          relativePath(this.repositoryRoot, feature.statePath),
-          relativePath(this.repositoryRoot, this.projectStatePath),
-          'src/contracts/runtime/diagnostic-autocorrection.md',
-          'src/contracts/runtime/operation-loop.md',
-          ],
-          reason,
-          'The blocker is terminal or requires human intervention, so deterministic recovery stops here.',
-        );
+        return this.consultDoctorOnSystemicBlocker(feature, blocker, reason, null);
       }
 
       const recoveryAnchor = snapshot.activeTask !== 'none'
@@ -2423,18 +2460,7 @@ export class CompassRoseOrchestrator {
         ]);
       }
 
-      return this.buildDeterministicStopDiagnosticDecision(
-        blocker,
-        feature,
-        [
-        relativePath(this.repositoryRoot, feature.statePath),
-        relativePath(this.repositoryRoot, this.projectStatePath),
-        'src/contracts/runtime/diagnostic-autocorrection.md',
-        'src/contracts/runtime/operation-loop.md',
-        ],
-        reason,
-        'The blocker looks recoverable, but the runtime could not recover a safe task anchor from state or recorded artifacts.',
-      );
+      return this.consultDoctorOnSystemicBlocker(feature, blocker, reason, null);
     }
 
     return this.buildDeterministicStopDiagnosticDecision(
@@ -2449,6 +2475,86 @@ export class CompassRoseOrchestrator {
       reason,
       'The runtime could not prove a safer deterministic recovery path, so it stops with a diagnostic instead of consulting an agent.',
     );
+  }
+
+  /**
+   * The one place diagnostic/autocorrection consults a model instead of deciding
+   * deterministically: reached only when a quality_failed/review_failed/blocked rejection
+   * cannot be resolved into plan_doctor_recovery by the deterministic checks above (terminal/
+   * human recoverability, or no safe recovery anchor) -- i.e. exactly where the runtime would
+   * otherwise stop the whole run. Offers exactly two valid answers (plan_doctor_recovery or
+   * file_blocking_fix); any malformed/untrusted response falls back to the same
+   * stop_with_diagnostic halt the deterministic path would have produced anyway, via
+   * ensureDiagnosticAutocorrectionDecision -- never a worse outcome than today's behavior.
+   */
+  private consultDoctorOnSystemicBlocker(
+    feature: WorkItemContext,
+    blocker: BlockerProfile,
+    reason: string,
+    taskId: string | null,
+  ): DiagnosticAutocorrectionDecision {
+    const sourcePaths = [
+      'src/contracts/runtime/diagnostic-autocorrection.md',
+      'src/contracts/task/doctor-recovery-task.md',
+      relativePath(this.repositoryRoot, feature.statePath),
+      relativePath(this.repositoryRoot, this.projectStatePath),
+    ];
+
+    const prompt = [
+      'Act as the CompassRose Diagnostic/Autocorrection role.',
+      '',
+      `Decide the next step for \`${feature.id}\`, which is blocked and could not be resolved by deterministic classification alone.`,
+      '',
+      'Read only:',
+      '- `src/contracts/runtime/diagnostic-autocorrection.md`',
+      '- `src/contracts/task/doctor-recovery-task.md`',
+      `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
+      '- `docs/compassrose/PROJECT_STATE.md`',
+      '',
+      'Blocker context:',
+      `- kind: ${blocker.kind}`,
+      `- signature: ${blocker.signature}`,
+      `- recoverability: ${blocker.recoverability}`,
+      `- observed_state: ${blocker.observed_state}`,
+      ...blocker.evidence.map((item) => `- evidence: ${item}`),
+      '',
+      `Reason this diagnosis was triggered: ${reason}`,
+      '',
+      'Rules:',
+      '- Choose exactly one next_step: `plan_doctor_recovery` or `file_blocking_fix`. No other value is valid from this call.',
+      "- Choose `plan_doctor_recovery` only if the evidence shows a bounded task-interface gap (stale anchor, prompt/scope tightening, missing evidence) that a single doctor recovery task confined to this feature/fix's own frame could resolve.",
+      "- Choose `file_blocking_fix` if the defect is outside this feature/fix's own frame entirely -- architectural, framework-level, or otherwise systemic -- so no bounded recovery task confined to it could resolve the root cause.",
+      '- When choosing `file_blocking_fix`, populate `systemic_blocker` with `title` (short, specific, becomes the new fix\'s slug), `evidence_summary`, `scope_note` (must state the new fix excludes this feature/fix\'s own remaining work), and `severity` fixed to `"critical"`.',
+      '- When choosing `plan_doctor_recovery`, set `systemic_blocker` to `null`.',
+      '- Never let a `file_blocking_fix` scope include any of this feature/fix\'s own remaining work.',
+      '- Return JSON only and do not modify files.',
+    ].join('\n');
+
+    const label = `doctor:diagnostic-autocorrection:${feature.id}`;
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'doctor',
+      kind: 'diagnostic_autocorrection',
+      label,
+      feature_id: feature.id,
+      task_id: taskId,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'diagnostic_autocorrection',
+      },
+    }));
+
+    const raw = this.codex.runStructured<DiagnosticAutocorrectionDecision>(
+      prompt,
+      this.contracts.schema('diagnostic_autocorrection'),
+      [],
+      label,
+    );
+
+    return this.ensureDiagnosticAutocorrectionDecision(feature, reason, raw);
   }
 
   private readRecordedBlockerProfile(snapshot: FeatureStateSnapshot): BlockerProfile | null {
@@ -2519,6 +2625,7 @@ export class CompassRoseOrchestrator {
           'src/contracts/task/state-correction-task.md',
         ],
       },
+      systemic_blocker: null,
     };
   }
 
@@ -2553,6 +2660,7 @@ export class CompassRoseOrchestrator {
           'src/contracts/task/doctor-recovery-task.md',
         ]),
       },
+      systemic_blocker: null,
     };
   }
 
@@ -2576,6 +2684,7 @@ export class CompassRoseOrchestrator {
           ...targetPaths.filter((item): item is string => typeof item === 'string' && item.length > 0),
         ]),
       },
+      systemic_blocker: null,
     };
   }
 
@@ -2608,6 +2717,23 @@ export class CompassRoseOrchestrator {
         reason,
         'Diagnostic/autocorrection returned malformed structured output.',
       );
+    }
+
+    if (decision.next_step === 'file_blocking_fix') {
+      const systemicBlocker = decision.systemic_blocker;
+      if (
+        !systemicBlocker ||
+        typeof systemicBlocker.title !== 'string' || systemicBlocker.title.trim().length === 0 ||
+        typeof systemicBlocker.evidence_summary !== 'string' || systemicBlocker.evidence_summary.trim().length === 0 ||
+        typeof systemicBlocker.scope_note !== 'string' || systemicBlocker.scope_note.trim().length === 0 ||
+        systemicBlocker.severity !== 'critical'
+      ) {
+        return this.buildDiagnosticFallbackDecision(
+          feature,
+          reason,
+          'Diagnostic/autocorrection chose file_blocking_fix without a valid systemic_blocker payload.',
+        );
+      }
     }
 
     return this.normalizeDiagnosticAutocorrectionDecision(decision);
@@ -2662,6 +2788,7 @@ export class CompassRoseOrchestrator {
           'src/contracts/task/doctor-recovery-task.md',
         ],
       },
+      systemic_blocker: null,
     };
   }
 
@@ -3012,6 +3139,38 @@ export class CompassRoseOrchestrator {
       };
     }
 
+    if (review.status === 'failed') {
+      const blocker = this.recordFailedReview(task, review, implementation, qualityResults);
+      const analysisSuffix = taskInterfaceAnalysis
+        ? ' Task-interface analysis and a recovery lesson were recorded.'
+        : '';
+
+      if (this.options.commit) {
+        // Same reasoning as the changes_required/blocked branches above: commit everything dirty
+        // so an invalid implementer diff never blocks the next step's clean-worktree precondition.
+        const changedFiles = this.git.diffNameOnly();
+        this.git.commit(changedFiles, `proto: record failed review for ${task.taskId}`);
+      }
+
+      const failedSummary = `Review found the attempt invalid or unusable (blocker ${blocker.signature}); recorded review_failed instead of a silent stop.`;
+
+      if (this.options.loop) {
+        console.error(failedSummary);
+        return {
+          exitCode: 0,
+          continueLoop: true,
+          summary: `${review.summary} ${failedSummary}${analysisSuffix}`,
+        };
+      }
+
+      const diagnosticResult = this.diagnoseAndAutocorrect(task.featureId, failedSummary);
+      return {
+        exitCode: diagnosticResult.exitCode,
+        continueLoop: diagnosticResult.continueLoop,
+        summary: `${review.summary} ${failedSummary} ${diagnosticResult.summary}${analysisSuffix}`,
+      };
+    }
+
     console.error(review.summary);
     return {
       exitCode: 1,
@@ -3228,6 +3387,7 @@ export class CompassRoseOrchestrator {
           'src/contracts/task/doctor-recovery-task.md',
         ]),
       },
+      systemic_blocker: null,
     };
     this.writeDiagnosticArtifact(decision);
 
@@ -3748,14 +3908,39 @@ export class CompassRoseOrchestrator {
     }
 
     const referencedPaths = extractReferencedPaths(waived.output_summary);
-    const fixId = this.fileOrReuseBlockingFix(waived.command, referencedPaths);
+    const primaryPath = referencedPaths[0] ?? 'the system';
+    const fixId = this.fileOrReuseBlockingFix({
+      signature: this.computeGateFailureSignature(waived.command, referencedPaths),
+      titleSubject: `Pre-existing failure in \`${primaryPath}\``,
+      severity: 'high',
+      whatHappened:
+        `While executing an unrelated task, the quality-gate command \`${waived.command}\` failed. The `
+        + 'failure was confirmed to be pre-existing and unrelated to that task: none of the paths '
+        + "its output referenced fell within the task's own allowed scope or changed files, and "
+        + 'the same command still fails the same way on a clean checkout of the repository (i.e. '
+        + "before that task's own diff existed).",
+      evidenceLines: [
+        `- Command: \`${waived.command}\``,
+        `- Referenced path(s): ${referencedPaths.length > 0 ? referencedPaths.map((path) => `\`${path}\``).join(', ') : 'none extracted'}`,
+        '- Reproduces against a clean checkout of HEAD (confirmed via a stash/rerun/restore baseline check).',
+      ],
+      outlineStep: `Diagnosing and repairing the root cause of \`${waived.command}\` failing.`,
+      scopeExcludes: 'Any work belonging to the task that first surfaced this failure; that task is unrelated and unblocks automatically once this fix reaches `completed`.',
+      problem:
+        `\`${waived.command}\` fails on a clean checkout of the repository, unrelated to any task currently in progress. `
+        + `Referenced path(s): ${referencedPaths.length > 0 ? referencedPaths.map((path) => `\`${path}\``).join(', ') : 'none extracted'}.`,
+      acceptanceCriterion: `\`${waived.command}\` passes on a clean checkout of the repository.`,
+      completionCriterion: `\`${waived.command}\` passes cleanly, and every feature/fix blocked on this fix id can resume.`,
+      currentReality: `\`${waived.command}\` fails on a clean checkout of the repository, confirmed unrelated to any single task.`,
+      nextPlanningHint: `diagnose and repair \`${waived.command}\`.`,
+    });
     const reason =
       `Task ${task.taskId} hit a quality-gate failure (\`${waived.command}\`) confirmed unrelated to and preexisting `
       + `its own scope; filed/reused fix \`${fixId}\` and stopped instead of continuing to review or generating a `
       + 'correction for it.';
 
     this.recordBlockedFeature(task.featureId, reason, task.taskId);
-    writeText(owner.statePath, replaceOperationalStatus(readUtf8(owner.statePath), { blocked_on_fix: fixId }));
+    this.setBlockedOnFix(owner, fixId);
 
     if (this.options.commit) {
       this.git.commit(
@@ -3777,58 +3962,65 @@ export class CompassRoseOrchestrator {
   }
 
   /**
-   * Deterministically scaffolds a new fix (request.md + fix.md + state.md, no LLM call --
-   * the defect is already precisely known: which command, which unrelated paths, and that it
-   * reproduces against a clean baseline) describing a confirmed pre-existing/unrelated
-   * quality-gate failure, or returns the id of an existing fix already filed for the same
-   * signature so repeated hits of the same defect never spawn duplicates. Left in
-   * `task_planning_pending` with no tasks/ yet: diagnosing and actually fixing an arbitrary
-   * pre-existing bug needs real reasoning, so the normal fix-task planning flow takes it from
-   * here.
+   * Deterministically scaffolds a new fix (request.md + fix.md + state.md, no LLM call -- the
+   * caller already knows precisely what happened) describing a confirmed blocking defect, or
+   * returns the id of an existing fix already filed for the same signature so repeated hits of
+   * the same defect never spawn duplicates. Left in `task_planning_pending` with no tasks/ yet:
+   * diagnosing and actually fixing an arbitrary defect needs real reasoning, so the normal
+   * fix-task planning flow takes it from here. Shared by the quality-gate waiver path
+   * (blockOnUnrelatedFixFailure, severity 'high', a *proven* pre-existing/unrelated defect) and
+   * the doctor's systemic-blocker path (severity 'critical', an *unproven, ambiguous* defect --
+   * see readFixSeverityAndOwnership's fail-safe-upward rationale).
    */
-  private fileOrReuseBlockingFix(command: string, referencedPaths: readonly string[]): string {
-    const signature = this.computeGateFailureSignature(command, referencedPaths);
+  private fileOrReuseBlockingFix(scaffold: {
+    readonly signature: string;
+    readonly titleSubject: string;
+    readonly severity: FixSeverity;
+    readonly whatHappened: string;
+    readonly evidenceLines: readonly string[];
+    readonly outlineStep: string;
+    readonly scopeExcludes: string;
+    readonly problem: string;
+    readonly acceptanceCriterion: string;
+    readonly completionCriterion: string;
+    readonly currentReality: string;
+    readonly nextPlanningHint: string;
+  }): string {
+    const { signature } = scaffold;
     const existing = this.findExistingFixForSignature(signature);
     if (existing) {
       return existing;
     }
 
-    const primaryPath = referencedPaths[0] ?? 'the system';
-    const fixId = this.nextFixId(slugify(`pre-existing failure in ${primaryPath}`));
+    const fixId = this.nextFixId(slugify(scaffold.titleSubject));
     const fixDirectory = join(this.fixesRoot, fixId);
 
     const requestMarkdown = [
-      `# Request: Pre-existing failure in \`${primaryPath}\``,
+      `# Request: ${scaffold.titleSubject}`,
       '',
       `Signature: \`${signature}\``,
       '',
       '## What happened',
       '',
-      `While executing an unrelated task, the quality-gate command \`${command}\` failed. The `
-        + 'failure was confirmed to be pre-existing and unrelated to that task: none of the paths '
-        + "its output referenced fell within the task's own allowed scope or changed files, and "
-        + 'the same command still fails the same way on a clean checkout of the repository (i.e. '
-        + "before that task's own diff existed).",
+      scaffold.whatHappened,
       '',
       '## Evidence',
       '',
-      `- Command: \`${command}\``,
-      `- Referenced path(s): ${referencedPaths.length > 0 ? referencedPaths.map((path) => `\`${path}\``).join(', ') : 'none extracted'}`,
-      '- Reproduces against a clean checkout of HEAD (confirmed via a stash/rerun/restore baseline check).',
+      ...scaffold.evidenceLines,
       '',
       '## Scope',
       '',
       'This fix includes:',
       '',
-      `- Diagnosing and repairing the root cause of \`${command}\` failing.`,
+      `- ${scaffold.outlineStep}`,
       '',
       'This fix does not include:',
       '',
-      '- Any work belonging to the task that first surfaced this failure; that task is unrelated and unblocks automatically once this fix reaches `completed`.',
+      `- ${scaffold.scopeExcludes}`,
     ].join('\n');
 
     const fixMarkdown = [
-      `# Fix: Pre-existing failure in \`${primaryPath}\``,
+      `# Fix: ${scaffold.titleSubject}`,
       '',
       '## Status',
       '',
@@ -3836,7 +4028,7 @@ export class CompassRoseOrchestrator {
       '',
       '## Severity',
       '',
-      'high',
+      scaffold.severity,
       '',
       '## Owning Feature',
       '',
@@ -3844,26 +4036,25 @@ export class CompassRoseOrchestrator {
       '',
       '## Purpose',
       '',
-      `Repair the pre-existing, unrelated failure in \`${command}\` that is blocking unrelated task chains.`,
+      `Repair the blocking defect: ${scaffold.titleSubject}.`,
       '',
       '## Problem',
       '',
-      `\`${command}\` fails on a clean checkout of the repository, unrelated to any task currently in progress. `
-        + `Referenced path(s): ${referencedPaths.length > 0 ? referencedPaths.map((path) => `\`${path}\``).join(', ') : 'none extracted'}.`,
+      scaffold.problem,
       '',
       '## Scope',
       '',
       'This fix includes:',
       '',
-      `- Diagnosing and repairing the root cause of \`${command}\` failing.`,
+      `- ${scaffold.outlineStep}`,
       '',
       'This fix does not include:',
       '',
-      '- Any work belonging to the task chain that discovered it.',
+      `- ${scaffold.scopeExcludes}`,
       '',
       '## Acceptance Criteria',
       '',
-      `- \`${command}\` passes on a clean checkout of the repository.`,
+      `- ${scaffold.acceptanceCriterion}`,
       '',
       '## Implementation Deliverables',
       '',
@@ -3873,11 +4064,11 @@ export class CompassRoseOrchestrator {
       '',
       'This fix is considered resolved when:',
       '',
-      `- \`${command}\` passes cleanly, and every feature/fix blocked on this fix id can resume.`,
+      `- ${scaffold.completionCriterion}`,
       '',
       '## Implementation Outline',
       '',
-      `1. Diagnose why \`${command}\` fails and repair the root cause.`,
+      `1. ${scaffold.outlineStep}`,
       '',
       '## Related Documents',
       '',
@@ -3885,7 +4076,7 @@ export class CompassRoseOrchestrator {
     ].join('\n');
 
     const stateMarkdown = [
-      `# State: Pre-existing failure in \`${primaryPath}\``,
+      `# State: ${scaffold.titleSubject}`,
       '',
       '## Lifecycle State',
       '',
@@ -3901,7 +4092,7 @@ export class CompassRoseOrchestrator {
       '- active_task: none',
       '- active_correction_task: none',
       '- active_unblock_task: none',
-      '- severity: high',
+      `- severity: ${scaffold.severity}`,
       '- owning_feature: none',
       '- last_implementation_result: not_run',
       '- last_quality_gate_result: unknown',
@@ -3910,7 +4101,7 @@ export class CompassRoseOrchestrator {
       '',
       '## Current Reality',
       '',
-      `\`${command}\` fails on a clean checkout of the repository, confirmed unrelated to any single task.`,
+      scaffold.currentReality,
       '',
       '## Implemented Deliverables',
       '',
@@ -3918,11 +4109,11 @@ export class CompassRoseOrchestrator {
       '',
       '## Remaining Deliverables',
       '',
-      `- Diagnose and repair the root cause of \`${command}\` failing.`,
+      `- ${scaffold.outlineStep}`,
       '',
       '## Outline Progress',
       '',
-      `- Diagnose and repair \`${command}\`: not started`,
+      `- ${scaffold.outlineStep}: not started`,
       '',
       '## Blocked By',
       '',
@@ -3945,7 +4136,7 @@ export class CompassRoseOrchestrator {
       '',
       '## Next Planning Hint',
       '',
-      `Plan the first task for fix \`${fixId}\`: diagnose and repair \`${command}\`.`,
+      `Plan the first task for fix \`${fixId}\`: ${scaffold.nextPlanningHint}`,
     ].join('\n');
 
     writeText(join(fixDirectory, 'request.md'), requestMarkdown);
@@ -3955,8 +4146,16 @@ export class CompassRoseOrchestrator {
     return fixId;
   }
 
+  private setBlockedOnFix(owner: Pick<WorkItemContext, 'statePath'>, fixId: string): void {
+    writeText(owner.statePath, replaceOperationalStatus(readUtf8(owner.statePath), { blocked_on_fix: fixId }));
+  }
+
   private computeGateFailureSignature(command: string, referencedPaths: readonly string[]): string {
     return createHash('sha1').update(`${command}::${referencedPaths[0] ?? ''}`).digest('hex').slice(0, 12);
+  }
+
+  private computeSystemicBlockerSignature(featureId: string, systemicBlocker: SystemicBlockerRequest): string {
+    return createHash('sha1').update(`systemic::${featureId}::${systemicBlocker.title}`).digest('hex').slice(0, 12);
   }
 
   private findExistingFixForSignature(signature: string): string | null {
@@ -4140,16 +4339,6 @@ export class CompassRoseOrchestrator {
 
   private correctState(featureId: string, reason: string): void {
     const owner = this.resolveWorkItemContext(featureId);
-
-    // Enforce the configured correction depth limit before allocating a new correction ID.
-    // At the limit, refuse to create any correction artifact or mutate state.
-    const correctionId = this.buildStateCorrectionTaskId(owner.tasksDirectory, owner.id);
-    if (correctionId === null) {
-      throw new StateCorrectionLimitReachedError(
-        `Correction iteration limit reached for feature ${featureId} after ${this.maxReviewIterations} correction(s) for anchor ${owner.id}; refusing to create another near-duplicate state-correction task.`,
-      );
-    }
-
     const markdown = readUtf8(owner.statePath);
     const lifecycleState = stripTicks(requireSection(markdown, 'Lifecycle State').trim());
     const operationalStatusSection = requireSection(markdown, 'Operational Status');
@@ -4161,6 +4350,16 @@ export class CompassRoseOrchestrator {
     if (activeTask === 'none') {
       console.error(
         `State correction fallback for ${featureId}: active_task is missing, so the prototype will use ${restoredActiveTask} as the repair anchor.`,
+      );
+    }
+
+    // Enforce the configured correction depth limit before allocating a new correction ID.
+    // At the limit, refuse to create any correction artifact or mutate state.
+    // Use the same restoredActiveTask anchor that buildStateCorrectionTask receives.
+    const correctionId = this.buildStateCorrectionTaskId(owner.tasksDirectory, restoredActiveTask);
+    if (correctionId === null) {
+      throw new StateCorrectionLimitReachedError(
+        `Correction iteration limit reached for feature ${featureId} after ${this.maxReviewIterations} correction(s) for anchor ${restoredActiveTask}; refusing to create another near-duplicate state-correction task.`,
       );
     }
 
@@ -4447,6 +4646,29 @@ export class CompassRoseOrchestrator {
     return blocker;
   }
 
+  /**
+   * Mirrors recordBlockedReview() exactly, except the persisted lifecycle is `review_failed`,
+   * not `blocked` -- closing the gap where reviewer `failed` used to hard-stop with no persisted
+   * state at all. The routing this enables (review_failed -> diagnose_autocorrect ->
+   * runDiagnosticAutocorrection) already existed and was dormant; this is what finally writes
+   * that lifecycle state.
+   */
+  private recordFailedReview(
+    task: ParsedTaskDocument,
+    review: ReviewerOutput,
+    implementation: ImplementationAttempt,
+    qualityResults: readonly QualityGateResult[],
+  ): BlockerProfile {
+    const owner = this.resolveWorkItemContext(task.featureId);
+    const snapshot = this.readFeatureStateSnapshot(owner);
+    const blocker = this.buildReviewBlockerProfile(review, implementation, qualityResults, snapshot);
+    const restorationTarget = this.preferredRestorationTarget(snapshot);
+    const reason = this.buildReviewBlockerReason(review, implementation, qualityResults);
+
+    this.persistBlockedFeature(task.featureId, task.taskId, reason, blocker, restorationTarget, owner, 'review_failed');
+    return blocker;
+  }
+
   private persistBlockedFeature(
     featureId: string,
     taskId: string | null,
@@ -4454,6 +4676,7 @@ export class CompassRoseOrchestrator {
     blocker: BlockerProfile,
     restorationTarget: RestorationTarget,
     feature: WorkItemContext,
+    lifecycleState: 'blocked' | 'review_failed' = 'blocked',
   ): void {
     const blockedByLines = this.buildBlockedByLines(blocker, reason);
     const updatedFeatureState = this.updateFeatureStateForBlocked(
@@ -4462,6 +4685,7 @@ export class CompassRoseOrchestrator {
       restorationTarget,
       blockedByLines,
       this.blockedNextPlanningHint(blocker, restorationTarget),
+      lifecycleState,
     );
     const updatedProjectState = this.updateProjectStateForBlocked(
       featureId,
@@ -4581,14 +4805,15 @@ export class CompassRoseOrchestrator {
     restorationTarget: RestorationTarget,
     blockedByLines: readonly string[],
     nextPlanningHint: string,
+    lifecycleState: 'blocked' | 'review_failed' = 'blocked',
   ): string {
     let markdown = readUtf8(featureStatePath);
-    markdown = replaceSection(markdown, 'Lifecycle State', 'blocked');
+    markdown = replaceSection(markdown, 'Lifecycle State', lifecycleState);
     markdown = replaceOperationalStatus(markdown, {
       active_task: restorationTarget.active_task,
       active_correction_task: restorationTarget.active_correction_task,
       active_unblock_task: 'none',
-      last_review_result: 'blocked',
+      last_review_result: lifecycleState === 'review_failed' ? 'failed' : 'blocked',
       last_unblock_result: 'not_run',
     });
     markdown = replaceSection(markdown, 'Blocked By', bulletList(blockedByLines));

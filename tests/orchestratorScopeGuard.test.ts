@@ -70,6 +70,7 @@ function prepareScopeGuardWorkspace(): { cloneRoot: string; dispose: () => void 
 
   copyTree(join(repoRoot, 'src'), join(cloneRoot, 'src'));
   neutralizeRealFeatureStates(cloneRoot);
+  removeRealFixes(cloneRoot);
   seedTargetFeature(cloneRoot);
   seedSiblingFeature(cloneRoot);
   seedTaskRequestArtifact(cloneRoot);
@@ -157,6 +158,16 @@ function neutralizeRealFeatureStates(cloneRoot: string): void {
     );
     writeFileSync(statePath, neutralized, 'utf8');
   }
+}
+
+// Real, still-unformalized fixes committed in this repo's own docs/fixes now default to
+// 'critical' severity (fail-safe upward -- see readFixSeverityAndOwnership) until formalized, so
+// they would otherwise outrank this scenario's synthetic target feature in the clone and hijack
+// the run. Unlike features, no in-clone "neutralize the lifecycle state" rewrite applies here --
+// a fresh fix request has no state.md at all -- so remove them outright; this scenario needs
+// nothing but its own synthetic features.
+function removeRealFixes(cloneRoot: string): void {
+  rmSync(join(cloneRoot, 'docs', 'fixes'), { recursive: true, force: true });
 }
 
 function seedTargetFeature(cloneRoot: string): void {

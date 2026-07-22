@@ -42,13 +42,15 @@ describe('proto blocker flows', () => {
     expect(result.stderr).not.toContain('FAIL:');
   });
 
-  test('stops on a terminal blocked review and preserves the blocker profile', () => {
+  test('files a critical blocking fix on a terminal blocked review instead of a bounded doctor recovery', () => {
     const result = runProtoScenario('terminal-review-blocked');
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain('PASS: terminal blocker recorded a blocker profile');
     expect(result.stdout).toContain('PASS: no doctor recovery task was created');
-    expect(result.stdout).toContain('PASS: run stopped with a blocked status');
+    expect(result.stdout).toContain('PASS: a systemic blocking fix was filed');
+    expect(result.stdout).toContain('PASS: the feature was blocked on the filed fix');
+    expect(result.stdout).toContain('PASS: run stopped after filing a blocking fix');
     expect(result.stderr).not.toContain('FAIL:');
   });
 

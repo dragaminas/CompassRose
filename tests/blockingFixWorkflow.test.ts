@@ -6,8 +6,37 @@ import type { ParsedTaskDocument } from '../src/contracts/task/taskContracts.js'
 import type { QualityGateResult } from '../src/contracts/runtime/attempts.js';
 import type { FeatureInspection, FeatureRecord, StepExecutionResult, WorkItemContext } from '../src/contracts/runtime/protoRuntime.js';
 import type { StepDecision } from '../src/contracts/runtime/stepDecision.js';
+import type { DiagnosticAutocorrectionDecision, FixSeverity } from '../src/contracts/types.js';
 import { CompassRoseOrchestrator } from '../src/orchestrator/orchestrator.js';
 import { copyContractsIntoWorkspace, createTempWorkspace, readFixtureConfigMarkdown, type TempWorkspace } from './testUtils.js';
+
+interface BlockingFixScaffold {
+  readonly signature: string;
+  readonly titleSubject: string;
+  readonly severity: FixSeverity;
+  readonly whatHappened: string;
+  readonly evidenceLines: readonly string[];
+  readonly outlineStep: string;
+  readonly scopeExcludes: string;
+  readonly problem: string;
+  readonly acceptanceCriterion: string;
+  readonly completionCriterion: string;
+  readonly currentReality: string;
+  readonly nextPlanningHint: string;
+}
+
+function baseDiagnosticDecision(overrides: Partial<DiagnosticAutocorrectionDecision> = {}): DiagnosticAutocorrectionDecision {
+  return {
+    feature_id: 'fixture-feature',
+    diagnosis_summary: 'fixture diagnosis',
+    blocker: { kind: 'unknown', signature: 'fixture-signature', recoverability: 'terminal', evidence: ['fixture evidence'] },
+    next_step: 'stop_with_diagnostic',
+    next_step_reason: 'fixture reason',
+    interface_response: { mode: 'manual_review', summary: 'fixture summary', target_paths: [] },
+    systemic_blocker: null,
+    ...overrides,
+  };
+}
 
 const PROJECT_STATE_SEED = `# CompassRose Project State
 
@@ -175,6 +204,12 @@ interface BlockingFixAccess {
   listFeatures(): FeatureRecord[];
   inspectFeature(feature: FeatureRecord): FeatureInspection;
   determineNextStep(): StepDecision;
+  ensureDiagnosticAutocorrectionDecision(
+    feature: WorkItemContext,
+    reason: string,
+    decision: DiagnosticAutocorrectionDecision,
+  ): DiagnosticAutocorrectionDecision;
+  fileOrReuseBlockingFix(scaffold: BlockingFixScaffold): string;
 }
 
 function asAccess(orchestrator: CompassRoseOrchestrator): BlockingFixAccess {
@@ -288,5 +323,110 @@ describe('blockOnUnrelatedFixFailure', () => {
     const featureState = readFileSync(join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'), 'utf8');
     expect(featureState).toContain('- blocked_on_fix: none');
     expect(featureState.match(/## Lifecycle State\n\n(\S+)/)?.[1]).toBe('implementation_running');
+  });
+});
+
+describe('fileOrReuseBlockingFix (generalized scaffold, doctor-filed severity)', () => {
+  test('files a critical-severity fix from the doctor-flavored scaffold', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+
+    const fixId = access.fileOrReuseBlockingFix({
+      signature: 'systemic-signature-1',
+      titleSubject: 'Systemic defect in the framework',
+      severity: 'critical',
+      whatHappened: 'The framework itself is broken, unrelated to any bounded task.',
+      evidenceLines: ['- The environment cannot recover without human intervention.'],
+      outlineStep: 'Diagnose and repair the systemic defect.',
+      scopeExcludes: 'Any work belonging to the feature that surfaced this defect.',
+      problem: 'The framework itself is broken.',
+      acceptanceCriterion: 'The systemic defect no longer reproduces.',
+      completionCriterion: 'The defect is repaired and every blocked feature/fix can resume.',
+      currentReality: 'The framework itself is broken.',
+      nextPlanningHint: 'diagnose and repair the systemic defect.',
+    });
+
+    const fixState = readFileSync(join(workspace.root, 'docs', 'fixes', fixId, 'state.md'), 'utf8');
+    expect(fixState).toMatch(/- severity: critical/);
+    expect(existsSync(join(workspace.root, 'docs', 'fixes', fixId, 'fix.md'))).toBe(true);
+
+    // Reusing the same signature must not spawn a duplicate fix.
+    const reusedFixId = access.fileOrReuseBlockingFix({
+      signature: 'systemic-signature-1',
+      titleSubject: 'Systemic defect in the framework (second sighting)',
+      severity: 'critical',
+      whatHappened: 'Same defect observed again.',
+      evidenceLines: ['- Same evidence.'],
+      outlineStep: 'Diagnose and repair the systemic defect.',
+      scopeExcludes: 'Nothing new.',
+      problem: 'Same problem.',
+      acceptanceCriterion: 'Same criterion.',
+      completionCriterion: 'Same completion criterion.',
+      currentReality: 'Same reality.',
+      nextPlanningHint: 'diagnose and repair the systemic defect.',
+    });
+
+    expect(reusedFixId).toBe(fixId);
+    expect(listFixDirectories(workspace.root)).toHaveLength(1);
+  });
+});
+
+describe('ensureDiagnosticAutocorrectionDecision (file_blocking_fix safety net)', () => {
+  test('accepts a well-formed file_blocking_fix decision unchanged', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const owner = access.resolveWorkItemContext('fixture-feature');
+
+    const decision = baseDiagnosticDecision({
+      next_step: 'file_blocking_fix',
+      systemic_blocker: {
+        title: 'Systemic defect',
+        evidence_summary: 'The environment cannot recover without human intervention.',
+        scope_note: 'Excludes the blocked feature\'s own remaining work.',
+        severity: 'critical',
+      },
+    });
+
+    const ensured = access.ensureDiagnosticAutocorrectionDecision(owner, 'fixture reason', decision);
+
+    expect(ensured.next_step).toBe('file_blocking_fix');
+    expect(ensured.systemic_blocker?.title).toBe('Systemic defect');
+  });
+
+  test('falls back to stop_with_diagnostic when file_blocking_fix has no systemic_blocker payload', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const owner = access.resolveWorkItemContext('fixture-feature');
+
+    const decision = baseDiagnosticDecision({ next_step: 'file_blocking_fix', systemic_blocker: null });
+
+    const ensured = access.ensureDiagnosticAutocorrectionDecision(owner, 'fixture reason', decision);
+
+    expect(ensured.next_step).toBe('stop_with_diagnostic');
+    expect(ensured.systemic_blocker).toBeNull();
+  });
+
+  test('falls back to stop_with_diagnostic when systemic_blocker is missing required fields', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const owner = access.resolveWorkItemContext('fixture-feature');
+
+    const decision = baseDiagnosticDecision({
+      next_step: 'file_blocking_fix',
+      systemic_blocker: {
+        title: '',
+        evidence_summary: 'Some evidence.',
+        scope_note: 'Some scope note.',
+        severity: 'critical',
+      },
+    });
+
+    const ensured = access.ensureDiagnosticAutocorrectionDecision(owner, 'fixture reason', decision);
+
+    expect(ensured.next_step).toBe('stop_with_diagnostic');
   });
 });

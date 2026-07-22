@@ -64,6 +64,13 @@ function main(): number {
   copyTree(join(repoRoot, 'src'), join(cloneRoot, 'src'));
   syncFeatureStateDocs(repoRoot, cloneRoot);
   pinScenarioConfigLimits(cloneRoot);
+  // Real, still-unformalized fixes committed in this repo's own docs/fixes now default to
+  // 'critical' severity (fail-safe upward -- see readFixSeverityAndOwnership) until formalized.
+  // Once the scenario's targeted feature stops being "continuing" (e.g. after a doctor recovery
+  // task completes), the scheduler would otherwise pick up a real fix the mocks below know
+  // nothing about and crash. These scenarios only exercise feature-side blocker flows, so remove
+  // real fixes from the disposable clone entirely.
+  rmSync(join(cloneRoot, 'docs', 'fixes'), { recursive: true, force: true });
 
   // A fresh local clone (and the sync steps above, which rewrite files with content that's
   // still identical to HEAD) can leave the index stat-cache out of sync with the checked-out
@@ -240,6 +247,7 @@ function main(): number {
     malformedFeatureStatePath,
     implementerTool,
     worktreeClean,
+    cloneRoot,
   }),
   ];
 
@@ -295,6 +303,7 @@ function buildScenarioChecks(input: {
   malformedFeatureStatePath: string;
   implementerTool: AgentToolName;
   worktreeClean: boolean;
+  cloneRoot: string;
 }): Array<{ name: string; ok: boolean }> {
   const {
     scenario,
@@ -317,6 +326,7 @@ function buildScenarioChecks(input: {
     malformedFeatureStatePath,
     implementerTool,
     worktreeClean,
+    cloneRoot,
   } = input;
 
   if (scenario === 'recoverable-review-blocked') {
@@ -333,12 +343,17 @@ function buildScenarioChecks(input: {
   }
 
   if (scenario === 'terminal-review-blocked') {
+    const fixesRoot = join(cloneRoot, 'docs', 'fixes');
+    const fixedFixDirectories = existsSync(fixesRoot) ? readdirSync(fixesRoot) : [];
+    const featureState = readFileSync(malformedFeatureStatePath, 'utf8');
     return [
-      { name: 'codex was called enough times to analyze the blocked review and stop with a diagnostic', ok: codexCalls >= 1 },
+      { name: 'codex was called enough times to analyze the blocked review and classify the blocker as systemic', ok: codexCalls >= 2 },
       { name: 'opencode was called exactly once', ok: opencodeCalls === 1 },
-      { name: 'run stopped with a blocked status', ok: runSummary.status === 'stopped' && runSummary.exit_code === 2 },
+      { name: 'run stopped after filing a blocking fix', ok: runSummary.status === 'stopped' && runSummary.exit_code === 2 },
       { name: 'terminal blocker recorded a blocker profile', ok: existsSync(blockerProfilePath) },
       { name: 'no doctor recovery task was created', ok: !existsSync(unblockTaskPath) },
+      { name: 'a systemic blocking fix was filed', ok: fixedFixDirectories.length === 1 },
+      { name: 'the feature was blocked on the filed fix', ok: /- blocked_on_fix: \S+/.test(featureState) && !featureState.includes('- blocked_on_fix: none') },
       { name: 'opencode touched the repo', ok: markerExists },
     ];
   }
@@ -1120,6 +1135,24 @@ function sequenceForScenario(scenario) {
     case 'terminal-review-blocked':
       return [
         () => blockedReview('F002-T04', 'terminal blocker: the environment cannot recover without human intervention', 'The environment is unavailable and the failure is terminal.', 'skipped'),
+        () => diagnosticPayload(
+          '002-configuration-model',
+          'file_blocking_fix',
+          'The blocked review reports an unavailable environment, which is outside this task\\'s own frame -- no bounded doctor recovery task confined to this feature could resolve it.',
+          'environment',
+          'terminal-review-blocked-environment',
+          'terminal',
+          ['The environment is unavailable and the failure is terminal.'],
+          'none',
+          'No task-interface change applies; the defect is systemic, not a bounded interface gap.',
+          ['proto/protoCompassRose.e2e.ts'],
+          {
+            title: 'Environment unavailable during terminal-review-blocked scenario',
+            evidence_summary: 'The environment is unavailable and the failure is terminal, confirmed by the blocked review.',
+            scope_note: 'This fix excludes any work belonging to F002-T04; that task resumes automatically once this fix reaches completed.',
+            severity: 'critical',
+          },
+        ),
       ];
     case 'interface-gap':
       return [
@@ -1272,7 +1305,7 @@ function plannerTask(task) {
   return { task };
 }
 
-function diagnosticPayload(featureId, nextStep, reason, blockerKind, signature, recoverability, evidence, interfaceMode, interfaceSummary, targetPaths) {
+function diagnosticPayload(featureId, nextStep, reason, blockerKind, signature, recoverability, evidence, interfaceMode, interfaceSummary, targetPaths, systemicBlocker = null) {
   return {
     feature_id: featureId,
     diagnosis_summary: reason,
@@ -1289,6 +1322,7 @@ function diagnosticPayload(featureId, nextStep, reason, blockerKind, signature, 
       summary: interfaceSummary,
       target_paths: targetPaths,
     },
+    systemic_blocker: systemicBlocker,
   };
 }
 

@@ -1,8 +1,9 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, test } from 'vitest';
-import { limitStateCorrectionTaskId } from '../src/task/taskId.js';
+import { CompassRoseOrchestrator } from '../src/orchestrator/orchestrator.js';
+import { limitStateCorrectionTaskId } from '../src/orchestrator/runtimeHelpers.js';
 
 describe('limitStateCorrectionTaskId', () => {
   let tempDir: string | null = null;
@@ -56,16 +57,80 @@ describe('limitStateCorrectionTaskId', () => {
     expect(c1).toBe(null);
   });
 
-  test('refuses nested correction depth at the boundary', () => {
+  test('allows the first base correction but refuses a nested anchor at limit 1', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'correction-limit-'));
 
-    // Write C1 and C2 for the same task anchor
-    writeFileSync(join(tempDir, '007.1.md'), '`F002-T7-C1`\n', 'utf8');
-    writeFileSync(join(tempDir, '007.2.md'), '`F002-T7-C2`\n', 'utf8');
+    const firstBaseCorrection = limitStateCorrectionTaskId(tempDir, 'F002-T7', 1);
+    expect(firstBaseCorrection).toBe('F002-T7-C1');
 
-    // Even a nested correction for the same anchor (e.g., C2's correction) would
-    // attempt the next correction number for F002-T7 -> C3 is refused
-    const nestedRefused = limitStateCorrectionTaskId(tempDir, 'F002-T7', 2);
+    // The active anchor already carries one correction suffix, so another
+    // correction would exceed max_review_iterations=1.
+    const nestedRefused = limitStateCorrectionTaskId(tempDir, 'F002-T7-C1', 1);
     expect(nestedRefused).toBe(null);
+  });
+
+  test('refuses the first allocation for a nested anchor at limit 1', () => {
+    tempDir = mkdtempSync(join(tmpdir(), 'correction-limit-'));
+
+    const first = limitStateCorrectionTaskId(tempDir, 'F002-T7-C1', 1);
+    expect(first).toBe(null);
+  });
+
+  test('correct_state refuses before writing artifacts or mutating feature and project state', () => {
+    const repositoryRoot = process.cwd();
+    const featureStatePath = join(repositoryRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+    const projectStatePath = join(repositoryRoot, 'docs', 'compassrose', 'PROJECT_STATE.md');
+    const tasksDirectory = join(repositoryRoot, 'docs', 'features', '002-configuration-model', 'tasks');
+    const artifactTasksDirectory = join(repositoryRoot, '.git', 'proto-compassrose', 'tasks');
+    const featureStateBefore = readFileSync(featureStatePath, 'utf8');
+    const projectStateBefore = readFileSync(projectStatePath, 'utf8');
+    const taskFilesBefore = readdirSync(tasksDirectory).sort();
+    const artifactFilesBefore = existsSync(artifactTasksDirectory) ? readdirSync(artifactTasksDirectory).sort() : [];
+
+    try {
+      const orchestrator = new CompassRoseOrchestrator({
+        cwd: repositoryRoot,
+        commit: false,
+        implementer: 'codex',
+        loop: false,
+      } as unknown as ConstructorParameters<typeof CompassRoseOrchestrator>[0]);
+      const git = Reflect.get(orchestrator, 'git') as { dirtyPaths: () => readonly string[] };
+      const originalDirtyPaths = git.dirtyPaths;
+      git.dirtyPaths = () => [];
+
+      try {
+        const executeStep = Reflect.get(orchestrator, 'executeStep') as (decision: unknown) => unknown;
+        const result = executeStep.call(orchestrator, {
+          kind: 'correct_state',
+          feature_id: '002-configuration-model',
+          reason: 'recovery test: nested correction anchor is already at the configured limit',
+        }) as { exitCode: number; continueLoop: boolean };
+
+        expect(result).toMatchObject({ exitCode: 2, continueLoop: false });
+        expect(readdirSync(tasksDirectory).sort()).toEqual(taskFilesBefore);
+        expect(existsSync(artifactTasksDirectory) ? readdirSync(artifactTasksDirectory).sort() : []).toEqual(artifactFilesBefore);
+        expect(readFileSync(featureStatePath, 'utf8')).toBe(featureStateBefore);
+        expect(readFileSync(projectStatePath, 'utf8')).toBe(projectStateBefore);
+      } finally {
+        git.dirtyPaths = originalDirtyPaths;
+      }
+    } finally {
+      writeFileSync(featureStatePath, featureStateBefore, 'utf8');
+      writeFileSync(projectStatePath, projectStateBefore, 'utf8');
+
+      for (const fileName of readdirSync(tasksDirectory)) {
+        if (!taskFilesBefore.includes(fileName)) {
+          rmSync(join(tasksDirectory, fileName), { force: true });
+        }
+      }
+
+      if (existsSync(artifactTasksDirectory)) {
+        for (const fileName of readdirSync(artifactTasksDirectory)) {
+          if (!artifactFilesBefore.includes(fileName)) {
+            rmSync(join(artifactTasksDirectory, fileName), { force: true });
+          }
+        }
+      }
+    }
   });
 });
