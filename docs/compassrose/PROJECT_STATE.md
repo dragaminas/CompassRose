@@ -6,7 +6,7 @@ In progress
 
 ## Active Feature
 
-`002-configuration-model`
+`001-blocked-feature-scope-misclassification`
 
 ## Current Reality
 
@@ -19,6 +19,7 @@ In progress
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R5`; the active task pointer was restored to `F002-T17-C1`.
 - Implementation failure evidence: Implementation for F002-T17-C1 produced no git diff (tool_refusal).
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R6`; the active task pointer was restored to `F002-T17-C1`.
+- The active work-item pointer currently targets fix `001-blocked-feature-scope-misclassification`; the detailed task and lifecycle state for that fix lives in `docs/fixes/001-blocked-feature-scope-misclassification/state.md`.
 
 ## Implemented
 
@@ -31,8 +32,8 @@ In progress
 
 ## Pending
 
-- Plan the next implementation task for the active feature.
-- Continue updating this file with approved repository facts as feature work lands.
+- Plan the next implementation task for the active fix.
+- Continue updating this file with approved repository facts as fix work lands.
 
 ## Blocked
 
@@ -40,7 +41,7 @@ In progress
 
 ## Last Approved Change
 
-Subtask `F002-T17-C1-CORRECTION-R1` was approved by the prototype orchestrator.
+Fix `001-blocked-feature-scope-misclassification` was formalized by the orchestrator.
 
 ## Known Gaps
 
@@ -48,4 +49,4 @@ Subtask `F002-T17-C1-CORRECTION-R1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is the next task-planning pass.
+The active work item is fix `001-blocked-feature-scope-misclassification`, and its next valid action is task planning.
