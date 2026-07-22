@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-task_ready
+implementation_running
 
 ## Source Request
 
@@ -14,9 +14,9 @@ task_ready
 - active_task: F002-T17-C1
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: skipped
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
 - last_unblock_result: passed
 - doctor_recovery_attempts: 0
 
@@ -114,4 +114,4 @@ Doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R5` passed re-entry quality ga
 
 ## Next Planning Hint
 
-Execute `F002-T17-C1` when the current execution mode allows it.
+Recover or finish subtask implementation of `F002-T17-C1` before allowing review or new planning.
