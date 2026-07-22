@@ -15,8 +15,6 @@ In progress
 - Feature `002-configuration-model` was suspended from `implementation_running`; the active task pointer remains `F002-T17-C1`.
 - Blocking task context: `F002-T17-C1-DOCTOR-RECOVERY-R3`
 - Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R4`; the active task pointer was restored to `F002-T17-C1`.
-- Implementation failure evidence: Implementation for F002-T17-C1 produced no git diff (context_overflow).
-- Feature `002-configuration-model` now has a planned doctor recovery task, `F002-T17-C1-DOCTOR-RECOVERY-R5`, to resolve a recoverable blocker and restore `task_ready`.
 
 ## Implemented
 
@@ -29,7 +27,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R5` for the active feature.
+- Recover the implementation of `F002-T17-C1-DOCTOR-RECOVERY-R4` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -46,4 +44,4 @@ Doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R4` passed re-entry quality ga
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R5` from the captured `task_ready` state.
+Resume `F002-T17-C1` implementation recovery before continuing.

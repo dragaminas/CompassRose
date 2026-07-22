@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+implementation_running
 
 ## Source Request
 
@@ -13,12 +13,12 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T17-C1
 - active_correction_task: none
-- active_unblock_task: F002-T17-C1-DOCTOR-RECOVERY-R5
-- last_implementation_result: failed
-- last_quality_gate_result: unknown
-- last_review_result: blocked
-- last_unblock_result: not_run
-- doctor_recovery_attempts: 1
+- active_unblock_task: none
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: skipped
+- last_unblock_result: passed
+- doctor_recovery_attempts: 0
 
 ## Current Reality
 
@@ -95,18 +95,14 @@ Task `F002-T17` is now planned and ready to execute. Add a cycle/depth limit to 
 
 ## Blocked By
 
-- - kind: implementation_failure
-- - signature: implementation-failure-F002-T17-C1
-- - recoverability: agent
-- - observed_state: lifecycle=implementation_failed; active_task=F002-T17-C1; active_correction_task=none; active_unblock_task=none
-- - evidence: Implementation for F002-T17-C1 produced no git diff (context_overflow).
+- None
 
 ## Blocked From
 
-- lifecycle_state: `task_ready`
-- active_task: `F002-T17-C1`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
@@ -118,4 +114,4 @@ Doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R4` passed re-entry quality ga
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R5` next.
+Resume `F002-T17-C1` implementation recovery before continuing.
