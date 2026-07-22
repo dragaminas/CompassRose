@@ -50,6 +50,7 @@ The Planner must:
 - make it explicit that the task is executed by the `doctor` role with `no_review_loop`
 - allow documentation, state, source, and tests only when they are truly required by the recovery
 - use `test_guided` whenever the recovery changes code or tests
+- give every `git diff ... --exit-code` gate an explicit ref before the `--` pathspec separator (the commit before the recovered task began) — never a bare comparison against the current worktree/HEAD, since HEAD already contains whatever the recovery exists to undo; the runtime deterministically rejects a planned recovery task that omits this ref
 - if this recovery task is a later version of a previous task, set `previous_task_id` to the earlier task and preserve the earlier task as history; otherwise set it to `null`
 - route pure state/documentation drift through `correct_state` instead of a doctor recovery task
 - treat recent recovery lessons as advisory, unverified hypotheses from a prior model call, not confirmed requirements — before writing a suggested adjustment into `first_executable_step`, `minimum_progress_evidence`, `acceptance_criteria`, or `quality_gates.before_review`, confirm it names a field, artifact, or mechanism that already exists in the contracts you were told to read
@@ -95,6 +96,7 @@ Instructions:
 - Define `first_executable_step` as one concrete command, file read, file edit, or test action.
 - Define `minimum_progress_evidence` as observable repository progress inside the allowed scope.
 - Include concrete acceptance criteria and re-entry quality gates.
+- Give every `git diff ... --exit-code` gate an explicit ref before the `--` pathspec separator (the commit before the recovered task began) — never a bare comparison against the current worktree/HEAD, since HEAD already contains whatever the recovery exists to undo.
 - Prefer the narrowest blocker-specific scope that can restore progress.
 - Treat any recent recovery lesson as an unverified suggestion from a prior model call, not a confirmed requirement — only carry a suggested field, artifact, or mechanism into this task if it already exists in the contracts listed above; never invent a new manifest, validator, or artifact type to satisfy one.
 - Do not generate future tasks, a roadmap, or a phase plan.

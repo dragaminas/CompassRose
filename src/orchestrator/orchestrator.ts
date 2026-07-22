@@ -2163,6 +2163,7 @@ export class CompassRoseOrchestrator {
       '- The restoration target above is fixed by the runtime and represents forward progress, not the failed state the blocker was diagnosed from; do not propose a different one.',
       '- Use `test_guided` when the recovery produces code or tests.',
       '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
+      '- Every `git diff ... --exit-code` gate must include an explicit ref before the `--` pathspec separator (the commit before the recovered task began) — never a bare comparison against the current worktree/HEAD, since HEAD already contains whatever this recovery exists to undo; a ref-less gate is deterministically rejected.',
       '- Any recovery lesson above is an unverified suggestion from a prior model call, not a confirmed requirement — only carry a suggested field, artifact, or mechanism into this task if it already exists in the contracts you were told to read; never invent a new manifest, validator, or artifact type to satisfy one.',
       '- Return JSON only and do not modify files.',
     ].join('\n');
