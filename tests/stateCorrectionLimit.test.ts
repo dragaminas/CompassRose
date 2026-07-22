@@ -84,10 +84,17 @@ describe('limitStateCorrectionTaskId', () => {
     const artifactTasksDirectory = join(repositoryRoot, '.git', 'proto-compassrose', 'tasks');
     const featureStateBefore = readFileSync(featureStatePath, 'utf8');
     const projectStateBefore = readFileSync(projectStatePath, 'utf8');
+    const nestedFeatureState = featureStateBefore.replace(
+      /(active_task\s*:\s*)[^\r\n]*/,
+      '$1F002-T7-C1',
+    );
+    expect(nestedFeatureState).not.toBe(featureStateBefore);
     const taskFilesBefore = readdirSync(tasksDirectory).sort();
     const artifactFilesBefore = existsSync(artifactTasksDirectory) ? readdirSync(artifactTasksDirectory).sort() : [];
 
     try {
+      writeFileSync(featureStatePath, nestedFeatureState, 'utf8');
+
       const orchestrator = new CompassRoseOrchestrator({
         cwd: repositoryRoot,
         commit: false,
@@ -107,9 +114,10 @@ describe('limitStateCorrectionTaskId', () => {
         }) as { exitCode: number; continueLoop: boolean };
 
         expect(result).toMatchObject({ exitCode: 2, continueLoop: false });
+        expect((result as { summary?: string }).summary).toMatch(/correction iteration limit reached/i);
         expect(readdirSync(tasksDirectory).sort()).toEqual(taskFilesBefore);
         expect(existsSync(artifactTasksDirectory) ? readdirSync(artifactTasksDirectory).sort() : []).toEqual(artifactFilesBefore);
-        expect(readFileSync(featureStatePath, 'utf8')).toBe(featureStateBefore);
+        expect(readFileSync(featureStatePath, 'utf8')).toBe(nestedFeatureState);
         expect(readFileSync(projectStatePath, 'utf8')).toBe(projectStateBefore);
       } finally {
         git.dirtyPaths = originalDirtyPaths;
