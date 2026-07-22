@@ -31,7 +31,7 @@ In progress
 
 ## Pending
 
-- Execute correction subtask `F002-T17-C1-CORRECTION-R1` for the active feature.
+- Recover or finish implementation for `F002-T17-C1-CORRECTION-R1`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -48,4 +48,4 @@ Doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R6` passed re-entry quality ga
 
 ## Next Planning Hint
 
-The active feature is `002-configuration-model`, and its next valid action is to execute correction subtask `F002-T17-C1-CORRECTION-R1`.
+The active feature is `002-configuration-model`, and subtask execution for `F002-T17-C1-CORRECTION-R1` is in progress.
