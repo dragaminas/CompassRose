@@ -31,7 +31,7 @@ In progress
 
 ## Pending
 
-- Execute `F002-T17-C1-DOCTOR-RECOVERY-R6` for the active feature.
+- Recover or finish implementation for `F002-T17-C1`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -48,4 +48,4 @@ Doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R6` passed re-entry quality ga
 
 ## Next Planning Hint
 
-Execute `F002-T17-C1` when the current execution mode allows it.
+The active feature is `002-configuration-model`, and subtask execution for `F002-T17-C1` is in progress.
