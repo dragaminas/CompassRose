@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+blocked
 
 ## Source Request
 
@@ -13,7 +13,7 @@ unblock_pending
 - formalization: complete
 - active_task: F002-T17-C1
 - active_correction_task: none
-- active_unblock_task: F002-T17-C1-DOCTOR-RECOVERY-R3
+- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: failed
 - last_review_result: blocked
@@ -96,17 +96,15 @@ Task `F002-T17` is now planned and ready to execute. Add a cycle/depth limit to 
 ## Blocked By
 
 - - kind: state_corruption
-- - signature: state-corruption-unblock-pending-doctor-recovery-f002-t17-c1-doctor-recovery-r2-failed-its-re-en
+- - signature: state-corruption-unblock-pending-implementation-for-f002-t17-c1-doctor-recovery-r3-produced-no-g
 - - recoverability: agent
-- - observed_state: lifecycle=unblock_pending; active_task=F002-T17-C1; active_correction_task=none; active_unblock_task=F002-T17-C1-DOCTOR-RECOVERY-R2
-- - evidence: Doctor recovery F002-T17-C1-DOCTOR-RECOVERY-R2 failed its re-entry quality gates.
-node_modules/.bin/tsx scripts/runtimeSmokeTest.mjs src/cli/main.ts: "node_modules" no se reconoce como un comando interno o externo,
-programa o archivo por lotes ejecutable.
+- - observed_state: lifecycle=unblock_pending; active_task=F002-T17-C1; active_correction_task=none; active_unblock_task=F002-T17-C1-DOCTOR-RECOVERY-R3
+- - evidence: Implementation for F002-T17-C1-DOCTOR-RECOVERY-R3 produced no git diff (context_overflow).
 - - evidence: - kind: state_corruption
-- - evidence: - signature: state-corruption-unblock-pending-doctor-recovery-f002-t17-c1-doctor-recovery-r1-failed-its-re-en
+- - evidence: - signature: state-corruption-unblock-pending-doctor-recovery-f002-t17-c1-doctor-recovery-r2-failed-its-re-en
 - - evidence: - recoverability: agent
 - - evidence: lifecycle=unblock_pending
-- - reason: Doctor recovery F002-T17-C1-DOCTOR-RECOVERY-R2 failed its re-entry quality gates. | node_modules/.bin/tsx scripts/runtimeSmokeTest.mjs src/cli/main.ts: "node_modules" no se reconoce como un comando interno o externo, | programa o archivo por lotes ejecutable.
+- - reason: Implementation for F002-T17-C1-DOCTOR-RECOVERY-R3 produced no git diff (context_overflow).
 
 ## Blocked From
 
@@ -114,6 +112,7 @@ programa o archivo por lotes ejecutable.
 - active_task: `F002-T17-C1`
 - active_correction_task: `none`
 - active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -125,4 +124,4 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R3` next.
+Plan a doctor recovery task for blocker `state-corruption-unblock-pending-implementation-for-f002-t17-c1-doctor-recovery-r3-produced-no-g` and then restore `implementation_running`.
