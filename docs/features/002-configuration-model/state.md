@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+formalized
 
 ## Source Request
 
@@ -11,12 +11,12 @@ implementation_running
 ## Operational Status
 
 - formalization: complete
-- active_task: F002-T17-C1-CORRECTION-R1
+- active_task: none
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: not_run
-- last_quality_gate_result: unknown
-- last_review_result: not_run
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: approved
 - last_unblock_result: passed
 - doctor_recovery_attempts: 0
 
@@ -106,7 +106,7 @@ Task `F002-T17` is now planned and ready to execute. Add a cycle/depth limit to 
 
 ## Last Approved Change
 
-Doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R6` passed re-entry quality gates and was applied by the prototype orchestrator.
+Subtask `F002-T17-C1-CORRECTION-R1` was approved by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -114,4 +114,4 @@ Doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R6` passed re-entry quality ga
 
 ## Next Planning Hint
 
-Recover or finish subtask implementation of `F002-T17-C1-CORRECTION-R1` before allowing review or new planning.
+Plan the next task that advances this feature from the remaining gap.

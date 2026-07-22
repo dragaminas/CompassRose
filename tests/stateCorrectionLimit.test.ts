@@ -5,6 +5,46 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { CompassRoseOrchestrator } from '../src/orchestrator/orchestrator.js';
 import { limitStateCorrectionTaskId } from '../src/orchestrator/runtimeHelpers.js';
 
+type ArtifactDirectorySnapshot = {
+  directoryExists: boolean;
+  files: Array<{
+    path: string;
+    exists: boolean;
+    content: string;
+  }>;
+};
+
+function snapshotArtifactDirectory(directory: string): ArtifactDirectorySnapshot {
+  const directoryExists = existsSync(directory);
+  if (!directoryExists) {
+    return { directoryExists: false, files: [] };
+  }
+
+  const paths = readdirSync(directory)
+    .filter((fileName) => /\.(?:md|json)$/i.test(fileName))
+    .sort()
+    .map((fileName) => join(directory, fileName));
+
+  return {
+    directoryExists: true,
+    files: paths.map((path) => ({
+      path,
+      exists: existsSync(path),
+      content: readFileSync(path, 'utf8'),
+    })),
+  };
+}
+
+function expectArtifactDirectoryUnchanged(
+  before: ArtifactDirectorySnapshot,
+  after: ArtifactDirectorySnapshot,
+): void {
+  expect(after.directoryExists).toBe(before.directoryExists);
+  expect(after.files.map((file) => file.path)).toEqual(before.files.map((file) => file.path));
+  expect(after.files.map((file) => file.exists)).toEqual(before.files.map((file) => file.exists));
+  expect(after.files.map((file) => file.content)).toEqual(before.files.map((file) => file.content));
+}
+
 describe('limitStateCorrectionTaskId', () => {
   let tempDir: string | null = null;
 
@@ -91,6 +131,8 @@ describe('limitStateCorrectionTaskId', () => {
     expect(nestedFeatureState).not.toBe(featureStateBefore);
     const taskFilesBefore = readdirSync(tasksDirectory).sort();
     const artifactFilesBefore = existsSync(artifactTasksDirectory) ? readdirSync(artifactTasksDirectory).sort() : [];
+    const correctionTasksBefore = snapshotArtifactDirectory(tasksDirectory);
+    const correctionArtifactsBefore = snapshotArtifactDirectory(artifactTasksDirectory);
 
     try {
       writeFileSync(featureStatePath, nestedFeatureState, 'utf8');
@@ -115,8 +157,8 @@ describe('limitStateCorrectionTaskId', () => {
 
         expect(result).toMatchObject({ exitCode: 2, continueLoop: false });
         expect((result as { summary?: string }).summary).toMatch(/correction iteration limit reached/i);
-        expect(readdirSync(tasksDirectory).sort()).toEqual(taskFilesBefore);
-        expect(existsSync(artifactTasksDirectory) ? readdirSync(artifactTasksDirectory).sort() : []).toEqual(artifactFilesBefore);
+        expectArtifactDirectoryUnchanged(correctionTasksBefore, snapshotArtifactDirectory(tasksDirectory));
+        expectArtifactDirectoryUnchanged(correctionArtifactsBefore, snapshotArtifactDirectory(artifactTasksDirectory));
         expect(readFileSync(featureStatePath, 'utf8')).toBe(nestedFeatureState);
         expect(readFileSync(projectStatePath, 'utf8')).toBe(projectStateBefore);
       } finally {
