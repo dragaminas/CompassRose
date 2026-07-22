@@ -3851,12 +3851,21 @@ export class CompassRoseOrchestrator {
    * `require('node:fs')` regression pass every vitest-based gate this session and crash
    * correctState() under the real CLI; this closes it without relying on any task author (LLM or
    * human) to remember to ask for it.
+   *
+   * Invoked through `npx`, not a direct `node_modules/.bin/tsx` path: runShellCommand() runs this
+   * with `shell: true`, which on Windows means cmd.exe -- and cmd.exe (unlike a POSIX shell) will
+   * not execute an extension-less relative path directly, so the bin shim path only ever worked
+   * on POSIX. `npx` resolves the locally-installed `tsx` through the same platform-specific shim
+   * (`tsx.cmd` on Windows, the plain script elsewhere) that PATH-based lookup already relies on
+   * everywhere else in this codebase, so this gate now runs identically on both platforms. This
+   * blocked every task touching core runtime code on Windows until caught by hand while
+   * dogfooding via `npm run dev`.
    */
   private coreRuntimeSmokeGateCommands(): readonly string[] {
     const coreRuntimePrefixes = ['src/orchestrator/', 'src/cli/', 'src/task/'];
     const changedFiles = this.git.diffNameOnly();
     const touchesCoreRuntime = changedFiles.some((path) => isPathAllowedByPrefix(path, coreRuntimePrefixes));
-    return touchesCoreRuntime ? ['node_modules/.bin/tsx scripts/runtimeSmokeTest.mjs src/cli/main.ts'] : [];
+    return touchesCoreRuntime ? ['npx tsx scripts/runtimeSmokeTest.mjs src/cli/main.ts'] : [];
   }
 
   /**

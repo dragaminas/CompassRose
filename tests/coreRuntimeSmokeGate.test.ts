@@ -197,6 +197,6 @@ describe('core-runtime smoke gate', () => {
 
     expect(results).toHaveLength(2);
     expect(results[0]?.command).toBe('echo unused');
-    expect(results[1]?.command).toBe('node_modules/.bin/tsx scripts/runtimeSmokeTest.mjs src/cli/main.ts');
+    expect(results[1]?.command).toBe('npx tsx scripts/runtimeSmokeTest.mjs src/cli/main.ts');
   });
 });
