@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+unblock_pending
 
 ## Source Request
 
@@ -13,12 +13,12 @@ blocked
 - formalization: complete
 - active_task: F002-T17-C1
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F002-T17-C1-DOCTOR-RECOVERY-R4
 - last_implementation_result: passed
 - last_quality_gate_result: failed
 - last_review_result: blocked
 - last_unblock_result: not_run
-- doctor_recovery_attempts: 2
+- doctor_recovery_attempts: 3
 
 ## Current Reality
 
@@ -112,7 +112,6 @@ Task `F002-T17` is now planned and ready to execute. Add a cycle/depth limit to 
 - active_task: `F002-T17-C1`
 - active_correction_task: `none`
 - active_unblock_task: `none`
-- recoverability: agent
 
 ## Last Approved Change
 
@@ -124,4 +123,4 @@ Subtask `F002-T16-C1-CORRECTION-R1-CORRECTION-1` was approved by the prototype o
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-unblock-pending-implementation-for-f002-t17-c1-doctor-recovery-r3-produced-no-g` and then restore `implementation_running`.
+Execute doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R4` next.
