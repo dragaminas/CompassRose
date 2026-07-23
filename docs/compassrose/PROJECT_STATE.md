@@ -15,6 +15,8 @@ In progress
 - Feature `003-doctor-command` was suspended from `implementation_running`; the active task pointer remains `F003-T01`.
 - Blocking task context: `F003-T01`
 - Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned next task, `FX002-T01`, ready to execute.
+- Implementation failure evidence: Implementation for FX002-T01 produced no git diff (context_overflow).
+- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned doctor recovery task, `FX002-T02`, to resolve a recoverable blocker and restore `task_ready`.
 
 ## Implemented
 
@@ -28,7 +30,7 @@ In progress
 
 ## Pending
 
-- Recover or finish implementation for `FX002-T01`.
+- Execute doctor recovery task `FX002-T02` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -46,4 +48,4 @@ Feature `003-doctor-command` was formalized by the prototype orchestrator.
 
 ## Next Planning Hint
 
-The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and subtask execution for `FX002-T01` is in progress.
+The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and its next valid action is to execute doctor recovery task `FX002-T02` from the captured `task_ready` state.
