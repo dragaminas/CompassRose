@@ -6,14 +6,14 @@ In progress
 
 ## Active Feature
 
-`002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`
+`003-doctor-command`
 
 ## Current Reality
 
-- Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` is complete: `npm test` passes cleanly and repeatedly (commit `242670b6` removed the stale per-test timeout overrides that were the actual root cause). Marked `completed` directly; see that fix's own `state.md` for why the runtime's implement/review/doctor-recovery loop could never reach that conclusion on its own.
-- No feature or fix is currently active.
-- `003-doctor-command` resumed after fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` reached completed; the active task pointer was restored to `F003-T01`.
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned doctor recovery task, `FX002-T07`, to resolve a recoverable blocker and restore `review_pending`.
+- Feature `003-doctor-command` is blocked by `state-corruption-implementation-running-task-f003-t01-hit-a-quality-gate-failure-npm-test-confir`.
+- Blocker recoverability: agent.
+- Feature `003-doctor-command` was suspended from `implementation_running`; the active task pointer remains `F003-T01`.
+- Blocking task context: `F003-T01`
 
 ## Implemented
 
@@ -29,7 +29,8 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `FX002-T07` for the active feature.
+- Plan a doctor recovery task for the active feature.
+- Restore the captured `implementation_running` state after the blocker is resolved.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -55,4 +56,4 @@ Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` reached comple
 
 ## Next Planning Hint
 
-The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and its next valid action is to execute doctor recovery task `FX002-T07` from the captured `review_pending` state.
+Plan a doctor recovery task for blocker `state-corruption-implementation-running-task-f003-t01-hit-a-quality-gate-failure-npm-test-confir` and then restore `implementation_running`.

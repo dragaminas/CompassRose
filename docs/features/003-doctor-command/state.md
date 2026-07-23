@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+blocked
 
 ## Source Request
 
@@ -19,7 +19,7 @@ implementation_running
 - last_review_result: blocked
 - last_unblock_result: not_run
 - doctor_recovery_attempts: 0
-- blocked_on_fix: none
+- blocked_on_fix: 003-pre-existing-failure-in-docs-features-003-doctor-command-state-md
 
 ## Current Reality
 
@@ -52,14 +52,22 @@ Task `F003-T01` is now planned and ready to execute. Establish Doctor diagnostic
 
 ## Blocked By
 
-- None
+- - kind: state_corruption
+- - signature: state-corruption-implementation-running-task-f003-t01-hit-a-quality-gate-failure-npm-test-confir
+- - recoverability: agent
+- - observed_state: lifecycle=implementation_running; active_task=F003-T01; active_correction_task=none; active_unblock_task=none
+- - evidence: Task F003-T01 hit a quality-gate failure (`npm test`) confirmed unrelated to and preexisting its own scope; filed/reused fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` and stopped instead of continuing to review or generating a correction for it.
+- - evidence: None
+- - evidence: lifecycle=implementation_running
+- - reason: Task F003-T01 hit a quality-gate failure (`npm test`) confirmed unrelated to and preexisting its own scope; filed/reused fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` and stopped instead of continuing to review or generating a correction for it.
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `implementation_running`
+- active_task: `F003-T01`
+- active_correction_task: `none`
+- active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -73,4 +81,4 @@ Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` reached comple
 
 ## Next Planning Hint
 
-Resume `F003-T01` implementation recovery before continuing.
+Plan a doctor recovery task for blocker `state-corruption-implementation-running-task-f003-t01-hit-a-quality-gate-failure-npm-test-confir` and then restore `implementation_running`.
