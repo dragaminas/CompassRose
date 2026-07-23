@@ -10,14 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `003-doctor-command` is blocked by `review-failure-implementation-running-task-f003-t01-hit-a-quality-gate-failure-npm-test-confirme`.
+- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` is blocked by `task-interface-gap-unblock-pending-doctor-recovery-fx002-t03-failed-its-re-entry-quality-gates-n`.
 - Blocker recoverability: agent.
-- Feature `003-doctor-command` was suspended from `implementation_running`; the active task pointer remains `F003-T01`.
-- Blocking task context: `F003-T01`
-- Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned next task, `FX002-T01`, ready to execute.
-- Implementation failure evidence: Implementation for FX002-T01 produced no git diff (context_overflow).
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` recovered from a blocker through doctor recovery task `FX002-T02`; the active task pointer was restored to `FX002-T01`.
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned doctor recovery task, `FX002-T03`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` was suspended from `implementation_running`; the active task pointer remains `FX002-T01`.
+- Blocking task context: `FX002-T03`
 
 ## Implemented
 
@@ -31,7 +27,8 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `FX002-T03` for the active feature.
+- Plan a doctor recovery task for the active feature.
+- Restore the captured `implementation_running` state after the blocker is resolved.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -49,4 +46,4 @@ Doctor recovery task `FX002-T02` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and its next valid action is to execute doctor recovery task `FX002-T03` from the captured `implementation_running` state.
+Plan a doctor recovery task for blocker `task-interface-gap-unblock-pending-doctor-recovery-fx002-t03-failed-its-re-entry-quality-gates-n` and then restore `implementation_running`.
