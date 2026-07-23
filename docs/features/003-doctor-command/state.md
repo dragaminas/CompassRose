@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+task_ready
 
 ## Source Request
 
@@ -11,13 +11,14 @@ formalized
 ## Operational Status
 
 - formalization: complete
-- active_task: none
+- active_task: F003-T01
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: not_run
 - last_quality_gate_result: unknown
 - last_review_result: not_run
 - last_unblock_result: not_run
+- doctor_recovery_attempts: 0
 
 ## Current Reality
 
@@ -26,6 +27,8 @@ formalized
 - Feature `002-configuration-model` is recorded as complete and provides repository-local configuration loading/validation plus Doctor/runtime integration.
 - `docs/compassrose/PROJECT_STATE.md` records an existing dedicated runtime preflight check for the configured project-state document, but it does not establish that the full `compassrose doctor` readiness command is complete.
 - No feature-specific implementation deliverable for the complete Doctor command is claimed complete by this feature state.
+
+Task `F003-T01` is now planned and ready to execute. Establish Doctor diagnostic contract and read-only check context.
 
 ## Implemented Deliverables
 
@@ -42,9 +45,7 @@ formalized
 
 ## Outline Progress
 
-Each entry tracks one task request from the implementation outline. This section shows planning visibility, not an execution queue.
-
-- 1. Doctor diagnostic contract: not started
+- 1. Doctor diagnostic contract: in progress
 - 2. Repository readiness checks: not started
 - 3. CLI reporting and command integration: not started
 
@@ -71,4 +72,4 @@ None for feature `003-doctor-command`; the latest repository-level change record
 
 ## Next Planning Hint
 
-The feature is formalized and unblocked. Plan task request `1` first to establish the Doctor diagnostic boundary, then proceed in the declared order.
+Execute `F003-T01` when the current execution mode allows it.
