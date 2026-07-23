@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+blocked
 
 ## Source Request
 
@@ -13,7 +13,7 @@ unblock_pending
 - formalization: complete
 - active_task: F003-T01
 - active_correction_task: none
-- active_unblock_task: F003-DR01
+- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: failed
 - last_review_result: blocked
@@ -29,7 +29,7 @@ unblock_pending
 - `docs/compassrose/PROJECT_STATE.md` records an existing dedicated runtime preflight check for the configured project-state document, but it does not establish that the full `compassrose doctor` readiness command is complete.
 - No feature-specific implementation deliverable for the complete Doctor command is claimed complete by this feature state.
 
-Task `F003-T01` is now planned and ready to execute. Establish Doctor diagnostic contract and read-only check context.
+Task `F003-T01` is the active implementation target and is restored for deterministic re-entry. This recovery reconciles state and evidence only; it does not change the implementation attempt.
 
 ## Implemented Deliverables
 
@@ -52,7 +52,26 @@ Task `F003-T01` is now planned and ready to execute. Establish Doctor diagnostic
 
 ## Blocked By
 
-- None
+- - kind: state_corruption
+- - signature: state-corruption-implementation-running-doctor-recovery-f003-dr01-failed-its-re-entry-quality-ga
+- - recoverability: agent
+- - observed_state: lifecycle=implementation_running; active_task=F003-T01; active_correction_task=none; active_unblock_task=none
+- - evidence: Doctor recovery F003-DR01 failed its re-entry quality gates.
+npm test: - 0
++ 1
+
+ ❯ tests/protoBlockerFlows.test.ts:162:27
+    160|     const result = runProtoScenario('state-correction-missing-active-t…
+    161|
+    162|     expect(result.status).toBe(0);
+       |                           ^
+    163|     expect(result.stdout).toContain('PASS: state correction artifact w…
+    164|     expect(result.stdout).toContain('PASS: state correction document w…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+- - evidence: None
+- - evidence: lifecycle=implementation_running
+- - reason: Doctor recovery F003-DR01 failed its re-entry quality gates. | npm test: - 0 | + 1 | ❯ tests/protoBlockerFlows.test.ts:162:27 | 160|     const result = runProtoScenario('state-correction-missing-active-t… | 161| | 162|     expect(result.status).toBe(0); | |                           ^ | 163|     expect(result.stdout).toContain('PASS: state correction artifact w… | 164|     expect(result.stdout).toContain('PASS: state correction document w… | ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
 
 ## Blocked From
 
@@ -60,10 +79,18 @@ Task `F003-T01` is now planned and ready to execute. Establish Doctor diagnostic
 - active_task: `F003-T01`
 - active_correction_task: `none`
 - active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
 Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reached completed; resumed automatically.
+
+## Recovery History
+
+- Doctor recovery task `F003-DR01` preserves the supplied blocker kind `state_corruption` and blocker signature `state-corruption-quality-failed-plan-one-bounded-doctor-recovery-task-to-preserve-the-blocker-ev`.
+- Supplied blocker evidence is preserved: `Plan one bounded doctor recovery task to preserve the blocker evidence, reconcile the stale feature/project state and restoration target, and establish executable re-entry gates for F003-T01. The available evidence does not justify filing a systemic blocker.`, `blocker_evidence: None` (no additional evidence supplied), and `lifecycle=quality_failed`.
+- The failed quality-gate result remains historical evidence. No concrete failed-gate output or implementation-failure evidence was available in the original blocker record; the advisory `protoBlockerFlows.test.ts` refinement remains unverified rather than confirmed failure evidence. The later recovery-gate result is reported in the handoff notes and is not added to blocker evidence.
+- The required pre-edit `npm test` baseline on 2026-07-23 timed out after 120 seconds with exit code `124` and no test output. No persisted raw failed-gate output was available.
 
 ## Known Gaps
 
@@ -73,4 +100,4 @@ Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reac
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F003-DR01` next.
+Plan a doctor recovery task for blocker `state-corruption-implementation-running-doctor-recovery-f003-dr01-failed-its-re-entry-quality-ga` and then restore `implementation_running`.

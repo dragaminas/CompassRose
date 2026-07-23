@@ -10,11 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `003-doctor-command` is `blocked_on_fix` `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md`, which is now `completed` -- the next `npm run dev` step should resume it deterministically back to `implementation_running`/`F003-T01` (`resumeWorkItemBlockedOnFix`).
-- Both fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` and fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` are `completed`: `npm test` passes cleanly and repeatedly (commits `242670b6` and `3f02b62c`). Neither fix's own task chain could have reached that conclusion on its own; both were marked `completed` directly. See each fix's own `state.md` Known Gaps.
-- No feature or fix is currently active.
-- `003-doctor-command` resumed after fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reached completed; the active task pointer was restored to `F003-T01`.
-- Feature `003-doctor-command` now has a planned doctor recovery task, `F003-DR01`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `003-doctor-command` is blocked by `state-corruption-implementation-running-doctor-recovery-f003-dr01-failed-its-re-entry-quality-ga`.
+- Blocker recoverability: agent.
+- Feature `003-doctor-command` was suspended from `implementation_running`; the active task pointer remains `F003-T01`.
+- Blocking task context: `F003-DR01`
 
 ## Implemented
 
@@ -25,16 +24,15 @@ In progress
 - Feature `001-project-identity-and-foundation` now has aligned package metadata, TypeScript settings, and top-level foundation documentation.
 - `compassrose doctor` now validates the configured project-state document as a dedicated runtime preflight check.
 - Feature `002-configuration-model` is complete: repository-local configuration loading/validation, Doctor/runtime integration, and the bounded correction-task allocator are all implemented and quality-gated.
-- Feature `003-doctor-command` is formalized; its task `F003-T01` implemented
-  `src/doctor/doctorDiagnostics.ts` (task request 1) but is `blocked_on_fix` pointing at
-  fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md`, now
-  `completed`.
+- Feature `003-doctor-command` is formalized; its task `F003-T01` implementation attempt
+  remains the active restoration target and is not claimed complete by this recovery.
 - Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` is complete: `npm test` passes cleanly.
 - Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` is complete: `npm test` passes cleanly.
 
 ## Pending
 
-- Execute doctor recovery task `F003-DR01` for the active feature.
+- Plan a doctor recovery task for the active feature.
+- Restore the captured `implementation_running` state after the blocker is resolved.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -60,6 +58,12 @@ Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reac
   misattribution pattern a second time (fix `003`, actually caused by
   `tests/protoBlockerFlows.test.ts` running too close to the suite timeout under
   contention; fixed in commit `3f02b62c`).
+- Doctor recovery `F003-DR01` preserved the supplied `state_corruption` blocker
+  signature `state-corruption-quality-failed-plan-one-bounded-doctor-recovery-task-to-preserve-the-blocker-ev`,
+  the supplied planning evidence, `blocker_evidence: None`, and
+  `lifecycle=quality_failed`. No concrete failed-gate output or
+  implementation-failure evidence was available in the original blocker record;
+  the `protoBlockerFlows.test.ts` refinement remains advisory and unverified.
 
 ## Known Gaps
 
@@ -70,4 +74,4 @@ Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reac
 
 ## Next Planning Hint
 
-The active feature is `003-doctor-command`, and its next valid action is to execute doctor recovery task `F003-DR01` from the captured `implementation_running` state.
+Plan a doctor recovery task for blocker `state-corruption-implementation-running-doctor-recovery-f003-dr01-failed-its-re-entry-quality-ga` and then restore `implementation_running`.
