@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-task_planning_pending
+task_ready
 
 ## Source Request
 
@@ -11,7 +11,7 @@ task_planning_pending
 ## Operational Status
 
 - formalization: complete
-- active_task: none
+- active_task: FX002-T01
 - active_correction_task: none
 - active_unblock_task: none
 - severity: high
@@ -20,10 +20,13 @@ task_planning_pending
 - last_quality_gate_result: unknown
 - last_review_result: not_run
 - last_unblock_result: not_run
+- doctor_recovery_attempts: 0
 
 ## Current Reality
 
 `npm test` fails on a clean checkout of the repository, confirmed unrelated to any single task.
+
+Task `FX002-T01` is now planned and ready to execute. Repair the pre-existing DoctorDiagnostics test failure.
 
 ## Implemented Deliverables
 
@@ -58,4 +61,4 @@ None
 
 ## Next Planning Hint
 
-Plan the first task for fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`: diagnose and repair `npm test`.
+Execute `FX002-T01` when the current execution mode allows it.

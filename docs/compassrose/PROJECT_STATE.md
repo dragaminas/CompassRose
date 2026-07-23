@@ -6,7 +6,7 @@ In progress
 
 ## Active Feature
 
-`003-doctor-command`
+`002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`
 
 ## Current Reality
 
@@ -14,6 +14,7 @@ In progress
 - Blocker recoverability: agent.
 - Feature `003-doctor-command` was suspended from `implementation_running`; the active task pointer remains `F003-T01`.
 - Blocking task context: `F003-T01`
+- Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned next task, `FX002-T01`, ready to execute.
 
 ## Implemented
 
@@ -27,9 +28,8 @@ In progress
 
 ## Pending
 
-- Plan a doctor recovery task for the active feature.
-- Restore the captured `implementation_running` state after the blocker is resolved.
-- Continue updating this file with approved repository facts as feature work lands.
+- Execute `FX002-T01` for the active fix.
+- Continue updating this file with approved repository facts as fix work lands.
 
 ## Blocked
 
@@ -46,4 +46,4 @@ Feature `003-doctor-command` was formalized by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `review-failure-implementation-running-task-f003-t01-hit-a-quality-gate-failure-npm-test-confirme` and then restore `implementation_running`.
+The active work item is fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and its next valid action is to execute `FX002-T01`.
