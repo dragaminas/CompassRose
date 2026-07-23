@@ -6,13 +6,14 @@ In progress
 
 ## Active Feature
 
-`none`
+`003-doctor-command`
 
 ## Current Reality
 
 - Feature `003-doctor-command` is `blocked_on_fix` `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md`, which is now `completed` -- the next `npm run dev` step should resume it deterministically back to `implementation_running`/`F003-T01` (`resumeWorkItemBlockedOnFix`).
 - Both fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` and fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` are `completed`: `npm test` passes cleanly and repeatedly (commits `242670b6` and `3f02b62c`). Neither fix's own task chain could have reached that conclusion on its own; both were marked `completed` directly. See each fix's own `state.md` Known Gaps.
 - No feature or fix is currently active.
+- `003-doctor-command` resumed after fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reached completed; the active task pointer was restored to `F003-T01`.
 
 ## Implemented
 
@@ -32,9 +33,7 @@ In progress
 
 ## Pending
 
-- Resume feature `003-doctor-command`'s task `F003-T01`, now that fix
-  `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` (the fix it was
-  `blocked_on_fix` for) is `completed`.
+- Recover the implementation of `F003-T01` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -43,7 +42,7 @@ In progress
 
 ## Last Approved Change
 
-Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` marked `completed` directly (manual transition); root cause repaired in commit `3f02b62c`.
+Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reached completed; `003-doctor-command` resumed automatically.
 
 ## Recovery History
 
@@ -70,4 +69,4 @@ Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` mark
 
 ## Next Planning Hint
 
-No feature or fix is active. The next `npm run dev` step should resume feature `003-doctor-command` back to `implementation_running`/`F003-T01` (`resumeWorkItemBlockedOnFix`).
+Resume `F003-T01` implementation recovery before continuing.
