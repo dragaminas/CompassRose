@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+implementation_running
 
 ## Source Request
 
@@ -19,7 +19,7 @@ blocked
 - last_review_result: blocked
 - last_unblock_result: not_run
 - doctor_recovery_attempts: 0
-- blocked_on_fix: 002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts
+- blocked_on_fix: none
 
 ## Current Reality
 
@@ -52,26 +52,18 @@ Task `F003-T01` is now planned and ready to execute. Establish Doctor diagnostic
 
 ## Blocked By
 
-- - kind: review_failure
-- - signature: review-failure-implementation-running-task-f003-t01-hit-a-quality-gate-failure-npm-test-confirme
-- - recoverability: agent
-- - observed_state: lifecycle=implementation_running; active_task=F003-T01; active_correction_task=none; active_unblock_task=none
-- - evidence: Task F003-T01 hit a quality-gate failure (`npm test`) confirmed unrelated to and preexisting its own scope; filed/reused fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` and stopped instead of continuing to review or generating a correction for it.
-- - evidence: None
-- - evidence: lifecycle=implementation_running
-- - reason: Task F003-T01 hit a quality-gate failure (`npm test`) confirmed unrelated to and preexisting its own scope; filed/reused fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` and stopped instead of continuing to review or generating a correction for it.
+- None
 
 ## Blocked From
 
-- lifecycle_state: `implementation_running`
-- active_task: `F003-T01`
-- active_correction_task: `none`
-- active_unblock_task: `none`
-- recoverability: agent
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-None for feature `003-doctor-command`; the latest repository-level change recorded in the supplied state is completion of feature `002-configuration-model`.
+Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` reached completed; resumed automatically.
 
 ## Known Gaps
 
@@ -81,4 +73,4 @@ None for feature `003-doctor-command`; the latest repository-level change record
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `review-failure-implementation-running-task-f003-t01-hit-a-quality-gate-failure-npm-test-confirme` and then restore `implementation_running`.
+Resume `F003-T01` implementation recovery before continuing.

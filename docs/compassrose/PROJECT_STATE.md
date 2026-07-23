@@ -6,14 +6,13 @@ In progress
 
 ## Active Feature
 
-`002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`
+`003-doctor-command`
 
 ## Current Reality
 
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` is blocked by `review-failure-review-pending-the-task-cannot-be-completed-within-its-defined-scope-the-doctordi`.
-- Blocker recoverability: agent.
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` was suspended from `review_pending`; the active task pointer remains `FX002-T01`.
-- Blocking task context: `FX002-T01`
+- Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` is complete: `npm test` passes cleanly and repeatedly (commit `242670b6` removed the stale per-test timeout overrides that were the actual root cause). Marked `completed` directly; see that fix's own `state.md` for why the runtime's implement/review/doctor-recovery loop could never reach that conclusion on its own.
+- No feature or fix is currently active.
+- `003-doctor-command` resumed after fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` reached completed; the active task pointer was restored to `F003-T01`.
 
 ## Implemented
 
@@ -24,11 +23,12 @@ In progress
 - Feature `001-project-identity-and-foundation` now has aligned package metadata, TypeScript settings, and top-level foundation documentation.
 - `compassrose doctor` now validates the configured project-state document as a dedicated runtime preflight check.
 - Feature `002-configuration-model` is complete: repository-local configuration loading/validation, Doctor/runtime integration, and the bounded correction-task allocator are all implemented and quality-gated.
+- Feature `003-doctor-command` is formalized; its task `F003-T01` was recorded as `blocked_on_fix` pointing at fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, which is now `completed` -- the next `npm run dev` step should resume it deterministically (`resumeWorkItemBlockedOnFix`).
+- Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` is complete: `npm test` passes cleanly.
 
 ## Pending
 
-- Plan a doctor recovery task for the active feature.
-- Restore the captured `review_pending` state after the blocker is resolved.
+- Recover the implementation of `F003-T01` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -37,7 +37,7 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `FX002-T06` passed re-entry quality gates and was applied by the prototype orchestrator.
+Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` reached completed; `003-doctor-command` resumed automatically.
 
 ## Recovery History
 
@@ -50,7 +50,8 @@ Doctor recovery task `FX002-T06` passed re-entry quality gates and was applied b
 
 - `classifyBlockerKind` misroutes a blocked-feature recovery hint toward doctor-recovery instead of the actual right action (seen twice: sibling-feature scope, and exhausted task requests). Tracked as fix `001-blocked-feature-scope-misclassification` (formalized, severity medium, not yet implemented).
 - No runtime code path transitions a feature from an exhausted-task-requests block directly to `completed`; feature `002-configuration-model`'s completion was applied directly rather than by the runtime. See that feature's own `state.md` Known Gaps for detail.
+- A task misattributed to a nonexistent file scope (via `blockOnUnrelatedFixFailure`'s noisy `referencedPaths[0]` heuristic) has no runtime path out of the implement -> review-blocked -> doctor-recovery cycle, even after its fix's real completion criterion is independently satisfied elsewhere. See fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`'s own `state.md` Known Gaps for detail.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `review-failure-review-pending-the-task-cannot-be-completed-within-its-defined-scope-the-doctordi` and then restore `review_pending`.
+Resume `F003-T01` implementation recovery before continuing.
