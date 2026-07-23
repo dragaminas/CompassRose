@@ -30,7 +30,7 @@ In progress
 
 ## Pending
 
-- Execute `FX002-T02` for the active feature.
+- Recover or finish implementation for `FX002-T01`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -48,4 +48,4 @@ Doctor recovery task `FX002-T02` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Execute `FX002-T01` when the current execution mode allows it.
+The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and subtask execution for `FX002-T01` is in progress.

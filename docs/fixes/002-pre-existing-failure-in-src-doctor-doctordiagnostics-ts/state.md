@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-task_ready
+implementation_running
 
 ## Source Request
 
@@ -16,9 +16,9 @@ task_ready
 - active_unblock_task: none
 - severity: high
 - owning_feature: none
-- last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: skipped
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
 - last_unblock_result: passed
 - doctor_recovery_attempts: 0
 
@@ -61,4 +61,4 @@ Doctor recovery task `FX002-T02` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Execute `FX002-T01` when the current execution mode allows it.
+Recover or finish subtask implementation of `FX002-T01` before allowing review or new planning.
