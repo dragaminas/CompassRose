@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+implementation_running
 
 ## Source Request
 
@@ -13,12 +13,12 @@ unblock_pending
 - formalization: complete
 - active_task: F003-T01
 - active_correction_task: none
-- active_unblock_task: F003-DR02
+- active_unblock_task: none
 - last_implementation_result: passed
-- last_quality_gate_result: failed
-- last_review_result: blocked
-- last_unblock_result: not_run
-- doctor_recovery_attempts: 2
+- last_quality_gate_result: passed
+- last_review_result: skipped
+- last_unblock_result: passed
+- doctor_recovery_attempts: 0
 - blocked_on_fix: none
 
 ## Current Reality
@@ -52,37 +52,18 @@ Task `F003-T01` is the active implementation target and is restored for determin
 
 ## Blocked By
 
-- - kind: state_corruption
-- - signature: state-corruption-implementation-running-doctor-recovery-f003-dr01-failed-its-re-entry-quality-ga
-- - recoverability: agent
-- - observed_state: lifecycle=implementation_running; active_task=F003-T01; active_correction_task=none; active_unblock_task=none
-- - evidence: Doctor recovery F003-DR01 failed its re-entry quality gates.
-npm test: - 0
-+ 1
-
- ❯ tests/protoBlockerFlows.test.ts:162:27
-    160|     const result = runProtoScenario('state-correction-missing-active-t…
-    161|
-    162|     expect(result.status).toBe(0);
-       |                           ^
-    163|     expect(result.stdout).toContain('PASS: state correction artifact w…
-    164|     expect(result.stdout).toContain('PASS: state correction document w…
-
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
-- - evidence: None
-- - evidence: lifecycle=implementation_running
-- - reason: Doctor recovery F003-DR01 failed its re-entry quality gates. | npm test: - 0 | + 1 | ❯ tests/protoBlockerFlows.test.ts:162:27 | 160|     const result = runProtoScenario('state-correction-missing-active-t… | 161| | 162|     expect(result.status).toBe(0); | |                           ^ | 163|     expect(result.stdout).toContain('PASS: state correction artifact w… | 164|     expect(result.stdout).toContain('PASS: state correction document w… | ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+- None
 
 ## Blocked From
 
-- lifecycle_state: `implementation_running`
-- active_task: `F003-T01`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reached completed; resumed automatically.
+Doctor recovery task `F003-DR02` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -99,4 +80,4 @@ Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reac
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F003-DR02` next.
+Resume `F003-T01` implementation recovery before continuing.

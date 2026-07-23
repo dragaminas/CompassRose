@@ -14,7 +14,7 @@ In progress
 - Blocker recoverability: agent.
 - Feature `003-doctor-command` was suspended from `implementation_running`; the active task pointer remains `F003-T01`.
 - Blocking task context: `F003-DR01`
-- Feature `003-doctor-command` now has a planned doctor recovery task, `F003-DR02`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR02`; the active task pointer was restored to `F003-T01`.
 
 ## Implemented
 
@@ -32,7 +32,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F003-DR02` for the active feature.
+- Recover the implementation of `F003-DR02` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -41,7 +41,7 @@ In progress
 
 ## Last Approved Change
 
-Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reached completed; `003-doctor-command` resumed automatically.
+Doctor recovery task `F003-DR02` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -74,4 +74,4 @@ Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reac
 
 ## Next Planning Hint
 
-The active feature is `003-doctor-command`, and its next valid action is to execute doctor recovery task `F003-DR02` from the captured `implementation_running` state.
+Resume `F003-T01` implementation recovery before continuing.

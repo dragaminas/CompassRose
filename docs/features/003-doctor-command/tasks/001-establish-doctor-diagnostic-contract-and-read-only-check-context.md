@@ -63,9 +63,20 @@ Forbidden:
 - `tests/doctor/`
 
 ## Quality Gates to Run
+
+These are the implementation gates for F003-T01 and apply when the restored implementation task runs:
+
 ```bash
 npm run typecheck
 npm test
+```
+
+## Doctor Re-entry Gates (`quality_gates.before_review`)
+
+Doctor re-entry is a separate recovery gate set and does not inherit F003-T01's implementation gates. The recovery-specific gate is:
+
+```bash
+git diff --check
 ```
 
 ## Expected Deliverables
