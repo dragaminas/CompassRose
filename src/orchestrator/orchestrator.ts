@@ -2445,6 +2445,27 @@ export class CompassRoseOrchestrator {
         );
       }
 
+      // A state_corruption blocker unconditionally proposed correct_state here, with no check
+      // for whether this anchor had already exhausted its correction limit -- so once
+      // correctState() refused (StateCorrectionLimitReachedError), every subsequent
+      // diagnose_autocorrect run for this feature deterministically re-proposed the same doomed
+      // correction and immediately hit the same limit again, forever, with no escape but manual
+      // intervention. Observed live on feature 003-doctor-command's F003-T01 anchor. Escalate to
+      // a bounded doctor recovery instead, exactly like the analogous `blocked` branch above.
+      const correctionAnchor = snapshot.activeTask !== 'none'
+        ? snapshot.activeTask
+        : this.resolveStateCorrectionActiveTaskFromArtifacts(feature.id);
+      if (correctionAnchor && this.buildStateCorrectionTaskId(feature.tasksDirectory, correctionAnchor) === null) {
+        const taskPath = this.tryFindTaskDocumentPath(correctionAnchor, feature.tasksDirectory);
+        return this.buildDeterministicDoctorRecoveryDecision(feature, snapshot, blocker, reason, [
+          relativePath(this.repositoryRoot, feature.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+          'src/contracts/task/doctor-recovery-task.md',
+          'src/contracts/runtime/operation-loop.md',
+          taskPath ? relativePath(this.repositoryRoot, taskPath) : null,
+        ]);
+      }
+
       return this.buildDeterministicStateCorrectionDecision(feature, blocker, reason);
     }
 

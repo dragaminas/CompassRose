@@ -259,4 +259,76 @@ describe('limitStateCorrectionTaskId', () => {
       }
     }
   });
+
+  test('runDiagnosticAutocorrection() escalates to doctor recovery instead of re-proposing an exhausted correction', () => {
+    // Regression test: a state_corruption blocker whose anchor has already used up its
+    // correction limit used to unconditionally get next_step: 'correct_state' again anyway, with
+    // no check for whether correctState() would actually allow it. Since this whole decision path
+    // is deterministic (no AI call), every future diagnose_autocorrect run for the same feature
+    // would re-propose the identical doomed correction and immediately hit
+    // StateCorrectionLimitReachedError again -- an unrecoverable loop with no escape but manual
+    // intervention. Observed live on feature 003-doctor-command's F003-T01 anchor.
+    const repositoryRoot = process.cwd();
+    const featureStatePath = join(repositoryRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+    const tasksDirectory = join(repositoryRoot, 'docs', 'features', '002-configuration-model', 'tasks');
+    const featureStateBefore = readFileSync(featureStatePath, 'utf8');
+    const taskFilesBefore = readdirSync(tasksDirectory).sort();
+
+    // Anchor F002-T7 already has its one allowed correction (F002-T7-C1), matching this
+    // repository's own configured max_review_iterations: 1.
+    const exhaustedAnchorTaskFile = join(tasksDirectory, '999.1-fixture-exhausted-anchor.md');
+
+    const stateWithRecordedBlocker = featureStateBefore
+      .replace(/(active_task\s*:\s*)[^\r\n]*/, '$1F002-T7')
+      .replace(
+        /## Lifecycle State\n\n\S+/,
+        '## Lifecycle State\n\nquality_failed',
+      )
+      .replace(
+        /## Blocked By\n\n(?:- .*\n)*/,
+        [
+          '## Blocked By',
+          '',
+          '- kind: state_corruption',
+          '- signature: fixture-state-corruption-signature',
+          '- recoverability: agent',
+          '- observed_state: lifecycle=quality_failed',
+          '- evidence: fixture evidence',
+          '',
+        ].join('\n'),
+      );
+    expect(stateWithRecordedBlocker).not.toBe(featureStateBefore);
+
+    try {
+      writeFileSync(featureStatePath, stateWithRecordedBlocker, 'utf8');
+      writeFileSync(exhaustedAnchorTaskFile, '`F002-T7-C1`\n', 'utf8');
+
+      const orchestrator = new CompassRoseOrchestrator({
+        cwd: repositoryRoot,
+        commit: false,
+        implementer: 'codex',
+        loop: false,
+      } as unknown as ConstructorParameters<typeof CompassRoseOrchestrator>[0]);
+
+      const resolveWorkItemContext = Reflect.get(orchestrator, 'resolveWorkItemContext') as (featureId: string) => unknown;
+      const owner = resolveWorkItemContext.call(orchestrator, '002-configuration-model');
+      const runDiagnosticAutocorrection = Reflect.get(orchestrator, 'runDiagnosticAutocorrection') as (
+        feature: unknown,
+        reason: string,
+      ) => { next_step: string };
+
+      const decision = runDiagnosticAutocorrection.call(orchestrator, owner, 'fixture reason');
+
+      expect(decision.next_step).toBe('plan_doctor_recovery');
+    } finally {
+      writeFileSync(featureStatePath, featureStateBefore, 'utf8');
+      rmSync(exhaustedAnchorTaskFile, { force: true });
+
+      for (const fileName of readdirSync(tasksDirectory)) {
+        if (!taskFilesBefore.includes(fileName)) {
+          rmSync(join(tasksDirectory, fileName), { force: true });
+        }
+      }
+    }
+  });
 });
