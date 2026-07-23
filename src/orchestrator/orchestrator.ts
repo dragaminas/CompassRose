@@ -3976,6 +3976,14 @@ export class CompassRoseOrchestrator {
 
     this.recordBlockedFeature(task.featureId, reason, task.taskId);
     this.setBlockedOnFix(owner, fixId);
+    // This task's own attempt is abandoned for good (unlike doctor recovery, nothing will ever
+    // plan a follow-up task scoped to its allowed_paths), so its dirty diff -- already archived
+    // under .git/proto-compassrose/diffs/ by the quality-gate run that led here -- must be
+    // discarded now. Left in the tree, it would permanently fail every future run's
+    // require_clean_worktree_before_task preflight (findDisallowedDirtyPaths in this class),
+    // since the next deterministic decision is always a fresh plan_fix_task for the newly filed
+    // fix, which requires a fully clean tree. See reconcileDirtyPathsForNewScope's own docs.
+    this.reconcileDirtyPathsForNewScope(task.featureId, task.taskId, []);
 
     if (this.options.commit) {
       this.git.commit(

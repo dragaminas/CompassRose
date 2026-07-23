@@ -261,6 +261,24 @@ describe('blockOnUnrelatedFixFailure', () => {
     expect(featureState).toContain(`- blocked_on_fix: ${fixId}`);
   });
 
+  test('discards the abandoned task\'s own dirty diff so future runs are not permanently blocked', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const owner = access.resolveWorkItemContext('fixture-feature');
+    const task = access.loadTask('F001-T01');
+    const command = "node -e \"console.error('FAIL tests/unrelated.test.ts:1:1'); process.exit(1)\"";
+
+    // The task's own in-progress, uncommitted work within its allowed_paths (`src/allowed.ts`),
+    // exactly like an implementer attempt's diff sitting in the tree when quality gates fail.
+    writeFileSync(join(workspace.root, 'src', 'allowed.ts'), 'export const allowed = false;\n', 'utf8');
+
+    access.blockOnUnrelatedFixFailure(owner, task, [waivedResult(command, 'tests/unrelated.test.ts')]);
+
+    const statusAfter = execFileSync('git', ['status', '--porcelain'], { cwd: workspace.root, encoding: 'utf8' });
+    expect(statusAfter).not.toContain('src/allowed.ts');
+  });
+
   test('reuses the existing fix for the same signature instead of filing a duplicate', () => {
     workspace = createWorkspace('fixture-feature', 'F001-T01');
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
