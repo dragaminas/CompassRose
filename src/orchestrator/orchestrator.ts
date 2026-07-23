@@ -5325,6 +5325,10 @@ export class CompassRoseOrchestrator {
       last_review_result: 'not_run',
       active_correction_task: 'none',
       active_unblock_task: 'none',
+      // Quality gates actually passing is the only point that proves a prior doctor recovery
+      // (if any) produced real forward progress rather than just re-entering the same failing
+      // attempt; see updateFeatureStateAfterDoctorRecovery for why it must NOT reset this itself.
+      ...(lifecycleState === 'review_pending' ? { doctor_recovery_attempts: '0' } : {}),
     });
 
     if (lifecycleState === 'quality_failed') {
@@ -5603,9 +5607,15 @@ export class CompassRoseOrchestrator {
       last_quality_gate_result: 'passed',
       last_review_result: 'skipped',
       last_unblock_result: 'passed',
-      // This recovery attempt actually worked -- reset the depth counter so a later, unrelated
-      // failure starts its own fresh budget instead of inheriting this one's exhausted count.
-      doctor_recovery_attempts: '0',
+      // Deliberately NOT reset here. Passing this recovery task's own narrow re-entry gates only
+      // proves the state-document rewrite is internally consistent -- it says nothing about
+      // whether the underlying blocker that triggered diagnose_autocorrect is actually resolved.
+      // Resetting unconditionally on every recovery application let a recurring same-root-cause
+      // quality-gate failure cycle quality_failed -> doctor recovery -> implementation_running ->
+      // quality_failed forever: priorAttempts in planDoctorRecoveryTask always read back 0, so
+      // max_recovery_iterations could never trip. The counter now only resets once quality gates
+      // genuinely pass (see updateFeatureStateAfterImplementation's review_pending branch), which
+      // is the first point that proves real forward progress happened.
     });
     markdown = replaceSection(markdown, 'Blocked By', '- None');
     markdown = replaceSection(markdown, 'Blocked From', [

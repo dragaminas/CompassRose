@@ -282,4 +282,49 @@ describe('updateFeatureStateAfterImplementation() quality_failed evidence', () =
     expect(updated).toMatch(/## Blocked By\n\n- - kind: \S/);
     expect(updated).not.toMatch(/## Blocked By\n\n- None/);
   });
+
+  test('preserves doctor_recovery_attempts on quality_failed instead of resetting it', () => {
+    // Companion regression test for the doctor-recovery infinite-loop fix (see
+    // doctorRecoveryLimit.test.ts): a quality-gate failure alone must not silently discard a
+    // prior recovery cycle's count, or max_recovery_iterations could never trip for a recurring
+    // same-root-cause failure.
+    const command = "node -e \"console.error('FAIL src/allowed.ts:1:1 real assertion failure'); process.exit(1)\"";
+    workspace = createWorkspace('fixture-feature', 'F001-T01', command);
+    writeFileSync(
+      join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'),
+      FEATURE_STATE_SEED.replace('- last_unblock_result: not_run\n', '- last_unblock_result: not_run\n- doctor_recovery_attempts: 2\n'),
+      'utf8',
+    );
+
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asQualityGateAccess(orchestrator);
+    const owner = access.resolveWorkItemContext('fixture-feature');
+    const task = access.loadTask('F001-T01');
+    const results = access.runQualityGates(task);
+
+    const updated = access.updateFeatureStateAfterImplementation(owner.statePath, 'F001-T01', 'quality_failed', 'failed', results);
+
+    expect(updated).toContain('- doctor_recovery_attempts: 2');
+  });
+
+  test('resets doctor_recovery_attempts once quality gates genuinely pass', () => {
+    const command = 'node -e "process.exit(0)"';
+    workspace = createWorkspace('fixture-feature', 'F001-T01', command);
+    writeFileSync(
+      join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'),
+      FEATURE_STATE_SEED.replace('- last_unblock_result: not_run\n', '- last_unblock_result: not_run\n- doctor_recovery_attempts: 2\n'),
+      'utf8',
+    );
+
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asQualityGateAccess(orchestrator);
+    const owner = access.resolveWorkItemContext('fixture-feature');
+    const task = access.loadTask('F001-T01');
+    const results = access.runQualityGates(task);
+    expect(results[0].status).toBe('passed');
+
+    const updated = access.updateFeatureStateAfterImplementation(owner.statePath, 'F001-T01', 'review_pending', 'passed', results);
+
+    expect(updated).toContain('- doctor_recovery_attempts: 0');
+  });
 });

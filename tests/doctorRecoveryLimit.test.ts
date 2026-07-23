@@ -269,7 +269,17 @@ describe('doctor-recovery iteration limit', () => {
     expect(updated).toContain('- doctor_recovery_attempts: 2');
   });
 
-  test('updateFeatureStateAfterDoctorRecovery resets the attempt count to 0 on success', () => {
+  test('updateFeatureStateAfterDoctorRecovery preserves the attempt count instead of resetting it', () => {
+    // Regression test: this used to unconditionally reset doctor_recovery_attempts to 0 whenever
+    // a doctor recovery task's own narrow re-entry gates passed -- but passing those gates only
+    // proves the state-document rewrite is internally consistent, not that the underlying blocker
+    // that triggered diagnose_autocorrect was actually resolved. Live symptom (feature
+    // 003-doctor-command, 2026-07-23): a recurring quality-gate failure cycled
+    // quality_failed -> doctor recovery -> implementation_running -> quality_failed forever,
+    // because planDoctorRecoveryTask always read the count back as 0 and max_recovery_iterations
+    // could never trip. The count must now only reset once quality gates genuinely pass (see
+    // qualityGateWaiver.test.ts's "resets doctor_recovery_attempts once quality gates genuinely
+    // pass").
     workspace = createWorkspace('fixture-feature', 'F001-T01', 'unblock_pending', 2);
     const statePath = join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md');
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
@@ -291,6 +301,46 @@ describe('doctor-recovery iteration limit', () => {
 
     const updated = access.updateFeatureStateAfterDoctorRecovery(statePath, task, doctorRecovery);
 
-    expect(updated).toContain('- doctor_recovery_attempts: 0');
+    expect(updated).toContain('- doctor_recovery_attempts: 2');
+  });
+
+  test('a recurring same-root-cause quality failure trips the recovery limit instead of looping forever', () => {
+    // End-to-end reproduction of the live bug: three consecutive quality_failed -> doctor-recovery
+    // cycles for the same unresolved blocker must exhaust the budget on the fourth, instead of
+    // planDoctorRecoveryTask reading the count back as 0 every time.
+    workspace = createWorkspace('fixture-feature', 'F001-T01', 'quality_failed', 0);
+    const statePath = join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const task = access.loadTask('F001-T01');
+    const doctorRecovery: DoctorRecoveryTaskMetadata = {
+      blocker: {
+        kind: 'review_failure',
+        signature: 'fixture-signature',
+        evidence: ['fixture evidence'],
+        recoverability: 'agent',
+        observed_state: 'fixture observed state',
+      },
+      restoration_target: RESTORATION_TARGET,
+      executor_role: 'doctor',
+      review_policy: 'no_review_loop',
+    };
+
+    // The canonical CONFIG.md fixture sets limits.max_recovery_iterations to 3. Cycles 1..3 apply
+    // a doctor recovery whose own gates pass, restoring implementation_running -- but the quality
+    // gate then fails again for the same unresolved reason each time.
+    for (let cycle = 1; cycle <= 3; cycle += 1) {
+      const priorAttempts = access.readDoctorRecoveryAttempts(statePath);
+      const planned = access.updateFeatureStateForDoctorRecovery(statePath, `F001-T01-DOCTOR-RECOVERY-R${cycle}`, RESTORATION_TARGET, priorAttempts + 1);
+      writeFileSync(statePath, planned, 'utf8');
+
+      const applied = access.updateFeatureStateAfterDoctorRecovery(statePath, task, doctorRecovery);
+      writeFileSync(statePath, applied, 'utf8');
+      expect(access.readDoctorRecoveryAttempts(statePath)).toBe(cycle);
+    }
+
+    expect(() => access.planDoctorRecoveryTask('fixture-feature', 'quality gates failed again, same root cause')).toThrow(
+      DoctorRecoveryLimitReachedError,
+    );
   });
 });
