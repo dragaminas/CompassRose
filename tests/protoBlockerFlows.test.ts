@@ -2,7 +2,13 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AgentToolName } from '../src/contracts/runtime/agentContext.js';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
+
+// Each test here spawns a real tsx -> node -> proto e2e harness subprocess (a full clone plus
+// mock-CLI scenario) and takes ~9-11s even running alone; the suite-wide 30000ms default
+// (vitest.config.ts) leaves too little headroom once these run alongside the rest of the full
+// suite under contention.
+vi.setConfig({ testTimeout: 60000 });
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const tsxBinary = join(repoRoot, 'node_modules', '.bin', 'tsx');
