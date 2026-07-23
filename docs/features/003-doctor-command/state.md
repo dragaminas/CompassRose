@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+quality_failed
 
 ## Source Request
 
@@ -14,9 +14,9 @@ implementation_running
 - active_task: F003-T01
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: not_run
-- last_quality_gate_result: unknown
-- last_review_result: not_run
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: approved
 - last_unblock_result: not_run
 - doctor_recovery_attempts: 0
 - blocked_on_fix: none
@@ -52,7 +52,39 @@ Task `F003-T01` remains the active implementation target for deterministic re-en
 
 ## Blocked By
 
-- None
+- - kind: state_corruption
+- - signature: state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes
+- - recoverability: agent
+- - observed_state: lifecycle=implementation_running
+- - evidence: Quality gates failed after implementing F003-T01.
+npm test: - 0
++ 1
+
+ ❯ tests/protoBlockerFlows.test.ts:162:27
+    160|     const result = runProtoScenario('state-correction-missing-active-t…
+    161|
+    162|     expect(result.status).toBe(0);
+       |                           ^
+    163|     expect(result.stdout).toContain('PASS: state correction artifact w…
+    164|     expect(result.stdout).toContain('PASS: state correction document w…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+- - evidence: npm run typecheck: passed: > compassrose@1.0.0 typecheck
+> tsc --noEmit
+- - evidence: npm test: failed: - 0
++ 1
+
+ ❯ tests/protoBlockerFlows.test.ts:162:27
+    160|     const result = runProtoScenario('state-correction-missing-active-t…
+    161|
+    162|     expect(result.status).toBe(0);
+       |                           ^
+    163|     expect(result.stdout).toContain('PASS: state correction artifact w…
+    164|     expect(result.stdout).toContain('PASS: state correction document w…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+- - evidence: lifecycle=implementation_running
+- - reason: Quality gates failed after implementing F003-T01. | npm test: - 0 | + 1 | ❯ tests/protoBlockerFlows.test.ts:162:27 | 160|     const result = runProtoScenario('state-correction-missing-active-t… | 161| | 162|     expect(result.status).toBe(0); | |                           ^ | 163|     expect(result.stdout).toContain('PASS: state correction artifact w… | 164|     expect(result.stdout).toContain('PASS: state correction document w… | ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
 
 ## Blocked From
 
@@ -63,10 +95,7 @@ Task `F003-T01` remains the active implementation target for deterministic re-en
 
 ## Last Approved Change
 
-Restored to `implementation_running`/`F003-T01` by hand after deleting fix
-`004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect`
-(never a real defect -- see Known Gaps) and repairing the actual root cause in
-commit `2a6e3af9`.
+State correction artifact `F003-T01-C1` was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -102,4 +131,4 @@ commit `2a6e3af9`.
 
 ## Next Planning Hint
 
-Resume `F003-T01` implementation deterministically.
+Continue from the repaired `quality_failed` state for `F003-T01-C1`.

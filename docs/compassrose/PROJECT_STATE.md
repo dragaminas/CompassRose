@@ -13,6 +13,7 @@ In progress
 - Feature `003-doctor-command` is `implementation_running` for `F003-T01`, restored by hand
   after deleting fix `004-orchestration-quality-failure-attribution-and-recovery-state-
   transition-defect` (never a real defect) and repairing the actual root cause -- see Known Gaps.
+- Feature `003-doctor-command` state was canonicalized; the active task pointer remains `F003-T01`.
 
 ## Implemented
 
@@ -30,7 +31,7 @@ In progress
 
 ## Pending
 
-- Resume `F003-T01` implementation deterministically.
+- Continue from the repaired `quality_failed` state for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -39,9 +40,7 @@ In progress
 
 ## Last Approved Change
 
-Fix `004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect`
-deleted by hand; feature `003-doctor-command` restored to `implementation_running`/`F003-T01`.
-Root cause repaired in commit `2a6e3af9`.
+State correction artifact `F003-T01-C1` was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -103,4 +102,4 @@ Root cause repaired in commit `2a6e3af9`.
 
 ## Next Planning Hint
 
-Resume feature `003-doctor-command`'s task `F003-T01` implementation deterministically.
+Continue from the repaired `quality_failed` state for `F003-T01-C1`.
