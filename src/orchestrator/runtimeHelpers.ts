@@ -28,6 +28,41 @@ export function createRunId(): string {
   return `run-${new Date().toISOString().replace(/[:.]/g, '-').replace('T', '--').replace('Z', '')}`;
 }
 
+const RECOVERY_LESSON_NOTE_HEAD_CHARS = 600;
+const RECOVERY_LESSON_NOTE_TAIL_CHARS = 400;
+const RECOVERY_LESSON_NOTE_MAX_CHARS = RECOVERY_LESSON_NOTE_HEAD_CHARS + RECOVERY_LESSON_NOTE_TAIL_CHARS;
+
+/**
+ * Bounds a recovery lesson's `implementation_notes` before it is ever written to disk.
+ *
+ * extractImplementationNotes() (src/implementer/implementationNotes.ts) falls back to the
+ * implementer's ENTIRE raw reply when no literal `## Implementation Notes` heading is found --
+ * a deliberate, documented choice to avoid discarding a legitimate outcome over a formatting
+ * miss. But every recovery lesson gets replayed verbatim into every later planning/implementation
+ * prompt for the same feature (buildRecoveryLessonPromptLines, up to 5 lessons), so an unbounded
+ * fallback there compounds: a real production prompt reached ~295KB across a six-recovery chain
+ * for a single task, most of it multiple copies of the same rambling multi-thousand-word replies.
+ * This is the one field in a recovery lesson with no schema-enforced size (findings, adjustments,
+ * etc. come from a separate structured call with its own contract) and no natural task-scoped
+ * bound, so it is the one place a hard cap belongs. Keeps the head (usually states what was
+ * attempted) and tail (usually states the outcome/status) and elides the noisy middle, which for
+ * a rambling transcript carries the least signal per character.
+ */
+export function boundRecoveryLessonNotes(notes: string | null): string | null {
+  if (notes === null) {
+    return null;
+  }
+
+  if (notes.length <= RECOVERY_LESSON_NOTE_MAX_CHARS) {
+    return notes;
+  }
+
+  const head = notes.slice(0, RECOVERY_LESSON_NOTE_HEAD_CHARS).trimEnd();
+  const tail = notes.slice(notes.length - RECOVERY_LESSON_NOTE_TAIL_CHARS).trimStart();
+  const omitted = notes.length - head.length - tail.length;
+  return `${head}\n\n...[${omitted} characters omitted for context size]...\n\n${tail}`;
+}
+
 export function statSafeIsFile(path: string): boolean {
   try {
     return statSync(path).isFile();

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { createTempWorkspace, type TempWorkspace } from './testUtils.js';
 import {
   assertNever,
+  boundRecoveryLessonNotes,
   compareFeatureIds,
   createRunId,
   errorMessage,
@@ -176,5 +177,47 @@ describe('extractReferencedPaths', () => {
   test('does not match an absolute Windows path with backslashes', () => {
     const output = 'C:\\Users\\Eric\\repo\\src\\orchestrator\\orchestrator.ts:3446:13';
     expect(extractReferencedPaths(output)).toEqual([]);
+  });
+});
+
+describe('boundRecoveryLessonNotes', () => {
+  test('passes null through unchanged', () => {
+    expect(boundRecoveryLessonNotes(null)).toBeNull();
+  });
+
+  test('leaves short notes untouched', () => {
+    const notes = 'Status: already_complete. The requested behavior already exists.';
+    expect(boundRecoveryLessonNotes(notes)).toBe(notes);
+  });
+
+  test('leaves notes exactly at the cap untouched', () => {
+    const notes = 'x'.repeat(1000);
+    expect(boundRecoveryLessonNotes(notes)).toBe(notes);
+  });
+
+  test('truncates an oversized transcript, keeping the head and tail and eliding the middle', () => {
+    const head = 'HEAD-MARKER-'.repeat(60);
+    const middle = 'middle noise '.repeat(500);
+    const tail = 'TAIL-MARKER-'.repeat(40);
+    const notes = `${head}${middle}${tail}`;
+
+    const bounded = boundRecoveryLessonNotes(notes);
+
+    expect(bounded).not.toBeNull();
+    expect(bounded!.length).toBeLessThan(notes.length);
+    expect(bounded!.length).toBeLessThan(1200);
+    expect(bounded).toContain('HEAD-MARKER-');
+    expect(bounded).toContain('TAIL-MARKER-');
+    expect(bounded).not.toContain('middle noise');
+    expect(bounded).toMatch(/\.\.\.\[\d+ characters omitted for context size\]\.\.\./);
+  });
+
+  test('reproduces the real production scale: a ~295KB transcript collapses to well under 2KB', () => {
+    const notes = 'The implementer narrated a long multi-section status update. '.repeat(5000);
+    expect(notes.length).toBeGreaterThan(290_000);
+
+    const bounded = boundRecoveryLessonNotes(notes);
+
+    expect(bounded!.length).toBeLessThan(1200);
   });
 });

@@ -28,7 +28,16 @@ export class OpenCodeCli {
     // and exits with no diff, which is indistinguishable from a "did nothing" implementation
     // failure. Found live: two consecutive doctor-recovery/implementer runs against this same
     // task produced zero file changes despite reporting success.
-    const args = ['run', '--dir', this.repositoryRoot, '--auto'];
+    //
+    // `--pure` disables the user's globally-installed opencode plugins for this invocation. One
+    // of those (a "superpowers" plugin) ships a `brainstorming` skill with a hard gate against
+    // writing any code before a human approves a design through back-and-forth dialogue -- built
+    // for interactive sessions, and liable to fire (non-deterministically, since routing is the
+    // model's own judgment call) on a one-shot, non-interactive CompassRose task prompt with no
+    // human present to ever satisfy it. CompassRose's planner/reviewer roles already do this
+    // project's design/scoping work before the implementer ever runs, so a second, uncontrolled
+    // planning-oriented skill inside the implementer call is redundant risk with no upside here.
+    const args = ['run', '--dir', this.repositoryRoot, '--auto', '--pure'];
     const model = resolveOpenCodeModel();
     if (model) {
       args.push('-m', model);

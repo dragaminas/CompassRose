@@ -144,6 +144,7 @@ import { renderTaskInterfaceAnalysisMarkdown } from './taskInterfaceRendering.js
 import { replaceOperationalStatus } from './stateMarkdown.js';
 import {
   assertNever,
+  boundRecoveryLessonNotes,
   compareFeatureIds,
   createRunId,
   errorMessage,
@@ -5620,7 +5621,7 @@ export class CompassRoseOrchestrator {
       review_status: review.status,
       category,
       summary: review.summary,
-      implementation_notes: implementation.implementation_notes,
+      implementation_notes: boundRecoveryLessonNotes(implementation.implementation_notes),
       review_findings: review.findings.map((finding) => `[${finding.severity}] ${finding.message}`),
       quality_gate_failures: qualityGateFailures,
       recommended_action: analysis.recommended_action,
