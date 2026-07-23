@@ -11,14 +11,16 @@ In progress
 ## Current Reality
 
 - Feature `003-doctor-command` is `implementation_running` for `F003-T01`, restored by the
-  bounded F003-DR04 doctor recovery after deleting fix
+  bounded F003-DR05 doctor recovery after preserving the failed F003-T01 quality-gate evidence
+  and deleting fix
   `004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect` (never a
   real defect) and repairing the actual root cause -- see Known Gaps.
 - Feature `003-doctor-command` state was canonicalized; the active task pointer remains `F003-T01`.
 - F003-DR04 is the successor to F003-DR03; its literal doctor re-entry gates passed and its
   restoration target is applied. The F003-T01 implementation remains incomplete.
 - Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR04`; the active task pointer was restored to `F003-T01`.
-- Feature `003-doctor-command` now has a planned doctor recovery task, `F003-DR05`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `003-doctor-command` completed doctor recovery task `F003-DR05`; the active task pointer remains `F003-T01` in `implementation_running`.
+- Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR05`; the active task pointer was restored to `F003-T01`.
 
 ## Implemented
 
@@ -36,7 +38,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F003-DR05` for the active feature.
+- Recover the implementation of `F003-DR05` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -45,7 +47,7 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `F003-DR04` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `F003-DR05` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -105,6 +107,11 @@ Doctor recovery task `F003-DR04` passed re-entry quality gates and was applied b
   `lifecycle_state=implementation_running`, `active_task=F003-T01`,
   `active_correction_task=none`, and `active_unblock_task=none`; the failed F003-T01 quality
   gate remains preserved as historical evidence for the next implementation attempt.
+- Doctor recovery task `F003-DR05` reconciled the feature and project recovery checkpoints
+  without changing source, tests, contracts, or feature scope. It preserved the supplied
+  `state_corruption` blocker and confirmed F003-T01 quality-gate evidence, then applied the
+  restoration target `implementation_running` with `F003-T01` active and no active correction
+  or unblock task.
 
 ## Known Gaps
 
@@ -120,4 +127,4 @@ Doctor recovery task `F003-DR04` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-The active feature is `003-doctor-command`, and its next valid action is to execute doctor recovery task `F003-DR05` from the captured `implementation_running` state.
+Resume `F003-T01` implementation recovery before continuing.
