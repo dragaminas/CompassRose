@@ -6,14 +6,12 @@ In progress
 
 ## Active Feature
 
-`002-configuration-model`
+`none`
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `unknown-formalized-task-planning-for-feature-002-configuration-model-was-invoked-but-every-pre-d`.
-- Blocker recoverability: agent.
-- Feature `002-configuration-model` was suspended from `formalized`; the active task pointer remains `none`.
-- Blocking task context: none
+- Feature `002-configuration-model` is complete: every task request in its Implementation Outline (`F002-TR01`-`F002-TR05`) is `complete`, most recently `F002-TR05` via the approved correction chain `F002-T17` → `F002-T17-C1` → `F002-T17-C1-CORRECTION-R1`.
+- No feature is currently active; task planning should select `003-doctor-command`, the earliest numbered feature still pending formalization.
 
 ## Implemented
 
@@ -23,11 +21,11 @@ In progress
 - The package metadata recovery bundle is accepted and backed by the configured validation commands.
 - Feature `001-project-identity-and-foundation` now has aligned package metadata, TypeScript settings, and top-level foundation documentation.
 - `compassrose doctor` now validates the configured project-state document as a dedicated runtime preflight check.
+- Feature `002-configuration-model` is complete: repository-local configuration loading/validation, Doctor/runtime integration, and the bounded correction-task allocator are all implemented and quality-gated.
 
 ## Pending
 
-- Plan a doctor recovery task for the active feature.
-- Restore the captured `formalized` state after the blocker is resolved.
+- Formalize feature `003-doctor-command` next.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -40,8 +38,9 @@ Fix `001-blocked-feature-scope-misclassification` was formalized by the orchestr
 
 ## Known Gaps
 
-- `classifyBlockerKind` misroutes a blocked-feature recovery hint toward doctor-recovery instead of the actual right action (seen twice: sibling-feature scope, and exhausted task requests). Tracked as fix `001-blocked-feature-scope-misclassification`.
+- `classifyBlockerKind` misroutes a blocked-feature recovery hint toward doctor-recovery instead of the actual right action (seen twice: sibling-feature scope, and exhausted task requests). Tracked as fix `001-blocked-feature-scope-misclassification` (formalized, severity medium, not yet implemented).
+- No runtime code path transitions a feature from an exhausted-task-requests block directly to `completed`; feature `002-configuration-model`'s completion was applied directly rather than by the runtime. See that feature's own `state.md` Known Gaps for detail.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `unknown-formalized-task-planning-for-feature-002-configuration-model-was-invoked-but-every-pre-d` and then restore `formalized`.
+No feature is active. Select `003-doctor-command` for formalization, or plan the next task for fix `001-blocked-feature-scope-misclassification` (medium severity, ordinary backlog).

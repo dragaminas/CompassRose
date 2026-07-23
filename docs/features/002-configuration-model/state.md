@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+completed
 
 ## Source Request
 
@@ -16,7 +16,7 @@ blocked
 - active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: blocked
+- last_review_result: approved
 - last_unblock_result: not_run
 - doctor_recovery_attempts: 0
 
@@ -70,6 +70,10 @@ Restoring to `formalized` triggered the structured task-request backbone's one-t
 
 Task `F002-T17` is now planned and ready to execute. Add a cycle/depth limit to the correction-task ID allocator.
 
+`F002-T17` drifted into review as `owner.id`-anchored with unbounded nested correction depth; correction `F002-T17-C1` narrowed the guard to the restored active-task anchor and bounded nested `-C` suffix depth, and its own correction `F002-T17-C1-CORRECTION-R1` (adding byte-level artifact-preservation assertions to the refusal test) was approved. `F002-TR05` is complete: `limitStateCorrectionTaskId` (`src/orchestrator/runtimeHelpers.ts`) now bounds both same-anchor and nested-anchor correction-task allocation by `limits.max_review_iterations`, `correctState()` applies it to the restored active-task anchor before any correction write, and `tests/stateCorrectionLimit.test.ts` covers the boundary, nested-depth, and byte-for-byte non-mutation behavior.
+
+Every task request in this feature's Implementation Outline is now `complete`. Task planning correctly reported the outline as exhausted; there is no remaining scope in `feature.md` this feature is meant to cover, so this is genuine completion rather than a gap requiring a new task request. Marked `completed` directly (no runtime code path currently transitions a feature from an exhausted-task-requests block to `completed` on its own -- see Known Gaps).
+
 ## Implemented Deliverables
 
 - the source feature request exists at `docs/features/002-configuration-model/request.md`
@@ -82,8 +86,7 @@ Task `F002-T17` is now planned and ready to execute. Add a cycle/depth limit to 
 
 ## Remaining Deliverables
 
-- connect configuration validation to the broader runtime flow
-- prove the documented configuration model works through approved implementation tasks and quality gates
+- None
 
 ## Outline Progress
 
@@ -95,22 +98,14 @@ Task `F002-T17` is now planned and ready to execute. Add a cycle/depth limit to 
 
 ## Blocked By
 
-- - kind: unknown
-- - signature: unknown-formalized-task-planning-for-feature-002-configuration-model-was-invoked-but-every-pre-d
-- - recoverability: agent
-- - observed_state: lifecycle=formalized; active_task=none; active_correction_task=none; active_unblock_task=none
-- - evidence: Task planning for feature `002-configuration-model` was invoked, but every pre-declared task request is already complete or superseded. Formalize additional task requests before continuing.
-- - evidence: None
-- - evidence: lifecycle=formalized
-- - reason: Task planning for feature `002-configuration-model` was invoked, but every pre-declared task request is already complete or superseded. Formalize additional task requests before continuing.
+- None
 
 ## Blocked From
 
-- lifecycle_state: `formalized`
-- active_task: `none`
-- active_correction_task: `none`
-- active_unblock_task: `none`
-- recoverability: agent
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
@@ -118,8 +113,8 @@ Subtask `F002-T17-C1-CORRECTION-R1` was approved by the prototype orchestrator.
 
 ## Known Gaps
 
-- `classifyBlockerKind` misroutes a blocked-feature recovery hint toward doctor-recovery instead of the actual right action, when the call site already knows precisely what's wrong (sibling-feature scope, or exhausted task requests). Tracked as fix `001-blocked-feature-scope-misclassification`; not yet addressed.
+- No runtime code path transitions a feature from an exhausted-task-requests block directly to `completed` -- it only ever reports "formalize additional task requests," which is the right call when a request was genuinely forgotten but not when the outline is actually finished, as it was here. This feature's own `completed` transition was applied directly rather than by the runtime. Not the same gap as `classifyBlockerKind`'s misclassification (fix `001-blocked-feature-scope-misclassification`, cross-cutting, no longer specific to this feature); tracked here as a separate observation.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `unknown-formalized-task-planning-for-feature-002-configuration-model-was-invoked-but-every-pre-d` and then restore `formalized`.
+Feature `002-configuration-model` is complete. Select `003-doctor-command` next because it is now the earliest numbered feature that is still pending formalization.
