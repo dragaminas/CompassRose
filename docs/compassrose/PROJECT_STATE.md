@@ -14,7 +14,7 @@ In progress
 - Blocker recoverability: agent.
 - Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` was suspended from `review_pending`; the active task pointer remains `FX002-T01`.
 - Blocking task context: `FX002-T01`
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned doctor recovery task, `FX002-T06`, to resolve a recoverable blocker and restore `review_pending`.
+- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` recovered from a blocker through doctor recovery task `FX002-T06`; the active task pointer was restored to `FX002-T01`.
 
 ## Implemented
 
@@ -28,7 +28,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `FX002-T06` for the active feature.
+- Review `FX002-T06` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -37,7 +37,7 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `FX002-T05` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `FX002-T06` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -53,4 +53,4 @@ Doctor recovery task `FX002-T05` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and its next valid action is to execute doctor recovery task `FX002-T06` from the captured `review_pending` state.
+Review `FX002-T01` next.
