@@ -6,13 +6,14 @@ In progress
 
 ## Active Feature
 
-`003-doctor-command`
+`002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`
 
 ## Current Reality
 
 - Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` is complete: `npm test` passes cleanly and repeatedly (commit `242670b6` removed the stale per-test timeout overrides that were the actual root cause). Marked `completed` directly; see that fix's own `state.md` for why the runtime's implement/review/doctor-recovery loop could never reach that conclusion on its own.
 - No feature or fix is currently active.
 - `003-doctor-command` resumed after fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` reached completed; the active task pointer was restored to `F003-T01`.
+- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned doctor recovery task, `FX002-T07`, to resolve a recoverable blocker and restore `review_pending`.
 
 ## Implemented
 
@@ -28,7 +29,7 @@ In progress
 
 ## Pending
 
-- Recover the implementation of `F003-T01` before continuing.
+- Execute doctor recovery task `FX002-T07` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -54,4 +55,4 @@ Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` reached comple
 
 ## Next Planning Hint
 
-Resume `F003-T01` implementation recovery before continuing.
+The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and its next valid action is to execute doctor recovery task `FX002-T07` from the captured `review_pending` state.

@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-completed
+unblock_pending
 
 ## Source Request
 
@@ -13,14 +13,14 @@ completed
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: FX002-T07
 - severity: high
 - owning_feature: none
 - last_implementation_result: not_applicable
 - last_quality_gate_result: passed
-- last_review_result: superseded
+- last_review_result: blocked
 - last_unblock_result: not_run
-- doctor_recovery_attempts: 0
+- doctor_recovery_attempts: 1
 
 ## Current Reality
 
@@ -83,10 +83,10 @@ If this is a long-running test, pass a timeout value as the last argument or con
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `review_pending`
+- active_task: `FX002-T01`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -115,4 +115,4 @@ Marked `completed` by hand: commit `242670b6` repairs the actual root cause
 
 ## Next Planning Hint
 
-None -- this fix is complete. `PROJECT_STATE.md` records the next candidates.
+Execute doctor recovery task `FX002-T07` next.
