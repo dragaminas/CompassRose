@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+unblock_pending
 
 ## Source Request
 
@@ -13,12 +13,12 @@ implementation_running
 - formalization: complete
 - active_task: F003-T01
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F003-DR06
 - last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: skipped
-- last_unblock_result: passed
-- doctor_recovery_attempts: 0
+- last_quality_gate_result: failed
+- last_review_result: blocked
+- last_unblock_result: not_run
+- doctor_recovery_attempts: 1
 - blocked_on_fix: none
 
 ## Current Reality
@@ -88,14 +88,46 @@ npm test: - 0
 
 ## Blocked By
 
-- None
+- - kind: state_corruption
+- - signature: state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes
+- - recoverability: agent
+- - observed_state: lifecycle=implementation_running
+- - evidence: Quality gates failed after implementing F003-T01.
+npm test: - 0
++ 1
+
+ ❯ tests/protoBlockerFlows.test.ts:162:27
+    160|     const result = runProtoScenario('state-correction-missing-active-t…
+    161|
+    162|     expect(result.status).toBe(0);
+       |                           ^
+    163|     expect(result.stdout).toContain('PASS: state correction artifact w…
+    164|     expect(result.stdout).toContain('PASS: state correction document w…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+- - evidence: npm run typecheck: passed: > compassrose@1.0.0 typecheck
+> tsc --noEmit
+- - evidence: npm test: failed: - 0
++ 1
+
+ ❯ tests/protoBlockerFlows.test.ts:162:27
+    160|     const result = runProtoScenario('state-correction-missing-active-t…
+    161|
+    162|     expect(result.status).toBe(0);
+       |                           ^
+    163|     expect(result.stdout).toContain('PASS: state correction artifact w…
+    164|     expect(result.stdout).toContain('PASS: state correction document w…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+- - evidence: lifecycle=implementation_running
+- - reason: Quality gates failed after implementing F003-T01. | npm test: - 0 | + 1 | ❯ tests/protoBlockerFlows.test.ts:162:27 | 160|     const result = runProtoScenario('state-correction-missing-active-t… | 161| | 162|     expect(result.status).toBe(0); | |                           ^ | 163|     expect(result.stdout).toContain('PASS: state correction artifact w… | 164|     expect(result.stdout).toContain('PASS: state correction document w… | ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `implementation_running`
+- active_task: `F003-T01`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -153,4 +185,4 @@ Doctor recovery task `F003-DR05` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Resume `F003-T01` implementation recovery before continuing.
+Execute doctor recovery task `F003-DR06` next.
