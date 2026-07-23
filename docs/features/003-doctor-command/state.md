@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+unblock_pending
 
 ## Source Request
 
@@ -13,12 +13,12 @@ implementation_running
 - formalization: complete
 - active_task: F003-T01
 - active_correction_task: none
-- active_unblock_task: none
-- last_implementation_result: not_run
-- last_quality_gate_result: unknown
+- active_unblock_task: F003-DR01
+- last_implementation_result: passed
+- last_quality_gate_result: failed
 - last_review_result: blocked
 - last_unblock_result: not_run
-- doctor_recovery_attempts: 0
+- doctor_recovery_attempts: 1
 - blocked_on_fix: none
 
 ## Current Reality
@@ -56,10 +56,10 @@ Task `F003-T01` is now planned and ready to execute. Establish Doctor diagnostic
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `implementation_running`
+- active_task: `F003-T01`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -73,4 +73,4 @@ Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reac
 
 ## Next Planning Hint
 
-Resume `F003-T01` implementation recovery before continuing.
+Execute doctor recovery task `F003-DR01` next.

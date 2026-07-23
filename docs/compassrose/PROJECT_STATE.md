@@ -14,6 +14,7 @@ In progress
 - Both fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` and fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` are `completed`: `npm test` passes cleanly and repeatedly (commits `242670b6` and `3f02b62c`). Neither fix's own task chain could have reached that conclusion on its own; both were marked `completed` directly. See each fix's own `state.md` Known Gaps.
 - No feature or fix is currently active.
 - `003-doctor-command` resumed after fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reached completed; the active task pointer was restored to `F003-T01`.
+- Feature `003-doctor-command` now has a planned doctor recovery task, `F003-DR01`, to resolve a recoverable blocker and restore `implementation_running`.
 
 ## Implemented
 
@@ -33,7 +34,7 @@ In progress
 
 ## Pending
 
-- Recover the implementation of `F003-T01` before continuing.
+- Execute doctor recovery task `F003-DR01` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -69,4 +70,4 @@ Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reac
 
 ## Next Planning Hint
 
-Resume `F003-T01` implementation recovery before continuing.
+The active feature is `003-doctor-command`, and its next valid action is to execute doctor recovery task `F003-DR01` from the captured `implementation_running` state.
