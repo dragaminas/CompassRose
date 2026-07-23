@@ -14,6 +14,7 @@ In progress
   after deleting fix `004-orchestration-quality-failure-attribution-and-recovery-state-
   transition-defect` (never a real defect) and repairing the actual root cause -- see Known Gaps.
 - Feature `003-doctor-command` state was canonicalized; the active task pointer remains `F003-T01`.
+- Feature `003-doctor-command` now has a planned doctor recovery task, `F003-DR04`, to resolve a recoverable blocker and restore `implementation_running`.
 
 ## Implemented
 
@@ -31,7 +32,7 @@ In progress
 
 ## Pending
 
-- Continue from the repaired `quality_failed` state for the active feature.
+- Execute doctor recovery task `F003-DR04` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -102,4 +103,4 @@ State correction artifact `F003-T01-C1` was applied by the prototype orchestrato
 
 ## Next Planning Hint
 
-Continue from the repaired `quality_failed` state for `F003-T01-C1`.
+The active feature is `003-doctor-command`, and its next valid action is to execute doctor recovery task `F003-DR04` from the captured `implementation_running` state.

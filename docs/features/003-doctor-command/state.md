@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-quality_failed
+unblock_pending
 
 ## Source Request
 
@@ -13,12 +13,12 @@ quality_failed
 - formalization: complete
 - active_task: F003-T01
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F003-DR04
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: approved
+- last_review_result: blocked
 - last_unblock_result: not_run
-- doctor_recovery_attempts: 0
+- doctor_recovery_attempts: 1
 - blocked_on_fix: none
 
 ## Current Reality
@@ -88,10 +88,10 @@ npm test: - 0
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `implementation_running`
+- active_task: `F003-T01`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -131,4 +131,4 @@ State correction artifact `F003-T01-C1` was applied by the prototype orchestrato
 
 ## Next Planning Hint
 
-Continue from the repaired `quality_failed` state for `F003-T01-C1`.
+Execute doctor recovery task `F003-DR04` next.
