@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+unblock_pending
 
 ## Source Request
 
@@ -13,14 +13,14 @@ blocked
 - formalization: complete
 - active_task: FX002-T01
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: FX002-T06
 - severity: high
 - owning_feature: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
 - last_review_result: blocked
 - last_unblock_result: not_run
-- doctor_recovery_attempts: 0
+- doctor_recovery_attempts: 1
 
 ## Current Reality
 
@@ -89,7 +89,6 @@ implementation_classification: already_complete
 - active_task: `FX002-T01`
 - active_correction_task: `none`
 - active_unblock_task: `none`
-- recoverability: agent
 
 ## Last Approved Change
 
@@ -101,4 +100,4 @@ Doctor recovery task `FX002-T05` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-review-pending-no-repairable-failure-exists-within-the-bounded-task-scope-the-n` and then restore `review_pending`.
+Execute doctor recovery task `FX002-T06` next.
