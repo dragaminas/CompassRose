@@ -10,11 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` is blocked by `state-corruption-review-pending-no-repairable-failure-exists-within-the-bounded-task-scope-the-n`.
+- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` is blocked by `review-failure-review-pending-the-task-cannot-be-completed-within-its-defined-scope-the-doctordi`.
 - Blocker recoverability: agent.
 - Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` was suspended from `review_pending`; the active task pointer remains `FX002-T01`.
 - Blocking task context: `FX002-T01`
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` recovered from a blocker through doctor recovery task `FX002-T06`; the active task pointer was restored to `FX002-T01`.
 
 ## Implemented
 
@@ -28,7 +27,8 @@ In progress
 
 ## Pending
 
-- Review `FX002-T06` for the active feature.
+- Plan a doctor recovery task for the active feature.
+- Restore the captured `review_pending` state after the blocker is resolved.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -53,4 +53,4 @@ Doctor recovery task `FX002-T06` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Review `FX002-T01` next.
+Plan a doctor recovery task for blocker `review-failure-review-pending-the-task-cannot-be-completed-within-its-defined-scope-the-doctordi` and then restore `review_pending`.
