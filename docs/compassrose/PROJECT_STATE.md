@@ -10,11 +10,11 @@ In progress
 
 ## Current Reality
 
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` is blocked by `task-interface-gap-unblock-pending-doctor-recovery-fx002-t03-failed-its-re-entry-quality-gates-n`.
-- Blocker recoverability: agent.
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` was suspended from `implementation_running`; the active task pointer remains `FX002-T01`.
-- Blocking task context: `FX002-T03`
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned doctor recovery task, `FX002-T04`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` was blocked by `task-interface-gap-unblock-pending-doctor-recovery-fx002-t03-failed-its-re-entry-quality-gates-n`.
+- Doctor recovery `FX002-T04` repaired the stale re-entry interface with bounded gates and restored `implementation_running`.
+- The active task pointer remains `FX002-T01`; active correction and unblock task pointers are clear.
+- `FX002-T03` remains historical blocker context; its known failing full `npm test` gate was not used as a doctor re-entry gate.
+- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` recovered from a blocker through doctor recovery task `FX002-T04`; the active task pointer was restored to `FX002-T01`.
 
 ## Implemented
 
@@ -28,7 +28,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `FX002-T04` for the active feature.
+- Recover the implementation of `FX002-T04` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -37,7 +37,14 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `FX002-T02` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `FX002-T04` passed re-entry quality gates and was applied by the prototype orchestrator.
+
+## Recovery History
+
+- `FX002-T03` failed its doctor re-entry quality gates.
+- Historical blocker kind: `task_interface_gap`.
+- Historical blocker signature: `task-interface-gap-unblock-pending-doctor-recovery-fx002-t03-failed-its-re-entry-quality-gates-n`.
+- Historical blocker evidence: `npm test` timed out in `tests/taskRequestScopeEnforcement.test.ts`.
 
 ## Known Gaps
 
@@ -46,4 +53,4 @@ Doctor recovery task `FX002-T02` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and its next valid action is to execute doctor recovery task `FX002-T04` from the captured `implementation_running` state.
+Resume `FX002-T01` implementation recovery before continuing.

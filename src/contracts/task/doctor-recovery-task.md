@@ -46,6 +46,10 @@ restoration_target:
 
 The task's `quality_gates.before_review` list is interpreted as the doctor recovery's re-entry gates.
 
+Those gates are the complete gate set for the recovery handoff. They validate the recovery
+interface and restoration readiness; they are not inherited from the active implementation task
+and must not require that task's unmet implementation acceptance gates before re-entry.
+
 ---
 
 ## Rules
@@ -62,6 +66,7 @@ A doctor recovery task must:
 - state the doctor executor and `no_review_loop` policy in the task document
 - use quality gates that validate re-entry readiness, not reviewer convenience
 - give every `quality_gates.before_review` entry as a literal, directly executable shell command (e.g. `npm test`) — the runtime runs each entry verbatim; a natural-language description of what to verify is not a gate and will fail with no output
+- preserve `restoration_target.active_task` as the task anchor being resumed, set `active_correction_task` to `none` unless a correction is explicitly part of the restoration target, and clear `active_unblock_task` after the recovery gates pass
 - give every `git diff ... --exit-code` gate an explicit ref before the `--` pathspec separator (the commit before the task being recovered began), never a bare comparison against the current worktree/HEAD — HEAD already contains whatever this recovery exists to undo, so a ref-less gate could only ever pass by leaving it untouched; the runtime deterministically rejects a planned recovery task that omits this ref
 - keep architecture redesign out of scope unless the diagnostic explicitly says the blocker cannot be repaired otherwise
 - use `test_guided` when the recovery changes code or tests

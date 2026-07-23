@@ -67,6 +67,9 @@ npm run typecheck
 npm test
 ```
 
+These are FX002-T01's implementation acceptance gates. They are not doctor recovery re-entry
+gates; an active doctor recovery task owns its own bounded `quality_gates.before_review` list.
+
 ## Expected Deliverables
 - `code`
 - `tests`
