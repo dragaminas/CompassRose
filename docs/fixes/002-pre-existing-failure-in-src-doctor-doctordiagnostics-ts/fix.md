@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Completed
 
 ## Severity
 
@@ -47,6 +47,29 @@ This fix is considered resolved when:
 ## Implementation Outline
 
 1. Diagnosing and repairing the root cause of `npm test` failing.
+
+## Resolution
+
+The root cause was a stale, per-test `20000`ms timeout override in five test files
+(`tests/taskRequestScopeEnforcement.test.ts`, `tests/orchestratorScopeGuard.test.ts`,
+`tests/taskRequestBackfill.test.ts`, `tests/featurePlanningOutline.test.ts`,
+`tests/protoControlledStop.test.ts`) that undercut `vitest.config.ts`'s own global
+`testTimeout: 30000`, already raised specifically to accommodate these subprocess-spawning
+e2e-style tests under full-suite contention. Removing the stale overrides (commit
+`242670b6`) let them inherit the safe default; `npm test` now passes cleanly and
+repeatedly (471/472, one pre-existing skip, 0 failures across multiple full-suite runs).
+
+Fixed directly, out of band, rather than through this fix's own task chain: the
+originally-filed request misattributed the failure to `src/doctor/doctorDiagnostics.ts`
+(a file that never existed -- an artifact of `blockOnUnrelatedFixFailure`'s
+`referencedPaths[0]` heuristic picking up an unrelated, coincidentally-touched path from
+a noisy match list instead of the actual failing test files). Every subsequent task
+attempt (`FX002-T01`) and review correctly confirmed there was nothing to repair inside
+that misattributed scope, and doctor recovery could only ever narrow the task's *wording*
+(`FX002-T02`, `FX002-T04`, `FX002-T05`, `FX002-T06`), never its fundamentally wrong file
+scope -- so the implement -> review-blocked -> doctor-recovery cycle would have repeated
+indefinitely. See this fix's own `state.md` Known Gaps and
+`docs/compassrose/PROJECT_STATE.md` Known Gaps for the underlying runtime limitation.
 
 ## Related Documents
 
