@@ -10,12 +10,12 @@ In progress
 
 ## Current Reality
 
-- Feature `003-doctor-command` is blocked by `state-corruption-implementation-running-doctor-recovery-f003-dr01-failed-its-re-entry-quality-ga`.
-- Blocker recoverability: agent.
-- Feature `003-doctor-command` was suspended from `implementation_running`; the active task pointer remains `F003-T01`.
-- Blocking task context: `F003-DR01`
+- Feature `003-doctor-command` is in `unblock_pending` for the bounded doctor recovery task `F003-DR03`; its active task pointer remains `F003-T01`.
+- The supplied environment blocker is recorded with blocker kind: environment, blocker signature: environment-quality-failed-feature-003-doctor-command-is-in-quality-failed-and-needs-diagnosis-a, and recoverability: human.
+- Feature `003-doctor-command` was suspended from `implementation_running`; the captured restoration target remains `lifecycle_state=implementation_running` with active task `F003-T01`.
+- Blocking task context: `F003-DR03`
 - Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR02`; the active task pointer was restored to `F003-T01`.
-- Feature `003-doctor-command` now has a planned doctor recovery task, `F003-DR03`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR03`; the active task pointer was restored to `F003-T01`.
 
 ## Implemented
 
@@ -33,7 +33,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F003-DR03` for the active feature.
+- Recover the implementation of `F003-DR03` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -42,7 +42,7 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `F003-DR02` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `F003-DR03` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -65,6 +65,23 @@ Doctor recovery task `F003-DR02` passed re-entry quality gates and was applied b
   `lifecycle=quality_failed`. No concrete failed-gate output or
   implementation-failure evidence was available in the original blocker record;
   the `protoBlockerFlows.test.ts` refinement remains advisory and unverified.
+- Doctor recovery task `F003-DR03` preserves the supplied environment blocker
+  metadata: blocker kind: environment; blocker signature:
+  environment-quality-failed-feature-003-doctor-command-is-in-quality-failed-and-needs-diagnosis-a;
+  recoverability: human; observed state:
+  `lifecycle=quality_failed; active_task=F003-T01; active_correction_task=none; active_unblock_task=none`.
+- The supplied recovery context also preserves blocker kind: `state_corruption`,
+  blocker signature:
+  `state-corruption-quality-failed-a-single-doctor-recovery-task-confined-to-feature-003-can-reconc`,
+  and blocker evidence: `A single doctor recovery task confined to Feature 003 can
+  reconcile the stale restoration state, preserve the missing blocker evidence, and
+  establish executable re-entry gates for F003-T01. The documents do not establish
+  that this specific blocker is systemic.`, `None`, and `lifecycle=quality_failed`.
+- No concrete failed-gate output or implementation-failure evidence is available
+  for the F003-DR03 handoff. Its fixed restoration target is
+  `lifecycle_state=implementation_running`, `active_task=F003-T01`,
+  `active_correction_task=none`, and `active_unblock_task=none`; the runtime applies
+  that target only after every `quality_gates.before_review` gate passes.
 
 ## Known Gaps
 
@@ -75,4 +92,4 @@ Doctor recovery task `F003-DR02` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-The active feature is `003-doctor-command`, and its next valid action is to execute doctor recovery task `F003-DR03` from the captured `implementation_running` state.
+Resume `F003-T01` implementation recovery before continuing.

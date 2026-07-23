@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+implementation_running
 
 ## Source Request
 
@@ -13,12 +13,12 @@ unblock_pending
 - formalization: complete
 - active_task: F003-T01
 - active_correction_task: none
-- active_unblock_task: F003-DR03
+- active_unblock_task: none
 - last_implementation_result: passed
-- last_quality_gate_result: failed
-- last_review_result: blocked
-- last_unblock_result: not_run
-- doctor_recovery_attempts: 1
+- last_quality_gate_result: passed
+- last_review_result: skipped
+- last_unblock_result: passed
+- doctor_recovery_attempts: 0
 - blocked_on_fix: none
 
 ## Current Reality
@@ -29,7 +29,7 @@ unblock_pending
 - `docs/compassrose/PROJECT_STATE.md` records an existing dedicated runtime preflight check for the configured project-state document, but it does not establish that the full `compassrose doctor` readiness command is complete.
 - No feature-specific implementation deliverable for the complete Doctor command is claimed complete by this feature state.
 
-Task `F003-T01` is the active implementation target and is restored for deterministic re-entry. This recovery reconciles state and evidence only; it does not change the implementation attempt.
+Task `F003-T01` remains the active implementation target for deterministic re-entry. Doctor recovery task `F003-DR03` reconciles state and evidence only; it does not change the implementation attempt, and the runtime applies the restoration target after the recovery gates pass.
 
 ## Implemented Deliverables
 
@@ -56,14 +56,14 @@ Task `F003-T01` is the active implementation target and is restored for determin
 
 ## Blocked From
 
-- lifecycle_state: `implementation_running`
-- active_task: `F003-T01`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Doctor recovery task `F003-DR02` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `F003-DR03` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -71,6 +71,9 @@ Doctor recovery task `F003-DR02` passed re-entry quality gates and was applied b
 - Supplied blocker evidence is preserved: `Plan one bounded doctor recovery task to preserve the blocker evidence, reconcile the stale feature/project state and restoration target, and establish executable re-entry gates for F003-T01. The available evidence does not justify filing a systemic blocker.`, `blocker_evidence: None` (no additional evidence supplied), and `lifecycle=quality_failed`.
 - The failed quality-gate result remains historical evidence. No concrete failed-gate output or implementation-failure evidence was available in the original blocker record; the advisory `protoBlockerFlows.test.ts` refinement remains unverified rather than confirmed failure evidence. The later recovery-gate result is reported in the handoff notes and is not added to blocker evidence.
 - The required pre-edit `npm test` baseline on 2026-07-23 timed out after 120 seconds with exit code `124` and no test output. No persisted raw failed-gate output was available.
+- Doctor recovery task `F003-DR03` records the supplied environment blocker metadata: blocker kind: environment; blocker signature: environment-quality-failed-feature-003-doctor-command-is-in-quality-failed-and-needs-diagnosis-a; recoverability: human; observed state: `lifecycle=quality_failed; active_task=F003-T01; active_correction_task=none; active_unblock_task=none`.
+- The supplied recovery context is preserved for the state-corruption handoff: blocker kind: `state_corruption`; blocker signature: `state-corruption-quality-failed-a-single-doctor-recovery-task-confined-to-feature-003-can-reconc`; blocker evidence: `A single doctor recovery task confined to Feature 003 can reconcile the stale restoration state, preserve the missing blocker evidence, and establish executable re-entry gates for F003-T01. The documents do not establish that this specific blocker is systemic.`, `None`, and `lifecycle=quality_failed`.
+- No concrete failed-gate output or implementation-failure evidence is available for this handoff. The advisory `protoBlockerFlows.test.ts` refinement remains unverified and is not promoted to confirmed evidence. The fixed restoration target remains `lifecycle_state=implementation_running`, `active_task=F003-T01`, `active_correction_task=none`, and `active_unblock_task=none`; the runtime applies it only after every `quality_gates.before_review` gate passes.
 
 ## Known Gaps
 
@@ -80,4 +83,4 @@ Doctor recovery task `F003-DR02` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F003-DR03` next.
+Resume `F003-T01` implementation recovery before continuing.
