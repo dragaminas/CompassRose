@@ -28,8 +28,8 @@ In progress
 
 ## Pending
 
-- Execute `FX002-T01` for the active fix.
-- Continue updating this file with approved repository facts as fix work lands.
+- Recover or finish implementation for `FX002-T01`.
+- Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
 
@@ -46,4 +46,4 @@ Feature `003-doctor-command` was formalized by the prototype orchestrator.
 
 ## Next Planning Hint
 
-The active work item is fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and its next valid action is to execute `FX002-T01`.
+The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and subtask execution for `FX002-T01` is in progress.

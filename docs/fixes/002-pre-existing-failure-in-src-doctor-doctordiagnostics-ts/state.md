@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-task_ready
+implementation_running
 
 ## Source Request
 
@@ -61,4 +61,4 @@ None
 
 ## Next Planning Hint
 
-Execute `FX002-T01` when the current execution mode allows it.
+Recover or finish subtask implementation of `FX002-T01` before allowing review or new planning.
