@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+unblock_pending
 
 ## Source Request
 
@@ -13,12 +13,12 @@ implementation_running
 - formalization: complete
 - active_task: F003-T01
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F003-DR03
 - last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: skipped
-- last_unblock_result: passed
-- doctor_recovery_attempts: 0
+- last_quality_gate_result: failed
+- last_review_result: blocked
+- last_unblock_result: not_run
+- doctor_recovery_attempts: 1
 - blocked_on_fix: none
 
 ## Current Reality
@@ -56,10 +56,10 @@ Task `F003-T01` is the active implementation target and is restored for determin
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `implementation_running`
+- active_task: `F003-T01`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -80,4 +80,4 @@ Doctor recovery task `F003-DR02` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Resume `F003-T01` implementation recovery before continuing.
+Execute doctor recovery task `F003-DR03` next.
