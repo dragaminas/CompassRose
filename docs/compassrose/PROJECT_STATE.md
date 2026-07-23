@@ -15,7 +15,7 @@ In progress
 - The active task pointer remains `FX002-T01`; active correction and unblock task pointers are clear.
 - `FX002-T03` remains historical blocker context; its known failing full `npm test` gate was not used as a doctor re-entry gate.
 - Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` recovered from a blocker through doctor recovery task `FX002-T04`; the active task pointer was restored to `FX002-T01`.
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned doctor recovery task, `FX002-T05`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` recovered from a blocker through doctor recovery task `FX002-T05`; the active task pointer was restored to `FX002-T01`.
 
 ## Implemented
 
@@ -29,7 +29,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `FX002-T05` for the active feature.
+- Recover the implementation of `FX002-T05` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -38,7 +38,7 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `FX002-T04` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `FX002-T05` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -54,4 +54,4 @@ Doctor recovery task `FX002-T04` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and its next valid action is to execute doctor recovery task `FX002-T05` from the captured `implementation_running` state.
+Resume `FX002-T01` implementation recovery before continuing.
