@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+completed
 
 ## Source Request
 
@@ -13,14 +13,14 @@ unblock_pending
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: FX002-T07
+- active_unblock_task: none
 - severity: high
 - owning_feature: none
 - last_implementation_result: not_applicable
 - last_quality_gate_result: passed
-- last_review_result: blocked
+- last_review_result: superseded
 - last_unblock_result: not_run
-- doctor_recovery_attempts: 1
+- doctor_recovery_attempts: 0
 
 ## Current Reality
 
@@ -83,21 +83,26 @@ If this is a long-running test, pass a timeout value as the last argument or con
 
 ## Blocked From
 
-- lifecycle_state: `review_pending`
-- active_task: `FX002-T01`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Marked `completed` by hand: commit `242670b6` repairs the actual root cause
-(stale per-test timeout overrides) and `npm test` passes cleanly and repeatedly.
+Marked `completed` by hand a second time: this fix's own long-running `review_subtask`
+step (started before the first manual completion edit, chained internally into
+diagnostic autocorrection since loop mode was disabled) finished afterward and silently
+overwrote the first manual edit with `FX002-T07` (yet another interface-only doctor
+recovery, same non-convergent pattern). Re-applied once no `npm run dev` process was
+confirmed running. The underlying fact has not changed: commit `242670b6` repairs the
+actual root cause and `npm test` passes cleanly and repeatedly.
 
 ## Known Gaps
 
 - The implement -> review-blocked -> doctor-recovery cycle (`FX002-T01` /
-  `FX002-T02`/`FX002-T04`/`FX002-T05`/`FX002-T06`) had no way to terminate on its own:
-  doctor recovery can only revise a task's declared interface/wording, never its
+  `FX002-T02`/`FX002-T04`/`FX002-T05`/`FX002-T06`/`FX002-T07`) had no way to terminate on
+  its own: doctor recovery can only revise a task's declared interface/wording, never its
   fundamentally wrong file scope, so once a task is misattributed to nonexistent files
   the implementer and reviewer will keep correctly reporting "nothing repairable here"
   forever, with no runtime path to recognize that the fix's actual completion criterion
@@ -111,8 +116,20 @@ Marked `completed` by hand: commit `242670b6` repairs the actual root cause
   out of a noisy full-suite failure output instead of the file(s) the failure actually
   occurred in, misnaming and mis-scoping the filed fix from the start (observed here:
   titled around `src/doctor/doctorDiagnostics.ts`, a file that never existed, when the
-  real failures were timeouts in unrelated pre-existing test files).
+  real failures were timeouts in unrelated pre-existing test files; the same heuristic
+  then misfired a second time on fix
+  `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md`).
+- A single non-loop `npm run dev` invocation is not always a single atomic, quickly
+  observable unit of work: a review-blocked result can chain internally into diagnostic
+  autocorrection and a further doctor-recovery planning step (`"running
+  diagnostic/autocorrection before stopping because loop mode is disabled"`) within the
+  same process, taking several more minutes and producing further commits after the
+  point where a supervisor might reasonably believe the run has already produced its
+  final, observable result. Editing/committing repository state by hand without first
+  confirming the process has actually exited (not just that a decision appeared in its
+  streamed output) races that still-running process and can have hand edits silently
+  overwritten, as happened here.
 
 ## Next Planning Hint
 
-Execute doctor recovery task `FX002-T07` next.
+None -- this fix is complete. `PROJECT_STATE.md` records the next candidates.

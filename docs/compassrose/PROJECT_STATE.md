@@ -6,14 +6,13 @@ In progress
 
 ## Active Feature
 
-`003-doctor-command`
+`none`
 
 ## Current Reality
 
-- Feature `003-doctor-command` is blocked by `state-corruption-implementation-running-task-f003-t01-hit-a-quality-gate-failure-npm-test-confir`.
-- Blocker recoverability: agent.
-- Feature `003-doctor-command` was suspended from `implementation_running`; the active task pointer remains `F003-T01`.
-- Blocking task context: `F003-T01`
+- Feature `003-doctor-command` is `blocked_on_fix` `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md`, which is now `completed` -- the next `npm run dev` step should resume it deterministically back to `implementation_running`/`F003-T01` (`resumeWorkItemBlockedOnFix`).
+- Both fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` and fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` are `completed`: `npm test` passes cleanly and repeatedly (commits `242670b6` and `3f02b62c`). Neither fix's own task chain could have reached that conclusion on its own; both were marked `completed` directly. See each fix's own `state.md` Known Gaps.
+- No feature or fix is currently active.
 
 ## Implemented
 
@@ -24,13 +23,18 @@ In progress
 - Feature `001-project-identity-and-foundation` now has aligned package metadata, TypeScript settings, and top-level foundation documentation.
 - `compassrose doctor` now validates the configured project-state document as a dedicated runtime preflight check.
 - Feature `002-configuration-model` is complete: repository-local configuration loading/validation, Doctor/runtime integration, and the bounded correction-task allocator are all implemented and quality-gated.
-- Feature `003-doctor-command` is formalized; its task `F003-T01` was recorded as `blocked_on_fix` pointing at fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, which is now `completed` -- the next `npm run dev` step should resume it deterministically (`resumeWorkItemBlockedOnFix`).
+- Feature `003-doctor-command` is formalized; its task `F003-T01` implemented
+  `src/doctor/doctorDiagnostics.ts` (task request 1) but is `blocked_on_fix` pointing at
+  fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md`, now
+  `completed`.
 - Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` is complete: `npm test` passes cleanly.
+- Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` is complete: `npm test` passes cleanly.
 
 ## Pending
 
-- Plan a doctor recovery task for the active feature.
-- Restore the captured `implementation_running` state after the blocker is resolved.
+- Resume feature `003-doctor-command`'s task `F003-T01`, now that fix
+  `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` (the fix it was
+  `blocked_on_fix` for) is `completed`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -39,7 +43,7 @@ In progress
 
 ## Last Approved Change
 
-Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` reached completed; `003-doctor-command` resumed automatically.
+Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` marked `completed` directly (manual transition); root cause repaired in commit `3f02b62c`.
 
 ## Recovery History
 
@@ -47,13 +51,23 @@ Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` reached comple
 - Historical blocker kind: `task_interface_gap`.
 - Historical blocker signature: `task-interface-gap-unblock-pending-doctor-recovery-fx002-t03-failed-its-re-entry-quality-gates-n`.
 - Historical blocker evidence: `npm test` timed out in `tests/taskRequestScopeEnforcement.test.ts`.
+- `FX002-T01`'s review-blocked result chained internally into diagnostic autocorrection
+  (`FX002-T07`) within the same long-running `npm run dev` invocation, overwriting a
+  first manual completion edit made while that process was still running. Re-applied
+  once no orchestrator process was confirmed running. See fix `002`'s own `state.md`
+  Known Gaps.
+- `F003-T01`'s subsequent retry hit the same `blockOnUnrelatedFixFailure`
+  misattribution pattern a second time (fix `003`, actually caused by
+  `tests/protoBlockerFlows.test.ts` running too close to the suite timeout under
+  contention; fixed in commit `3f02b62c`).
 
 ## Known Gaps
 
 - `classifyBlockerKind` misroutes a blocked-feature recovery hint toward doctor-recovery instead of the actual right action (seen twice: sibling-feature scope, and exhausted task requests). Tracked as fix `001-blocked-feature-scope-misclassification` (formalized, severity medium, not yet implemented).
 - No runtime code path transitions a feature from an exhausted-task-requests block directly to `completed`; feature `002-configuration-model`'s completion was applied directly rather than by the runtime. See that feature's own `state.md` Known Gaps for detail.
-- A task misattributed to a nonexistent file scope (via `blockOnUnrelatedFixFailure`'s noisy `referencedPaths[0]` heuristic) has no runtime path out of the implement -> review-blocked -> doctor-recovery cycle, even after its fix's real completion criterion is independently satisfied elsewhere. See fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`'s own `state.md` Known Gaps for detail.
+- A task misattributed to a nonexistent/irrelevant file scope (via `blockOnUnrelatedFixFailure`'s noisy `referencedPaths[0]` heuristic) has no runtime path out of the implement -> review-blocked -> doctor-recovery cycle, even after its fix's real completion criterion is independently satisfied elsewhere. Observed twice (fixes `002` and `003`). See fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`'s own `state.md` Known Gaps for detail.
+- A single non-loop `npm run dev` invocation is not always a quickly-observable atomic unit: a review-blocked result can chain internally into diagnostic autocorrection and further doctor-recovery planning within the same process, taking several more minutes past the point a supervisor might reasonably believe the run has finished. See fix `002`'s own `state.md` Known Gaps for detail.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-implementation-running-task-f003-t01-hit-a-quality-gate-failure-npm-test-confir` and then restore `implementation_running`.
+No feature or fix is active. The next `npm run dev` step should resume feature `003-doctor-command` back to `implementation_running`/`F003-T01` (`resumeWorkItemBlockedOnFix`).

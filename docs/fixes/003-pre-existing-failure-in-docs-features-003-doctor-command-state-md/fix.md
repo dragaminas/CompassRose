@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Completed
 
 ## Severity
 
@@ -47,6 +47,25 @@ This fix is considered resolved when:
 ## Implementation Outline
 
 1. Diagnosing and repairing the root cause of `npm test` failing.
+
+## Resolution
+
+The referenced-path list includes `tests/protoBlockerFlows.test.ts`: the actual root
+cause. Each of its 12 tests spawns a real subprocess (full repo clone plus e2e scenario)
+and takes ~9-11s even in isolation, leaving too little headroom against the suite-wide
+`testTimeout: 30000` once it runs alongside the rest of the full suite under contention
+-- the one occasional source of flakiness left after fix
+`002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`'s own repair (commit
+`242670b6`). Fixed by raising this file's own timeout to `60000`ms via `vi.setConfig()`
+(commit `3f02b62c`). Validated with two additional clean full-suite runs (471/472, 0
+failures), for four consecutive clean runs total across both fixes.
+
+As with fix 002, this fix's own title/scope was misattributed by the same
+`blockOnUnrelatedFixFailure` `referencedPaths[0]` heuristic (here to
+`docs/features/003-doctor-command/state.md`, a file with no actual defect) -- fixed
+directly, out of band, rather than through this fix's own task chain, for the same
+reason: doctor recovery can only narrow a misattributed task's wording, never correct
+its file scope, so the cycle would never converge on its own.
 
 ## Related Documents
 
