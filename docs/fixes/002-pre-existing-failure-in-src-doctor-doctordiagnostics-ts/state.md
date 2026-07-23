@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+unblock_pending
 
 ## Source Request
 
@@ -13,14 +13,14 @@ blocked
 - formalization: complete
 - active_task: FX002-T01
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: FX002-T04
 - severity: high
 - owning_feature: none
 - last_implementation_result: passed
 - last_quality_gate_result: failed
 - last_review_result: blocked
 - last_unblock_result: not_run
-- doctor_recovery_attempts: 1
+- doctor_recovery_attempts: 2
 
 ## Current Reality
 
@@ -69,7 +69,6 @@ If this is a long-running test, pass a timeout value as the last argument or con
 - active_task: `FX002-T01`
 - active_correction_task: `none`
 - active_unblock_task: `none`
-- recoverability: agent
 
 ## Last Approved Change
 
@@ -81,4 +80,4 @@ Doctor recovery task `FX002-T02` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `task-interface-gap-unblock-pending-doctor-recovery-fx002-t03-failed-its-re-entry-quality-gates-n` and then restore `implementation_running`.
+Execute doctor recovery task `FX002-T04` next.
