@@ -183,4 +183,80 @@ describe('limitStateCorrectionTaskId', () => {
       }
     }
   });
+
+  test('diagnoseAndAutocorrect() stops cleanly instead of crashing when correct_state hits the limit', () => {
+    // Regression test: unlike executeStep()'s own 'correct_state' case (covered just above),
+    // diagnoseAndAutocorrect()'s internal call to correctState() -- reached when
+    // runDiagnosticAutocorrection() itself decides next_step: 'correct_state' -- used to have no
+    // try/catch at all, so StateCorrectionLimitReachedError propagated as an uncaught exception
+    // and crashed the whole CLI process instead of returning a bounded stop. Observed live on
+    // feature 003-doctor-command's F003-T01 anchor.
+    const repositoryRoot = process.cwd();
+    const featureStatePath = join(repositoryRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+    const tasksDirectory = join(repositoryRoot, 'docs', 'features', '002-configuration-model', 'tasks');
+    const artifactTasksDirectory = join(repositoryRoot, '.git', 'proto-compassrose', 'tasks');
+    const featureStateBefore = readFileSync(featureStatePath, 'utf8');
+    const nestedFeatureState = featureStateBefore.replace(
+      /(active_task\s*:\s*)[^\r\n]*/,
+      '$1F002-T7-C1',
+    );
+    expect(nestedFeatureState).not.toBe(featureStateBefore);
+    const taskFilesBefore = readdirSync(tasksDirectory).sort();
+    const artifactFilesBefore = existsSync(artifactTasksDirectory) ? readdirSync(artifactTasksDirectory).sort() : [];
+
+    try {
+      writeFileSync(featureStatePath, nestedFeatureState, 'utf8');
+
+      const orchestrator = new CompassRoseOrchestrator({
+        cwd: repositoryRoot,
+        commit: false,
+        implementer: 'codex',
+        loop: false,
+      } as unknown as ConstructorParameters<typeof CompassRoseOrchestrator>[0]);
+      const git = Reflect.get(orchestrator, 'git') as { dirtyPaths: () => readonly string[] };
+      const originalDirtyPaths = git.dirtyPaths;
+      git.dirtyPaths = () => [];
+      // Stub out the actual AI diagnostic call so this test exercises only the
+      // correct_state-handling logic that follows it.
+      (orchestrator as unknown as Record<string, unknown>).runDiagnosticAutocorrection = () => ({
+        feature_id: '002-configuration-model',
+        diagnosis_summary: 'fixture diagnosis',
+        blocker: { kind: 'unknown', signature: 'fixture-signature', recoverability: 'agent', evidence: ['fixture evidence'] },
+        next_step: 'correct_state',
+        next_step_reason: 'recovery test: nested correction anchor is already at the configured limit',
+        interface_response: { mode: 'manual_review', summary: 'fixture summary', target_paths: [] },
+        systemic_blocker: null,
+      });
+
+      try {
+        const diagnoseAndAutocorrect = Reflect.get(orchestrator, 'diagnoseAndAutocorrect') as (featureId: string, reason: string) => unknown;
+        const result = diagnoseAndAutocorrect.call(orchestrator, '002-configuration-model', 'fixture reason') as {
+          exitCode: number;
+          continueLoop: boolean;
+          summary?: string;
+        };
+
+        expect(result).toMatchObject({ exitCode: 2, continueLoop: false });
+        expect(result.summary).toMatch(/correction iteration limit reached/i);
+      } finally {
+        git.dirtyPaths = originalDirtyPaths;
+      }
+    } finally {
+      writeFileSync(featureStatePath, featureStateBefore, 'utf8');
+
+      for (const fileName of readdirSync(tasksDirectory)) {
+        if (!taskFilesBefore.includes(fileName)) {
+          rmSync(join(tasksDirectory, fileName), { force: true });
+        }
+      }
+
+      if (existsSync(artifactTasksDirectory)) {
+        for (const fileName of readdirSync(artifactTasksDirectory)) {
+          if (!artifactFilesBefore.includes(fileName)) {
+            rmSync(join(artifactTasksDirectory, fileName), { force: true });
+          }
+        }
+      }
+    }
+  });
 });

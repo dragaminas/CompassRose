@@ -2281,7 +2281,19 @@ export class CompassRoseOrchestrator {
         };
       }
 
-      this.correctState(featureId, decision.next_step_reason);
+      try {
+        this.correctState(featureId, decision.next_step_reason);
+      } catch (error) {
+        // Mirrors the executeStep() 'correct_state' case's own handling of this same error just
+        // above in this class: without this, a second diagnose_autocorrect run landing on
+        // correct_state for an anchor that already has one recent correction crashes the whole
+        // CLI with an uncaught exception instead of stopping cleanly. Observed live on
+        // 003-doctor-command's F003-T01 anchor.
+        if (error instanceof StateCorrectionLimitReachedError) {
+          return { exitCode: 2, continueLoop: false, summary: error.message };
+        }
+        throw error;
+      }
       return {
         exitCode: 0,
         continueLoop: true,
