@@ -6,12 +6,13 @@ In progress
 
 ## Active Feature
 
-`none`
+`003-doctor-command`
 
 ## Current Reality
 
 - Feature `002-configuration-model` is complete: every task request in its Implementation Outline (`F002-TR01`-`F002-TR05`) is `complete`, most recently `F002-TR05` via the approved correction chain `F002-T17` → `F002-T17-C1` → `F002-T17-C1-CORRECTION-R1`.
 - No feature is currently active; task planning should select `003-doctor-command`, the earliest numbered feature still pending formalization.
+- The active feature pointer currently targets `003-doctor-command`; the detailed task and lifecycle state for that feature lives in `docs/features/003-doctor-command/state.md`.
 
 ## Implemented
 
@@ -25,7 +26,7 @@ In progress
 
 ## Pending
 
-- Formalize feature `003-doctor-command` next.
+- Plan the next implementation task for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -34,7 +35,7 @@ In progress
 
 ## Last Approved Change
 
-Fix `001-blocked-feature-scope-misclassification` was formalized by the orchestrator.
+Feature `003-doctor-command` was formalized by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -43,4 +44,4 @@ Fix `001-blocked-feature-scope-misclassification` was formalized by the orchestr
 
 ## Next Planning Hint
 
-No feature is active. Select `003-doctor-command` for formalization, or plan the next task for fix `001-blocked-feature-scope-misclassification` (medium severity, ordinary backlog).
+The active feature is `003-doctor-command`, and its next valid action is task planning.
