@@ -5351,6 +5351,32 @@ export class CompassRoseOrchestrator {
     return markdown;
   }
 
+  /**
+   * A task request is only ever satisfied once, but the task that finally gets approved for it
+   * is frequently not the task task-planning originally created from that request: a correction
+   * (`F002-T17-C1`) or a further correction of that correction (`F002-T17-C1-CORRECTION-R1`)
+   * carries no `source_task_request_id` of its own -- only the original planned task does. Found
+   * live: F002-TR05's status stayed `in_progress` forever after its correction chain was fully
+   * approved, because this lookup only ever checked the just-approved task's own stored JSON.
+   * primaryTaskAnchorFromId strips every `-C<n>`/`-CORRECTION-*`/`-DOCTOR-RECOVERY-*` suffix back
+   * to the original `F<feature>-T<n>` anchor regardless of how many correction/recovery rounds
+   * separate the two, so this falls back to that anchor's own stored task JSON when the approved
+   * task itself doesn't carry the field.
+   */
+  private resolveSourceTaskRequestId(taskId: string): string | null {
+    const direct = this.artifacts.readJson<PlannerOutput>(join('tasks', `${taskId}.json`))?.task?.source_task_request_id ?? null;
+    if (direct) {
+      return direct;
+    }
+
+    const anchor = primaryTaskAnchorFromId(taskId);
+    if (anchor === taskId) {
+      return null;
+    }
+
+    return this.artifacts.readJson<PlannerOutput>(join('tasks', `${anchor}.json`))?.task?.source_task_request_id ?? null;
+  }
+
   private updateFeatureStateAfterApprovedReview(featureStatePath: string, task: ParsedTaskDocument): string {
     let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'formalized');
@@ -5371,7 +5397,7 @@ export class CompassRoseOrchestrator {
     markdown = replaceSection(markdown, 'Last Approved Change', `Subtask \`${task.taskId}\` was approved by the prototype orchestrator.`);
     markdown = replaceSection(markdown, 'Next Planning Hint', 'Plan the next task that advances this feature from the remaining gap.');
 
-    const sourceTaskRequestId = this.artifacts.readJson<PlannerOutput>(join('tasks', `${task.taskId}.json`))?.task?.source_task_request_id ?? null;
+    const sourceTaskRequestId = this.resolveSourceTaskRequestId(task.taskId);
     if (sourceTaskRequestId) {
       markdown = this.markTaskRequestStatus(markdown, task.featureId, sourceTaskRequestId, 'complete');
     }

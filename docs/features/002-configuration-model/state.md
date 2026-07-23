@@ -91,7 +91,7 @@ Task `F002-T17` is now planned and ready to execute. Add a cycle/depth limit to 
 - F002-TR02. Stabilize the project-local configuration contract: complete
 - F002-TR03. Implement MVP configuration loading and validation: complete
 - F002-TR04. Connect configuration validation to the doctor/runtime flow: complete
-- F002-TR05. Add a cycle/depth limit to the correction-task id allocator: in progress
+- F002-TR05. Add a cycle/depth limit to the correction-task id allocator: complete
 
 ## Blocked By
 
