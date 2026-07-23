@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+blocked
 
 ## Source Request
 
@@ -18,8 +18,8 @@ implementation_running
 - owning_feature: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: skipped
-- last_unblock_result: passed
+- last_review_result: blocked
+- last_unblock_result: not_run
 - doctor_recovery_attempts: 0
 
 ## Current Reality
@@ -68,14 +68,28 @@ If this is a long-running test, pass a timeout value as the last argument or con
 
 ## Blocked By
 
-- None
+- - kind: state_corruption
+- - signature: state-corruption-review-pending-no-repairable-failure-exists-within-the-bounded-task-scope-the-n
+- - recoverability: agent
+- - observed_state: lifecycle=review_pending
+- - evidence: No repairable failure exists within the bounded task scope. The named DoctorDiagnostics files are absent, the existing Doctor command tests are green, and the empty diff contains no test-guided regression or source repair. This is a task-interface/diagnosis blocker, not an implementation defect.
+The bounded task cannot satisfy its test-guided deliverables: no failure is reproducible in the allowed Doctor command paths, while the originally named DoctorDiagnostics source and test files do not exist and are forbidden. Replanning or state/interface correction is required before code review can proceed.
+The task is test_guided, but the supplied diff is empty, so there is no meaningful regression-test change for the claimed behavior.
+implementation.implementation_notes is present and non-empty, so the missing-notes execution defect does not apply. No separate implementer context artifacts were supplied; their absence alone is not a defect under the reviewer contract.
+implementation_classification: already_complete
+- - evidence: No repairable failure exists within the bounded task scope. The named DoctorDiagnostics files are absent, the existing Doctor command tests are green, and the empty diff contains no test-guided regression or source repair. This is a task-interface/diagnosis blocker, not an implementation defect.
+- - evidence: The bounded task cannot satisfy its test-guided deliverables: no failure is reproducible in the allowed Doctor command paths, while the originally named DoctorDiagnostics source and test files do not exist and are forbidden. Replanning or state/interface correction is required before code review can proceed.
+- - evidence: The task is test_guided, but the supplied diff is empty, so there is no meaningful regression-test change for the claimed behavior.
+- - evidence: lifecycle=review_pending
+- - reason: No repairable failure exists within the bounded task scope. The named DoctorDiagnostics files are absent, the existing Doctor command tests are green, and the empty diff contains no test-guided regression or source repair. This is a task-interface/diagnosis blocker, not an implementation defect. | The bounded task cannot satisfy its test-guided deliverables: no failure is reproducible in the allowed Doctor command paths, while the originally named DoctorDiagnostics source and test files do not exist and are forbidden. Replanning or state/interface correction is required before code review can proceed. | The task is test_guided, but the supplied diff is empty, so there is no meaningful regression-test change for the claimed behavior. | implementation.implementation_notes is present and non-empty, so the missing-notes execution defect does not apply. No separate implementer context artifacts were supplied; their absence alone is not a defect under the reviewer contract. | implementation_classification: already_complete
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `review_pending`
+- active_task: `FX002-T01`
+- active_correction_task: `none`
+- active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -87,4 +101,4 @@ Doctor recovery task `FX002-T05` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Resume `FX002-T01` implementation recovery before continuing.
+Plan a doctor recovery task for blocker `state-corruption-review-pending-no-repairable-failure-exists-within-the-bounded-task-scope-the-n` and then restore `review_pending`.
