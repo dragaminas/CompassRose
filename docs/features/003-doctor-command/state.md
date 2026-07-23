@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+implementation_running
 
 ## Source Request
 
@@ -14,12 +14,12 @@ blocked
 - active_task: F003-T01
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: passed
-- last_quality_gate_result: failed
-- last_review_result: blocked
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
 - last_unblock_result: not_run
 - doctor_recovery_attempts: 0
-- blocked_on_fix: 004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect
+- blocked_on_fix: none
 
 ## Current Reality
 
@@ -52,26 +52,21 @@ Task `F003-T01` remains the active implementation target for deterministic re-en
 
 ## Blocked By
 
-- - kind: state_corruption
-- - signature: state-corruption-quality-failed-diagnostic-autocorrection-classified-the-blocker-on-003-doctor-c
-- - recoverability: agent
-- - observed_state: lifecycle=quality_failed; active_task=F003-T01; active_correction_task=none; active_unblock_task=none
-- - evidence: Diagnostic/autocorrection classified the blocker on 003-doctor-command as systemic rather than a bounded implementation issue; filed/reused fix `004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect` and stopped instead of attempting a bounded doctor recovery.
-- - evidence: None
-- - evidence: lifecycle=quality_failed
-- - reason: Diagnostic/autocorrection classified the blocker on 003-doctor-command as systemic rather than a bounded implementation issue; filed/reused fix `004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect` and stopped instead of attempting a bounded doctor recovery.
+- None
 
 ## Blocked From
 
-- lifecycle_state: `implementation_running`
-- active_task: `F003-T01`
-- active_correction_task: `none`
-- active_unblock_task: `none`
-- recoverability: agent
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Doctor recovery task `F003-DR03` passed re-entry quality gates and was applied by the prototype orchestrator.
+Restored to `implementation_running`/`F003-T01` by hand after deleting fix
+`004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect`
+(never a real defect -- see Known Gaps) and repairing the actual root cause in
+commit `2a6e3af9`.
 
 ## Recovery History
 
@@ -82,13 +77,29 @@ Doctor recovery task `F003-DR03` passed re-entry quality gates and was applied b
 - Doctor recovery task `F003-DR03` records the supplied environment blocker metadata: blocker kind: environment; blocker signature: environment-quality-failed-feature-003-doctor-command-is-in-quality-failed-and-needs-diagnosis-a; recoverability: human; observed state: `lifecycle=quality_failed; active_task=F003-T01; active_correction_task=none; active_unblock_task=none`.
 - The supplied recovery context is preserved for the state-corruption handoff: blocker kind: `state_corruption`; blocker signature: `state-corruption-quality-failed-a-single-doctor-recovery-task-confined-to-feature-003-can-reconc`; blocker evidence: `A single doctor recovery task confined to Feature 003 can reconcile the stale restoration state, preserve the missing blocker evidence, and establish executable re-entry gates for F003-T01. The documents do not establish that this specific blocker is systemic.`, `None`, and `lifecycle=quality_failed`.
 - No concrete failed-gate output or implementation-failure evidence is available for this handoff. The advisory `protoBlockerFlows.test.ts` refinement remains unverified and is not promoted to confirmed evidence. The fixed restoration target remains `lifecycle_state=implementation_running`, `active_task=F003-T01`, `active_correction_task=none`, and `active_unblock_task=none`; the runtime applies it only after every `quality_gates.before_review` gate passes.
+- Diagnostic/autocorrection then classified the recurring "no concrete failed-gate evidence"
+  observation itself as a systemic defect and filed fix
+  `004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect` (critical
+  severity, no falsifiable acceptance criterion). Deleted by hand: the repeated "no concrete
+  evidence" observation was itself the symptom of a real bug --
+  `updateFeatureStateAfterImplementation()`'s `quality_failed` branch never wrote a `Blocked By`
+  block at all (unlike every other blocked transition), so no diagnostic call in this chain ever
+  had real evidence to work with. Fixed at the source in commit `2a6e3af9` rather than through
+  fix 004's own task chain.
 
 ## Known Gaps
 
 - The supplied planning sources do not identify the current CLI entrypoint or the physical configuration-loader path, so those bindings remain for task planning.
 - The existing project-state preflight may need to be reused or folded into the Doctor diagnostic report without duplicating configuration or runtime policy.
 - The full readiness command, its complete check set, and its automated coverage remain unimplemented by this feature.
+- `npm test` run as part of F003-T01's own quality gates can still intermittently fail for a
+  reason unrelated to any code defect: this repository's own e2e test suite
+  (`tests/protoBlockerFlows.test.ts` and similar) clones the *current* repository HEAD, so while
+  feature `003-doctor-command` itself sits in a non-terminal lifecycle state, those tests can pick
+  up that in-progress state and fail in ways their scripted mock CLI responses don't anticipate.
+  Not a defect in F003-T01's own implementation; expected to stop once this feature reaches a
+  terminal state.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-quality-failed-diagnostic-autocorrection-classified-the-blocker-on-003-doctor-c` and then restore `implementation_running`.
+Resume `F003-T01` implementation deterministically.

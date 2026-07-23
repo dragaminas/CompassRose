@@ -10,10 +10,9 @@ In progress
 
 ## Current Reality
 
-- Feature `003-doctor-command` is blocked by `state-corruption-quality-failed-diagnostic-autocorrection-classified-the-blocker-on-003-doctor-c`.
-- Blocker recoverability: agent.
-- Feature `003-doctor-command` was suspended from `implementation_running`; the active task pointer remains `F003-T01`.
-- Blocking task context: `F003-T01`
+- Feature `003-doctor-command` is `implementation_running` for `F003-T01`, restored by hand
+  after deleting fix `004-orchestration-quality-failure-attribution-and-recovery-state-
+  transition-defect` (never a real defect) and repairing the actual root cause -- see Known Gaps.
 
 ## Implemented
 
@@ -31,8 +30,7 @@ In progress
 
 ## Pending
 
-- Plan a doctor recovery task for the active feature.
-- Restore the captured `implementation_running` state after the blocker is resolved.
+- Resume `F003-T01` implementation deterministically.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -41,7 +39,9 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `F003-DR03` passed re-entry quality gates and was applied by the prototype orchestrator.
+Fix `004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect`
+deleted by hand; feature `003-doctor-command` restored to `implementation_running`/`F003-T01`.
+Root cause repaired in commit `2a6e3af9`.
 
 ## Recovery History
 
@@ -81,14 +81,26 @@ Doctor recovery task `F003-DR03` passed re-entry quality gates and was applied b
   `lifecycle_state=implementation_running`, `active_task=F003-T01`,
   `active_correction_task=none`, and `active_unblock_task=none`; the runtime applies
   that target only after every `quality_gates.before_review` gate passes.
+- Diagnostic/autocorrection then classified the recurring "no concrete failed-gate evidence"
+  observation itself as a systemic defect and filed fix `004-orchestration-quality-failure-
+  attribution-and-recovery-state-transition-defect` (critical severity, no falsifiable
+  acceptance criterion). Deleted by hand: the real defect was
+  `updateFeatureStateAfterImplementation()`'s `quality_failed` branch never writing a
+  `Blocked By` block at all (unlike every other blocked transition), so no diagnostic call in
+  this chain ever had real evidence to reason about. Fixed at the source in commit `2a6e3af9`.
 
 ## Known Gaps
 
 - `classifyBlockerKind` misroutes a blocked-feature recovery hint toward doctor-recovery instead of the actual right action (seen twice: sibling-feature scope, and exhausted task requests). Tracked as fix `001-blocked-feature-scope-misclassification` (formalized, severity medium, not yet implemented).
 - No runtime code path transitions a feature from an exhausted-task-requests block directly to `completed`; feature `002-configuration-model`'s completion was applied directly rather than by the runtime. See that feature's own `state.md` Known Gaps for detail.
-- A task misattributed to a nonexistent/irrelevant file scope (via `blockOnUnrelatedFixFailure`'s noisy `referencedPaths[0]` heuristic) has no runtime path out of the implement -> review-blocked -> doctor-recovery cycle, even after its fix's real completion criterion is independently satisfied elsewhere. Observed twice (fixes `002` and `003`). See fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`'s own `state.md` Known Gaps for detail.
+- A task misattributed to a nonexistent/irrelevant file scope (via `blockOnUnrelatedFixFailure`'s noisy `referencedPaths[0]` heuristic) has no runtime path out of the implement -> review-blocked -> doctor-recovery cycle, even after its fix's real completion criterion is independently satisfied elsewhere. Observed twice (fixes `002` and `003`); repaired at the source in commit `ba080611`.
 - A single non-loop `npm run dev` invocation is not always a quickly-observable atomic unit: a review-blocked result can chain internally into diagnostic autocorrection and further doctor-recovery planning within the same process, taking several more minutes past the point a supervisor might reasonably believe the run has finished. See fix `002`'s own `state.md` Known Gaps for detail.
+- `npm test` run as part of a task's own quality gates can intermittently fail for a reason
+  unrelated to any code defect while any feature/fix sits in a non-terminal lifecycle state:
+  this repository's own e2e test suite clones the *current* HEAD, so it can pick up that
+  in-progress state and fail in ways its scripted mock CLI responses don't anticipate. See
+  feature `003-doctor-command`'s own `state.md` Known Gaps for detail.
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-quality-failed-diagnostic-autocorrection-classified-the-blocker-on-003-doctor-c` and then restore `implementation_running`.
+Resume feature `003-doctor-command`'s task `F003-T01` implementation deterministically.
