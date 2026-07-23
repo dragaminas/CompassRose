@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+unblock_pending
 
 ## Source Request
 
@@ -13,12 +13,12 @@ blocked
 - formalization: complete
 - active_task: F003-T01
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: F003-DR02
 - last_implementation_result: passed
 - last_quality_gate_result: failed
 - last_review_result: blocked
 - last_unblock_result: not_run
-- doctor_recovery_attempts: 1
+- doctor_recovery_attempts: 2
 - blocked_on_fix: none
 
 ## Current Reality
@@ -79,7 +79,6 @@ npm test: - 0
 - active_task: `F003-T01`
 - active_correction_task: `none`
 - active_unblock_task: `none`
-- recoverability: agent
 
 ## Last Approved Change
 
@@ -100,4 +99,4 @@ Fix `003-pre-existing-failure-in-docs-features-003-doctor-command-state-md` reac
 
 ## Next Planning Hint
 
-Plan a doctor recovery task for blocker `state-corruption-implementation-running-doctor-recovery-f003-dr01-failed-its-re-entry-quality-ga` and then restore `implementation_running`.
+Execute doctor recovery task `F003-DR02` next.
