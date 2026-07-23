@@ -18,6 +18,7 @@ In progress
 - F003-DR04 is the successor to F003-DR03; its literal doctor re-entry gates passed and its
   restoration target is applied. The F003-T01 implementation remains incomplete.
 - Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR04`; the active task pointer was restored to `F003-T01`.
+- Feature `003-doctor-command` now has a planned doctor recovery task, `F003-DR05`, to resolve a recoverable blocker and restore `implementation_running`.
 
 ## Implemented
 
@@ -35,7 +36,7 @@ In progress
 
 ## Pending
 
-- Recover the implementation of `F003-DR04` before continuing.
+- Execute doctor recovery task `F003-DR05` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -119,4 +120,4 @@ Doctor recovery task `F003-DR04` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Resume `F003-T01` implementation recovery before continuing.
+The active feature is `003-doctor-command`, and its next valid action is to execute doctor recovery task `F003-DR05` from the captured `implementation_running` state.
