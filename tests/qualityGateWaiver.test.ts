@@ -1,9 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import type { ParsedTaskDocument } from '../src/contracts/task/taskContracts.js';
 import type { QualityGateResult } from '../src/contracts/runtime/attempts.js';
+import type { WorkItemContext } from '../src/contracts/runtime/protoRuntime.js';
 import { CompassRoseOrchestrator } from '../src/orchestrator/orchestrator.js';
 import { copyContractsIntoWorkspace, createTempWorkspace, readFixtureConfigMarkdown, type TempWorkspace } from './testUtils.js';
 
@@ -40,6 +41,67 @@ None.
 ## Next Planning Hint
 
 None.
+`;
+
+const FEATURE_STATE_SEED = `# State: Fixture Feature
+
+## Lifecycle State
+
+implementation_running
+
+## Source Request
+
+\`request.md\`
+
+## Operational Status
+
+- formalization: complete
+- active_task: F001-T01
+- active_correction_task: none
+- active_unblock_task: none
+- last_implementation_result: not_run
+- last_quality_gate_result: unknown
+- last_review_result: not_run
+- last_unblock_result: not_run
+
+## Current Reality
+
+Fixture state for quality-gate waiver tests.
+
+## Implemented Deliverables
+
+- None yet.
+
+## Remaining Deliverables
+
+- None yet.
+
+## Outline Progress
+
+- Fixture task request: not started
+
+## Blocked By
+
+- None
+
+## Blocked From
+
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
+
+## Last Approved Change
+
+None
+
+## Known Gaps
+
+- None
+
+## Next Planning Hint
+
+None
 `;
 
 // A minimal real task document, narrowly scoped to `src/allowed.ts`, so allowedPaths is small
@@ -94,6 +156,14 @@ function createWorkspace(featureId: string, taskId: string, qualityGateCommand: 
 interface QualityGateAccess {
   loadTask(taskId: string): ParsedTaskDocument;
   runQualityGates(task: ParsedTaskDocument): QualityGateResult[];
+  resolveWorkItemContext(featureId: string): WorkItemContext;
+  updateFeatureStateAfterImplementation(
+    featureStatePath: string,
+    taskId: string,
+    lifecycleState: 'review_pending' | 'quality_failed',
+    qualityResult: 'passed' | 'failed',
+    qualityResults?: readonly QualityGateResult[],
+  ): string;
 }
 
 function asQualityGateAccess(orchestrator: CompassRoseOrchestrator): QualityGateAccess {
@@ -181,5 +251,35 @@ describe('runQualityGates() unrelated-failure waiver', () => {
     const results = access.runQualityGates(task);
 
     expect(results[0].status).toBe('passed');
+  });
+});
+
+describe('updateFeatureStateAfterImplementation() quality_failed evidence', () => {
+  test('persists the concrete failed-gate evidence in Blocked By, not just a bare hint', () => {
+    // Regression test: this transition used to leave `Blocked By` empty on a quality-gate
+    // failure -- unlike every other blocked transition (implementation_failed, review_failed,
+    // blocked), which all persist a full blocker profile. A later diagnose_autocorrect run then
+    // had nothing concrete to go on, and filed a vague, unfalsifiable "systemic" fix instead of a
+    // bounded one (observed live: fix 004-orchestration-quality-failure-attribution-and-recovery-
+    // state-transition-defect, whose own evidence was "lacks concrete failed-gate evidence").
+    // References src/allowed.ts (in this task's own allowed_paths) so runQualityGates() cannot
+    // waive it as unrelated -- this must genuinely reach `failed`, the case that used to skip
+    // recording any blocker evidence at all.
+    const command = "node -e \"console.error('FAIL src/allowed.ts:1:1 real assertion failure'); process.exit(1)\"";
+    workspace = createWorkspace('fixture-feature', 'F001-T01', command);
+    writeFileSync(join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'), FEATURE_STATE_SEED, 'utf8');
+
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asQualityGateAccess(orchestrator);
+    const owner = access.resolveWorkItemContext('fixture-feature');
+    const task = access.loadTask('F001-T01');
+    const results = access.runQualityGates(task);
+    expect(results[0].status).toBe('failed');
+
+    const updated = access.updateFeatureStateAfterImplementation(owner.statePath, 'F001-T01', 'quality_failed', 'failed', results);
+
+    expect(updated).toContain('real assertion failure');
+    expect(updated).toMatch(/## Blocked By\n\n- - kind: \S/);
+    expect(updated).not.toMatch(/## Blocked By\n\n- None/);
   });
 });

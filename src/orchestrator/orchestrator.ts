@@ -3673,17 +3673,14 @@ export class CompassRoseOrchestrator {
       task.taskId,
       passed ? 'review_pending' : 'quality_failed',
       passed ? 'passed' : 'failed',
+      qualityResults,
     );
     const projectState = this.updateProjectStateAfterImplementation(task.featureId, task.taskId, passed);
     writeText(owner.statePath, featureState);
     writeText(this.projectStatePath, projectState);
 
     if (!passed) {
-      const failedGateSummaries = qualityResults
-        .filter((result) => result.status === 'failed')
-        .map((result) => `${result.name}: ${result.output_summary}`)
-        .join('\n');
-      const failureReason = `Quality gates failed after implementing ${task.taskId}.\n${failedGateSummaries}`;
+      const failureReason = this.buildQualityFailureReason(task.taskId, qualityResults);
       this.writeRefinementFeedback(failureReason, {
         kind: correction ? 'correct_task' : 'implement_subtask',
         feature_id: task.featureId,
@@ -5268,11 +5265,23 @@ export class CompassRoseOrchestrator {
     return replaceSection(markdown, 'Outline Progress', renderOutlineProgressMarkdown(updated));
   }
 
+  /**
+   * The `quality_failed` branch used to leave `Blocked By` empty -- unlike every other blocked
+   * transition (implementation_failed, review_failed, blocked), which all persist a full blocker
+   * profile with concrete evidence. That asymmetry meant a later diagnose_autocorrect run had
+   * nothing but a bare "stop and recover" hint to go on, since the real failed-gate output only
+   * ever reached a transient console.error() and an explicitly "advisory, unverified" refinement
+   * artifact -- diagnosed live when it produced a fix filed on the vague grounds of "lacks
+   * concrete failed-gate evidence" (fix 004-orchestration-quality-failure-attribution-and-
+   * recovery-state-transition-defect), a defect in this function's own omission, not a genuine
+   * systemic defect elsewhere.
+   */
   private updateFeatureStateAfterImplementation(
     featureStatePath: string,
     taskId: string,
     lifecycleState: 'review_pending' | 'quality_failed',
     qualityResult: 'passed' | 'failed',
+    qualityResults: readonly QualityGateResult[] = [],
   ): string {
     let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', lifecycleState);
@@ -5284,20 +5293,51 @@ export class CompassRoseOrchestrator {
       active_correction_task: 'none',
       active_unblock_task: 'none',
     });
+
+    if (lifecycleState === 'quality_failed') {
+      const reason = this.buildQualityFailureReason(taskId, qualityResults);
+      // updateFeatureStateAfterImplementation() is only ever reached from implementation_running
+      // (see its single call site): the implementer just ran and its quality gates just failed.
+      const blocker = classifyBlockerKind(
+        reason,
+        qualityResults.map((result) => `${result.name}: ${result.status}: ${result.output_summary}`),
+        'implementation_running',
+      );
+      const restorationTarget: RestorationTarget = {
+        lifecycle_state: 'implementation_running',
+        active_task: taskId,
+        active_correction_task: 'none',
+        active_unblock_task: 'none',
+      };
+      markdown = replaceSection(markdown, 'Blocked By', bulletList(this.buildBlockedByLines(blocker, reason)));
+      markdown = replaceSection(markdown, 'Blocked From', [
+        `- lifecycle_state: \`${restorationTarget.lifecycle_state}\``,
+        `- active_task: \`${restorationTarget.active_task}\``,
+        `- active_correction_task: \`${restorationTarget.active_correction_task}\``,
+        `- active_unblock_task: \`${restorationTarget.active_unblock_task}\``,
+        `- recoverability: ${blocker.recoverability}`,
+      ].join('\n'));
+      markdown = replaceSection(markdown, 'Next Planning Hint', this.blockedNextPlanningHint(blocker, restorationTarget));
+      return markdown;
+    }
+
     markdown = replaceSection(markdown, 'Blocked From', [
       '- lifecycle_state: none',
       '- active_task: none',
       '- active_correction_task: none',
       '- active_unblock_task: none',
     ].join('\n'));
-    markdown = replaceSection(
-      markdown,
-      'Next Planning Hint',
-      lifecycleState === 'review_pending'
-        ? `Review subtask \`${taskId}\` next.`
-        : `Quality gates for \`${taskId}\` failed; stop and recover before continuing.`,
-    );
+    markdown = replaceSection(markdown, 'Next Planning Hint', `Review subtask \`${taskId}\` next.`);
     return markdown;
+  }
+
+  private buildQualityFailureReason(taskId: string, qualityResults: readonly QualityGateResult[]): string {
+    const failedGates = qualityResults
+      .filter((result) => result.status === 'failed')
+      .map((result) => `${result.name}: ${result.output_summary}`);
+    return [`Quality gates failed after implementing ${taskId}.`, ...failedGates]
+      .filter((item) => item.trim().length > 0)
+      .join('\n');
   }
 
   private updateFeatureStateDuringImplementation(featureStatePath: string, taskId: string): string {
