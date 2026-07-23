@@ -16,7 +16,7 @@ In progress
 - Blocking task context: `F003-T01`
 - Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned next task, `FX002-T01`, ready to execute.
 - Implementation failure evidence: Implementation for FX002-T01 produced no git diff (context_overflow).
-- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned doctor recovery task, `FX002-T02`, to resolve a recoverable blocker and restore `task_ready`.
+- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` recovered from a blocker through doctor recovery task `FX002-T02`; the active task pointer was restored to `FX002-T01`.
 
 ## Implemented
 
@@ -30,7 +30,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `FX002-T02` for the active feature.
+- Execute `FX002-T02` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -39,7 +39,7 @@ In progress
 
 ## Last Approved Change
 
-Feature `003-doctor-command` was formalized by the prototype orchestrator.
+Doctor recovery task `FX002-T02` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -48,4 +48,4 @@ Feature `003-doctor-command` was formalized by the prototype orchestrator.
 
 ## Next Planning Hint
 
-The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and its next valid action is to execute doctor recovery task `FX002-T02` from the captured `task_ready` state.
+Execute `FX002-T01` when the current execution mode allows it.

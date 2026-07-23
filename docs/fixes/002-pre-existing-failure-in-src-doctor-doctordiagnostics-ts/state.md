@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+task_ready
 
 ## Source Request
 
@@ -13,14 +13,14 @@ unblock_pending
 - formalization: complete
 - active_task: FX002-T01
 - active_correction_task: none
-- active_unblock_task: FX002-T02
+- active_unblock_task: none
 - severity: high
 - owning_feature: none
-- last_implementation_result: failed
-- last_quality_gate_result: unknown
-- last_review_result: blocked
-- last_unblock_result: not_run
-- doctor_recovery_attempts: 1
+- last_implementation_result: passed
+- last_quality_gate_result: passed
+- last_review_result: skipped
+- last_unblock_result: passed
+- doctor_recovery_attempts: 0
 
 ## Current Reality
 
@@ -42,22 +42,18 @@ Task `FX002-T01` is now planned and ready to execute. Repair the pre-existing Do
 
 ## Blocked By
 
-- - kind: implementation_failure
-- - signature: implementation-failure-FX002-T01
-- - recoverability: agent
-- - observed_state: lifecycle=implementation_failed; active_task=FX002-T01; active_correction_task=none; active_unblock_task=none
-- - evidence: Implementation for FX002-T01 produced no git diff (context_overflow).
+- None
 
 ## Blocked From
 
-- lifecycle_state: `task_ready`
-- active_task: `FX002-T01`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-None
+Doctor recovery task `FX002-T02` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Known Gaps
 
@@ -65,4 +61,4 @@ None
 
 ## Next Planning Hint
 
-Execute doctor recovery task `FX002-T02` next.
+Execute `FX002-T01` when the current execution mode allows it.
