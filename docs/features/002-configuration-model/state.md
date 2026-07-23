@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+blocked
 
 ## Source Request
 
@@ -16,8 +16,8 @@ formalized
 - active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: approved
-- last_unblock_result: passed
+- last_review_result: blocked
+- last_unblock_result: not_run
 - doctor_recovery_attempts: 0
 
 ## Current Reality
@@ -95,14 +95,22 @@ Task `F002-T17` is now planned and ready to execute. Add a cycle/depth limit to 
 
 ## Blocked By
 
-- None
+- - kind: unknown
+- - signature: unknown-formalized-task-planning-for-feature-002-configuration-model-was-invoked-but-every-pre-d
+- - recoverability: agent
+- - observed_state: lifecycle=formalized; active_task=none; active_correction_task=none; active_unblock_task=none
+- - evidence: Task planning for feature `002-configuration-model` was invoked, but every pre-declared task request is already complete or superseded. Formalize additional task requests before continuing.
+- - evidence: None
+- - evidence: lifecycle=formalized
+- - reason: Task planning for feature `002-configuration-model` was invoked, but every pre-declared task request is already complete or superseded. Formalize additional task requests before continuing.
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `formalized`
+- active_task: `none`
+- active_correction_task: `none`
+- active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -114,4 +122,4 @@ Subtask `F002-T17-C1-CORRECTION-R1` was approved by the prototype orchestrator.
 
 ## Next Planning Hint
 
-Plan the next task that advances this feature from the remaining gap.
+Plan a doctor recovery task for blocker `unknown-formalized-task-planning-for-feature-002-configuration-model-was-invoked-but-every-pre-d` and then restore `formalized`.

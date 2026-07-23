@@ -6,20 +6,14 @@ In progress
 
 ## Active Feature
 
-`001-blocked-feature-scope-misclassification`
+`002-configuration-model`
 
 ## Current Reality
 
-- Feature `002-configuration-model` is blocked by `state-corruption-unblock-pending-implementation-for-f002-t17-c1-doctor-recovery-r3-produced-no-g`.
+- Feature `002-configuration-model` is blocked by `unknown-formalized-task-planning-for-feature-002-configuration-model-was-invoked-but-every-pre-d`.
 - Blocker recoverability: agent.
-- Feature `002-configuration-model` was suspended from `implementation_running`; the active task pointer remains `F002-T17-C1`.
-- Blocking task context: `F002-T17-C1-DOCTOR-RECOVERY-R3`
-- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R4`; the active task pointer was restored to `F002-T17-C1`.
-- Implementation failure evidence: Implementation for F002-T17-C1 produced no git diff (tool_refusal).
-- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R5`; the active task pointer was restored to `F002-T17-C1`.
-- Implementation failure evidence: Implementation for F002-T17-C1 produced no git diff (tool_refusal).
-- Feature `002-configuration-model` recovered from a blocker through doctor recovery task `F002-T17-C1-DOCTOR-RECOVERY-R6`; the active task pointer was restored to `F002-T17-C1`.
-- The active work-item pointer currently targets fix `001-blocked-feature-scope-misclassification`; the detailed task and lifecycle state for that fix lives in `docs/fixes/001-blocked-feature-scope-misclassification/state.md`.
+- Feature `002-configuration-model` was suspended from `formalized`; the active task pointer remains `none`.
+- Blocking task context: none
 
 ## Implemented
 
@@ -32,8 +26,9 @@ In progress
 
 ## Pending
 
-- Plan the next implementation task for the active fix.
-- Continue updating this file with approved repository facts as fix work lands.
+- Plan a doctor recovery task for the active feature.
+- Restore the captured `formalized` state after the blocker is resolved.
+- Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
 
@@ -49,4 +44,4 @@ Fix `001-blocked-feature-scope-misclassification` was formalized by the orchestr
 
 ## Next Planning Hint
 
-The active work item is fix `001-blocked-feature-scope-misclassification`, and its next valid action is task planning.
+Plan a doctor recovery task for blocker `unknown-formalized-task-planning-for-feature-002-configuration-model-was-invoked-but-every-pre-d` and then restore `formalized`.
