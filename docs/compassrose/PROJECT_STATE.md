@@ -10,11 +10,14 @@ In progress
 
 ## Current Reality
 
-- Feature `003-doctor-command` is `implementation_running` for `F003-T01`, restored by hand
-  after deleting fix `004-orchestration-quality-failure-attribution-and-recovery-state-
-  transition-defect` (never a real defect) and repairing the actual root cause -- see Known Gaps.
+- Feature `003-doctor-command` is `implementation_running` for `F003-T01`, restored by the
+  bounded F003-DR04 doctor recovery after deleting fix
+  `004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect` (never a
+  real defect) and repairing the actual root cause -- see Known Gaps.
 - Feature `003-doctor-command` state was canonicalized; the active task pointer remains `F003-T01`.
-- Feature `003-doctor-command` now has a planned doctor recovery task, `F003-DR04`, to resolve a recoverable blocker and restore `implementation_running`.
+- F003-DR04 is the successor to F003-DR03; its literal doctor re-entry gates passed and its
+  restoration target is applied. The F003-T01 implementation remains incomplete.
+- Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR04`; the active task pointer was restored to `F003-T01`.
 
 ## Implemented
 
@@ -32,7 +35,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F003-DR04` for the active feature.
+- Recover the implementation of `F003-DR04` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -41,7 +44,7 @@ In progress
 
 ## Last Approved Change
 
-State correction artifact `F003-T01-C1` was applied by the prototype orchestrator.
+Doctor recovery task `F003-DR04` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -89,6 +92,19 @@ State correction artifact `F003-T01-C1` was applied by the prototype orchestrato
   `Blocked By` block at all (unlike every other blocked transition), so no diagnostic call in
   this chain ever had real evidence to reason about. Fixed at the source in commit `2a6e3af9`.
 
+- Doctor recovery task `F003-DR04` is the successor to `F003-DR03`. It preserves the supplied
+  blocker kind `state_corruption`, blocker signature
+  `state-corruption-quality-failed-feature-003-doctor-command-is-in-quality-failed-and-needs-diagno`,
+  and evidence: `Feature 003-doctor-command is in quality_failed and needs
+  diagnosis/autocorrection before normal execution can resume.`, `- kind: state_corruption`,
+  `- signature: state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes`,
+  `- recoverability: agent`, and `lifecycle=quality_failed`.
+- F003-DR04 re-entry gates passed: the bounded diff check, `npm run typecheck`, and the literal
+  state/project anchor check. The restoration target is
+  `lifecycle_state=implementation_running`, `active_task=F003-T01`,
+  `active_correction_task=none`, and `active_unblock_task=none`; the failed F003-T01 quality
+  gate remains preserved as historical evidence for the next implementation attempt.
+
 ## Known Gaps
 
 - `classifyBlockerKind` misroutes a blocked-feature recovery hint toward doctor-recovery instead of the actual right action (seen twice: sibling-feature scope, and exhausted task requests). Tracked as fix `001-blocked-feature-scope-misclassification` (formalized, severity medium, not yet implemented).
@@ -103,4 +119,4 @@ State correction artifact `F003-T01-C1` was applied by the prototype orchestrato
 
 ## Next Planning Hint
 
-The active feature is `003-doctor-command`, and its next valid action is to execute doctor recovery task `F003-DR04` from the captured `implementation_running` state.
+Resume `F003-T01` implementation recovery before continuing.

@@ -73,10 +73,46 @@ npm test
 
 ## Doctor Re-entry Gates (`quality_gates.before_review`)
 
-Doctor re-entry is a separate recovery gate set and does not inherit F003-T01's implementation gates. The recovery-specific gate is:
+Doctor re-entry is a separate recovery gate set and does not inherit F003-T01's implementation gates. F003-DR04 is the successor to F003-DR03, and these are its complete literal re-entry gates:
 
 ```bash
-git diff --check
+git diff 2a6e3af9 --check -- docs/features/003-doctor-command/state.md docs/compassrose/PROJECT_STATE.md docs/features/003-doctor-command/tasks/001-establish-doctor-diagnostic-contract-and-read-only-check-context.md
+npm run typecheck
+node -e "const fs=require('fs'); const a=fs.readFileSync('docs/features/003-doctor-command/state.md','utf8'); const b=fs.readFileSync('docs/compassrose/PROJECT_STATE.md','utf8'); if(!a.includes('F003-T01')||!a.includes('state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes')||!b.includes('F003-T01')) process.exit(1)"
+```
+
+## Doctor Recovery Handoff
+
+```yaml
+doctor_recovery:
+  task_id: F003-DR04
+  previous_task_id: F003-DR03
+  executor_role: doctor
+  review_policy: no_review_loop
+
+blocker:
+  kind: state_corruption
+  signature: state-corruption-quality-failed-feature-003-doctor-command-is-in-quality-failed-and-needs-diagno
+  recoverability: agent
+  observed_state: lifecycle=quality_failed; active_task=F003-T01; active_correction_task=none; active_unblock_task=none
+  evidence:
+    - "Feature 003-doctor-command is in quality_failed and needs diagnosis/autocorrection before normal execution can resume."
+    - "- kind: state_corruption"
+    - "- signature: state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes"
+    - "- recoverability: agent"
+    - "lifecycle=quality_failed"
+
+restoration_target:
+  lifecycle_state: implementation_running
+  active_task: F003-T01
+  active_correction_task: none
+  active_unblock_task: none
+
+quality_gates:
+  before_review:
+    - "git diff 2a6e3af9 --check -- docs/features/003-doctor-command/state.md docs/compassrose/PROJECT_STATE.md docs/features/003-doctor-command/tasks/001-establish-doctor-diagnostic-contract-and-read-only-check-context.md"
+    - "npm run typecheck"
+    - "node -e \"const fs=require('fs'); const a=fs.readFileSync('docs/features/003-doctor-command/state.md','utf8'); const b=fs.readFileSync('docs/compassrose/PROJECT_STATE.md','utf8'); if(!a.includes('F003-T01')||!a.includes('state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes')||!b.includes('F003-T01')) process.exit(1)\""
 ```
 
 ## Expected Deliverables
