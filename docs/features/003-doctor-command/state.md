@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-task_ready
+implementation_running
 
 ## Source Request
 
@@ -72,4 +72,4 @@ None for feature `003-doctor-command`; the latest repository-level change record
 
 ## Next Planning Hint
 
-Execute `F003-T01` when the current execution mode allows it.
+Recover or finish subtask implementation of `F003-T01` before allowing review or new planning.

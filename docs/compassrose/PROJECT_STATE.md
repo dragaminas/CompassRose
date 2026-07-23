@@ -27,7 +27,7 @@ In progress
 
 ## Pending
 
-- Execute `F003-T01` for the active feature.
+- Recover or finish implementation for `F003-T01`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -45,4 +45,4 @@ Feature `003-doctor-command` was formalized by the prototype orchestrator.
 
 ## Next Planning Hint
 
-The active feature is `003-doctor-command`, and its next valid action is to execute `F003-T01`.
+The active feature is `003-doctor-command`, and subtask execution for `F003-T01` is in progress.
