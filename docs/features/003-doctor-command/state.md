@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+blocked
 
 ## Source Request
 
@@ -15,11 +15,11 @@ implementation_running
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: skipped
-- last_unblock_result: passed
+- last_quality_gate_result: failed
+- last_review_result: blocked
+- last_unblock_result: not_run
 - doctor_recovery_attempts: 0
-- blocked_on_fix: none
+- blocked_on_fix: 004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect
 
 ## Current Reality
 
@@ -52,14 +52,22 @@ Task `F003-T01` remains the active implementation target for deterministic re-en
 
 ## Blocked By
 
-- None
+- - kind: state_corruption
+- - signature: state-corruption-quality-failed-diagnostic-autocorrection-classified-the-blocker-on-003-doctor-c
+- - recoverability: agent
+- - observed_state: lifecycle=quality_failed; active_task=F003-T01; active_correction_task=none; active_unblock_task=none
+- - evidence: Diagnostic/autocorrection classified the blocker on 003-doctor-command as systemic rather than a bounded implementation issue; filed/reused fix `004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect` and stopped instead of attempting a bounded doctor recovery.
+- - evidence: None
+- - evidence: lifecycle=quality_failed
+- - reason: Diagnostic/autocorrection classified the blocker on 003-doctor-command as systemic rather than a bounded implementation issue; filed/reused fix `004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect` and stopped instead of attempting a bounded doctor recovery.
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `implementation_running`
+- active_task: `F003-T01`
+- active_correction_task: `none`
+- active_unblock_task: `none`
+- recoverability: agent
 
 ## Last Approved Change
 
@@ -83,4 +91,4 @@ Doctor recovery task `F003-DR03` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Resume `F003-T01` implementation recovery before continuing.
+Plan a doctor recovery task for blocker `state-corruption-quality-failed-diagnostic-autocorrection-classified-the-blocker-on-003-doctor-c` and then restore `implementation_running`.
