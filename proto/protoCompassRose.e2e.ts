@@ -71,6 +71,22 @@ function main(): number {
   // nothing about and crash. These scenarios only exercise feature-side blocker flows, so remove
   // real fixes from the disposable clone entirely.
   rmSync(join(cloneRoot, 'docs', 'fixes'), { recursive: true, force: true });
+  // Same class of contamination, on the feature side: syncFeatureStateDocs above copies every
+  // real feature's live state.md into the clone, not just 002-configuration-model's. determineNextStep()
+  // scans features in id order and returns the first one in a "continuing" (non-terminal)
+  // lifecycle state -- so whenever some OTHER real feature (e.g. 003-doctor-command) is itself
+  // mid-flight in the actual repo (implementation_running/quality_failed/unblock_pending/...),
+  // the orchestrator running inside this clone picks that feature up instead of the scenario's
+  // actual target, and every assertion below about 002-configuration-model fails or times out.
+  // Observed live 2026-07-23: every protoBlockerFlows scenario failed identically, in lockstep
+  // with feature 003-doctor-command sitting non-terminal in this repository during a long-running
+  // implementation/recovery cycle. No scenario here ever seeds or asserts on a feature other than
+  // 002-configuration-model, so remove every other feature directory from the disposable clone.
+  for (const entry of readdirSync(join(cloneRoot, 'docs', 'features'))) {
+    if (entry !== '002-configuration-model' && statSync(join(cloneRoot, 'docs', 'features', entry)).isDirectory()) {
+      rmSync(join(cloneRoot, 'docs', 'features', entry), { recursive: true, force: true });
+    }
+  }
 
   // A fresh local clone (and the sync steps above, which rewrite files with content that's
   // still identical to HEAD) can leave the index stat-cache out of sync with the checked-out
