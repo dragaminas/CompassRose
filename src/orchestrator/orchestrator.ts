@@ -3918,6 +3918,7 @@ export class CompassRoseOrchestrator {
         `Waived: this command already fails the same way on a clean checkout of HEAD, and its `
         + `failure output names no path within this task's allowed_paths (${task.allowedPaths.join(', ')}) `
         + `or changed files (${changedFiles.join(', ') || 'none'}) -- referenced instead: ${referencedPaths.join(', ')}.`,
+      referenced_paths: referencedPaths,
     } satisfies QualityGateResult;
   }
 
@@ -3942,7 +3943,12 @@ export class CompassRoseOrchestrator {
       throw new Error(`blockOnUnrelatedFixFailure called for ${task.taskId} without a waived quality-gate result.`);
     }
 
-    const referencedPaths = extractReferencedPaths(waived.output_summary);
+    // Read the structured field the waiver already computed rather than re-parsing
+    // output_summary: that message also quotes the task's own allowed_paths/changed files (for
+    // human context) before the actually-referenced paths, so re-extracting from it picks up the
+    // task's own files first and misattributes the failure to them. The output_summary fallback
+    // only matters for a waived result that didn't come through tryWaiveUnrelatedGateFailure().
+    const referencedPaths = waived.referenced_paths ?? extractReferencedPaths(waived.output_summary);
     const primaryPath = referencedPaths[0] ?? 'the system';
     const fixId = this.fileOrReuseBlockingFix({
       signature: this.computeGateFailureSignature(waived.command, referencedPaths),

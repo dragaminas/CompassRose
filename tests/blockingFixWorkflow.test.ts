@@ -201,6 +201,8 @@ interface BlockingFixAccess {
   loadTask(taskId: string): ParsedTaskDocument;
   resolveWorkItemContext(featureId: string): WorkItemContext;
   blockOnUnrelatedFixFailure(owner: WorkItemContext, task: ParsedTaskDocument, qualityResults: readonly QualityGateResult[]): StepExecutionResult;
+  tryWaiveUnrelatedGateFailure(task: ParsedTaskDocument, command: string, stdout: string, stderr: string): QualityGateResult | null;
+  runShellCommand(command: string): { readonly status: number | null; readonly stdout: string; readonly stderr: string };
   listFeatures(): FeatureRecord[];
   inspectFeature(feature: FeatureRecord): FeatureInspection;
   determineNextStep(): StepDecision;
@@ -277,6 +279,42 @@ describe('blockOnUnrelatedFixFailure', () => {
 
     const statusAfter = execFileSync('git', ['status', '--porcelain'], { cwd: workspace.root, encoding: 'utf8' });
     expect(statusAfter).not.toContain('src/allowed.ts');
+  });
+
+  test('names the fix after the actually-referenced file, not the task\'s own changed file', () => {
+    // Regression test: tryWaiveUnrelatedGateFailure()'s output_summary quotes the task's own
+    // allowed_paths/changed files (for human context) before the "referenced instead:" list of
+    // paths the failing command's own output actually named. blockOnUnrelatedFixFailure() used to
+    // re-extract paths from that summary text, so it would pick up the task's own changed file
+    // (src/allowed.ts, matched here since it has a .ts extension) as primaryPath instead of the
+    // file genuinely responsible for the failure (tests/unrelated.test.ts) -- exactly what
+    // happened live: a fix got titled "Pre-existing failure in `src/doctor/doctorDiagnostics.ts`"
+    // (the task's own new file) instead of the real flaky test file.
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const owner = access.resolveWorkItemContext('fixture-feature');
+
+    // Give the task its own uncommitted, in-scope, .ts-extensioned changed file so it appears in
+    // the waiver's output_summary alongside the real out-of-scope failure.
+    writeFileSync(join(workspace.root, 'src', 'allowed.ts'), 'export const allowed = 2;\n', 'utf8');
+    const task = access.loadTask('F001-T01');
+
+    const command = "node -e \"console.error('FAIL tests/unrelated.test.ts:1:1'); process.exit(1)\"";
+    const { stdout, stderr } = access.runShellCommand(command);
+    const waived = access.tryWaiveUnrelatedGateFailure(task, command, stdout, stderr);
+
+    expect(waived).not.toBeNull();
+    expect(waived?.status).toBe('waived');
+    expect(waived?.referenced_paths).toEqual(['tests/unrelated.test.ts']);
+
+    const result = access.blockOnUnrelatedFixFailure(owner, task, [waived as QualityGateResult]);
+    expect(result.exitCode).toBe(2);
+
+    const [fixId] = listFixDirectories(workspace.root);
+    const fixMarkdown = readFileSync(join(workspace.root, 'docs', 'fixes', fixId, 'fix.md'), 'utf8');
+    expect(fixMarkdown).toContain('tests/unrelated.test.ts');
+    expect(fixMarkdown).not.toContain('Pre-existing failure in `src/allowed.ts`');
   });
 
   test('reuses the existing fix for the same signature instead of filing a duplicate', () => {

@@ -29,6 +29,16 @@ export interface QualityGateResult {
    */
   readonly status: "passed" | "failed" | "skipped" | "waived";
   readonly output_summary: string;
+  /**
+   * The file paths the failing command's own raw output referenced, captured before they get
+   * folded into output_summary's human-readable prose (which also quotes the task's own
+   * allowed_paths/changed files for context). Only populated for "waived" results. Callers that
+   * need to know which file was actually implicated (e.g. blockOnUnrelatedFixFailure() naming a
+   * fix after it) must read this field instead of re-parsing output_summary -- re-parsing picks
+   * up the task's own quoted paths first and misattributes the failure to them. See
+   * tryWaiveUnrelatedGateFailure() in src/orchestrator/orchestrator.ts.
+   */
+  readonly referenced_paths?: readonly string[];
 }
 
 export interface ImplementationDiagnostics {
