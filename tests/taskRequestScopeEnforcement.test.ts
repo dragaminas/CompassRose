@@ -55,7 +55,7 @@ describe('task-request scope enforcement', () => {
     } finally {
       workspace.dispose();
     }
-  }, 20000);
+  });
 
   // Complements the rejection test above: when the planner honestly names a deviation_reason,
   // the orchestrator must accept the widened scope, write the task, and persist the widened
@@ -89,7 +89,7 @@ describe('task-request scope enforcement', () => {
     } finally {
       workspace.dispose();
     }
-  }, 20000);
+  });
 });
 
 function prepareWorkspace(options: { withDeviationReason?: boolean } = {}): { cloneRoot: string; dispose: () => void } {

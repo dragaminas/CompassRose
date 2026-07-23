@@ -48,7 +48,7 @@ describe('proto controlled stop', () => {
     } finally {
       workspace.dispose();
     }
-  }, 20000);
+  });
 });
 
 function prepareControlledStopWorkspace(): { cloneRoot: string; dispose: () => void } {

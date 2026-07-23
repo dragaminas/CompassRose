@@ -65,7 +65,7 @@ describe('feature formalization task-request outline', () => {
     } finally {
       workspace.dispose();
     }
-  }, 20000);
+  });
 });
 
 function prepareWorkspace(): { cloneRoot: string; dispose: () => void } {

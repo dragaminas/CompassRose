@@ -55,7 +55,7 @@ describe('task-request backfill for a legacy feature', () => {
     } finally {
       workspace.dispose();
     }
-  }, 20000);
+  });
 });
 
 function prepareWorkspace(): { cloneRoot: string; dispose: () => void } {

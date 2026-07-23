@@ -44,7 +44,7 @@ describe('feature scope guard', () => {
     } finally {
       workspace.dispose();
     }
-  }, 20000);
+  });
 });
 
 function prepareScopeGuardWorkspace(): { cloneRoot: string; dispose: () => void } {
