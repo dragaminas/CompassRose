@@ -17,6 +17,7 @@ In progress
 - Fix `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned next task, `FX002-T01`, ready to execute.
 - Implementation failure evidence: Implementation for FX002-T01 produced no git diff (context_overflow).
 - Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` recovered from a blocker through doctor recovery task `FX002-T02`; the active task pointer was restored to `FX002-T01`.
+- Feature `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts` now has a planned doctor recovery task, `FX002-T03`, to resolve a recoverable blocker and restore `implementation_running`.
 
 ## Implemented
 
@@ -30,7 +31,7 @@ In progress
 
 ## Pending
 
-- Recover or finish implementation for `FX002-T01`.
+- Execute doctor recovery task `FX002-T03` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -48,4 +49,4 @@ Doctor recovery task `FX002-T02` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and subtask execution for `FX002-T01` is in progress.
+The active feature is `002-pre-existing-failure-in-src-doctor-doctordiagnostics-ts`, and its next valid action is to execute doctor recovery task `FX002-T03` from the captured `implementation_running` state.

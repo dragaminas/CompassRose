@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+unblock_pending
 
 ## Source Request
 
@@ -13,14 +13,14 @@ implementation_running
 - formalization: complete
 - active_task: FX002-T01
 - active_correction_task: none
-- active_unblock_task: none
+- active_unblock_task: FX002-T03
 - severity: high
 - owning_feature: none
-- last_implementation_result: not_run
-- last_quality_gate_result: unknown
-- last_review_result: not_run
-- last_unblock_result: passed
-- doctor_recovery_attempts: 0
+- last_implementation_result: passed
+- last_quality_gate_result: failed
+- last_review_result: blocked
+- last_unblock_result: not_run
+- doctor_recovery_attempts: 1
 
 ## Current Reality
 
@@ -46,10 +46,10 @@ Task `FX002-T01` is now planned and ready to execute. Repair the pre-existing Do
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `implementation_running`
+- active_task: `FX002-T01`
+- active_correction_task: `none`
+- active_unblock_task: `none`
 
 ## Last Approved Change
 
@@ -61,4 +61,4 @@ Doctor recovery task `FX002-T02` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Recover or finish subtask implementation of `FX002-T01` before allowing review or new planning.
+Execute doctor recovery task `FX002-T03` next.
