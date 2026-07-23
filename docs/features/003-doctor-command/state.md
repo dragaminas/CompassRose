@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+implementation_running
 
 ## Source Request
 
@@ -13,12 +13,12 @@ unblock_pending
 - formalization: complete
 - active_task: F003-T01
 - active_correction_task: none
-- active_unblock_task: F003-DR06
+- active_unblock_task: none
 - last_implementation_result: passed
-- last_quality_gate_result: failed
-- last_review_result: blocked
-- last_unblock_result: not_run
-- doctor_recovery_attempts: 1
+- last_quality_gate_result: passed
+- last_review_result: skipped
+- last_unblock_result: passed
+- doctor_recovery_attempts: 2
 - blocked_on_fix: none
 
 ## Current Reality
@@ -29,7 +29,7 @@ unblock_pending
 - `docs/compassrose/PROJECT_STATE.md` records an existing dedicated runtime preflight check for the configured project-state document, but it does not establish that the full `compassrose doctor` readiness command is complete.
 - No feature-specific implementation deliverable for the complete Doctor command is claimed complete by this feature state.
 
-Task `F003-T01` remains the active implementation target in `implementation_running` for deterministic re-entry. Doctor recovery task `F003-DR04`, the successor to `F003-DR03`, reconciled the state and evidence only; it did not change the implementation attempt. Its re-entry gates passed, and `F003-DR05` reconciled the remaining feature checkpoint with the documented `implementation_running` restoration target. The implementation remains incomplete.
+Task `F003-T01` remains the active implementation target in `implementation_running` for deterministic re-entry. Doctor recovery task `F003-DR06`, the successor to `F003-DR05`, reconciled the state and recovery handoff only; it did not change the implementation attempt. Its doctor re-entry gates passed and applied the fixed restoration target `implementation_running` with `F003-T01` active and no correction or unblock task. The implementation remains incomplete.
 
 ## Implemented Deliverables
 
@@ -88,50 +88,18 @@ npm test: - 0
 
 ## Blocked By
 
-- - kind: state_corruption
-- - signature: state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes
-- - recoverability: agent
-- - observed_state: lifecycle=implementation_running
-- - evidence: Quality gates failed after implementing F003-T01.
-npm test: - 0
-+ 1
-
- ❯ tests/protoBlockerFlows.test.ts:162:27
-    160|     const result = runProtoScenario('state-correction-missing-active-t…
-    161|
-    162|     expect(result.status).toBe(0);
-       |                           ^
-    163|     expect(result.stdout).toContain('PASS: state correction artifact w…
-    164|     expect(result.stdout).toContain('PASS: state correction document w…
-
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
-- - evidence: npm run typecheck: passed: > compassrose@1.0.0 typecheck
-> tsc --noEmit
-- - evidence: npm test: failed: - 0
-+ 1
-
- ❯ tests/protoBlockerFlows.test.ts:162:27
-    160|     const result = runProtoScenario('state-correction-missing-active-t…
-    161|
-    162|     expect(result.status).toBe(0);
-       |                           ^
-    163|     expect(result.stdout).toContain('PASS: state correction artifact w…
-    164|     expect(result.stdout).toContain('PASS: state correction document w…
-
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
-- - evidence: lifecycle=implementation_running
-- - reason: Quality gates failed after implementing F003-T01. | npm test: - 0 | + 1 | ❯ tests/protoBlockerFlows.test.ts:162:27 | 160|     const result = runProtoScenario('state-correction-missing-active-t… | 161| | 162|     expect(result.status).toBe(0); | |                           ^ | 163|     expect(result.stdout).toContain('PASS: state correction artifact w… | 164|     expect(result.stdout).toContain('PASS: state correction document w… | ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+- None
 
 ## Blocked From
 
-- lifecycle_state: `implementation_running`
-- active_task: `F003-T01`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Doctor recovery task `F003-DR05` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `F003-DR06` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -169,6 +137,21 @@ Doctor recovery task `F003-DR05` passed re-entry quality gates and was applied b
   the `F003-DR04` lineage. Its re-entry gates passed, and the restoration target is applied:
   `lifecycle_state=implementation_running`, `active_task=F003-T01`,
   `active_correction_task=none`, and `active_unblock_task=none`.
+- Doctor recovery task `F003-DR06` is the successor to `F003-DR05`. It preserves the supplied
+  blocker kind `state_corruption`, signature
+  `state-corruption-quality-failed-feature-003-doctor-command-is-in-quality-failed-and-needs-diagno`,
+  observed state `lifecycle=quality_failed; active_task=F003-T01; active_correction_task=none;
+  active_unblock_task=none`, and evidence: `Feature 003-doctor-command is in quality_failed and
+  needs diagnosis/autocorrection before normal execution can resume.`, `- kind: state_corruption`,
+  `- signature: state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes`,
+  `- recoverability: agent`, and `lifecycle=quality_failed`. The historical typecheck-pass and
+  npm-test-failure evidence remains unchanged above.
+- F003-DR06's complete doctor re-entry gates passed: the bounded `git diff 2a6e3af9 --check`
+  gate and the literal state/project anchor check. The recovery did not inherit F003-T01's failed
+  `npm test` gate. The fixed restoration target is applied:
+  `lifecycle_state=implementation_running`, `active_task=F003-T01`,
+  `active_correction_task=none`, and `active_unblock_task=none`. F003-T01 remains historical
+  implementation evidence with its scope and acceptance criteria unchanged.
 
 ## Known Gaps
 
@@ -185,4 +168,4 @@ Doctor recovery task `F003-DR05` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F003-DR06` next.
+Resume `F003-T01` implementation recovery before continuing.

@@ -118,3 +118,44 @@ quality_gates:
 ## Expected Deliverables
 - `code`
 - `tests`
+
+## Doctor Recovery Handoff: F003-DR06
+
+F003-DR06 is the successor to F003-DR05 and preserves this task as the historical
+implementation anchor. It does not change F003-T01's implementation scope or acceptance
+criteria.
+
+```yaml
+doctor_recovery:
+  task_id: F003-DR06
+  previous_task_id: F003-DR05
+  executor_role: doctor
+  review_policy: no_review_loop
+
+blocker:
+  kind: state_corruption
+  signature: state-corruption-quality-failed-feature-003-doctor-command-is-in-quality-failed-and-needs-diagno
+  recoverability: agent
+  observed_state: lifecycle=quality_failed; active_task=F003-T01; active_correction_task=none; active_unblock_task=none
+  evidence:
+    - "Feature 003-doctor-command is in quality_failed and needs diagnosis/autocorrection before normal execution can resume."
+    - "- kind: state_corruption"
+    - "- signature: state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes"
+    - "- recoverability: agent"
+    - "lifecycle=quality_failed"
+
+restoration_target:
+  lifecycle_state: implementation_running
+  active_task: F003-T01
+  active_correction_task: none
+  active_unblock_task: none
+
+quality_gates:
+  before_review:
+    - "git diff 2a6e3af9 --check -- docs/features/003-doctor-command/state.md docs/compassrose/PROJECT_STATE.md src/contracts/task/doctor-recovery-task.md src/contracts/runtime/operation-loop.md docs/features/003-doctor-command/tasks/001-establish-doctor-diagnostic-contract-and-read-only-check-context.md"
+    - "node -e \"const fs=require('fs'); const checks=[['docs/features/003-doctor-command/state.md',['## Blocked From','lifecycle_state: `implementation_running`','active_task: `F003-T01`','active_correction_task: `none`','active_unblock_task: `none`','state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes']],['docs/compassrose/PROJECT_STATE.md',['F003-T01','implementation_running']]]; for(const [p,need] of checks){const s=fs.readFileSync(p,'utf8'); if(need.some(v=>!s.includes(v))) process.exit(1);}\""
+```
+
+The F003-T01 typecheck-pass and npm-test-failure records remain historical evidence. The
+F003-DR06 recovery gates are recovery-owned and do not inherit F003-T01's failed `npm test`
+gate; after they pass, the runtime applies the restoration target above.

@@ -212,8 +212,9 @@ Action:
 - execute the recorded doctor recovery task if the execution mode allows it
 - run the recovery task's `quality_gates.before_review` entries directly as the complete doctor re-entry gate set
 - do not inherit the active implementation task's quality gates for doctor re-entry unless the recovery task explicitly lists them
-- restore the recorded `restoration_target.lifecycle_state`, `active_task`, and `active_correction_task` when every recovery gate passes
-- clear `active_unblock_task` when every recovery gate passes, while preserving the restored active task anchor
+- honor the recovery task's `executor_role: doctor` and `review_policy: no_review_loop`; do not enter the normal reviewer loop
+- execute every `quality_gates.before_review` entry literally, and apply the complete recorded restoration target only when every recovery gate passes
+- restore `restoration_target.lifecycle_state`, `active_task`, `active_correction_task`, and `active_unblock_task` exactly as recorded, preserving the restored active task anchor
 - stop with a diagnostic when they fail
 
 Next state:

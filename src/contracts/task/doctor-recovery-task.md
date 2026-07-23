@@ -50,6 +50,14 @@ Those gates are the complete gate set for the recovery handoff. They validate th
 interface and restoration readiness; they are not inherited from the active implementation task
 and must not require that task's unmet implementation acceptance gates before re-entry.
 
+Doctor execution uses `executor_role: doctor` with `review_policy: no_review_loop`; the recovery
+does not enter the normal reviewer loop. The runtime executes every
+`quality_gates.before_review` entry verbatim as the complete recovery gate set. Only after every
+entry passes may the runtime apply the complete `restoration_target`, preserving its active task
+anchor, setting `active_correction_task` as recorded, and clearing `active_unblock_task` as
+recorded. If a recovery gate fails, the runtime must preserve the blocker and lineage evidence
+and must not apply the restoration target.
+
 ---
 
 ## Rules

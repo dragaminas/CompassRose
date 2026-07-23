@@ -21,7 +21,10 @@ In progress
 - Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR04`; the active task pointer was restored to `F003-T01`.
 - Feature `003-doctor-command` completed doctor recovery task `F003-DR05`; the active task pointer remains `F003-T01` in `implementation_running`.
 - Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR05`; the active task pointer was restored to `F003-T01`.
-- Feature `003-doctor-command` now has a planned doctor recovery task, `F003-DR06`, to resolve a recoverable blocker and restore `implementation_running`.
+- Feature `003-doctor-command` completed doctor recovery task `F003-DR06`; its fixed restoration
+  target is applied with `implementation_running`, `F003-T01` active, and no correction or unblock
+  task.
+- Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR06`; the active task pointer was restored to `F003-T01`.
 
 ## Implemented
 
@@ -39,7 +42,7 @@ In progress
 
 ## Pending
 
-- Execute doctor recovery task `F003-DR06` for the active feature.
+- Recover the implementation of `F003-DR06` before continuing.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -48,7 +51,7 @@ In progress
 
 ## Last Approved Change
 
-Doctor recovery task `F003-DR05` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `F003-DR06` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -113,6 +116,22 @@ Doctor recovery task `F003-DR05` passed re-entry quality gates and was applied b
   `state_corruption` blocker and confirmed F003-T01 quality-gate evidence, then applied the
   restoration target `implementation_running` with `F003-T01` active and no active correction
   or unblock task.
+- Doctor recovery task `F003-DR06` is the successor to `F003-DR05`. It preserves blocker kind
+  `state_corruption`, signature
+  `state-corruption-quality-failed-feature-003-doctor-command-is-in-quality-failed-and-needs-diagno`,
+  observed state `lifecycle=quality_failed; active_task=F003-T01; active_correction_task=none;
+  active_unblock_task=none`, and the supplied evidence: `Feature 003-doctor-command is in
+  quality_failed and needs diagnosis/autocorrection before normal execution can resume.`, `-
+  kind: state_corruption`, `- signature:
+  state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes`,
+  `- recoverability: agent`, and `lifecycle=quality_failed`. The confirmed typecheck-pass and
+  npm-test-failure evidence remains historical evidence, and F003-T01's implementation scope is
+  unchanged.
+- F003-DR06's complete doctor re-entry gates passed: the bounded `git diff 2a6e3af9 --check`
+  gate and the literal state/project anchor check. Its recovery-owned gates did not inherit
+  F003-T01's failed `npm test` gate. The runtime-applied restoration target is exactly
+  `lifecycle_state=implementation_running`, `active_task=F003-T01`,
+  `active_correction_task=none`, and `active_unblock_task=none`.
 
 ## Known Gaps
 
@@ -128,4 +147,4 @@ Doctor recovery task `F003-DR05` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-The active feature is `003-doctor-command`, and its next valid action is to execute doctor recovery task `F003-DR06` from the captured `implementation_running` state.
+Resume `F003-T01` implementation recovery before continuing.
