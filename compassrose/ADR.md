@@ -858,3 +858,23 @@ Accepted
 The relay check shall accept either `passed` or `skipped` as trustworthy when zero quality gates ran, and only `passed` when gates ran and none failed -- matching what the contract actually commits the reviewer to, not a stricter reading invented after the fact.
 
 This is an instance of ADR-0034: a deterministic check must be built from what its input's own declared contract actually promises, not from an assumption about phrasing the contract never made.
+
+## ADR-0046
+
+### Title
+
+CompassRose's Own Documentation Lives Isolated From The Target Repository's docs/
+
+### Status
+
+Accepted
+
+### Decision
+
+CompassRose's own operational documents (`CONFIG.md`, `PROJECT_STATE.md`, `ADR.md`, `SAD.md`, `ROADMAP.md`, `DMS.md`, `REFACTOR_PLAN.md`, `templates/`, `features/`, `fixes/`) previously lived scattered directly inside the target repository's own `docs/` folder (`docs/compassrose/CONFIG.md`, `docs/ADR.md`, `docs/features/`, and siblings). Pointing CompassRose at a real, pre-existing project collided with whatever documentation conventions that project already had under its own `docs/` -- the opposite of the bounded-scope law (ADR-0034) applied one level up, at the whole tool's footprint rather than a single operation's.
+
+CompassRose's own documents shall live under one isolated root, `compassrose/`, at the repository root -- sibling to, not nested inside, the target repository's own `docs/` (which is preserved as-is for the target project's own use, per `project.documentation_root`). The root is resolved through one canonical module (`src/config/compassRosePaths.ts`), itself driven by an optional `documentation.compassrose_root` config field (default `'compassrose'`), so no call site re-derives or hardcodes the location independently. `CONFIG.md`'s own path is the one location that can never be config-driven (the bootstrap chicken-and-egg problem: config must be found before it can be read) and stays a single hardcoded constant instead of being duplicated across call sites.
+
+This also settles the fresh-bootstrap-vs-existing-project signal the not-yet-built "Flow 0" (`npm run setup`, SAD.md 5.3's Project Analyzer) needs: the bootstrap config path's existence is exactly that check.
+
+This is an instance of ADR-0034, applied to the tool's own footprint rather than a single bounded operation.

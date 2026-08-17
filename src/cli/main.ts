@@ -8,6 +8,8 @@ import { getCurrentSupportedPlatform } from '../platform/platformInfo.js';
 import { CompassRoseOrchestrator } from '../orchestrator/orchestrator.js';
 import { parseRunArguments } from './runOptions.js';
 import { getBootstrapConfigPath } from '../config/compassRosePaths.js';
+import { runSetupCli } from './setup.js';
+import { runFeatureValidationCli } from './featureValidation.js';
 
 export interface CliEnvironment {
   readonly cwd?: string;
@@ -15,7 +17,7 @@ export interface CliEnvironment {
   readonly stderr?: (message: string) => void;
 }
 
-export function main(argv: string[] = process.argv.slice(2), environment: CliEnvironment = {}): number {
+export function main(argv: string[] = process.argv.slice(2), environment: CliEnvironment = {}): number | Promise<number> {
   const stdout = environment.stdout ?? ((message: string) => process.stdout.write(`${message}\n`));
   const stderr = environment.stderr ?? ((message: string) => process.stderr.write(`${message}\n`));
   const cwd = environment.cwd ?? process.cwd();
@@ -32,6 +34,14 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     return report.exitCode;
   }
 
+  if (argv.length === 1 && argv[0] === 'setup') {
+    return runSetupCli({ cwd, stdout, stderr });
+  }
+
+  if (argv.length >= 1 && argv[0] === 'feature-validation') {
+    return runFeatureValidationCli(argv.slice(1), { cwd, stdout, stderr });
+  }
+
   let options;
   try {
     options = parseRunArguments(argv, cwd);
@@ -39,6 +49,8 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     stderr(error instanceof Error ? error.message : String(error));
     stderr('Usage: compassrose [--loop] [--implementer codex|opencode] [--no-commit] [--cwd <path>]');
     stderr('Usage: compassrose doctor');
+    stderr('Usage: compassrose setup');
+    stderr('Usage: compassrose feature-validation [--no-commit] [--cwd <path>]');
     return 1;
   }
 
@@ -111,6 +123,12 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
 }
 
 if (fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? '')) {
-  const exitCode = main();
-  process.exitCode = exitCode;
+  const result = main();
+  if (result instanceof Promise) {
+    result.then((exitCode) => {
+      process.exitCode = exitCode;
+    });
+  } else {
+    process.exitCode = result;
+  }
 }

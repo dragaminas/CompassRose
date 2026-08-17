@@ -22,6 +22,8 @@ function seedSchemas(root: string): void {
     'src/contracts/planner/task-requests-backfill-output.schema.json': '{"type":"object","title":"task_requests_backfill"}',
     'src/contracts/runtime/blocker-kind-classification.schema.json': '{"type":"object","title":"blocker_kind_classification"}',
     'src/contracts/runtime/systemic-blocker-next-step.schema.json': '{"type":"object","title":"systemic_blocker_next_step"}',
+    'src/contracts/validator/feature-validation-weight.schema.json': '{"type":"object","title":"feature_validation_weight"}',
+    'src/contracts/validator/decision-points-output.schema.json': '{"type":"object","title":"feature_validation_decision_points"}',
   };
 
   for (const [relativePath, contents] of Object.entries(schemaFiles)) {
@@ -32,7 +34,7 @@ function seedSchemas(root: string): void {
 }
 
 describe('ContractRegistry', () => {
-  test('loads all nine structured schemas on construction', () => {
+  test('loads all eleven structured schemas on construction', () => {
     workspace = createTempWorkspace();
     seedSchemas(workspace.root);
     const registry = new ContractRegistry(workspace.root);
@@ -46,6 +48,8 @@ describe('ContractRegistry', () => {
     expect(registry.schema<{ title: string }>('task_requests_backfill').title).toBe('task_requests_backfill');
     expect(registry.schema<{ title: string }>('blocker_kind_classification').title).toBe('blocker_kind_classification');
     expect(registry.schema<{ title: string }>('systemic_blocker_next_step').title).toBe('systemic_blocker_next_step');
+    expect(registry.schema<{ title: string }>('feature_validation_weight').title).toBe('feature_validation_weight');
+    expect(registry.schema<{ title: string }>('feature_validation_decision_points').title).toBe('feature_validation_decision_points');
   });
 
   test('refresh reports no reload and no restart when nothing changed', () => {

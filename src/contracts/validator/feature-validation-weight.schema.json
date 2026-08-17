@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["weight", "rationale"],
+  "properties": {
+    "weight": {
+      "type": "string",
+      "enum": ["bounded", "architectural"]
+    },
+    "rationale": { "type": "string" }
+  }
+}

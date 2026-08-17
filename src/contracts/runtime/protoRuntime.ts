@@ -68,6 +68,10 @@ export type WorkItemInspectionKind =
   | 'request_pending'
   | 'formalization_pending'
   | 'formalized'
+  // Formalized (feature.md/architecture.md exist) but not yet confirmed by a human through
+  // "npm run feature-validation" (see ADR-0046/Flow 1) -- invisible to both scheduler passes,
+  // same treatment as 'blocked_on_fix', so plan_task/plan_fix_task is never selected for it.
+  | 'awaiting_validation'
   | 'task_planning_pending'
   | 'task_ready'
   | 'unblock_pending'

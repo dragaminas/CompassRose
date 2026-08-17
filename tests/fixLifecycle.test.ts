@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { readFixtureConfigMarkdown } from './testUtils.js';
+import { replaceOperationalStatus } from '../src/orchestrator/stateMarkdown.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tsxBinary = join(repoRoot, 'node_modules', '.bin', 'tsx');
@@ -20,15 +21,29 @@ describe('fix lifecycle end-to-end', () => {
     const workspace = prepareFixLifecycleWorkspace();
 
     try {
+      // Pass 1: the loop formalizes the fix, then stops -- ADR-0046's Flow 1 gate means a freshly
+      // formalized fix starts `validation: not_started`, which is invisible to both scheduler
+      // passes (see inspectFix()'s `awaiting_validation` case), so task planning cannot proceed
+      // yet even though nothing failed.
+      const formalizeResult = runFixLifecycleScenario(workspace.root);
+      expect(formalizeResult.exitCode).toBe(0);
+      expect(formalizeResult.stdout).toContain(`Next step: plan_fix (${FIX_ID})`);
+      expect(formalizeResult.stdout).toContain('awaiting human validation');
+
+      const fixRoot = join(workspace.root, 'compassrose', 'fixes', FIX_ID);
+
+      // Stand in for a human completing "npm run feature-validation" and typing "listo": flips
+      // the same state.md field CompassRoseOrchestrator.confirmFeatureValidation() would flip.
+      // Flow 1's own interactive loop is covered separately by tests/featureValidation.test.ts.
+      confirmFixValidation(fixRoot);
+
+      // Pass 2: now that validation is confirmed, the same loop can plan, implement, and review.
       const result = runFixLifecycleScenario(workspace.root);
 
       expect(result.exitCode).toBe(0);
-      expect(result.stdout).toContain(`Next step: plan_fix (${FIX_ID})`);
       expect(result.stdout).toContain(`Next step: plan_fix_task (${FIX_ID})`);
       expect(result.stdout).toContain('Next step: implement_subtask');
       expect(result.stdout).toContain('Next step: review_subtask');
-
-      const fixRoot = join(workspace.root, 'compassrose', 'fixes', FIX_ID);
       expect(existsSync(join(fixRoot, 'fix.md'))).toBe(true);
       expect(existsSync(join(fixRoot, 'architecture.md'))).toBe(false);
 
@@ -123,6 +138,12 @@ function runFixLifecycleScenario(root: string): { exitCode: number | null; stdou
     stdout: result.stdout || '',
     stderr: result.stderr || '',
   };
+}
+
+function confirmFixValidation(fixRoot: string): void {
+  const statePath = join(fixRoot, 'state.md');
+  const markdown = readFileSync(statePath, 'utf8');
+  writeFileSync(statePath, replaceOperationalStatus(markdown, { validation: 'confirmed' }), 'utf8');
 }
 
 function copyTree(sourceRoot: string, targetRoot: string): void {

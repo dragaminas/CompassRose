@@ -4,17 +4,19 @@
   "description": "CompassRose is a CLI-first TypeScript application for deterministic AI-assisted software development orchestration.",
   "main": "./dist/cli/main.js",
   "directories": {
-    "doc": "docs"
+    "doc": "compassrose"
   },
   "scripts": {
     "test": "vitest run",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "setup": "tsx src/cli/main.ts setup",
+    "feature-validation": "tsx src/cli/main.ts feature-validation",
     "dev": "tsx src/cli/main.ts",
     "doctor": "tsx src/cli/main.ts doctor",
     "dev:no-commit": "tsx src/cli/main.ts --no-commit",
-    "dev:loop": "tsx src/cli/main.ts --loop",
-    "dev:loop:codex": "tsx src/cli/main.ts --loop --implementer codex",
+    "app": "tsx src/cli/main.ts --loop",
+    "app:codex": "tsx src/cli/main.ts --loop --implementer codex",
     "proto:typecheck": "tsc -p proto/tsconfig.json",
     "proto:e2e": "tsx proto/protoCompassRose.e2e.ts",
     "proto:e2e:codex": "cross-env PROTO_E2E_IMPLEMENTER=codex tsx proto/protoCompassRose.e2e.ts",

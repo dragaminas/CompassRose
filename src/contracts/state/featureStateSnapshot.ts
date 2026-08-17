@@ -13,4 +13,13 @@ export interface FeatureStateSnapshot {
   readonly activeUnblockTask: string;
   readonly blockedBy: readonly string[];
   readonly blockedFrom: RestorationTarget | null;
+  /**
+   * 'not_started' | 'confirmed' -- whether a human has confirmed this feature's formalized
+   * definition through "npm run feature-validation" (see ADR-0046/Flow 1). A freshly-formalized
+   * feature/fix always has this explicitly written as 'not_started' by
+   * planFeature()/planFixRequest(); it defaults to 'confirmed' only when genuinely absent (a
+   * state.md formalized before this field existed), so pre-existing work is never retroactively
+   * blocked -- matching ADR-0040/41's precedent.
+   */
+  readonly validationStatus: string;
 }

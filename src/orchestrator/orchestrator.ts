@@ -59,6 +59,7 @@ import type {
 } from '../contracts/runtime/protoRuntime.js';
 import type { ProjectConfiguration } from '../config/configTypes.js';
 import { readProjectConfiguration } from '../config/configReader.js';
+import type { ValidationDecisionPointsOutput, ValidationRoundRecord, ValidationWeight } from '../contracts/validator/validatorContracts.js';
 import {
   buildAdrPath,
   buildDmsPath,
@@ -513,6 +514,206 @@ export class CompassRoseOrchestrator {
     }
   }
 
+  /**
+   * Flow 1 ("npm run feature-validation", ADR-0046): every formalized feature/fix that
+   * inspectFeature()/inspectFix() would currently report as `awaiting_validation` -- i.e.
+   * exactly the set Flow 2 ("npm run app") is silently skipping. Reuses the same inspection the
+   * scheduler already runs rather than re-deriving the gate condition a second way.
+   */
+  listFeaturesAwaitingValidation(): readonly WorkItemContext[] {
+    const featureIds = this.listFeatures()
+      .filter((feature) => this.inspectFeature(feature).kind === 'awaiting_validation')
+      .map((feature) => feature.id);
+    const fixIds = this.listFixes()
+      .filter((fix) => this.inspectFix(fix).kind === 'awaiting_validation')
+      .map((fix) => fix.id);
+
+    return [...featureIds, ...fixIds].map((id) => this.resolveWorkItemContext(id));
+  }
+
+  /**
+   * Decides how much back-and-forth `id`'s definition needs before a human can confirm it, via
+   * the same 3-vote unanimous-required ensemble pattern as classifySystemicBlockerNextStepByEnsemble
+   * (ADR-0036/38). Unlike that ensemble's tie-break-to-stop, disagreement or unavailability here
+   * ties to `architectural` -- the heavier, more-scrutiny path -- because a human is already
+   * present in Flow 1's loop and one extra round is cheap, matching the "when in doubt take the
+   * heavier path" principle this feature was explicitly modeled on.
+   */
+  classifyValidationWeight(id: string): ValidationWeight {
+    const owner = this.resolveWorkItemContext(id);
+    const sourcePaths = [
+      relativePath(this.repositoryRoot, owner.definitionPath),
+      ...(owner.architecturePath ? [relativePath(this.repositoryRoot, owner.architecturePath)] : []),
+    ];
+
+    const prompt = [
+      'Act as the CompassRose Validator.',
+      '',
+      `Classify how much back-and-forth \`${id}\`'s already-formalized definition needs before a human can confirm it: \`bounded\` or \`architectural\`.`,
+      '',
+      'Read only:',
+      ...sourcePaths.map((path) => `- \`${path}\``),
+      '',
+      'Rules:',
+      '- `bounded`: scope, interfaces, and approach are already concrete enough that at most 1-2 sharp confirmations are needed.',
+      '- `architectural`: the definition leaves open cross-cutting structural choices (data model, integration boundaries, multi-component tradeoffs) that deserve deliberate confirmation.',
+      '- Reason independently from the definition above only -- do not assume any other attempt\'s conclusion.',
+      '- Return JSON only and do not modify files.',
+    ].join('\n');
+
+    const votes = this.runClassifierEnsemble<ValidationWeight>({
+      size: BLOCKER_KIND_ENSEMBLE_SIZE,
+      prompt,
+      labelPrefix: `classifier:validation-weight:${id}`,
+      invocationKind: 'feature_validation_weight',
+      schemaId: 'feature_validation_weight',
+      featureId: id,
+      taskId: null,
+      extractVote: (raw) => (raw.weight === 'bounded' || raw.weight === 'architectural' ? raw.weight : null),
+    });
+
+    if (!votes) {
+      return 'architectural';
+    }
+
+    const resolved = resolveUnanimousVote(votes);
+    return resolved.agreed ? resolved.value : 'architectural';
+  }
+
+  /**
+   * One-shot Validator call proposing this round's decision points, grounded in `id`'s
+   * already-written feature.md/architecture.md (never the raw request.md -- see
+   * src/contracts/validator/feature-validation-prompt.md) and every prior round's answer, so the
+   * model never re-raises something the human already settled. Returning `decision_points: []`
+   * only changes what the CLI loop displays next; per that same contract, it is never by itself
+   * sufficient to confirm validation -- only confirmFeatureValidation(), called exclusively from
+   * the human's own "listo" keystroke, may do that.
+   */
+  runNextValidationRound(
+    id: string,
+    weight: ValidationWeight,
+    priorRounds: readonly ValidationRoundRecord[],
+  ): ValidationDecisionPointsOutput {
+    const owner = this.resolveWorkItemContext(id);
+    const sourcePaths = [
+      'src/contracts/validator/feature-validation-prompt.md',
+      relativePath(this.repositoryRoot, owner.definitionPath),
+      ...(owner.architecturePath ? [relativePath(this.repositoryRoot, owner.architecturePath)] : []),
+    ];
+
+    const priorRoundsText = priorRounds.length > 0
+      ? priorRounds.map((round, index) => {
+          const question = round.decision_point?.question ?? '(human-provided clarification, no decision point)';
+          const answer = round.chosen_option_id
+            ? `chose option \`${round.chosen_option_id}\``
+            : `answered: ${round.free_text ?? '(no answer recorded)'}`;
+          return `${index + 1}. ${question} -> ${answer}`;
+        }).join('\n')
+      : '(none yet)';
+
+    const label = `validator:decision-points:${id}:${priorRounds.length + 1}`;
+    const prompt = [
+      'Act as the CompassRose Validator.',
+      '',
+      `Feature/fix \`${id}\` is formalized (weight: ${weight}). Propose the concrete decisions a human should confirm before this is allowed into automated task planning.`,
+      '',
+      'Read only:',
+      ...sourcePaths.map((path) => `- \`${path}\``),
+      '',
+      'Rounds already recorded this session (never re-raise one of these):',
+      priorRoundsText,
+      '',
+      'Rules:',
+      '- Propose at most 3 decision points this round, each with 0-3 labeled options, a recommended option id, and a one-line rationale.',
+      '- Ground every decision point in what the definition document already states -- frame it as confirming or overriding an existing assumption, not inventing a new one.',
+      '- If nothing further is worth raising, return `decision_points: []`.',
+      '- Do not ask open-ended questions with no options.',
+      '- Do not claim the human has approved anything.',
+      '- Do not modify files.',
+      '',
+      'Return JSON only, matching the decision-points-output schema.',
+    ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'validator',
+      kind: 'feature_validation_decision_points',
+      label,
+      feature_id: id,
+      task_id: null,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'feature_validation_decision_points',
+      },
+    }));
+
+    return this.codex.runStructured<ValidationDecisionPointsOutput>(
+      prompt,
+      this.contracts.schema('feature_validation_decision_points'),
+      [],
+      label,
+    );
+  }
+
+  /**
+   * The only method allowed to flip `validation: confirmed` (ADR-0046) -- called exclusively from
+   * the CLI loop's explicit "listo" branch, never from AI-response handling. Writes the full
+   * transcript as a durable `## Validation Decisions` section on the definition document itself
+   * (so every later Planner/task-planning prompt that already reads feature.md/fix.md sees it for
+   * free), the deterministic state.md flag, and a full audit copy under
+   * `.git/proto-compassrose/validation-decisions/<id>.json` (ADR-0003).
+   */
+  confirmFeatureValidation(id: string, transcript: readonly ValidationRoundRecord[]): void {
+    const owner = this.resolveWorkItemContext(id);
+    const updatedDefinition = setOrInsertSection(
+      readUtf8(owner.definitionPath),
+      'Validation Decisions',
+      this.renderValidationDecisionsMarkdown(transcript),
+    );
+    writeText(owner.definitionPath, ensureTrailingNewline(updatedDefinition));
+
+    const updatedState = replaceOperationalStatus(readUtf8(owner.statePath), { validation: 'confirmed' });
+    writeText(owner.statePath, ensureTrailingNewline(updatedState));
+
+    this.artifacts.writeJson(join('validation-decisions', `${id}.json`), transcript);
+
+    if (this.options.commit) {
+      this.git.commit(
+        [
+          relativePath(this.repositoryRoot, owner.definitionPath),
+          relativePath(this.repositoryRoot, owner.statePath),
+        ],
+        `proto: confirm validation for ${id}`,
+      );
+    }
+  }
+
+  private renderValidationDecisionsMarkdown(transcript: readonly ValidationRoundRecord[]): string {
+    const answered = transcript.filter((round) => round.decision_point !== null);
+    if (answered.length === 0) {
+      return '- No decision points were raised; confirmed as-is.';
+    }
+
+    return answered
+      .map((round, index) => {
+        const decisionPoint = round.decision_point;
+        if (!decisionPoint) {
+          return '';
+        }
+
+        const chosenOption = decisionPoint.options.find((option) => option.id === round.chosen_option_id);
+        const answer = chosenOption
+          ? `${chosenOption.label} (${chosenOption.detail})`
+          : round.free_text ?? '(no answer recorded)';
+        return `${index + 1}. **${decisionPoint.question}** -> ${answer}`;
+      })
+      .filter((line) => line.length > 0)
+      .join('\n');
+  }
+
   private installControlledStopHandlers(): () => void {
     const onSignal = (signal: NodeJS.Signals): void => {
       this.requestControlledStop(
@@ -607,10 +808,12 @@ export class CompassRoseOrchestrator {
   }
 
   private isContinuingInspectionKind(kind: WorkItemInspectionKind): boolean {
-    // 'blocked_on_fix' is deliberately neither startable nor continuing: it must be invisible to
-    // both scheduler passes while the blocking fix is unresolved, so other features/fixes keep
-    // making progress instead of this one being retried (and re-diagnosed) every run.
-    return kind !== 'completed' && kind !== 'blocked_on_fix' && !this.isStartableInspectionKind(kind);
+    // 'blocked_on_fix' and 'awaiting_validation' are deliberately neither startable nor
+    // continuing: each must be invisible to both scheduler passes while unresolved (the
+    // blocking fix unresolved; a human hasn't confirmed the feature's definition, see
+    // ADR-0046/Flow 1), so other features/fixes keep making progress instead of this one being
+    // retried (and re-diagnosed) every run.
+    return kind !== 'completed' && kind !== 'blocked_on_fix' && kind !== 'awaiting_validation' && !this.isStartableInspectionKind(kind);
   }
 
   private static readonly FIX_SEVERITY_RANK: Record<FixSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -698,12 +901,19 @@ export class CompassRoseOrchestrator {
       }
     }
 
+    const awaitingValidationIds = [
+      ...featureInspections.filter(({ inspection }) => inspection.kind === 'awaiting_validation').map(({ feature }) => feature.id),
+      ...fixInspections.filter(({ inspection }) => inspection.kind === 'awaiting_validation').map(({ fix }) => fix.id),
+    ];
+
     return {
       kind: 'stop',
       feature_id: null,
       task_id: null,
       correction_task_id: null,
-      reason: 'No non-completed feature or fix remains.',
+      reason: awaitingValidationIds.length > 0
+        ? `No non-completed feature or fix remains ready for the autonomous pipeline; ${awaitingValidationIds.length} awaiting human validation (${awaitingValidationIds.join(', ')}) -- run "npm run feature-validation".`
+        : 'No non-completed feature or fix remains.',
     };
   }
 
@@ -801,6 +1011,10 @@ export class CompassRoseOrchestrator {
         throw new Error(
           `Feature ${feature.id} reached selectStepForFeature with kind 'blocked_on_fix', which determineNextStep's continuing/startable filters should never allow through.`,
         );
+      case 'awaiting_validation':
+        throw new Error(
+          `Feature ${feature.id} reached selectStepForFeature with kind 'awaiting_validation', which determineNextStep's continuing/startable filters should never allow through.`,
+        );
       default:
         return assertNever(inspection.kind);
     }
@@ -861,12 +1075,26 @@ export class CompassRoseOrchestrator {
           snapshot,
         };
       case 'formalized':
+        if (snapshot.validationStatus !== 'confirmed') {
+          return {
+            kind: 'awaiting_validation',
+            reason: `Feature ${feature.id} is formalized but not yet validated by a human; run "npm run feature-validation" before task planning.`,
+            snapshot,
+          };
+        }
         return {
           kind: 'formalized',
           reason: `Feature ${feature.id} is formalized and its next deterministic action is task planning.`,
           snapshot,
         };
       case 'task_planning_pending':
+        if (snapshot.validationStatus !== 'confirmed') {
+          return {
+            kind: 'awaiting_validation',
+            reason: `Feature ${feature.id} is formalized but not yet validated by a human; run "npm run feature-validation" before task planning.`,
+            snapshot,
+          };
+        }
         return {
           kind: 'task_planning_pending',
           reason: `Feature ${feature.id} is waiting for exactly one next task to be planned.`,
@@ -1078,9 +1306,13 @@ export class CompassRoseOrchestrator {
       case 'formalization_pending':
         return { kind: 'formalization_pending', reason: `Fix ${fix.id} is in formalization_pending and should resume formalization deterministically.`, snapshot, severity, owningFeature };
       case 'formalized':
-        return { kind: 'formalized', reason: `Fix ${fix.id} is formalized and its next deterministic action is task planning.`, snapshot, severity, owningFeature };
+        return snapshot.validationStatus === 'confirmed'
+          ? { kind: 'formalized', reason: `Fix ${fix.id} is formalized and its next deterministic action is task planning.`, snapshot, severity, owningFeature }
+          : { kind: 'awaiting_validation', reason: `Fix ${fix.id} is formalized but not yet validated by a human; run "npm run feature-validation" before task planning.`, snapshot, severity, owningFeature };
       case 'task_planning_pending':
-        return { kind: 'task_planning_pending', reason: `Fix ${fix.id} is waiting for exactly one next task to be planned.`, snapshot, severity, owningFeature };
+        return snapshot.validationStatus === 'confirmed'
+          ? { kind: 'task_planning_pending', reason: `Fix ${fix.id} is waiting for exactly one next task to be planned.`, snapshot, severity, owningFeature }
+          : { kind: 'awaiting_validation', reason: `Fix ${fix.id} is formalized but not yet validated by a human; run "npm run feature-validation" before task planning.`, snapshot, severity, owningFeature };
       case 'task_ready':
         return snapshot.activeTask !== 'none'
           ? { kind: 'task_ready', reason: `Fix ${fix.id} is task_ready with active task ${snapshot.activeTask}.`, snapshot, severity, owningFeature }
@@ -1240,6 +1472,10 @@ export class CompassRoseOrchestrator {
       case 'blocked_on_fix':
         throw new Error(
           `Fix ${fix.id} reached selectStepForFix with kind 'blocked_on_fix', which determineNextStep's continuing/startable filters should never allow through.`,
+        );
+      case 'awaiting_validation':
+        throw new Error(
+          `Fix ${fix.id} reached selectStepForFix with kind 'awaiting_validation', which determineNextStep's continuing/startable filters should never allow through.`,
         );
       default:
         return assertNever(inspection.kind);
@@ -1542,7 +1778,12 @@ export class CompassRoseOrchestrator {
     );
     writeText(feature.featurePath, ensureTrailingNewline(featureMarkdownWithOutline));
     writeText(feature.architecturePath, ensureTrailingNewline(planned.architecture_md));
-    writeText(feature.statePath, ensureTrailingNewline(planned.state_md));
+    // Declared here, deterministically, not left to the Planner's own prose (ADR-0034/0046):
+    // every freshly-formalized feature starts genuinely unvalidated, regardless of what (if
+    // anything) the AI wrote for this key -- only "npm run feature-validation"'s explicit
+    // human confirmation may ever flip it.
+    const stateMarkdownWithValidation = replaceOperationalStatus(planned.state_md, { validation: 'not_started' });
+    writeText(feature.statePath, ensureTrailingNewline(stateMarkdownWithValidation));
     this.artifacts.writeJson(join('task-requests', `${featureId}.json`), planned.task_requests);
 
     const updatedProjectState = this.updateProjectStateForFeaturePlan(featureId);
@@ -1623,7 +1864,10 @@ export class CompassRoseOrchestrator {
       `planner:fix-plan:${fixId}`,
     );
     writeText(fix.fixPath, ensureTrailingNewline(planned.fix_md));
-    writeText(fix.statePath, ensureTrailingNewline(planned.state_md));
+    // See planFeature()'s identical fix: declared deterministically here (ADR-0034/0046), not
+    // left to the Planner's own prose.
+    const fixStateMarkdownWithValidation = replaceOperationalStatus(planned.state_md, { validation: 'not_started' });
+    writeText(fix.statePath, ensureTrailingNewline(fixStateMarkdownWithValidation));
 
     const updatedProjectState = this.updateProjectStateForFixPlan(fixId);
     writeText(this.projectStatePath, updatedProjectState);
@@ -5034,6 +5278,11 @@ export class CompassRoseOrchestrator {
       activeUnblockTask: stripTicks(parsePreferredStatusValue(operationalStatus, 'active_unblock_task') ?? 'none'),
       blockedBy: parseBulletSection(blockedBySection) ?? [],
       blockedFrom,
+      // 'confirmed' when absent (NOT 'not_started'): this field is only genuinely absent from a
+      // state.md formalized before ADR-0046/Flow 1 existed -- grandfathered in, never
+      // retroactively blocked, matching ADR-0040/41's precedent. A freshly-formalized
+      // feature/fix always has this key explicitly written by planFeature()/planFixRequest().
+      validationStatus: stripTicks(parsePreferredStatusValue(operationalStatus, 'validation') ?? 'confirmed'),
     };
   }
 

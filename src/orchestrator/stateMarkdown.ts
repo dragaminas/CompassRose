@@ -11,6 +11,14 @@ export function replaceOperationalStatus(markdown: string, overrides: Partial<Re
 
   const defaults: Record<string, string> = {
     formalization: 'complete',
+    // See ADR-0046/Flow 1: whether a human has confirmed this feature's formalized definition
+    // through "npm run feature-validation" before the autonomous pipeline may plan tasks for it.
+    // Defaults to 'confirmed' here (NOT 'not_started') deliberately: this default only fills a
+    // gap for a state.md this field never applied to at all (formalized before Flow 1 existed),
+    // matching ADR-0040/41's "opt-in, never retroactive" precedent. A freshly-formalized
+    // feature/fix gets the real, blocking 'not_started' value written explicitly by
+    // planFeature()/planFixRequest() at formalization time instead of relying on this default.
+    validation: 'confirmed',
     active_task: 'none',
     active_correction_task: 'none',
     active_unblock_task: 'none',

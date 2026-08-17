@@ -239,6 +239,8 @@ repository_state.yml
 
 or an equivalent internal project state file.
 
+Not yet implemented (see `docs/features/004-project-understanding/request.md`, still `request_pending`). The fresh-bootstrap-vs-existing-project signal this component needs is already settled by ADR-0046: whether `compassrose/CONFIG.md` (via `getBootstrapConfigPath`, `src/config/compassRosePaths.ts`) exists is exactly "has this repository already been set up." `npm run setup` (the bootstrap-only slice of this responsibility) creates that root's skeleton when absent; the deeper repository inspection described above remains this component's own future work.
+
 ---
 
 ## 5.4 Intent Compiler

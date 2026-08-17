@@ -1,0 +1,41 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decision_points"],
+  "properties": {
+    "decision_points": {
+      "type": "array",
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "question", "applies_to", "options", "recommended_option_id", "rationale"],
+        "properties": {
+          "id": { "type": "string" },
+          "question": { "type": "string" },
+          "applies_to": {
+            "type": "string",
+            "enum": ["feature", "architecture"]
+          },
+          "options": {
+            "type": "array",
+            "minItems": 0,
+            "maxItems": 3,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "label", "detail"],
+              "properties": {
+                "id": { "type": "string" },
+                "label": { "type": "string" },
+                "detail": { "type": "string" }
+              }
+            }
+          },
+          "recommended_option_id": { "type": "string" },
+          "rationale": { "type": "string" }
+        }
+      }
+    }
+  }
+}
