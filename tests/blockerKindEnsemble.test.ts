@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { ParsedTaskDocument } from '../src/contracts/task/taskContracts.js';
@@ -10,14 +10,11 @@ import type { WorkItemContext } from '../src/contracts/runtime/protoRuntime.js';
 import { CompassRoseOrchestrator } from '../src/orchestrator/orchestrator.js';
 import { copyContractsIntoWorkspace, createTempWorkspace, readFixtureConfigMarkdown, type TempWorkspace } from './testUtils.js';
 
-// This test does not mock the codex command, so recordFailedReview()'s ensemble fallback (see
-// ADR-0036) makes BLOCKER_KIND_ENSEMBLE_SIZE real, sequential codex calls (previously zero calls
-// here). Each real call has taken up to ~20s combined in isolation; the suite-wide 30000ms
-// default (vitest.config.ts) leaves too little headroom once this runs alongside the rest of the
-// full suite under contention -- same rationale as protoBlockerFlows.test.ts's own override.
-// Bumped from 60000 to 90000: even 60s intermittently timed out as the full suite grew longer
-// (more real-codex-invoking tests added this session), while this test alone has stayed ~21s.
-vi.setConfig({ testTimeout: 90000 });
+// Covers buildReviewBlockerProfile()'s ensemble fallback branch (see ADR-0036): unanimous
+// agreement is trusted, disagreement forces human recoverability, and an unavailable ensemble
+// (no codex binary) must fall back to classifyBlockerKind() exactly as before this feature
+// existed -- see reviewFailedWiring.test.ts for the pre-existing non-ensemble-specific coverage
+// of recordFailedReview() this file does not duplicate.
 
 const PROJECT_STATE_SEED = `# CompassRose Project State
 
@@ -31,7 +28,7 @@ active
 
 ## Current Reality
 
-- Fixture workspace for review-failed wiring tests.
+- Fixture workspace for blocker-kind ensemble tests.
 
 ## Pending
 
@@ -78,7 +75,7 @@ implementation_running
 
 ## Current Reality
 
-Fixture state for testing review_failed wiring.
+Fixture state for blocker-kind ensemble tests.
 
 ## Implemented Deliverables
 
@@ -127,7 +124,7 @@ function taskDoc(taskId: string, featureId: string): string {
 \`${featureId}\`
 
 ## Goal
-Fixture task for review-failed wiring tests.
+Fixture task for blocker-kind ensemble tests.
 
 ## Scope
 Allowed:
@@ -206,8 +203,35 @@ function fixtureImplementationAttempt(): ImplementationAttempt {
   };
 }
 
+// Returns a fixed kind for the Nth classifier call in a run (1-indexed), cycling through
+// `kinds` -- e.g. ['a','a','a'] simulates unanimous agreement, ['a','b','a'] simulates
+// disagreement. A counter file on disk tracks the call index across the three separate codex
+// subprocess invocations one buildReviewBlockerProfile() call makes.
+function writeSequentialClassifierMock(root: string, kinds: readonly string[]): string {
+  const scriptPath = join(root, 'codex-mock-classifier.cjs');
+  const counterPath = join(root, 'classifier-mock-counter.txt');
+  writeFileSync(counterPath, '0', 'utf8');
+  const script = `#!/usr/bin/env node
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+const outputIndex = args.indexOf('-o');
+const outputPath = outputIndex === -1 ? null : args[outputIndex + 1];
+const kinds = ${JSON.stringify(kinds)};
+const counterPath = ${JSON.stringify(counterPath)};
+const index = Number(fs.readFileSync(counterPath, 'utf8'));
+fs.writeFileSync(counterPath, String(index + 1), 'utf8');
+const payload = { kind: kinds[index % kinds.length], rationale: 'mock ensemble vote ' + index };
+if (outputPath) {
+  fs.writeFileSync(outputPath, JSON.stringify(payload, null, 2) + '\\n', 'utf8');
+}
+process.exit(0);
+`;
+  writeFileSync(scriptPath, script, 'utf8');
+  chmodSync(scriptPath, 0o755);
+  return scriptPath;
+}
+
 interface ReviewFailedAccess {
-  resolveWorkItemContext(featureId: string): WorkItemContext;
   loadTask(taskId: string): ParsedTaskDocument;
   recordFailedReview(
     task: ParsedTaskDocument,
@@ -215,6 +239,7 @@ interface ReviewFailedAccess {
     implementation: ImplementationAttempt,
     qualityResults: readonly unknown[],
   ): BlockerProfile;
+  resolveWorkItemContext(featureId: string): WorkItemContext;
 }
 
 function asAccess(orchestrator: CompassRoseOrchestrator): ReviewFailedAccess {
@@ -224,24 +249,59 @@ function asAccess(orchestrator: CompassRoseOrchestrator): ReviewFailedAccess {
 let workspace: TempWorkspace | undefined;
 
 afterEach(() => {
+  vi.unstubAllEnvs();
   workspace?.dispose();
   workspace = undefined;
 });
 
-describe('reviewer failed -> review_failed wiring', () => {
-  test('persists review_failed lifecycle instead of a silent dead end', () => {
+describe('blocker-kind classification ensemble (ADR-0036)', () => {
+  test('trusts a unanimous ensemble vote over the prose fallback', () => {
     workspace = createWorkspace('fixture-feature', 'F001-T01');
+    vi.stubEnv('PROTO_COMPASSROSE_CODEX_COMMAND', writeSequentialClassifierMock(workspace.root, ['task_interface_gap']));
+
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     const access = asAccess(orchestrator);
     const task = access.loadTask('F001-T01');
 
     const blocker = access.recordFailedReview(task, failedReviewOutput('F001-T01'), fixtureImplementationAttempt(), []);
 
-    expect(blocker.kind).toBeTruthy();
+    // The prose-only fallback would have produced 'review_failure' (matches /diff|acceptance/i
+    // in the reviewer summary/findings) -- a unanimous ensemble vote for a *different* kind
+    // proves the ensemble result was actually used, not silently ignored.
+    expect(blocker.kind).toBe('task_interface_gap');
+  });
 
-    const featureState = readFileSync(join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'), 'utf8');
-    expect(featureState.match(/## Lifecycle State\n\n(\S+)/)?.[1]).toBe('review_failed');
-    expect(featureState).toContain('- last_review_result: failed');
-    expect(featureState).toContain(blocker.signature);
+  test('forces human recoverability and kind unknown when the ensemble disagrees', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    vi.stubEnv(
+      'PROTO_COMPASSROSE_CODEX_COMMAND',
+      writeSequentialClassifierMock(workspace.root, ['task_interface_gap', 'review_failure', 'task_interface_gap']),
+    );
+
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const task = access.loadTask('F001-T01');
+
+    const blocker = access.recordFailedReview(task, failedReviewOutput('F001-T01'), fixtureImplementationAttempt(), []);
+
+    expect(blocker.kind).toBe('unknown');
+    expect(blocker.recoverability).toBe('human');
+    expect(blocker.evidence.some((item) => item.includes('task_interface_gap') && item.includes('review_failure'))).toBe(true);
+  });
+
+  test('falls back to prose classification unchanged when the ensemble cannot run at all', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    // No codex binary at this path -- every ensemble call throws, so buildReviewBlockerProfile()
+    // must fall back to classifyBlockerKind() exactly as it did before this feature existed.
+    vi.stubEnv('PROTO_COMPASSROSE_CODEX_COMMAND', join(workspace.root, 'compassrose-codex-binary-that-does-not-exist'));
+
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const task = access.loadTask('F001-T01');
+
+    const blocker = access.recordFailedReview(task, failedReviewOutput('F001-T01'), fixtureImplementationAttempt(), []);
+
+    expect(blocker.kind).toBe('review_failure');
+    expect(blocker.recoverability).toBe('agent');
   });
 });

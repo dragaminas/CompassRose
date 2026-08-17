@@ -4,6 +4,12 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { AgentToolName } from '../src/contracts/runtime/agentContext.js';
+import { isolateFeatureDirectories } from './protoE2eSupport.js';
+
+// The only feature this file's scenarios ever seed or assert on. See ADR-0034/ADR-0035: the clone
+// must be built by declaring this set, not by copying every feature and pruning contamination
+// after the fact.
+const SCENARIO_FEATURE_IDS = ['002-configuration-model'] as const;
 
 // Single source of truth for the 'state-correction-missing-active-task' scenario: the fallback task
 // artifact that seedStateCorrectionFallbackTaskArtifact() seeds and that the runtime resolves the
@@ -62,31 +68,21 @@ function main(): number {
   }
 
   copyTree(join(repoRoot, 'src'), join(cloneRoot, 'src'));
-  syncFeatureStateDocs(repoRoot, cloneRoot);
+  // Isolate before syncing: the clone must never observe any feature other than what this file's
+  // scenarios declare, regardless of what else is mid-flight in the live repository (see
+  // ADR-0034/ADR-0035; this is the fix for the 2026-07-23 contamination incident where feature
+  // 003-doctor-command sitting non-terminal made every scenario below fail or time out).
+  isolateFeatureDirectories(cloneRoot, SCENARIO_FEATURE_IDS);
+  syncFeatureStateDocs(repoRoot, cloneRoot, SCENARIO_FEATURE_IDS);
   pinScenarioConfigLimits(cloneRoot);
   // Real, still-unformalized fixes committed in this repo's own docs/fixes now default to
   // 'critical' severity (fail-safe upward -- see readFixSeverityAndOwnership) until formalized.
   // Once the scenario's targeted feature stops being "continuing" (e.g. after a doctor recovery
   // task completes), the scheduler would otherwise pick up a real fix the mocks below know
-  // nothing about and crash. These scenarios only exercise feature-side blocker flows, so remove
-  // real fixes from the disposable clone entirely.
+  // nothing about and crash. These scenarios never seed or assert on any fix, so the declared set
+  // is empty -- remove real fixes from the disposable clone entirely (ADR-0034's same rule, with
+  // an empty allow-list).
   rmSync(join(cloneRoot, 'docs', 'fixes'), { recursive: true, force: true });
-  // Same class of contamination, on the feature side: syncFeatureStateDocs above copies every
-  // real feature's live state.md into the clone, not just 002-configuration-model's. determineNextStep()
-  // scans features in id order and returns the first one in a "continuing" (non-terminal)
-  // lifecycle state -- so whenever some OTHER real feature (e.g. 003-doctor-command) is itself
-  // mid-flight in the actual repo (implementation_running/quality_failed/unblock_pending/...),
-  // the orchestrator running inside this clone picks that feature up instead of the scenario's
-  // actual target, and every assertion below about 002-configuration-model fails or times out.
-  // Observed live 2026-07-23: every protoBlockerFlows scenario failed identically, in lockstep
-  // with feature 003-doctor-command sitting non-terminal in this repository during a long-running
-  // implementation/recovery cycle. No scenario here ever seeds or asserts on a feature other than
-  // 002-configuration-model, so remove every other feature directory from the disposable clone.
-  for (const entry of readdirSync(join(cloneRoot, 'docs', 'features'))) {
-    if (entry !== '002-configuration-model' && statSync(join(cloneRoot, 'docs', 'features', entry)).isDirectory()) {
-      rmSync(join(cloneRoot, 'docs', 'features', entry), { recursive: true, force: true });
-    }
-  }
 
   // A fresh local clone (and the sync steps above, which rewrite files with content that's
   // still identical to HEAD) can leave the index stat-cache out of sync with the checked-out
@@ -617,17 +613,21 @@ function pinScenarioConfigLimits(cloneRoot: string): void {
   writeFileSync(configPath, pinned, 'utf8');
 }
 
-function syncFeatureStateDocs(repoRoot: string, cloneRoot: string): void {
+// Syncs only the declared featureIds' live state.md into the clone -- never scans sourceRoot for
+// whatever features happen to exist there. See ADR-0034/ADR-0035 and isolateFeatureDirectories()
+// above: the clone's feature set is exactly what the caller declares, not everything present in
+// the live repository at sync time.
+function syncFeatureStateDocs(repoRoot: string, cloneRoot: string, featureIds: readonly string[]): void {
   const sourceRoot = join(repoRoot, 'docs', 'features');
   const targetRoot = join(cloneRoot, 'docs', 'features');
 
-  for (const entry of readdirSync(sourceRoot)) {
-    const sourceState = join(sourceRoot, entry, 'state.md');
+  for (const featureId of featureIds) {
+    const sourceState = join(sourceRoot, featureId, 'state.md');
     if (!existsSync(sourceState) || !statSync(sourceState).isFile()) {
       continue;
     }
 
-    const targetState = join(targetRoot, entry, 'state.md');
+    const targetState = join(targetRoot, featureId, 'state.md');
     mkdirSync(dirname(targetState), { recursive: true });
     writeFileSync(targetState, readFileSync(sourceState, 'utf8'), 'utf8');
   }
@@ -893,6 +893,36 @@ const kind = detectPromptKind(prompt);
 const outputPath = readArgValue(args, '-o');
 const markerPath = path.join(process.cwd(), 'proto', markerFileNameForScenario(scenario));
 const implementerCountFile = countFile ? countFile + '.implementer' : null;
+
+if (kind === 'classifier') {
+  // The blocker-kind classification ensemble (see ADR-0036) fires
+  // BLOCKER_KIND_ENSEMBLE_SIZE independent calls per blocked review, outside the deterministic
+  // planner/reviewer/diagnostic call order every other scenario here is scripted around. It must
+  // never consume from the shared count/sequence below -- doing so would shift every later
+  // scripted response by one slot and desync the entire rest of the scenario, exactly like
+  // implementer/doctor calls are already exempted just below for the same reason. The specific
+  // kind returned does not matter to any scenario's assertions (recoverability for a terminal
+  // blocker is still driven by keyword detection over the reason text downstream), so a fixed,
+  // unanimous answer keeps the ensemble deterministic under this mock.
+  if (outputPath) {
+    fs.writeFileSync(outputPath, JSON.stringify({ kind: 'implementation_failure', rationale: 'e2e mock classification vote' }, null, 2) + '\\n', 'utf8');
+  }
+  process.exit(0);
+}
+
+if (kind === 'systemic_blocker_triage') {
+  // The systemic-blocker next_step ensemble (see ADR-0038) fires BLOCKER_KIND_ENSEMBLE_SIZE
+  // independent votes before consultDoctorOnSystemicBlocker's own single detail call runs --
+  // same exemption rationale as the 'classifier' branch above: never consume from the shared
+  // count/sequence, or every later scripted response shifts by one slot. The only scenario that
+  // currently reaches this consultation at all (terminal-review-blocked) expects the detail call
+  // to end in file_blocking_fix, so a unanimous file_blocking_fix vote here lets that detail call
+  // -- scripted below as an ordinary 'diagnostic' kind entry -- run and agree with the ensemble.
+  if (outputPath) {
+    fs.writeFileSync(outputPath, JSON.stringify({ next_step: 'file_blocking_fix', rationale: 'e2e mock systemic-blocker vote' }, null, 2) + '\\n', 'utf8');
+  }
+  process.exit(0);
+}
 
 if (kind === 'implementer' || kind === 'doctor') {
   const implementerCount = readCount(implementerCountFile) + 1;
@@ -1566,6 +1596,14 @@ function detectPromptKind(prompt) {
 
   if (prompt.includes('Act as the CompassRose Doctor.')) {
     return 'doctor';
+  }
+
+  if (prompt.includes('Act as the CompassRose Blocker Classifier.')) {
+    return 'classifier';
+  }
+
+  if (prompt.includes('Act as the CompassRose Systemic Blocker Triage role.')) {
+    return 'systemic_blocker_triage';
   }
 
   return 'unknown';

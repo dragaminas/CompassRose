@@ -4,6 +4,12 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import type { AgentToolName } from '../src/contracts/runtime/agentContext.js';
+import { isolateFeatureDirectories } from './protoE2eSupport.js';
+
+// The only feature this scenario seeds (see seedSmokeFeatureStateDocs below). See
+// ADR-0034/ADR-0035: the clone must be built by declaring this set, not by inheriting every
+// feature directory the bare clone happens to carry from HEAD.
+const SCENARIO_FEATURE_IDS = ['002-configuration-model'] as const;
 
 interface LogEntry {
   readonly tool: AgentToolName;
@@ -42,6 +48,13 @@ function main(): number {
     process.stderr.write(`git clone from bare repo failed:\n${worktreeResult.stderr || worktreeResult.stdout}\n`);
     return 1;
   }
+
+  // The bare clone inherits every docs/features/* directory as committed at HEAD, not just
+  // 002-configuration-model's. This scenario only ever seeds and asserts on that one feature (see
+  // seedSmokeFeatureStateDocs below), so remove every other feature directory before anything
+  // else touches the clone -- see ADR-0034/ADR-0035, and the identical live contamination this
+  // fixed in protoCompassRose.e2e.ts (commit c90b090d).
+  isolateFeatureDirectories(cloneRoot, SCENARIO_FEATURE_IDS);
 
   // See protoCompassRose.e2e.ts: a fresh local clone can leave the index stat-cache out
   // of sync with the checked-out files, making `git status` report every file as modified

@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+review_pending
 
 ## Source Request
 
@@ -16,9 +16,9 @@ implementation_running
 - active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: skipped
+- last_review_result: not_run
 - last_unblock_result: passed
-- doctor_recovery_attempts: 2
+- doctor_recovery_attempts: 0
 - blocked_on_fix: none
 
 ## Current Reality
@@ -103,55 +103,7 @@ Doctor recovery task `F003-DR06` passed re-entry quality gates and was applied b
 
 ## Recovery History
 
-- Doctor recovery task `F003-DR01` preserves the supplied blocker kind `state_corruption` and blocker signature `state-corruption-quality-failed-plan-one-bounded-doctor-recovery-task-to-preserve-the-blocker-ev`.
-- Supplied blocker evidence is preserved: `Plan one bounded doctor recovery task to preserve the blocker evidence, reconcile the stale feature/project state and restoration target, and establish executable re-entry gates for F003-T01. The available evidence does not justify filing a systemic blocker.`, `blocker_evidence: None` (no additional evidence supplied), and `lifecycle=quality_failed`.
-- The failed quality-gate result remains historical evidence. No concrete failed-gate output or implementation-failure evidence was available in the original blocker record; the advisory `protoBlockerFlows.test.ts` refinement remains unverified rather than confirmed failure evidence. The later recovery-gate result is reported in the handoff notes and is not added to blocker evidence.
-- The required pre-edit `npm test` baseline on 2026-07-23 timed out after 120 seconds with exit code `124` and no test output. No persisted raw failed-gate output was available.
-- Doctor recovery task `F003-DR03` records the supplied environment blocker metadata: blocker kind: environment; blocker signature: environment-quality-failed-feature-003-doctor-command-is-in-quality-failed-and-needs-diagnosis-a; recoverability: human; observed state: `lifecycle=quality_failed; active_task=F003-T01; active_correction_task=none; active_unblock_task=none`.
-- The supplied recovery context is preserved for the state-corruption handoff: blocker kind: `state_corruption`; blocker signature: `state-corruption-quality-failed-a-single-doctor-recovery-task-confined-to-feature-003-can-reconc`; blocker evidence: `A single doctor recovery task confined to Feature 003 can reconcile the stale restoration state, preserve the missing blocker evidence, and establish executable re-entry gates for F003-T01. The documents do not establish that this specific blocker is systemic.`, `None`, and `lifecycle=quality_failed`.
-- No concrete failed-gate output or implementation-failure evidence is available for this handoff. The advisory `protoBlockerFlows.test.ts` refinement remains unverified and is not promoted to confirmed evidence. The fixed restoration target remains `lifecycle_state=implementation_running`, `active_task=F003-T01`, `active_correction_task=none`, and `active_unblock_task=none`; the runtime applies it only after every `quality_gates.before_review` gate passes.
-- Diagnostic/autocorrection then classified the recurring "no concrete failed-gate evidence"
-  observation itself as a systemic defect and filed fix
-  `004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect` (critical
-  severity, no falsifiable acceptance criterion). Deleted by hand: the repeated "no concrete
-  evidence" observation was itself the symptom of a real bug --
-  `updateFeatureStateAfterImplementation()`'s `quality_failed` branch never wrote a `Blocked By`
-  block at all (unlike every other blocked transition), so no diagnostic call in this chain ever
-  had real evidence to work with. Fixed at the source in commit `2a6e3af9` rather than through
-  fix 004's own task chain.
-
-- Doctor recovery task `F003-DR04` is the successor to `F003-DR03`. It preserves the supplied
-  blocker kind `state_corruption`, blocker signature
-  `state-corruption-quality-failed-feature-003-doctor-command-is-in-quality-failed-and-needs-diagno`,
-  and evidence: `Feature 003-doctor-command is in quality_failed and needs
-  diagnosis/autocorrection before normal execution can resume.`, `- kind: state_corruption`,
-  `- signature: state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes`,
-  `- recoverability: agent`, and `lifecycle=quality_failed`.
-- F003-DR04 re-entry gates passed: `git diff 2a6e3af9 --check` for the bounded paths, `npm run
-  typecheck`, and the literal state/project anchor check. The restoration target is
-  `lifecycle_state=implementation_running`, `active_task=F003-T01`,
-  `active_correction_task=none`, and `active_unblock_task=none`; the failed F003-T01 quality
-  gate remains preserved as historical evidence for the next implementation attempt.
-- Doctor recovery task `F003-DR05` reconciled the remaining feature checkpoint while preserving
-  the supplied `state_corruption` blocker, its confirmed F003-T01 quality-gate evidence, and
-  the `F003-DR04` lineage. Its re-entry gates passed, and the restoration target is applied:
-  `lifecycle_state=implementation_running`, `active_task=F003-T01`,
-  `active_correction_task=none`, and `active_unblock_task=none`.
-- Doctor recovery task `F003-DR06` is the successor to `F003-DR05`. It preserves the supplied
-  blocker kind `state_corruption`, signature
-  `state-corruption-quality-failed-feature-003-doctor-command-is-in-quality-failed-and-needs-diagno`,
-  observed state `lifecycle=quality_failed; active_task=F003-T01; active_correction_task=none;
-  active_unblock_task=none`, and evidence: `Feature 003-doctor-command is in quality_failed and
-  needs diagnosis/autocorrection before normal execution can resume.`, `- kind: state_corruption`,
-  `- signature: state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes`,
-  `- recoverability: agent`, and `lifecycle=quality_failed`. The historical typecheck-pass and
-  npm-test-failure evidence remains unchanged above.
-- F003-DR06's complete doctor re-entry gates passed: the bounded `git diff 2a6e3af9 --check`
-  gate and the literal state/project anchor check. The recovery did not inherit F003-T01's failed
-  `npm test` gate. The fixed restoration target is applied:
-  `lifecycle_state=implementation_running`, `active_task=F003-T01`,
-  `active_correction_task=none`, and `active_unblock_task=none`. F003-T01 remains historical
-  implementation evidence with its scope and acceptance criteria unchanged.
+- Compacted 5 doctor recovery cycle(s) recorded before this point (F003-DR01, F003-DR03, F003-DR04, F003-DR05, F003-DR06). Full detail: `.git/proto-compassrose/blockers/`, `.git/proto-compassrose/recovery-lessons/`, and git history.
 
 ## Known Gaps
 
@@ -168,4 +120,4 @@ Doctor recovery task `F003-DR06` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Resume `F003-T01` implementation recovery before continuing.
+Review subtask `F003-T01` next.

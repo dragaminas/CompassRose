@@ -60,6 +60,21 @@ export interface LimitsSection {
   readonly max_recovery_iterations: number;
   readonly stop_on_quality_gate_failure: boolean;
   readonly stop_on_review_failure: boolean;
+  /**
+   * Optional, unlike every field above: omitting it means unbounded (see ADR-0040), so an
+   * existing project config that predates this field is completely unaffected. Bounds the sum of
+   * every doctor-recovery cycle a feature accumulates across its entire life, independent of
+   * max_recovery_iterations resetting per blocker signature.
+   */
+  readonly max_lifetime_recovery_cycles?: number;
+  /**
+   * Optional, same reasoning as max_lifetime_recovery_cycles above: omitting it means unbounded.
+   * Unlike max_tasks_per_run (which only counts primary task completions), this bounds every
+   * structured AI call in a `--loop` run -- planning, review, doctor recovery, classification
+   * ensembles, all of it -- checked centrally once per step rather than at each call site. See
+   * ADR-0041.
+   */
+  readonly max_ai_calls_per_run?: number;
 }
 
 export interface GitPolicySection {

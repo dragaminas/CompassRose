@@ -696,9 +696,25 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
     optionalPolicySections['limits'] = limits;
   }
 
+  // Every key already validated into a required section above, or into an optional policy
+  // section (limits, quality_gates, review_policy, development_policy, execution, roles,
+  // git_policy) via optionalPolicySections, must be excluded here -- otherwise the
+  // Object.assign(..., extraConfigurationFields) below re-introduces that section's RAW,
+  // unvalidated parsed form and silently clobbers the validated one built above. This was
+  // invisible for every existing field because raw and validated happen to be identical for
+  // well-formed values; it only diverges for a field whose validated form differs from its raw
+  // parse (e.g. an optional integer field left with no inline value parses to `null`, but
+  // validates to `undefined`/omitted -- see optionalNonNegativeInteger).
+  const recognizedSectionKeys = new Set([
+    'project',
+    'adapters',
+    'commands',
+    'documentation',
+    ...Object.keys(optionalPolicySections),
+  ]);
   const extraConfigurationFields: Record<string, unknown> = {};
   for (const key of Object.keys(parsedConfiguration)) {
-    if (key !== 'project' && key !== 'adapters' && key !== 'commands' && key !== 'documentation') {
+    if (!recognizedSectionKeys.has(key)) {
       extraConfigurationFields[key] = parsedConfiguration[key];
     }
   }
@@ -1078,6 +1094,10 @@ function validateLimitsSection(section: Record<string, unknown>, issues: Configu
   const maxRecoveryIterations = requireNonNegativeInteger(section, 'max_recovery_iterations', 'limits.max_recovery_iterations', issues);
   const stopOnQualityGateFailure = requireBooleanValue(section, 'stop_on_quality_gate_failure', 'limits.stop_on_quality_gate_failure', issues);
   const stopOnReviewFailure = requireBooleanValue(section, 'stop_on_review_failure', 'limits.stop_on_review_failure', issues);
+  // Optional (see ADR-0040/ADR-0041): unlike every field above, absence is not an issue -- an
+  // existing config that predates these fields must validate exactly as it did before.
+  const maxLifetimeRecoveryCycles = optionalNonNegativeInteger(section, 'max_lifetime_recovery_cycles', 'limits.max_lifetime_recovery_cycles', issues);
+  const maxAiCallsPerRun = optionalNonNegativeInteger(section, 'max_ai_calls_per_run', 'limits.max_ai_calls_per_run', issues);
 
   if (issues.length > 0) {
     return {
@@ -1097,6 +1117,8 @@ function validateLimitsSection(section: Record<string, unknown>, issues: Configu
     max_recovery_iterations: maxRecoveryIterations,
     stop_on_quality_gate_failure: stopOnQualityGateFailure,
     stop_on_review_failure: stopOnReviewFailure,
+    ...(maxLifetimeRecoveryCycles !== undefined ? { max_lifetime_recovery_cycles: maxLifetimeRecoveryCycles } : {}),
+    ...(maxAiCallsPerRun !== undefined ? { max_ai_calls_per_run: maxAiCallsPerRun } : {}),
   };
 }
 
@@ -1115,6 +1137,25 @@ function requireNonNegativeInteger(
     return 0;
   }
   return value;
+}
+
+/**
+ * Like requireNonNegativeInteger(), but a missing field is not an issue -- it means "unset",
+ * not "invalid". Only validates the type/range when the caller actually supplied a value.
+ */
+function optionalNonNegativeInteger(
+  parent: Record<string, unknown>,
+  propertyKey: string,
+  fieldPath: string,
+  issues: ConfigurationIssue[]
+): number | undefined {
+  // A key written with no inline value and no nested block (e.g. `max_ai_calls_per_run:` with
+  // nothing after the colon) parses to an explicit `null`, not a missing key -- treat that the
+  // same as "absent" too, since the author's intent ("leave this unset/unbounded") is identical.
+  if (!(propertyKey in parent) || parent[propertyKey] === undefined || parent[propertyKey] === null) {
+    return undefined;
+  }
+  return requireNonNegativeInteger(parent, propertyKey, fieldPath, issues);
 }
 
 export function validateRuntimePreconditions(configuration: ProjectConfiguration): ConfigurationIssue[] {

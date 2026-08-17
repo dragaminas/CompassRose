@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "rationale"],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "state_corruption",
+        "task_interface_gap",
+        "cli_mismatch",
+        "environment",
+        "implementation_failure",
+        "review_failure",
+        "unknown"
+      ]
+    },
+    "rationale": { "type": "string" }
+  }
+}

@@ -7,7 +7,7 @@ import type { ProjectConfiguration } from "../../config/configTypes.js";
  * snapshot that produced it, so failures can be debugged from the concrete
  * context that was actually sent.
  */
-export type AgentRole = "planner" | "reviewer" | "implementer" | "doctor" | "diagnostic";
+export type AgentRole = "planner" | "reviewer" | "implementer" | "doctor" | "diagnostic" | "classifier";
 /** Shared agent/tool names used by runtime options and invocation logs. */
 export type AgentToolName = "codex" | "opencode";
 
@@ -21,7 +21,9 @@ export type AgentInvocationKind =
   | "review_task"
   | "task_interface_analysis"
   | "implement_task"
-  | "doctor_recovery_task";
+  | "doctor_recovery_task"
+  | "blocker_kind_classification"
+  | "systemic_blocker_next_step";
 
 export interface AgentToolContext {
   readonly name: AgentToolName;

@@ -24,6 +24,18 @@ export function readPositiveInteger(record: Record<string, unknown>, key: string
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null;
 }
 
+/**
+ * Like readPositiveInteger(), but an explicitly configured 0 is a valid, distinct value from
+ * "unset" -- the config validators for every `limits.*` field (requireNonNegativeInteger /
+ * optionalNonNegativeInteger in src/config/configReader.ts) already accept 0 as a legitimate,
+ * meaningful budget (e.g. "disable this entirely"). Only a genuinely missing/non-integer/negative
+ * value should fall back to a caller-supplied default.
+ */
+export function readNonNegativeInteger(record: Record<string, unknown>, key: string): number | null {
+  const value = record[key];
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
 export function createRunId(): string {
   return `run-${new Date().toISOString().replace(/[:.]/g, '-').replace('T', '--').replace('Z', '')}`;
 }

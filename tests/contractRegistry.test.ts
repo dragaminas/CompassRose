@@ -20,6 +20,8 @@ function seedSchemas(root: string): void {
     'src/contracts/runtime/task-interface-analysis.schema.json': '{"type":"object","title":"task_interface_analysis"}',
     'src/contracts/runtime/diagnostic-autocorrection.schema.json': '{"type":"object","title":"diagnostic_autocorrection"}',
     'src/contracts/planner/task-requests-backfill-output.schema.json': '{"type":"object","title":"task_requests_backfill"}',
+    'src/contracts/runtime/blocker-kind-classification.schema.json': '{"type":"object","title":"blocker_kind_classification"}',
+    'src/contracts/runtime/systemic-blocker-next-step.schema.json': '{"type":"object","title":"systemic_blocker_next_step"}',
   };
 
   for (const [relativePath, contents] of Object.entries(schemaFiles)) {
@@ -30,7 +32,7 @@ function seedSchemas(root: string): void {
 }
 
 describe('ContractRegistry', () => {
-  test('loads all seven structured schemas on construction', () => {
+  test('loads all nine structured schemas on construction', () => {
     workspace = createTempWorkspace();
     seedSchemas(workspace.root);
     const registry = new ContractRegistry(workspace.root);
@@ -42,6 +44,8 @@ describe('ContractRegistry', () => {
     expect(registry.schema<{ title: string }>('task_interface_analysis').title).toBe('task_interface_analysis');
     expect(registry.schema<{ title: string }>('diagnostic_autocorrection').title).toBe('diagnostic_autocorrection');
     expect(registry.schema<{ title: string }>('task_requests_backfill').title).toBe('task_requests_backfill');
+    expect(registry.schema<{ title: string }>('blocker_kind_classification').title).toBe('blocker_kind_classification');
+    expect(registry.schema<{ title: string }>('systemic_blocker_next_step').title).toBe('systemic_blocker_next_step');
   });
 
   test('refresh reports no reload and no restart when nothing changed', () => {
@@ -92,7 +96,7 @@ describe('ContractRegistry', () => {
     seedSchemas(workspace.root);
     const registry = new ContractRegistry(workspace.root);
 
-    // All 6 known ids are always loaded by initialize(); this exercises the throw path
+    // All 9 known ids are always loaded by initialize(); this exercises the throw path
     // via an id outside the known union to prove schema() doesn't silently return undefined.
     expect(() => registry.schema('unknown_schema' as never)).toThrow(/is not loaded/);
   });

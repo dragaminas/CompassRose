@@ -2,7 +2,7 @@
 
 ## Status
 
-Planned
+Resolved
 
 ## Severity
 

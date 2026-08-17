@@ -10,7 +10,9 @@ export type StructuredSchemaId =
   | 'reviewer_output'
   | 'task_interface_analysis'
   | 'diagnostic_autocorrection'
-  | 'task_requests_backfill';
+  | 'task_requests_backfill'
+  | 'blocker_kind_classification'
+  | 'systemic_blocker_next_step';
 
 interface FileFingerprint {
   readonly exists: boolean;
@@ -26,6 +28,8 @@ const STRUCTURED_SCHEMA_PATHS: Record<StructuredSchemaId, string> = {
   task_interface_analysis: 'src/contracts/runtime/task-interface-analysis.schema.json',
   diagnostic_autocorrection: 'src/contracts/runtime/diagnostic-autocorrection.schema.json',
   task_requests_backfill: 'src/contracts/planner/task-requests-backfill-output.schema.json',
+  blocker_kind_classification: 'src/contracts/runtime/blocker-kind-classification.schema.json',
+  systemic_blocker_next_step: 'src/contracts/runtime/systemic-blocker-next-step.schema.json',
 };
 
 // The runtime-critical paths are the files that, if changed, mean the orchestrator's own

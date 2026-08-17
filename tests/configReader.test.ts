@@ -304,6 +304,57 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
       expect(result.value.limits.max_review_iterations).toBe(1);
       expect(result.value.limits.stop_on_quality_gate_failure).toBe(true);
       expect(result.value.limits.stop_on_review_failure).toBe(true);
+      // Optional fields (ADR-0040/ADR-0041): the canonical fixture opts in to both.
+      expect(result.value.limits.max_lifetime_recovery_cycles).toBe(10);
+      expect(result.value.limits.max_ai_calls_per_run).toBe(200);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('accepts an explicit 0 for optional non-negative limits as a real, distinct value', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown()
+          .replace(/max_lifetime_recovery_cycles:\s*\d+/, 'max_lifetime_recovery_cycles: 0')
+          .replace(/max_ai_calls_per_run:\s*\d+/, 'max_ai_calls_per_run: 0'),
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+
+      expect(result.value.limits.max_lifetime_recovery_cycles).toBe(0);
+      expect(result.value.limits.max_ai_calls_per_run).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('treats a key with no inline value (parses to null) the same as an absent optional limit', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown()
+          .replace(/max_lifetime_recovery_cycles:\s*\d+/, 'max_lifetime_recovery_cycles:')
+          .replace(/max_ai_calls_per_run:\s*\d+/, 'max_ai_calls_per_run:'),
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+
+      expect(result.value.limits.max_lifetime_recovery_cycles).toBeUndefined();
+      expect(result.value.limits.max_ai_calls_per_run).toBeUndefined();
     } finally {
       workspace.dispose();
     }

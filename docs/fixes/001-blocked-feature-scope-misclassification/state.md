@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+completed
 
 ## Source Request
 
@@ -14,8 +14,8 @@ formalized
 - active_task: none
 - active_correction_task: none
 - active_unblock_task: none
-- last_implementation_result: not_run
-- last_quality_gate_result: unknown
+- last_implementation_result: passed
+- last_quality_gate_result: passed
 - last_review_result: not_run
 - last_unblock_result: not_run
 - severity: medium
@@ -23,26 +23,25 @@ formalized
 
 ## Current Reality
 
-The project state records this fix as a known gap. The reported defect is in blocker classification and recovery routing: call sites that already know the cause currently allow the system to reconstruct blocker metadata from reason text. The request identifies the relevant sibling-feature scope and exhausted-task-request paths, plus an equivalent formalization-time sibling path.
-
-The active project feature is `002-configuration-model`. The supplied project state records that feature’s recent blocker/recovery activity and separately identifies this fix as outstanding. No implementation, quality-gate, review, or unblock result has been recorded for this fix.
+Implemented directly (see `docs/REFACTOR_PLAN.md` item 6): `buildBlockerProfile`, `recordBlockedFeature`, and `persistBlockedFeature` (`src/orchestrator/orchestrator.ts`) now accept an optional explicit `{ kind, nextPlanningHint }` pair. `blockIfBelongsToOtherFeature` (the sibling-feature-scope path, shared by both `planTaskFreely` and `planTaskFromRequest` -- covering the "equivalent formalization-time sibling path" too) and `planTask`'s exhausted-task-request branch now supply it explicitly instead of leaving `classifyBlockerKind` to reconstruct it from `reason` text. `classifyBlockerKind` remains the unchanged fallback for every other call site.
 
 ## Implemented Deliverables
 
 - Fix scope, severity, transversal ownership, acceptance criteria, deliverables, completion criteria, and implementation outline have been formalized.
+- Explicit blocker-kind and next-planning-hint inputs added to the blocker recording/persistence path (`recordBlockedFeature`/`persistBlockedFeature`/`buildBlockerProfile`), with fallback classification retained unchanged for callers that don't supply them.
+- Sibling-feature scope, exhausted-task-request, and the shared formalization-time sibling path all supply deterministic metadata now.
+- Regression coverage added (`tests/blockedFeatureScopeMisclassification.test.ts`) for both reported cases and the fallback path; existing `tests/orchestratorScopeGuard.test.ts` e2e coverage still passes unchanged.
+- Configured typecheck and test quality gates pass (full suite: 536 passed, 1 skipped).
 
 ## Remaining Deliverables
 
-- Add explicit blocker-kind and next-planning-hint inputs to the blocker recording/persistence path while retaining fallback classification.
-- Update sibling-feature scope, exhausted-task-request, and equivalent formalization-time sibling paths to supply deterministic metadata.
-- Add regression coverage for the two reported cases and fallback classification.
-- Run the configured typecheck and test quality gates.
+- None.
 
 ## Outline Progress
 
-- Define the explicit blocker metadata contract with fallback classification: not started
-- Update deterministic blocker call sites: not started
-- Add regression coverage and run configured validation: not started
+- Define the explicit blocker metadata contract with fallback classification: complete
+- Update deterministic blocker call sites: complete
+- Add regression coverage and run configured validation: complete
 
 ## Blocked By
 
@@ -57,13 +56,12 @@ The active project feature is `002-configuration-model`. The supplied project st
 
 ## Last Approved Change
 
-None
+Explicit blocker-kind and next-planning-hint recording implemented for both reported cases, verified by regression tests and the full test suite.
 
 ## Known Gaps
 
-- The request establishes the required deterministic behavior but does not specify the canonical blocker-kind literals or exact hint wording; implementation must align those values with the existing blocker taxonomy and planner conventions.
-- The fix has not yet been implemented or validated by quality gates.
+- Both fixed call sites use `task_interface_gap` as the explicit kind (the closest existing fit: a missing/unsatisfied task-interface declaration for this feature). The request didn't mandate a specific literal, and no new `BlockerKind` value was introduced -- adding one would also require updating every JSON schema that enumerates the full kind set (`diagnostic-autocorrection.schema.json`, `blocker-kind-classification.schema.json`), which was judged out of this fix's narrow scope.
 
 ## Next Planning Hint
 
-Plan the first bounded task around the existing blocker taxonomy and recording/persistence interface, confirming the canonical kind and hint values before updating the affected call sites. Keep regex classification as the fallback for callers that lack explicit cause information.
+None; this fix is complete.

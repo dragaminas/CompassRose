@@ -43,7 +43,7 @@ import type {
   UnblockTaskMetadata,
 } from '../contracts/types.js';
 import { selectImplementationContextArtifactNames } from '../contracts/runtime/agentContext.js';
-import type { AgentInvocationContext, AgentToolName } from '../contracts/runtime/agentContext.js';
+import type { AgentInvocationContext, AgentInvocationKind, AgentToolName } from '../contracts/runtime/agentContext.js';
 import type {
   ContractRefreshResult,
   FeatureInspection,
@@ -89,8 +89,15 @@ import {
   stateCorrectionNextPlanningHint,
   stateCorrectionProjectPendingLines,
 } from '../state/restorationTarget.js';
-import { buildBlockerSignature, classifyBlockerKind } from '../state/blockerClassification.js';
-import { uniqueStrings } from '../shared/arrays.js';
+import {
+  buildBlockerSignature,
+  buildEnsembleDisagreementProfile,
+  classifyBlockerKind,
+  classifyDiagnosticKind,
+  finalizeBlockerProfile,
+  resolveBlockerKindEnsemble,
+} from '../state/blockerClassification.js';
+import { resolveUnanimousVote, uniqueStrings } from '../shared/arrays.js';
 import { isPathAllowedByPrefix, pathsExceedingPrefixes } from '../shared/pathPrefix.js';
 import { ControlledStopError, stopExitCodeForSignal } from '../runtime/controlledStop.js';
 import { GitClient } from '../git/gitClient.js';
@@ -123,6 +130,7 @@ import {
   renderBlockerProfileMarkdown,
 } from './blockerRendering.js';
 import { buildDoctorRecoveryPrompt, buildImplementerPrompt } from './promptBuilding.js';
+import { compactRecoveryHistorySection } from './recoveryHistoryCompaction.js';
 import {
   buildImplementationDiagnostics,
   buildImplementationErrorMessage,
@@ -152,7 +160,7 @@ import {
   isRecord,
   limitStateCorrectionTaskId,
   primaryTaskAnchorFromId,
-  readPositiveInteger,
+  readNonNegativeInteger,
   readRecordString,
   requireNonNoneValue,
   requireString,
@@ -202,6 +210,7 @@ const ORCHESTRATOR_RUNTIME_CRITICAL_PATHS: readonly string[] = [
   'src/orchestrator/blockerRendering.ts',
   'src/orchestrator/promptBuilding.ts',
   'src/orchestrator/implementationDiagnostics.ts',
+  'src/orchestrator/recoveryHistoryCompaction.ts',
   'src/orchestrator/refinementFeedback.ts',
   'src/orchestrator/taskInterfaceRendering.ts',
   'src/orchestrator/stateMarkdown.ts',
@@ -217,6 +226,12 @@ const ORCHESTRATOR_RUNTIME_CRITICAL_PATHS: readonly string[] = [
   'src/runtime/controlledStop.ts',
 ];
 
+// Number of independent, fresh-context classification calls fired by
+// classifyReviewBlockerKindByEnsemble() before requiring unanimous agreement (see ADR-0036).
+// Deliberately small: each call costs one local/cheap-model invocation, and the goal is cheap
+// cross-checking, not statistical sampling.
+const BLOCKER_KIND_ENSEMBLE_SIZE = 3;
+
 export class StateCorrectionLimitReachedError extends Error {
   constructor(message: string) {
     super(message);
@@ -228,6 +243,19 @@ export class DoctorRecoveryLimitReachedError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'DoctorRecoveryLimitReachedError';
+  }
+}
+
+/**
+ * Distinct from DoctorRecoveryLimitReachedError: that error bounds attempts against the SAME
+ * blocker signature and resets once the feature makes real forward progress (ADR-0032). This one
+ * bounds the sum of every doctor-recovery cycle a feature accumulates over its entire life,
+ * regardless of how many different blockers caused them, and never resets. See ADR-0040.
+ */
+export class DoctorRecoveryLifetimeLimitReachedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DoctorRecoveryLifetimeLimitReachedError';
   }
 }
 
@@ -264,6 +292,8 @@ export class CompassRoseOrchestrator {
   private readonly maxTasksPerRun: number;
   private readonly maxReviewIterations: number;
   private readonly maxRecoveryIterations: number;
+  private readonly maxLifetimeRecoveryCycles: number;
+  private readonly maxAiCallsPerRun: number;
   private readonly runId: string;
   private readonly codexCommand: string;
   private readonly opencodeCommand: string;
@@ -329,9 +359,20 @@ export class CompassRoseOrchestrator {
     this.projectStatePath = projectStatePath;
     this.featuresRoot = featuresRoot;
     this.fixesRoot = fixesRoot;
-    this.maxTasksPerRun = readPositiveInteger(limits, 'max_tasks_per_run') ?? Number.POSITIVE_INFINITY;
-    this.maxReviewIterations = readPositiveInteger(limits, 'max_review_iterations') ?? 1;
-    this.maxRecoveryIterations = readPositiveInteger(limits, 'max_recovery_iterations') ?? 3;
+    // readNonNegativeInteger(), not readPositiveInteger(): every limits.* field's config
+    // validator (requireNonNegativeInteger/optionalNonNegativeInteger) already accepts an
+    // explicit 0 as a real, distinct budget (e.g. "disable this entirely"), so the runtime must
+    // not silently coerce a configured 0 into "unset" -> unbounded/default. See ADR-0042.
+    this.maxTasksPerRun = readNonNegativeInteger(limits, 'max_tasks_per_run') ?? Number.POSITIVE_INFINITY;
+    this.maxReviewIterations = readNonNegativeInteger(limits, 'max_review_iterations') ?? 1;
+    this.maxRecoveryIterations = readNonNegativeInteger(limits, 'max_recovery_iterations') ?? 3;
+    // Opt-in only, unlike the sibling limits above: unbounded by default so this doesn't retroactively
+    // trip for any feature (e.g. this repository's own 003-doctor-command) that already accumulated
+    // recovery cycles before this limit existed. See ADR-0040.
+    this.maxLifetimeRecoveryCycles = readNonNegativeInteger(limits, 'max_lifetime_recovery_cycles') ?? Number.POSITIVE_INFINITY;
+    // Opt-in only, same reasoning: unbounded by default so no existing project config is
+    // retroactively affected. See ADR-0041.
+    this.maxAiCallsPerRun = readNonNegativeInteger(limits, 'max_ai_calls_per_run') ?? Number.POSITIVE_INFINITY;
     this.runId = createRunId();
     this.startedAt = new Date().toISOString();
   }
@@ -572,6 +613,22 @@ export class CompassRoseOrchestrator {
    * phase bundles in (see tests/schedulerPriority.test.ts).
    */
   private determineNextStep(): StepDecision {
+    // Checked centrally, once per step, before any feature/fix is even inspected -- unlike
+    // primaryTaskLimitReached() below (which only counts primary task completions),
+    // agentInvocationCount already increments on every structured AI call this class makes
+    // (recordAgentInvocationContext(), the one choke point every call site already passes
+    // through) as of this call, so no new counter or per-call-site plumbing is needed. See
+    // ADR-0041.
+    if (this.agentInvocationCount >= this.maxAiCallsPerRun) {
+      return {
+        kind: 'stop',
+        feature_id: null,
+        task_id: null,
+        correction_task_id: null,
+        reason: `AI call budget reached for this run (${this.maxAiCallsPerRun} structured call(s)); stopping before spending another.`,
+      };
+    }
+
     const featureInspections = this.listFeatures().map((feature) => ({ feature, inspection: this.inspectFeature(feature) }));
     const fixInspections = this.listFixes().map((fix) => ({ fix, inspection: this.inspectFix(fix) }));
 
@@ -1170,6 +1227,35 @@ export class CompassRoseOrchestrator {
     }
   }
 
+  /**
+   * Runs an operation that may refuse via a bounded-retry limit error (StateCorrectionLimitReachedError,
+   * DoctorRecoveryLimitReachedError, DoctorRecoveryPlanningRejectedError) and converts that refusal into
+   * a clean StepExecutionResult stop instead of letting it propagate as an uncaught exception.
+   *
+   * Every call site that can trigger one of these errors must go through this helper rather than its
+   * own inline try/catch. Before this existed, the same catch-and-convert logic was hand-copied at each
+   * call site; one copy (diagnoseAndAutocorrect's own correct_state path) was missing it entirely and
+   * crashed the whole CLI process on a second recovery cycle for the same anchor (see the regression
+   * test in tests/stateCorrectionLimit.test.ts, fixed in commit 68e9801a). A shared helper means a future
+   * call site inherits correct handling automatically instead of needing to remember to add it.
+   */
+  private runBoundedOperation(operation: () => void, onSuccess: () => StepExecutionResult): StepExecutionResult {
+    try {
+      operation();
+      return onSuccess();
+    } catch (error) {
+      if (
+        error instanceof StateCorrectionLimitReachedError
+        || error instanceof DoctorRecoveryLimitReachedError
+        || error instanceof DoctorRecoveryLifetimeLimitReachedError
+        || error instanceof DoctorRecoveryPlanningRejectedError
+      ) {
+        return { exitCode: 2, continueLoop: false, summary: error.message };
+      }
+      throw error;
+    }
+  }
+
   private executeStep(decision: StepDecision): StepExecutionResult {
     switch (decision.kind) {
       case 'plan_feature':
@@ -1186,29 +1272,20 @@ export class CompassRoseOrchestrator {
         this.planSubtask(requireString(decision.task_id, 'task_id'));
         return { exitCode: 0, continueLoop: true, summary: `Subtask prepared for ${requireString(decision.task_id, 'task_id')}.` };
       case 'correct_state': {
-        try {
-          this.correctState(requireString(decision.feature_id, 'feature_id'), decision.reason);
-          return { exitCode: 0, continueLoop: true, summary: `State correction task created for feature ${requireString(decision.feature_id, 'feature_id')}.` };
-        } catch (error) {
-          if (error instanceof StateCorrectionLimitReachedError) {
-            return { exitCode: 2, continueLoop: false, summary: error.message };
-          }
-          throw error;
-        }
+        const correctionFeatureId = requireString(decision.feature_id, 'feature_id');
+        return this.runBoundedOperation(
+          () => this.correctState(correctionFeatureId, decision.reason),
+          () => ({ exitCode: 0, continueLoop: true, summary: `State correction task created for feature ${correctionFeatureId}.` }),
+        );
       }
       case 'doctor_recovery_task':
         return this.runDoctorRecoveryTask(requireString(decision.task_id, 'task_id'));
       case 'unblock_task': {
         const unblockFeatureId = requireString(decision.feature_id, 'feature_id');
-        try {
-          this.planDoctorRecoveryTask(unblockFeatureId, decision.reason);
-          return { exitCode: 0, continueLoop: true, summary: `Doctor recovery task planned for feature ${unblockFeatureId}.` };
-        } catch (error) {
-          if (error instanceof DoctorRecoveryLimitReachedError || error instanceof DoctorRecoveryPlanningRejectedError) {
-            return { exitCode: 2, continueLoop: false, summary: error.message };
-          }
-          throw error;
-        }
+        return this.runBoundedOperation(
+          () => this.planDoctorRecoveryTask(unblockFeatureId, decision.reason),
+          () => ({ exitCode: 0, continueLoop: true, summary: `Doctor recovery task planned for feature ${unblockFeatureId}.` }),
+        );
       }
       case 'diagnose_autocorrect':
         return this.diagnoseAndAutocorrect(requireString(decision.feature_id, 'feature_id'), decision.reason);
@@ -1225,8 +1302,12 @@ export class CompassRoseOrchestrator {
         this.recordBlockedFeature(requireString(decision.feature_id, 'feature_id'), decision.reason);
         return { exitCode: 2, continueLoop: false, summary: decision.reason };
       case 'stop':
-        console.log('No selectable feature remains.');
-        return { exitCode: 0, continueLoop: false, summary: 'No selectable feature remains.' };
+        // Was previously a hardcoded generic message regardless of why determineNextStep()
+        // decided to stop -- silently swallowing the specific reason (e.g. "Primary task limit
+        // reached...", or the new AI-call-budget message above) even though StepDecision already
+        // carried it. Surface it instead of guessing at a one-size-fits-all string.
+        console.log(decision.reason);
+        return { exitCode: 0, continueLoop: false, summary: decision.reason };
       default:
         return assertNever(decision.kind);
     }
@@ -1566,7 +1647,14 @@ export class CompassRoseOrchestrator {
     if (!nextRequest) {
       const reason = `Task planning for feature \`${featureId}\` was invoked, but every pre-declared task request is already complete or superseded. Formalize additional task requests before continuing.`;
       console.error(`Blocked: ${reason}`);
-      this.recordBlockedFeature(featureId, reason);
+      // Explicit, not guessed: this call site already knows the exhausted-task-request cause
+      // firsthand -- classifyBlockerKind's regex has no case matching this reason and would
+      // otherwise fall through to 'unknown' with a generic doctor-recovery hint. See fix
+      // 001-blocked-feature-scope-misclassification.
+      this.recordBlockedFeature(featureId, reason, null, {
+        kind: 'task_interface_gap',
+        nextPlanningHint: `Formalize additional task requests for feature \`${featureId}\`; every pre-declared task request is already complete or superseded.`,
+      });
       this.commitDirtyWorktreeIfConfigured(`proto: record exhausted task requests block for feature ${featureId}`);
       return { exitCode: 2, continueLoop: false, summary: reason };
     }
@@ -1657,7 +1745,15 @@ export class CompassRoseOrchestrator {
 
     const reason = `Task planning for feature \`${featureId}\` proposed \`${task.title}\`, which the planner identified as belonging to feature \`${belongsToOtherFeature}\` instead of this feature's own declared scope. Refusing to write the task; formalize or advance \`${belongsToOtherFeature}\` before retrying.`;
     console.error(`Blocked: ${reason}`);
-    this.recordBlockedFeature(featureId, reason);
+    // Explicit, not guessed: this call site already knows the sibling-feature cause firsthand.
+    // classifyBlockerKind's regex matches the word "scope" in `reason` today and happens to land
+    // on task_interface_gap by accident -- fragile against any future rewording -- and its hint
+    // always says "plan a doctor recovery task", never naming the sibling feature that actually
+    // needs attention. See fix 001-blocked-feature-scope-misclassification.
+    this.recordBlockedFeature(featureId, reason, null, {
+      kind: 'task_interface_gap',
+      nextPlanningHint: `Formalize or advance feature \`${belongsToOtherFeature}\`; the previously proposed task for \`${featureId}\` belongs to that feature's own scope, not this one's.`,
+    });
     this.commitDirtyWorktreeIfConfigured(`proto: record scope-guard block for feature ${featureId}`);
     return { exitCode: 2, continueLoop: false, summary: reason };
   }
@@ -2097,6 +2193,16 @@ export class CompassRoseOrchestrator {
       );
     }
 
+    // Twin guard, one level up: priorAttempts above resets on genuine forward progress, so a
+    // feature that keeps hitting new, different blockers over its life could otherwise
+    // accumulate unlimited total recovery cycles. This one never resets. See ADR-0040.
+    const lifetimeRecoveryCount = this.readDoctorRecoveryLifetimeCount(owner.statePath);
+    if (lifetimeRecoveryCount >= this.maxLifetimeRecoveryCycles) {
+      throw new DoctorRecoveryLifetimeLimitReachedError(
+        `Doctor recovery lifetime limit reached for feature ${featureId} after ${this.maxLifetimeRecoveryCycles} total recovery cycle(s) across its life; refusing to plan another doctor recovery task without human review.`,
+      );
+    }
+
     const recoveryActiveTask = snapshot.lifecycleState === 'implementation_failed'
       ? this.resolveImplementationFailureActiveTask(owner, snapshot)
       : null;
@@ -2236,7 +2342,13 @@ export class CompassRoseOrchestrator {
     });
     this.writeBlockerProfile(featureId, task.task_id, blocker, doctorRecoveryMetadata.restoration_target, reason);
 
-    const updatedFeatureState = this.updateFeatureStateForDoctorRecovery(owner.statePath, task.task_id, restorationTarget, priorAttempts + 1);
+    const updatedFeatureState = this.updateFeatureStateForDoctorRecovery(
+      owner.statePath,
+      task.task_id,
+      restorationTarget,
+      priorAttempts + 1,
+      lifetimeRecoveryCount + 1,
+    );
     const updatedProjectState = this.updateProjectStateForDoctorRecovery(featureId, task.task_id, restorationTarget.lifecycle_state);
     writeText(owner.statePath, updatedFeatureState);
     writeText(this.projectStatePath, updatedProjectState);
@@ -2281,24 +2393,14 @@ export class CompassRoseOrchestrator {
         };
       }
 
-      try {
-        this.correctState(featureId, decision.next_step_reason);
-      } catch (error) {
-        // Mirrors the executeStep() 'correct_state' case's own handling of this same error just
-        // above in this class: without this, a second diagnose_autocorrect run landing on
-        // correct_state for an anchor that already has one recent correction crashes the whole
-        // CLI with an uncaught exception instead of stopping cleanly. Observed live on
-        // 003-doctor-command's F003-T01 anchor.
-        if (error instanceof StateCorrectionLimitReachedError) {
-          return { exitCode: 2, continueLoop: false, summary: error.message };
-        }
-        throw error;
-      }
-      return {
-        exitCode: 0,
-        continueLoop: true,
-        summary: `Diagnostic/autocorrection applied a state correction for feature ${featureId}.`,
-      };
+      return this.runBoundedOperation(
+        () => this.correctState(featureId, decision.next_step_reason),
+        () => ({
+          exitCode: 0,
+          continueLoop: true,
+          summary: `Diagnostic/autocorrection applied a state correction for feature ${featureId}.`,
+        }),
+      );
     }
 
     if (decision.next_step === 'plan_doctor_recovery') {
@@ -2310,20 +2412,14 @@ export class CompassRoseOrchestrator {
         };
       }
 
-      try {
-        this.planDoctorRecoveryTask(featureId, decision.next_step_reason);
-      } catch (error) {
-        if (error instanceof DoctorRecoveryLimitReachedError || error instanceof DoctorRecoveryPlanningRejectedError) {
-          return { exitCode: 2, continueLoop: false, summary: error.message };
-        }
-        throw error;
-      }
-
-      return {
-        exitCode: 0,
-        continueLoop: true,
-        summary: `Diagnostic/autocorrection planned a doctor recovery task for feature ${featureId}.`,
-      };
+      return this.runBoundedOperation(
+        () => this.planDoctorRecoveryTask(featureId, decision.next_step_reason),
+        () => ({
+          exitCode: 0,
+          continueLoop: true,
+          summary: `Diagnostic/autocorrection planned a doctor recovery task for feature ${featureId}.`,
+        }),
+      );
     }
 
     if (decision.next_step === 'file_blocking_fix' && decision.systemic_blocker) {
@@ -2541,12 +2637,185 @@ export class CompassRoseOrchestrator {
    * deterministically: reached only when a quality_failed/review_failed/blocked rejection
    * cannot be resolved into plan_doctor_recovery by the deterministic checks above (terminal/
    * human recoverability, or no safe recovery anchor) -- i.e. exactly where the runtime would
-   * otherwise stop the whole run. Offers exactly two valid answers (plan_doctor_recovery or
-   * file_blocking_fix); any malformed/untrusted response falls back to the same
+   * otherwise stop the whole run. Filing file_blocking_fix is expensive and hard to reverse (a
+   * new tracked work item, visible throughout the project's docs), so per ADR-0038 the choice
+   * itself is cross-checked by a 3-vote ensemble (classifySystemicBlockerNextStepByEnsemble)
+   * before this single-call, full-detail consultation is trusted -- either as the source of the
+   * file_blocking_fix payload once the ensemble agrees, or as the unchanged fallback when the
+   * ensemble can't run at all. Any malformed/untrusted response still falls back to the same
    * stop_with_diagnostic halt the deterministic path would have produced anyway, via
-   * ensureDiagnosticAutocorrectionDecision -- never a worse outcome than today's behavior.
+   * ensureDiagnosticAutocorrectionDecision -- never a worse outcome than before this feature
+   * existed.
    */
   private consultDoctorOnSystemicBlocker(
+    feature: WorkItemContext,
+    blocker: BlockerProfile,
+    reason: string,
+    taskId: string | null,
+  ): DiagnosticAutocorrectionDecision {
+    const votes = this.classifySystemicBlockerNextStepByEnsemble(feature, blocker, reason, taskId);
+    if (!votes) {
+      // Ensemble unavailable (e.g. no codex binary) -- fall back to the single-call consultation
+      // exactly as it behaved before this feature existed.
+      return this.consultDoctorOnSystemicBlockerSingleVote(feature, blocker, reason, taskId);
+    }
+
+    const resolved = resolveUnanimousVote(votes);
+    if (!resolved.agreed) {
+      return this.buildDiagnosticFallbackDecision(
+        feature,
+        reason,
+        `The systemic-blocker ensemble disagreed on next_step (votes: ${votes.join(', ')}); refusing to trust a single vote.`,
+      );
+    }
+
+    if (resolved.value === 'plan_doctor_recovery') {
+      // No further call needed: plan_doctor_recovery carries no extra payload to generate, and
+      // `blocker` is already the caller's own trusted profile -- reuse it rather than asking the
+      // model to restate it.
+      return {
+        feature_id: feature.id,
+        diagnosis_summary: `The blocker-kind classification ensemble agreed this defect is bounded to ${feature.id}'s own frame; planning a doctor recovery.`,
+        blocker,
+        next_step: 'plan_doctor_recovery',
+        next_step_reason: reason,
+        interface_response: {
+          mode: 'apply_in_doctor_recovery',
+          summary: 'Ensemble-confirmed bounded recovery; no systemic fix required.',
+          target_paths: [],
+        },
+        systemic_blocker: null,
+      };
+    }
+
+    // resolved.value === 'file_blocking_fix': the ensemble only settles *whether* to file a fix,
+    // not the fix's own title/evidence/scope wording -- voting on free text would just relocate
+    // the ADR-0031 prose-guessing problem one level up (three independently-phrased payloads
+    // have no meaningful "agreement" to check). A single further call generates that payload now
+    // that the decision itself is validated; if it contradicts the ensemble by returning
+    // plan_doctor_recovery anyway, that is treated as an untrustworthy response, not silently
+    // accepted over the ensemble's consensus.
+    const detail = this.consultDoctorOnSystemicBlockerSingleVote(feature, blocker, reason, taskId);
+    if (detail.next_step !== 'file_blocking_fix') {
+      return this.buildDiagnosticFallbackDecision(
+        feature,
+        reason,
+        'The systemic-blocker ensemble agreed on file_blocking_fix, but the detail call contradicted it; refusing to trust either.',
+      );
+    }
+
+    return detail;
+  }
+
+  /**
+   * Shared ensemble harness behind classifySystemicBlockerNextStepByEnsemble() and
+   * classifyReviewBlockerKindByEnsemble(): fires `size` independent, fresh-context structured
+   * calls with no shared history between them, each recorded through the same invocation-context
+   * choke point. Returns null the instant any single call throws or `extractVote` rejects its
+   * raw response, signaling the caller to fall back to its own single-call/regex path entirely --
+   * an incomplete vote set is never a basis for either trusting agreement or detecting
+   * disagreement. See ADR-0036/ADR-0038.
+   */
+  private runClassifierEnsemble<T>(options: {
+    readonly size: number;
+    readonly prompt: string;
+    readonly labelPrefix: string;
+    readonly invocationKind: AgentInvocationKind;
+    readonly schemaId: StructuredSchemaId;
+    readonly featureId: string | null;
+    readonly taskId: string | null;
+    readonly extractVote: (raw: Record<string, unknown>) => T | null;
+  }): readonly T[] | null {
+    const votes: T[] = [];
+    for (let attempt = 1; attempt <= options.size; attempt += 1) {
+      const label = `${options.labelPrefix}:${attempt}`;
+      this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+        role: 'classifier',
+        kind: options.invocationKind,
+        label,
+        feature_id: options.featureId,
+        task_id: options.taskId,
+        source_paths: [],
+        prompt: options.prompt,
+        tool: {
+          name: 'codex',
+          command: this.codexCommand,
+          model: resolveCodexPlannerModel(),
+          output_schema_id: options.schemaId,
+        },
+      }));
+
+      let raw: Record<string, unknown>;
+      try {
+        raw = this.codex.runStructured<Record<string, unknown>>(
+          options.prompt,
+          this.contracts.schema(options.schemaId),
+          [],
+          label,
+        );
+      } catch {
+        return null;
+      }
+
+      const vote = options.extractVote(raw);
+      if (vote === null) {
+        return null;
+      }
+
+      votes.push(vote);
+    }
+
+    return votes;
+  }
+
+  /**
+   * Fires BLOCKER_KIND_ENSEMBLE_SIZE independent, fresh-context votes on next_step only (a
+   * cheap, closed two-value question) -- no shared history between calls, each seeing the same
+   * declared minimal blocker context. Returns null if the ensemble could not run at all (codex
+   * unavailable, or any single call returned a malformed response), signaling the caller to fall
+   * back to the single-call consultation entirely. See ADR-0038.
+   */
+  private classifySystemicBlockerNextStepByEnsemble(
+    feature: WorkItemContext,
+    blocker: BlockerProfile,
+    reason: string,
+    taskId: string | null,
+  ): readonly ('plan_doctor_recovery' | 'file_blocking_fix')[] | null {
+    const prompt = [
+      'Act as the CompassRose Systemic Blocker Triage role.',
+      '',
+      `Decide only whether \`${feature.id}\`'s blocker needs a bounded doctor recovery or a systemic fix filed outside its own frame. Do not describe the fix itself.`,
+      '',
+      'Blocker context:',
+      `- kind: ${blocker.kind}`,
+      `- signature: ${blocker.signature}`,
+      `- recoverability: ${blocker.recoverability}`,
+      `- observed_state: ${blocker.observed_state}`,
+      ...blocker.evidence.map((item) => `- evidence: ${item}`),
+      '',
+      `Reason this diagnosis was triggered: ${reason}`,
+      '',
+      'Rules:',
+      '- Choose exactly one next_step: `plan_doctor_recovery` or `file_blocking_fix`. No other value is valid.',
+      "- Choose `plan_doctor_recovery` only if the evidence shows a bounded task-interface gap (stale anchor, prompt/scope tightening, missing evidence) that a single doctor recovery task confined to this feature/fix's own frame could resolve.",
+      "- Choose `file_blocking_fix` if the defect is outside this feature/fix's own frame entirely -- architectural, framework-level, or otherwise systemic -- so no bounded recovery task confined to it could resolve the root cause.",
+      '- Reason independently from the evidence above only -- do not assume any other attempt\'s conclusion.',
+      '- Return JSON only and do not modify files.',
+    ].join('\n');
+
+    return this.runClassifierEnsemble<'plan_doctor_recovery' | 'file_blocking_fix'>({
+      size: BLOCKER_KIND_ENSEMBLE_SIZE,
+      prompt,
+      labelPrefix: `classifier:systemic-blocker-next-step:${feature.id}`,
+      invocationKind: 'systemic_blocker_next_step',
+      schemaId: 'systemic_blocker_next_step',
+      featureId: feature.id,
+      taskId,
+      extractVote: (raw) => (raw.next_step === 'plan_doctor_recovery' || raw.next_step === 'file_blocking_fix' ? raw.next_step : null),
+    });
+  }
+
+  private consultDoctorOnSystemicBlockerSingleVote(
     feature: WorkItemContext,
     blocker: BlockerProfile,
     reason: string,
@@ -2919,6 +3188,58 @@ export class CompassRoseOrchestrator {
     return this.executeDoctorRecoveryTask(task, doctorRecovery);
   }
 
+  /**
+   * By the time reviewTask() calls the reviewer, runQualityGates() has already run
+   * deterministically and every result is guaranteed not 'failed' (see executeImplementation's
+   * `passed` check) -- ground truth for `quality_gate_check` at this call site is always
+   * `'passed'` (there were gates and none failed) or `'skipped'` (there were no gates at all),
+   * with `failed_gates` always empty. The reviewer AI is handed that exact objective result as a
+   * file to read and asked to relay it back in `quality_gate_check`, but nothing downstream ever
+   * verified it did so correctly (see ADR-0039) -- an approval built on a misrelayed fact was
+   * trusted outright.
+   *
+   * This does not re-judge the review; it only refuses to trust an `approved` status when the
+   * reviewer's own relay of an already-known, verifiable fact contradicts that fact. Any
+   * deviation is disqualifying (a real failure cannot reach this call site, so there is no
+   * legitimately-different reading of the data to weigh) -- downgrade to `blocked` and reuse the
+   * exact handling every other blocked review already gets, rather than inventing a new path.
+   */
+  private verifyReviewerQualityGateRelay(
+    review: ReviewerOutput,
+    qualityResults: readonly QualityGateResult[],
+  ): ReviewerOutput {
+    if (review.status !== 'approved') {
+      return review;
+    }
+
+    // Ground truth here is always "nothing failed" -- there were gates and none failed, or there
+    // were no gates at all. The reviewer contract (src/contracts/reviewer/output.md) documents
+    // `skipped` as the status for gates explicitly waived by policy, not specifically for "no
+    // gates were configured"; a reviewer reporting `passed` for zero applicable gates is an
+    // equally reasonable, truthful reading and must not be treated as a misrelay.
+    const acceptableStatuses: readonly ReviewerOutput['quality_gate_check']['status'][] =
+      qualityResults.length === 0 ? ['passed', 'skipped'] : ['passed'];
+    const relayIsTrustworthy = acceptableStatuses.includes(review.quality_gate_check.status)
+      && review.quality_gate_check.failed_gates.length === 0;
+    if (relayIsTrustworthy) {
+      return review;
+    }
+
+    return {
+      ...review,
+      status: 'blocked',
+      findings: [
+        ...review.findings,
+        {
+          severity: 'blocker',
+          message: `Reviewer approved, but its quality_gate_check (status: ${review.quality_gate_check.status}, failed_gates: ${review.quality_gate_check.failed_gates.join(', ') || 'none'}) does not match the actual quality-gate results computed for this task (expected one of: ${acceptableStatuses.join(', ')}, no failures). The approval is not trusted.`,
+          path: null,
+          related_acceptance_criterion: null,
+        },
+      ],
+    };
+  }
+
   private reviewTask(taskId: string): StepExecutionResult {
     const task = this.loadTask(taskId);
     const artifact = this.loadTaskArtifact(taskId);
@@ -3063,12 +3384,13 @@ export class CompassRoseOrchestrator {
       },
     }));
 
-    const review = this.codex.runStructured<ReviewerOutput>(
+    const rawReview = this.codex.runStructured<ReviewerOutput>(
       prompt,
       this.contracts.schema('reviewer_output'),
       [tempDir],
       `reviewer:subtask:${taskId}`,
     );
+    const review = this.verifyReviewerQualityGateRelay(rawReview, qualityResults);
     this.artifacts.writeJson(join('reviews', `${taskId}.json`), review);
     const taskInterfaceAnalysis = this.shouldAnalyzeTaskInterface(review)
       ? this.analyzeTaskInterface(task, owner, review, implementation, qualityResults, tempDir, stateCorrection, doctorRecovery)
@@ -3421,20 +3743,29 @@ export class CompassRoseOrchestrator {
     doctorRecovery: DoctorRecoveryTaskMetadata,
     reason: string,
   ): StepExecutionResult {
-    this.recordBlockedFeature(task.featureId, reason, task.taskId);
+    // Build the blocker once from the original blocker's own known kind/recoverability instead
+    // of letting `recordBlockedFeature`'s default path re-derive one from this failure's reason
+    // text: `reason` describes the recovery task's own re-entry gates failing, not the nature of
+    // the original blocker, so regex-matching it (for kind *or* recoverability) would classify
+    // the wrong thing and could route a terminal/human-only blocker back into another automatic
+    // doctor-recovery attempt. The same blocker is persisted and used in the diagnostic artifact
+    // below, so both stay consistent by construction. See ADR-0031/ADR-0034.
+    const blocker: BlockerProfile = {
+      kind: doctorRecovery.blocker.kind,
+      signature: doctorRecovery.blocker.signature,
+      recoverability: doctorRecovery.blocker.recoverability === 'terminal' ? 'terminal' : 'human',
+      evidence: uniqueStrings([
+        reason,
+        ...doctorRecovery.blocker.evidence,
+        `restoration_target=${doctorRecovery.restoration_target.lifecycle_state}:${doctorRecovery.restoration_target.active_task}`,
+      ]),
+      observed_state: doctorRecovery.blocker.observed_state,
+    };
+    this.persistBlockedFeatureWithKnownBlocker(owner, task.featureId, task.taskId, reason, blocker);
     const decision: DiagnosticAutocorrectionDecision = {
       feature_id: task.featureId,
       diagnosis_summary: 'Doctor recovery stopped because the bounded recovery itself failed or could not prove deterministic re-entry readiness.',
-      blocker: {
-        kind: classifyBlockerKind(reason, doctorRecovery.blocker.evidence, 'blocked').kind,
-        signature: doctorRecovery.blocker.signature,
-        recoverability: doctorRecovery.blocker.recoverability === 'terminal' ? 'terminal' : 'human',
-        evidence: uniqueStrings([
-          reason,
-          ...doctorRecovery.blocker.evidence,
-          `restoration_target=${doctorRecovery.restoration_target.lifecycle_state}:${doctorRecovery.restoration_target.active_task}`,
-        ]),
-      },
+      blocker,
       next_step: 'stop_with_diagnostic',
       next_step_reason: reason,
       interface_response: {
@@ -3701,14 +4032,21 @@ export class CompassRoseOrchestrator {
     }
 
     const passed = qualityResults.every((result) => result.status !== 'failed');
-    const featureState = this.updateFeatureStateAfterImplementation(
+    let featureState = this.updateFeatureStateAfterImplementation(
       owner.statePath,
       task.taskId,
       passed ? 'review_pending' : 'quality_failed',
       passed ? 'passed' : 'failed',
       qualityResults,
     );
-    const projectState = this.updateProjectStateAfterImplementation(task.featureId, task.taskId, passed);
+    let projectState = this.updateProjectStateAfterImplementation(task.featureId, task.taskId, passed);
+    if (passed) {
+      // Reaching review_pending is the point that proves accumulated Recovery History narration
+      // is no longer live troubleshooting context (see ADR-0037) -- compact both documents' own
+      // sections here, the only deterministic write site this transition has.
+      featureState = compactRecoveryHistorySection(featureState);
+      projectState = compactRecoveryHistorySection(projectState);
+    }
     writeText(owner.statePath, featureState);
     writeText(this.projectStatePath, projectState);
 
@@ -4282,14 +4620,37 @@ export class CompassRoseOrchestrator {
    * blocked/failed, entirely independent of how the LLM planner names each recovery task (real
    * chains observed this session, e.g. "F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R7", nest
    * unpredictably and can't be parsed back into a stable anchor). The runtime owns this counter
-   * completely: planDoctorRecoveryTask() increments it before every attempt, and
-   * updateFeatureStateAfterDoctorRecovery() resets it to 0 once a recovery actually succeeds.
+   * completely: planDoctorRecoveryTask() increments it before every attempt, and it resets to 0
+   * only once quality gates genuinely pass (updateFeatureStateAfterImplementation's
+   * review_pending branch) -- not when a recovery task's own narrow re-entry gates pass, which
+   * proves nothing about whether the underlying blocker is actually resolved (see ADR-0032).
    */
   private readDoctorRecoveryAttempts(statePath: string): number {
+    return this.readOperationalStatusCounter(statePath, 'doctor_recovery_attempts');
+  }
+
+  /**
+   * Counts every doctor-recovery cycle a feature has ever accumulated across its entire life --
+   * unlike readDoctorRecoveryAttempts() above, this never resets, not even when quality gates
+   * genuinely pass. A feature that keeps hitting new, different blockers over its life could
+   * otherwise accumulate unlimited total recovery cycles, since the per-signature counter resets
+   * on every genuine forward-progress point. See ADR-0040.
+   */
+  private readDoctorRecoveryLifetimeCount(statePath: string): number {
+    return this.readOperationalStatusCounter(statePath, 'doctor_recovery_lifetime_count');
+  }
+
+  /**
+   * Shared reader behind readDoctorRecoveryAttempts()/readDoctorRecoveryLifetimeCount(): both
+   * counters live as plain non-negative integers under the same `## Operational Status` section,
+   * differing only in which key they read. Fails safe to 0 on any parse error or missing
+   * section, exactly like the two callers did before this was extracted.
+   */
+  private readOperationalStatusCounter(statePath: string, key: string): number {
     try {
       const markdown = readUtf8(statePath);
       const operationalStatus = requireSection(markdown, 'Operational Status');
-      const raw = stripTicks(parsePreferredStatusValue(operationalStatus, 'doctor_recovery_attempts') ?? '0');
+      const raw = stripTicks(parsePreferredStatusValue(operationalStatus, key) ?? '0');
       const parsed = Number.parseInt(raw, 10);
       return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
     } catch {
@@ -4669,8 +5030,18 @@ export class CompassRoseOrchestrator {
     return preferredRestorationTarget(snapshot);
   }
 
-  private buildBlockerProfile(snapshot: FeatureStateSnapshot, reason: string): BlockerProfile {
-    const blockerKind = classifyBlockerKind(reason, snapshot.blockedBy, snapshot.lifecycleState);
+  /**
+   * When the caller already knows the blocker's kind (e.g. a sibling-feature scope conflict or
+   * an exhausted task-request list -- both deterministic facts the call site established itself,
+   * not something to guess), pass explicitKind so it is recorded as-is instead of being
+   * reconstructed by regex-matching `reason` text. See fix 001-blocked-feature-scope-misclassification
+   * and ADR-0031: classifyBlockerKind remains the fallback for callers that genuinely don't know
+   * the cause up front.
+   */
+  private buildBlockerProfile(snapshot: FeatureStateSnapshot, reason: string, explicitKind?: BlockerKind): BlockerProfile {
+    const blockerKind = explicitKind
+      ? finalizeBlockerProfile(explicitKind, reason, snapshot.blockedBy, snapshot.lifecycleState)
+      : classifyBlockerKind(reason, snapshot.blockedBy, snapshot.lifecycleState);
     return {
       kind: blockerKind.kind,
       signature: blockerKind.signature,
@@ -4700,13 +5071,51 @@ export class CompassRoseOrchestrator {
     this.artifacts.writeText(join('blockers', `${this.runId}-${taskId}.md`), renderBlockerProfileMarkdown(profile));
   }
 
-  private recordBlockedFeature(featureId: string, reason: string, taskId: string | null = null): BlockerProfile {
+  private recordBlockedFeature(
+    featureId: string,
+    reason: string,
+    taskId: string | null = null,
+    explicitBlocker?: { readonly kind: BlockerKind; readonly nextPlanningHint: string },
+  ): BlockerProfile {
     const owner = this.resolveWorkItemContext(featureId);
     const snapshot = this.readFeatureStateSnapshot(owner);
-    const blocker = this.buildBlockerProfile(snapshot, reason);
+    const blocker = this.buildBlockerProfile(snapshot, reason, explicitBlocker?.kind);
     const restorationTarget = this.preferredRestorationTarget(snapshot);
-    this.persistBlockedFeature(featureId, taskId ?? (snapshot.activeTask === 'none' ? null : snapshot.activeTask), reason, blocker, restorationTarget, owner);
+    this.persistBlockedFeature(
+      featureId,
+      taskId ?? (snapshot.activeTask === 'none' ? null : snapshot.activeTask),
+      reason,
+      blocker,
+      restorationTarget,
+      owner,
+      'blocked',
+      explicitBlocker?.nextPlanningHint,
+    );
     return blocker;
+  }
+
+  /**
+   * Persists a blocker whose kind/recoverability/evidence are already fully known (e.g. carried
+   * forward from an existing DoctorRecoveryTaskMetadata.blocker) instead of re-deriving one from
+   * `reason` text via classifyBlockerKind/finalizeBlockerProfile.
+   */
+  private persistBlockedFeatureWithKnownBlocker(
+    owner: WorkItemContext,
+    featureId: string,
+    taskId: string | null,
+    reason: string,
+    blocker: BlockerProfile,
+  ): void {
+    const snapshot = this.readFeatureStateSnapshot(owner);
+    const restorationTarget = this.preferredRestorationTarget(snapshot);
+    this.persistBlockedFeature(
+      featureId,
+      taskId ?? (snapshot.activeTask === 'none' ? null : snapshot.activeTask),
+      reason,
+      blocker,
+      restorationTarget,
+      owner,
+    );
   }
 
   private recordBlockedReview(
@@ -4717,7 +5126,7 @@ export class CompassRoseOrchestrator {
   ): BlockerProfile {
     const owner = this.resolveWorkItemContext(task.featureId);
     const snapshot = this.readFeatureStateSnapshot(owner);
-    const blocker = this.buildReviewBlockerProfile(review, implementation, qualityResults, snapshot);
+    const blocker = this.buildReviewBlockerProfile(task, review, implementation, qualityResults, snapshot);
     const restorationTarget = this.preferredRestorationTarget(snapshot);
     const reason = this.buildReviewBlockerReason(review, implementation, qualityResults);
 
@@ -4740,7 +5149,7 @@ export class CompassRoseOrchestrator {
   ): BlockerProfile {
     const owner = this.resolveWorkItemContext(task.featureId);
     const snapshot = this.readFeatureStateSnapshot(owner);
-    const blocker = this.buildReviewBlockerProfile(review, implementation, qualityResults, snapshot);
+    const blocker = this.buildReviewBlockerProfile(task, review, implementation, qualityResults, snapshot);
     const restorationTarget = this.preferredRestorationTarget(snapshot);
     const reason = this.buildReviewBlockerReason(review, implementation, qualityResults);
 
@@ -4756,14 +5165,20 @@ export class CompassRoseOrchestrator {
     restorationTarget: RestorationTarget,
     feature: WorkItemContext,
     lifecycleState: 'blocked' | 'review_failed' = 'blocked',
+    explicitNextPlanningHint?: string,
   ): void {
     const blockedByLines = this.buildBlockedByLines(blocker, reason);
+    // blockedNextPlanningHint() only branches on recoverability, never on kind, and always
+    // returns a generic "plan a doctor recovery task" hint for the non-terminal/human case -- so
+    // a caller whose blocker has an explicit, known correct next action (see recordBlockedFeature)
+    // must be able to override it, or fixing `kind` alone changes nothing a human/planner reads.
+    const nextPlanningHint = explicitNextPlanningHint ?? this.blockedNextPlanningHint(blocker, restorationTarget);
     const updatedFeatureState = this.updateFeatureStateForBlocked(
       feature.statePath,
       blocker,
       restorationTarget,
       blockedByLines,
-      this.blockedNextPlanningHint(blocker, restorationTarget),
+      nextPlanningHint,
       lifecycleState,
     );
     const updatedProjectState = this.updateProjectStateForBlocked(
@@ -4772,7 +5187,7 @@ export class CompassRoseOrchestrator {
       blocker,
       restorationTarget,
       this.blockedProjectPendingLines(blocker, restorationTarget, taskId),
-      this.blockedNextPlanningHint(blocker, restorationTarget),
+      nextPlanningHint,
     );
 
     writeText(feature.statePath, updatedFeatureState);
@@ -4831,19 +5246,106 @@ export class CompassRoseOrchestrator {
   }
 
   private buildReviewBlockerProfile(
+    task: ParsedTaskDocument,
     review: ReviewerOutput,
     implementation: ImplementationAttempt,
     qualityResults: readonly QualityGateResult[],
     snapshot: FeatureStateSnapshot,
   ): BlockerProfile {
     const reason = this.buildReviewBlockerReason(review, implementation, qualityResults);
-    return classifyBlockerKind(reason, [
+    const blockedBy = [
       review.summary,
       ...review.findings.map((finding) => finding.message),
       implementation.error ?? '',
       implementation.diagnostics.classification,
       ...qualityResults.map((result) => `${result.name}: ${result.status}`),
-    ].filter((item) => item.trim().length > 0), snapshot.lifecycleState);
+    ].filter((item) => item.trim().length > 0);
+
+    // Prefer structured facts this attempt already computed over guessing from prose (see
+    // ADR-0031/ADR-0034). classifyImplementation() already diagnosed *why* the implementation
+    // struggled -- that must not be re-derived by regex-matching whatever wording
+    // buildImplementationErrorMessage() happened to compose around it.
+    const diagnosticKind = classifyDiagnosticKind(implementation.diagnostics.classification);
+    if (diagnosticKind) {
+      return finalizeBlockerProfile(diagnosticKind, reason, blockedBy, snapshot.lifecycleState);
+    }
+
+    // No implementation-side diagnostic fired, but an objective, non-AI quality gate did fail --
+    // that alone is exactly what `review_failure` means, with nothing left to guess.
+    if (qualityResults.some((result) => result.status === 'failed')) {
+      return finalizeBlockerProfile('review_failure', reason, blockedBy, snapshot.lifecycleState);
+    }
+
+    // Nothing structured to go on: this is a genuine reviewer-only rejection, and findings are
+    // free text by nature. Rather than trust a single fragile regex guess, ask independently
+    // several times and require agreement (see ADR-0036) -- a deterministic, locally-cheap
+    // stand-in for a fresh-context verifier subagent, triggered by fixed orchestrator rule, not
+    // by a model deciding to delegate. Falls back to the regex guess untouched if the ensemble
+    // itself is unavailable (e.g. no codex binary in this environment), so behavior is identical
+    // to before whenever the ensemble can't run.
+    const ensemble = this.classifyReviewBlockerKindByEnsemble(task, review, snapshot.lifecycleState);
+    if (!ensemble) {
+      return classifyBlockerKind(reason, blockedBy, snapshot.lifecycleState);
+    }
+
+    const { kind, agreed } = resolveBlockerKindEnsemble(ensemble);
+    if (!agreed) {
+      return buildEnsembleDisagreementProfile(ensemble, reason, blockedBy, snapshot.lifecycleState);
+    }
+
+    return finalizeBlockerProfile(kind, reason, blockedBy, snapshot.lifecycleState);
+  }
+
+  /**
+   * Fires BLOCKER_KIND_ENSEMBLE_SIZE independent, fresh-context classification calls -- no
+   * shared history between them, each seeing only the same declared minimal input (reviewer
+   * summary + findings + lifecycle state) -- and returns their raw votes, or null if the
+   * ensemble could not run at all (codex unavailable, or any single call returned a malformed
+   * response). A null result signals the caller to fall back to classifyBlockerKind() entirely;
+   * this method never returns a partial/short ensemble, since an incomplete vote set is not a
+   * basis for either trusting agreement or detecting disagreement. See ADR-0036.
+   */
+  private classifyReviewBlockerKindByEnsemble(
+    task: ParsedTaskDocument,
+    review: ReviewerOutput,
+    lifecycleState: string,
+  ): readonly BlockerKind[] | null {
+    const prompt = [
+      'Act as the CompassRose Blocker Classifier.',
+      '',
+      'Classify why this review rejected the implementation into exactly one blocker kind.',
+      'Reason independently from the evidence below only -- do not assume any other attempt\'s conclusion.',
+      '',
+      'Reviewer summary:',
+      review.summary,
+      '',
+      'Reviewer findings:',
+      ...(review.findings.length > 0 ? review.findings.map((finding) => `- ${finding.message}`) : ['(none)']),
+      '',
+      `Feature lifecycle state: ${lifecycleState}`,
+      '',
+      'Valid kinds:',
+      '- state_corruption: the project/feature state documents themselves are stale or inconsistent.',
+      '- task_interface_gap: the task definition, scope, or acceptance criteria were unclear or insufficient.',
+      '- cli_mismatch: a tool required a permission/approval it did not get, or otherwise misbehaved procedurally.',
+      '- environment: a missing binary, command, or external dependency caused the failure.',
+      '- implementation_failure: the produced change itself is wrong, incomplete, or does not do what the task asked.',
+      '- review_failure: the change is plausible but did not meet the review/acceptance bar.',
+      '- unknown: none of the above clearly applies.',
+      '',
+      'Return JSON only and do not modify files.',
+    ].join('\n');
+
+    return this.runClassifierEnsemble<BlockerKind>({
+      size: BLOCKER_KIND_ENSEMBLE_SIZE,
+      prompt,
+      labelPrefix: `classifier:blocker-kind:${task.taskId}`,
+      invocationKind: 'blocker_kind_classification',
+      schemaId: 'blocker_kind_classification',
+      featureId: task.featureId,
+      taskId: task.taskId,
+      extractVote: (raw) => (typeof raw.kind === 'string' && isBlockerKind(raw.kind) ? raw.kind : null),
+    });
   }
 
   private blockedNextPlanningHint(blocker: BlockerProfile, restorationTarget: RestorationTarget): string {
@@ -5333,9 +5835,14 @@ export class CompassRoseOrchestrator {
 
     if (lifecycleState === 'quality_failed') {
       const reason = this.buildQualityFailureReason(taskId, qualityResults);
-      // updateFeatureStateAfterImplementation() is only ever reached from implementation_running
-      // (see its single call site): the implementer just ran and its quality gates just failed.
-      const blocker = classifyBlockerKind(
+      // This branch is only reached when lifecycleState === 'quality_failed', which the call site
+      // above only passes when `qualityResults.every(r => r.status !== 'failed')` is false -- i.e.
+      // at least one quality gate having failed is a guaranteed structural fact here, not
+      // something to guess at by regex-matching the failure text. That is exactly what
+      // `review_failure` means, so use it directly instead of classifyBlockerKind(). See
+      // ADR-0031/ADR-0034.
+      const blocker = finalizeBlockerProfile(
+        'review_failure',
         reason,
         qualityResults.map((result) => `${result.name}: ${result.status}: ${result.output_summary}`),
         'implementation_running',
@@ -5546,6 +6053,7 @@ export class CompassRoseOrchestrator {
     taskId: string,
     restorationTarget: RestorationTarget,
     doctorRecoveryAttempts: number,
+    doctorRecoveryLifetimeCount: number,
   ): string {
     let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'unblock_pending');
@@ -5555,6 +6063,11 @@ export class CompassRoseOrchestrator {
       last_review_result: 'blocked',
       last_unblock_result: 'not_run',
       doctor_recovery_attempts: String(doctorRecoveryAttempts),
+      // Never reset elsewhere -- see readDoctorRecoveryLifetimeCount()/ADR-0040. Every other
+      // Operational Status write in this file omits this key entirely, so
+      // replaceOperationalStatus()'s carry-forward preserves it unless this is the one place
+      // that increments it.
+      doctor_recovery_lifetime_count: String(doctorRecoveryLifetimeCount),
     });
     markdown = replaceSection(markdown, 'Blocked From', [
       `- lifecycle_state: \`${restorationTarget.lifecycle_state}\``,

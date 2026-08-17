@@ -11,6 +11,7 @@ import {
   extractReferencedPaths,
   isRecord,
   primaryTaskAnchorFromId,
+  readNonNegativeInteger,
   readPositiveInteger,
   readRecordString,
   requireNonNoneValue,
@@ -55,6 +56,15 @@ describe('isRecord / readRecordString / readPositiveInteger', () => {
     expect(readPositiveInteger({ a: -1 }, 'a')).toBeNull();
     expect(readPositiveInteger({ a: 1.5 }, 'a')).toBeNull();
     expect(readPositiveInteger({ a: 'x' }, 'a')).toBeNull();
+  });
+
+  test('readNonNegativeInteger accepts 0 as a valid, distinct value from missing/invalid', () => {
+    expect(readNonNegativeInteger({ a: 5 }, 'a')).toBe(5);
+    expect(readNonNegativeInteger({ a: 0 }, 'a')).toBe(0);
+    expect(readNonNegativeInteger({ a: -1 }, 'a')).toBeNull();
+    expect(readNonNegativeInteger({ a: 1.5 }, 'a')).toBeNull();
+    expect(readNonNegativeInteger({ a: 'x' }, 'a')).toBeNull();
+    expect(readNonNegativeInteger({}, 'a')).toBeNull();
   });
 });
 

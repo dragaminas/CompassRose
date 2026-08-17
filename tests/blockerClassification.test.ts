@@ -1,5 +1,12 @@
 import { describe, expect, test } from 'vitest';
-import { buildBlockerSignature, classifyBlockerKind } from '../src/state/blockerClassification.js';
+import {
+  buildBlockerSignature,
+  buildEnsembleDisagreementProfile,
+  classifyBlockerKind,
+  classifyDiagnosticKind,
+  finalizeBlockerProfile,
+  resolveBlockerKindEnsemble,
+} from '../src/state/blockerClassification.js';
 
 describe('classifyBlockerKind', () => {
   test('classifies state corruption from lifecycle/section language', () => {
@@ -94,5 +101,74 @@ describe('buildBlockerSignature', () => {
     const longReason = 'x'.repeat(500);
     const signature = buildBlockerSignature('unknown', 'blocked', longReason, []);
     expect(signature.length).toBeLessThanOrEqual(96);
+  });
+});
+
+describe('classifyDiagnosticKind', () => {
+  test('maps structured implementation diagnostics directly, without regex guessing', () => {
+    expect(classifyDiagnosticKind('model_passivity')).toBe('implementation_failure');
+    expect(classifyDiagnosticKind('reviewable_diff_lost')).toBe('implementation_failure');
+    expect(classifyDiagnosticKind('context_overflow')).toBe('implementation_failure');
+    expect(classifyDiagnosticKind('missing_implementation_notes')).toBe('task_interface_gap');
+    expect(classifyDiagnosticKind('already_complete')).toBe('task_interface_gap');
+    expect(classifyDiagnosticKind('permission_prompt')).toBe('cli_mismatch');
+    expect(classifyDiagnosticKind('tool_refusal')).toBe('cli_mismatch');
+    expect(classifyDiagnosticKind('ui_cli_behavior')).toBe('cli_mismatch');
+    expect(classifyDiagnosticKind('provider_failure')).toBe('environment');
+  });
+
+  test('returns null for unknown, signaling the caller must fall back to prose classification', () => {
+    expect(classifyDiagnosticKind('unknown')).toBeNull();
+  });
+});
+
+describe('finalizeBlockerProfile', () => {
+  test('builds the same envelope shape classifyBlockerKind would, around an already-known kind', () => {
+    const profile = finalizeBlockerProfile('implementation_failure', 'the diff was lost', [], 'implementation_running');
+    expect(profile.kind).toBe('implementation_failure');
+    expect(profile.recoverability).toBe('agent');
+    expect(profile.observed_state).toBe('lifecycle=implementation_running');
+  });
+
+  test('still forces human recoverability for an environment kind', () => {
+    const profile = finalizeBlockerProfile('environment', 'the provider is unreachable', [], 'blocked');
+    expect(profile.recoverability).toBe('human');
+  });
+
+  test('still detects terminal recoverability from keywords regardless of the given kind', () => {
+    const profile = finalizeBlockerProfile('review_failure', 'terminal blocker: no unblock path exists', [], 'blocked');
+    expect(profile.recoverability).toBe('terminal');
+  });
+});
+
+describe('resolveBlockerKindEnsemble', () => {
+  test('trusts a unanimous vote', () => {
+    const result = resolveBlockerKindEnsemble(['review_failure', 'review_failure', 'review_failure']);
+    expect(result).toEqual({ kind: 'review_failure', agreed: true });
+  });
+
+  test('reports disagreement instead of picking a winner by majority', () => {
+    const result = resolveBlockerKindEnsemble(['review_failure', 'review_failure', 'implementation_failure']);
+    expect(result).toEqual({ kind: 'unknown', agreed: false });
+  });
+
+  test('treats an empty vote set as disagreement, not as trivially agreed', () => {
+    const result = resolveBlockerKindEnsemble([]);
+    expect(result).toEqual({ kind: 'unknown', agreed: false });
+  });
+});
+
+describe('buildEnsembleDisagreementProfile', () => {
+  test('forces human recoverability and preserves every vote as evidence', () => {
+    const profile = buildEnsembleDisagreementProfile(
+      ['review_failure', 'implementation_failure', 'task_interface_gap'],
+      'the reviewer rejected the change',
+      [],
+      'blocked',
+    );
+
+    expect(profile.kind).toBe('unknown');
+    expect(profile.recoverability).toBe('human');
+    expect(profile.evidence.some((item) => item.includes('review_failure') && item.includes('implementation_failure'))).toBe(true);
   });
 });

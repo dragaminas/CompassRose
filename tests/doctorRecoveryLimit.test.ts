@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { ParsedTaskDocument, DoctorRecoveryTaskMetadata } from '../src/contracts/task/taskContracts.js';
 import type { RestorationTarget } from '../src/contracts/task/taskContracts.js';
 import type { WorkItemContext } from '../src/contracts/runtime/protoRuntime.js';
-import { CompassRoseOrchestrator, DoctorRecoveryLimitReachedError } from '../src/orchestrator/orchestrator.js';
+import { CompassRoseOrchestrator, DoctorRecoveryLifetimeLimitReachedError, DoctorRecoveryLimitReachedError } from '../src/orchestrator/orchestrator.js';
 import { copyContractsIntoWorkspace, createTempWorkspace, readFixtureConfigMarkdown, type TempWorkspace } from './testUtils.js';
 
 // A codex mock that always fails fast (exit 1) -- used only to prove the limit check runs
@@ -58,7 +58,12 @@ None.
 None.
 `;
 
-function featureStateSeed(lifecycleState: string, activeTask: string, doctorRecoveryAttempts: number): string {
+function featureStateSeed(
+  lifecycleState: string,
+  activeTask: string,
+  doctorRecoveryAttempts: number,
+  doctorRecoveryLifetimeCount = 0,
+): string {
   return `# State: Fixture Feature
 
 ## Lifecycle State
@@ -80,6 +85,7 @@ ${lifecycleState}
 - last_review_result: not_run
 - last_unblock_result: not_run
 - doctor_recovery_attempts: ${doctorRecoveryAttempts}
+- doctor_recovery_lifetime_count: ${doctorRecoveryLifetimeCount}
 
 ## Current Reality
 
@@ -148,14 +154,20 @@ echo unused
 `;
 }
 
-function createWorkspace(featureId: string, taskId: string, lifecycleState: string, doctorRecoveryAttempts: number): TempWorkspace {
+function createWorkspace(
+  featureId: string,
+  taskId: string,
+  lifecycleState: string,
+  doctorRecoveryAttempts: number,
+  doctorRecoveryLifetimeCount = 0,
+): TempWorkspace {
   const workspace = createTempWorkspace({
     files: {
       'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
       'docs/compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
       [`docs/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
       [`docs/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
-      [`docs/features/${featureId}/state.md`]: featureStateSeed(lifecycleState, taskId, doctorRecoveryAttempts),
+      [`docs/features/${featureId}/state.md`]: featureStateSeed(lifecycleState, taskId, doctorRecoveryAttempts, doctorRecoveryLifetimeCount),
       [`docs/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId),
     },
   });
@@ -176,12 +188,14 @@ interface DoctorRecoveryLimitAccess {
   loadTask(taskId: string): ParsedTaskDocument;
   resolveWorkItemContext(featureId: string): WorkItemContext;
   readDoctorRecoveryAttempts(statePath: string): number;
+  readDoctorRecoveryLifetimeCount(statePath: string): number;
   planDoctorRecoveryTask(featureId: string, reason: string): void;
   updateFeatureStateForDoctorRecovery(
     featureStatePath: string,
     taskId: string,
     restorationTarget: RestorationTarget,
     doctorRecoveryAttempts: number,
+    doctorRecoveryLifetimeCount: number,
   ): string;
   updateFeatureStateAfterDoctorRecovery(
     featureStatePath: string,
@@ -264,9 +278,10 @@ describe('doctor-recovery iteration limit', () => {
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     const access = asAccess(orchestrator);
 
-    const updated = access.updateFeatureStateForDoctorRecovery(statePath, 'F001-T01-DOCTOR-RECOVERY-R2', RESTORATION_TARGET, 2);
+    const updated = access.updateFeatureStateForDoctorRecovery(statePath, 'F001-T01-DOCTOR-RECOVERY-R2', RESTORATION_TARGET, 2, 5);
 
     expect(updated).toContain('- doctor_recovery_attempts: 2');
+    expect(updated).toContain('- doctor_recovery_lifetime_count: 5');
   });
 
   test('updateFeatureStateAfterDoctorRecovery preserves the attempt count instead of resetting it', () => {
@@ -331,7 +346,8 @@ describe('doctor-recovery iteration limit', () => {
     // gate then fails again for the same unresolved reason each time.
     for (let cycle = 1; cycle <= 3; cycle += 1) {
       const priorAttempts = access.readDoctorRecoveryAttempts(statePath);
-      const planned = access.updateFeatureStateForDoctorRecovery(statePath, `F001-T01-DOCTOR-RECOVERY-R${cycle}`, RESTORATION_TARGET, priorAttempts + 1);
+      const priorLifetimeCount = access.readDoctorRecoveryLifetimeCount(statePath);
+      const planned = access.updateFeatureStateForDoctorRecovery(statePath, `F001-T01-DOCTOR-RECOVERY-R${cycle}`, RESTORATION_TARGET, priorAttempts + 1, priorLifetimeCount + 1);
       writeFileSync(statePath, planned, 'utf8');
 
       const applied = access.updateFeatureStateAfterDoctorRecovery(statePath, task, doctorRecovery);
@@ -341,6 +357,103 @@ describe('doctor-recovery iteration limit', () => {
 
     expect(() => access.planDoctorRecoveryTask('fixture-feature', 'quality gates failed again, same root cause')).toThrow(
       DoctorRecoveryLimitReachedError,
+    );
+  });
+});
+
+describe('doctor-recovery lifetime limit (ADR-0040)', () => {
+  test('readDoctorRecoveryLifetimeCount defaults to 0 when the field is absent or unparsable', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01', 'quality_failed', 0);
+    const statePath = join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md');
+    writeFileSync(statePath, readFileSync(statePath, 'utf8').replace('- doctor_recovery_lifetime_count: 0\n', ''), 'utf8');
+
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    expect(asAccess(orchestrator).readDoctorRecoveryLifetimeCount(statePath)).toBe(0);
+  });
+
+  test('planDoctorRecoveryTask refuses to plan another attempt at the configured lifetime limit, even with a fresh per-signature counter', () => {
+    // The canonical CONFIG.md fixture sets limits.max_lifetime_recovery_cycles to 10. Seed the
+    // per-signature counter at 0 (as if the feature just made forward progress and reset it) but
+    // the lifetime counter already at 10 -- proving the two are independent, and that a fresh
+    // per-signature counter alone is not enough to keep planning recoveries forever.
+    workspace = createWorkspace('fixture-feature', 'F001-T01', 'quality_failed', 0, 10);
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+
+    expect(() => access.planDoctorRecoveryTask('fixture-feature', 'quality gates failed again')).toThrow(
+      DoctorRecoveryLifetimeLimitReachedError,
+    );
+  });
+
+  test('planDoctorRecoveryTask does not throw the lifetime error below the configured limit', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01', 'quality_failed', 0, 9);
+    vi.stubEnv('PROTO_COMPASSROSE_CODEX_COMMAND', writeFailingCodexMock(workspace.root));
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+
+    let caught: unknown;
+    try {
+      access.planDoctorRecoveryTask('fixture-feature', 'quality gates failed');
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeDefined();
+    expect(caught).not.toBeInstanceOf(DoctorRecoveryLifetimeLimitReachedError);
+    expect(caught).not.toBeInstanceOf(DoctorRecoveryLimitReachedError);
+  });
+
+  test('the lifetime counter keeps climbing across multiple genuine-progress resets of the per-signature counter', () => {
+    // The core value of ADR-0040: a feature that resolves one blocker (resetting
+    // doctor_recovery_attempts via review_pending), then hits a NEW, different blocker requiring
+    // another recovery, then resolves that one too, and so on -- never once threatening the
+    // per-signature limit -- must still eventually trip the lifetime limit.
+    workspace = createWorkspace('fixture-feature', 'F001-T01', 'quality_failed', 0, 0);
+    const statePath = join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator) as DoctorRecoveryLimitAccess & {
+      updateFeatureStateAfterImplementation(
+        featureStatePath: string,
+        taskId: string,
+        lifecycleState: 'review_pending' | 'quality_failed',
+        qualityResult: 'passed' | 'failed',
+      ): string;
+    };
+    const task = access.loadTask('F001-T01');
+    const doctorRecovery: DoctorRecoveryTaskMetadata = {
+      blocker: {
+        kind: 'review_failure',
+        signature: 'fixture-signature',
+        evidence: ['fixture evidence'],
+        recoverability: 'agent',
+        observed_state: 'fixture observed state',
+      },
+      restoration_target: RESTORATION_TARGET,
+      executor_role: 'doctor',
+      review_policy: 'no_review_loop',
+    };
+
+    // 10 cycles of "recover, then genuinely resolve" -- each resolve resets the per-signature
+    // counter to 0 via review_pending, so it never comes close to its own limit of 3.
+    for (let cycle = 1; cycle <= 10; cycle += 1) {
+      const priorLifetimeCount = access.readDoctorRecoveryLifetimeCount(statePath);
+      const planned = access.updateFeatureStateForDoctorRecovery(statePath, `F001-T01-DOCTOR-RECOVERY-R${cycle}`, RESTORATION_TARGET, 1, priorLifetimeCount + 1);
+      writeFileSync(statePath, planned, 'utf8');
+
+      const applied = access.updateFeatureStateAfterDoctorRecovery(statePath, task, doctorRecovery);
+      writeFileSync(statePath, applied, 'utf8');
+
+      const resolved = access.updateFeatureStateAfterImplementation(statePath, 'F001-T01', 'review_pending', 'passed');
+      writeFileSync(statePath, resolved, 'utf8');
+
+      expect(access.readDoctorRecoveryAttempts(statePath)).toBe(0);
+      expect(access.readDoctorRecoveryLifetimeCount(statePath)).toBe(cycle);
+    }
+
+    // The canonical CONFIG.md fixture sets limits.max_lifetime_recovery_cycles to 10 -- the 11th
+    // cycle must trip the lifetime limit even though the per-signature counter is freshly at 0.
+    expect(() => access.planDoctorRecoveryTask('fixture-feature', 'a brand-new, different blocker')).toThrow(
+      DoctorRecoveryLifetimeLimitReachedError,
     );
   });
 });

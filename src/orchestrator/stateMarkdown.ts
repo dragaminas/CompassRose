@@ -19,6 +19,7 @@ export function replaceOperationalStatus(markdown: string, overrides: Partial<Re
     last_review_result: 'not_run',
     last_unblock_result: 'not_run',
     doctor_recovery_attempts: '0',
+    doctor_recovery_lifetime_count: '0',
   };
 
   for (const [key, value] of Object.entries(defaults)) {

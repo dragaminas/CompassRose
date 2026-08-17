@@ -137,6 +137,7 @@ CompassRose coordinates these tools but should not depend on any single one.
 CompassRose
 ├── CLI
 ├── Orchestrator
+│   └── Diagnostic/Autocorrection Subsystem
 ├── Project Analyzer
 ├── Intent Compiler
 ├── Project State Manager
@@ -146,8 +147,15 @@ CompassRose
 │   └── Reviewer Adapter
 ├── Git Workspace Manager
 ├── Command Runner
-└── Configuration Loader
+├── Configuration Loader
+└── Artifact Store
 ```
+
+The Project Analyzer and Intent Compiler are the two components an empty or existing repository
+needs to bootstrap into CompassRose's model (see sections 5.3/5.4); as of this writing neither has
+a runtime implementation. The Diagnostic/Autocorrection Subsystem and Artifact Store below do have
+substantial real implementations that predate their addition to this document -- this document
+lagged the code (see ADR-0003, Documentation as UI); this revision catches it up.
 
 ---
 
@@ -300,6 +308,8 @@ Each role has:
 - Optional context limits
 
 The Role Runtime normalizes communication between CompassRose and external tools. Handles ratelimits and execution pauses due to external tools temporary unavailability.
+
+Every structured call an adapter makes passes through one recording choke point before execution, which logs the exact prompt, tool, and configuration snapshot to the Artifact Store (5.14) and increments the run-wide invocation counter that the run-wide AI call budget (5.13) checks. A heartbeat runner monitors each external CLI subprocess while it runs, emitting a periodic liveness signal so a long implementer or planner invocation is distinguishable from a hung one.
 
 ---
 
@@ -540,6 +550,80 @@ Configuration sources may include:
 Project config should override defaults.
 
 CLI flags should override project config.
+
+---
+
+## 5.13 Diagnostic/Autocorrection and Doctor Recovery Subsystem
+
+Not present in earlier revisions of this document, though it makes up the majority of this
+project's actual runtime complexity as of this writing -- added per ADR-0003 (Documentation as
+UI): an undocumented subsystem this large is itself a violation of that principle.
+
+When a task, review, or quality gate produces a blocked/failed result the Orchestrator cannot
+resolve by continuing the normal plan → implement → review cycle, this subsystem decides how to
+recover without abandoning the deterministic-orchestrator principle (ADR-0007). It is layered,
+deterministic-first:
+
+- **Blocker classification.** Every blocked/failed result is classified into a closed `BlockerKind`
+  taxonomy (`state_corruption`, `task_interface_gap`, `cli_mismatch`, `environment`,
+  `implementation_failure`, `review_failure`, `unknown`) and a `recoverability` tier (`auto`,
+  `agent`, `human`, `terminal`). Whenever a call site already knows the cause (e.g. a structured
+  implementation diagnostic, an objective quality-gate result, or a deterministic scope check), the
+  kind is read directly from that fact rather than reconstructed by matching keywords in free text.
+  Free-text classification remains the fallback only for calls with no structured signal to read.
+- **Bounded recovery.** A blocked feature is either corrected deterministically (`correct_state`,
+  for stale/malformed state documents) or handed to a doctor-recovery task (`plan_doctor_recovery`,
+  a bounded task confined to the feature's own frame) or escalated to a new tracked fix
+  (`file_blocking_fix`, for defects outside that frame entirely). Each of these bounded operations
+  has its own configured iteration limit, enforced *before* any planner call is spent, and every
+  limit-exceeded error routes through one shared handler that converts it into a clean stop instead
+  of an uncaught crash.
+- **Two independent recovery budgets.** A per-blocker-signature counter resets once a feature makes
+  genuine forward progress past its *current* blocker. A separate, never-reset lifetime counter
+  bounds the *sum* of every recovery cycle a feature accumulates across its entire life, so a
+  feature that keeps hitting new, different blockers cannot accumulate unlimited total recoveries
+  just because each individual blocker eventually clears.
+- **A run-wide AI call budget.** A single counter, incremented at the same recording choke point
+  every structured AI call already passes through (5.6), is checked centrally once per step, before
+  any feature or fix is even inspected -- bounding total AI spend for an entire `--loop` invocation,
+  not just primary task completions.
+- **Cross-checked consequential decisions.** The two most consequential single-AI-vote decisions in
+  this subsystem -- whether to file a new tracked fix instead of a bounded recovery, and whether to
+  trust an approval that gates whether a diff lands -- are not trusted from a single response.
+  Filing a fix is cross-checked by firing the choice itself (never the fix's own free-text payload)
+  as several independent, fresh-context votes and requiring unanimous agreement before acting,
+  escalating to a safe stop on disagreement. A review's approval is checked deterministically
+  against the quality-gate facts the orchestrator already computed itself, since the reviewer's
+  relay of an already-known fact has exactly one legitimate value by the time review runs.
+- **Bounded historical narration.** A feature's own recovery narrative is read back as live context
+  on every subsequent recovery attempt for that feature. Once accumulated narration is no longer
+  live troubleshooting context, it is compacted into a single summary naming the recovery task ids
+  it covers, with full detail left to git history and the Artifact Store rather than duplicated in
+  the document.
+
+See `docs/ADR.md` (ADR-0031 through ADR-0041) for the specific decisions this subsystem
+implements, each closing a concrete defect found by auditing this project's own real recovery
+incidents while developing itself (ADR-0022, Self-Hosting Documentation Model).
+
+---
+
+## 5.14 Artifact Store
+
+A repository-local, append-only record of what actually happened, rooted under
+`.git/proto-compassrose/`. Distinct from the project-state documents (5.5): the Artifact Store is
+the audit trail meant for humans and future diagnostic calls to inspect after the fact, while
+project state is what the Orchestrator itself reads to decide the next step.
+
+Recorded artifacts include, among others: every structured agent invocation's exact prompt and
+configuration snapshot (5.6); blocker profiles at the moment a feature was blocked; recovery
+lessons distilled from completed recovery attempts, read back across a feature's *entire* history
+(not just its most recent attempt) so a defect recurring across otherwise-unrelated task anchors
+can be surfaced as a pattern instead of only ever being visible once; and diagnostic decisions from
+the subsystem in 5.13.
+
+Not every artifact category needs pruning -- some are deliberately unbounded because their value
+depends on covering a feature's whole history, not a recent window of it (see `docs/REFACTOR_PLAN.md`
+item 7 for a case where pruning was considered and rejected for exactly this reason).
 
 ---
 
