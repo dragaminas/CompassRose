@@ -3,3 +3,4 @@ dist/
 benchmark-prompts/
 .vscode/
 logs/
+.claude/
