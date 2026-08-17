@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-review_pending
+correction_pending
 
 ## Source Request
 
@@ -12,14 +12,15 @@ review_pending
 
 - formalization: complete
 - active_task: F003-T01
-- active_correction_task: none
+- active_correction_task: F003-T01-C02
 - active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
-- last_review_result: not_run
+- last_review_result: changes_required
 - last_unblock_result: passed
 - doctor_recovery_attempts: 0
 - blocked_on_fix: none
+- doctor_recovery_lifetime_count: 0
 
 ## Current Reality
 
@@ -120,4 +121,4 @@ Doctor recovery task `F003-DR06` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Review subtask `F003-T01` next.
+Execute correction subtask `F003-T01-C02` next.

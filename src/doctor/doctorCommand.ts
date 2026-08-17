@@ -7,6 +7,7 @@ import type { ConfigurationIssue } from '../config/configTypes.js';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { getCurrentSupportedPlatform } from '../platform/platformInfo.js';
 import { isDirectory, pathExists, resolveRepositoryRelativePath } from '../filesystem/pathResolver.js';
+import { buildDiagnosticReport, createCheckContext } from './doctorDiagnostics.js';
 
 export function runDoctor(options: DoctorOptions = {}): DoctorReport {
   const workingDirectory = options.cwd ?? process.cwd();
@@ -72,6 +73,12 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
     details: [`Parsed and validated docs/compassrose/CONFIG.md`],
   });
 
+  // Constructed only now, from the successfully normalized configuration value, and given the
+  // same `checks` array by reference so every check pushed to it below (platform, paths,
+  // project-state) is reflected in context.checks/context.readiness -- not just the two already
+  // pushed above.
+  const context = createCheckContext(configurationResult.value, checks);
+
   const currentPlatform = getCurrentSupportedPlatform(process.platform);
   if (!currentPlatform) {
     checks.push({
@@ -116,7 +123,7 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
     repositoryRoot,
     currentPlatform,
     configPath,
-    checks,
+    checks: context.checks,
   });
 }
 
@@ -215,6 +222,11 @@ function formatConfigurationIssues(issues: readonly ConfigurationIssue[]): strin
   });
 }
 
+// Delegates check aggregation (success/exitCode derivation, check ordering) to the feature-owned
+// diagnostic boundary (src/doctor/doctorDiagnostics.ts) instead of re-deriving it inline here --
+// buildDiagnosticReport's own repositoryRoot/currentPlatform/configPath placeholders are always
+// null (it has no access to the coordinator's runtime context), so they are overridden with the
+// actual values every call site here already has.
 function buildDoctorReport(input: {
   repositoryRoot: string | null;
   currentPlatform: string | null;
@@ -222,11 +234,9 @@ function buildDoctorReport(input: {
   checks: readonly DoctorCheck[];
 }): DoctorReport {
   return {
+    ...buildDiagnosticReport(input.checks),
     repositoryRoot: input.repositoryRoot,
     currentPlatform: input.currentPlatform,
     configPath: input.configPath,
-    checks: input.checks,
-    success: input.checks.every((check) => check.status === 'pass'),
-    exitCode: input.checks.every((check) => check.status === 'pass') ? 0 : 1,
   };
 }
