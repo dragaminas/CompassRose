@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { err, ok, type Result } from "../../shared/result.js";
 
 /**
- * Parsed view of `docs/compassrose/PROJECT_STATE.md`.
+ * Parsed view of `compassrose/PROJECT_STATE.md`.
  *
  * Keep this separate from `ProjectStateSnapshot`, which is the runtime-facing
  * snapshot used by the orchestrator and action contexts.

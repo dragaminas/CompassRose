@@ -111,16 +111,16 @@ None
 
 function createWorkspace(featureId: string, siblingFeatureId?: string): TempWorkspace {
   const files: Record<string, string> = {
-    'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-    'docs/compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
-    [`docs/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
-    [`docs/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
-    [`docs/features/${featureId}/state.md`]: featureStateSeed('task_planning_pending'),
+    'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+    'compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
+    [`compassrose/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
+    [`compassrose/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
+    [`compassrose/features/${featureId}/state.md`]: featureStateSeed('task_planning_pending'),
   };
   if (siblingFeatureId) {
-    files[`docs/features/${siblingFeatureId}/feature.md`] = `# Feature: Sibling Feature\n\nSibling feature document.\n`;
-    files[`docs/features/${siblingFeatureId}/architecture.md`] = `# Architecture: Sibling Feature\n\nSibling architecture document.\n`;
-    files[`docs/features/${siblingFeatureId}/state.md`] = featureStateSeed('request_pending');
+    files[`compassrose/features/${siblingFeatureId}/feature.md`] = `# Feature: Sibling Feature\n\nSibling feature document.\n`;
+    files[`compassrose/features/${siblingFeatureId}/architecture.md`] = `# Architecture: Sibling Feature\n\nSibling architecture document.\n`;
+    files[`compassrose/features/${siblingFeatureId}/state.md`] = featureStateSeed('request_pending');
   }
 
   const workspace = createTempWorkspace({ files });
@@ -151,7 +151,7 @@ function asAccess(orchestrator: CompassRoseOrchestrator): Access {
 }
 
 function featureStatePath(workspace: TempWorkspace, featureId: string): string {
-  return join(workspace.root, 'docs', 'features', featureId, 'state.md');
+  return join(workspace.root, 'compassrose', 'features', featureId, 'state.md');
 }
 
 let workspace: TempWorkspace | undefined;
@@ -186,7 +186,7 @@ describe('fix 001: blocked-feature scope misclassification', () => {
     // tasksDirectory: backfillTaskRequests() reconstructs an empty task_requests array (the
     // feature's Implementation Outline is empty), so selectNextTaskRequest() finds nothing and
     // planTask() takes the exhausted-task-request branch without needing a real codex call.
-    mkdirSync(join(workspace.root, 'docs', 'features', 'fixture-feature', 'tasks'), { recursive: true });
+    mkdirSync(join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'tasks'), { recursive: true });
     mkdirSync(join(workspace.root, '.git', 'proto-compassrose', 'task-requests'), { recursive: true });
     writeFileSync(join(workspace.root, '.git', 'proto-compassrose', 'task-requests', 'fixture-feature.json'), '[]\n', {
       flag: 'wx',

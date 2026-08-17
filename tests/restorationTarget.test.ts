@@ -143,7 +143,7 @@ describe('stateCorrectionNextPlanningHint / stateCorrectionProjectPendingLines',
       minimum_progress_evidence: ['state.md changes'],
       trace: { roadmap_objective: 'x', feature_goal: 'y', state_gap: 'z' },
       state_target: {
-        feature_state_path: 'docs/features/001-widgets/state.md',
+        feature_state_path: 'compassrose/features/001-widgets/state.md',
         project_state_path: null,
         contract_reference: '',
         detected_issue: '',

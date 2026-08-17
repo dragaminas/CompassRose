@@ -28,11 +28,11 @@ describe('feature scope guard', () => {
         `identified as belonging to feature \`${SIBLING_FEATURE_ID}\` instead of this feature's own declared scope`,
       );
 
-      const tasksDirectory = join(workspace.cloneRoot, 'docs', 'features', TARGET_FEATURE_ID, 'tasks');
+      const tasksDirectory = join(workspace.cloneRoot, 'compassrose', 'features', TARGET_FEATURE_ID, 'tasks');
       const writtenTasks = existsSync(tasksDirectory) ? readdirSync(tasksDirectory) : [];
       expect(writtenTasks).toEqual([]);
 
-      const featureState = readFileSync(join(workspace.cloneRoot, 'docs', 'features', TARGET_FEATURE_ID, 'state.md'), 'utf8');
+      const featureState = readFileSync(join(workspace.cloneRoot, 'compassrose', 'features', TARGET_FEATURE_ID, 'state.md'), 'utf8');
       expect(featureState).toContain('## Lifecycle State\n\nblocked');
       expect(featureState).toContain(SIBLING_FEATURE_ID);
 
@@ -140,7 +140,7 @@ function copyTree(sourceRoot: string, targetRoot: string): void {
 // feature to `completed` inside the disposable clone only (never the real repo) so this
 // scenario is deterministic regardless of what the live repository happens to be doing.
 function neutralizeRealFeatureStates(cloneRoot: string): void {
-  const featuresRoot = join(cloneRoot, 'docs', 'features');
+  const featuresRoot = join(cloneRoot, 'compassrose', 'features');
   if (!existsSync(featuresRoot)) {
     return;
   }
@@ -160,18 +160,18 @@ function neutralizeRealFeatureStates(cloneRoot: string): void {
   }
 }
 
-// Real, still-unformalized fixes committed in this repo's own docs/fixes now default to
+// Real, still-unformalized fixes committed in this repo's own compassrose/fixes now default to
 // 'critical' severity (fail-safe upward -- see readFixSeverityAndOwnership) until formalized, so
 // they would otherwise outrank this scenario's synthetic target feature in the clone and hijack
 // the run. Unlike features, no in-clone "neutralize the lifecycle state" rewrite applies here --
 // a fresh fix request has no state.md at all -- so remove them outright; this scenario needs
 // nothing but its own synthetic features.
 function removeRealFixes(cloneRoot: string): void {
-  rmSync(join(cloneRoot, 'docs', 'fixes'), { recursive: true, force: true });
+  rmSync(join(cloneRoot, 'compassrose', 'fixes'), { recursive: true, force: true });
 }
 
 function seedTargetFeature(cloneRoot: string): void {
-  const featureRoot = join(cloneRoot, 'docs', 'features', TARGET_FEATURE_ID);
+  const featureRoot = join(cloneRoot, 'compassrose', 'features', TARGET_FEATURE_ID);
   mkdirSync(featureRoot, { recursive: true });
 
   writeFileSync(
@@ -284,7 +284,7 @@ Plan the next task for this feature.
 }
 
 function seedSiblingFeature(cloneRoot: string): void {
-  const featureRoot = join(cloneRoot, 'docs', 'features', SIBLING_FEATURE_ID);
+  const featureRoot = join(cloneRoot, 'compassrose', 'features', SIBLING_FEATURE_ID);
   mkdirSync(featureRoot, { recursive: true });
 
   writeFileSync(

@@ -43,13 +43,13 @@ describe('task-request backfill for a legacy feature', () => {
       // task is written (completion happens later, on review approval).
       expect(persisted[1]?.status).toBe('in_progress');
 
-      const tasksDirectory = join(workspace.cloneRoot, 'docs', 'features', TARGET_FEATURE_ID, 'tasks');
+      const tasksDirectory = join(workspace.cloneRoot, 'compassrose', 'features', TARGET_FEATURE_ID, 'tasks');
       const writtenTasks = readdirSync(tasksDirectory);
       expect(writtenTasks.length).toBe(2);
 
       // Phase 5: `## Outline Progress` in state.md is regenerated from the task-requests
       // artifact, not hand-edited -- it must reflect the same in_progress flip as the JSON.
-      const featureState = readFileSync(join(workspace.cloneRoot, 'docs', 'features', TARGET_FEATURE_ID, 'state.md'), 'utf8');
+      const featureState = readFileSync(join(workspace.cloneRoot, 'compassrose', 'features', TARGET_FEATURE_ID, 'state.md'), 'utf8');
       expect(featureState).toContain('- 1. Add the loader: complete');
       expect(featureState).toContain('- 2. Wire the loader into the orchestrator: in progress');
     } finally {
@@ -80,12 +80,12 @@ function prepareWorkspace(): { cloneRoot: string; dispose: () => void } {
   }
 
   copyTree(join(repoRoot, 'src'), join(cloneRoot, 'src'));
-  rmSync(join(cloneRoot, 'docs', 'features'), { recursive: true, force: true });
-  // Real, still-unformalized fixes committed in this repo's own docs/fixes now default to
+  rmSync(join(cloneRoot, 'compassrose', 'features'), { recursive: true, force: true });
+  // Real, still-unformalized fixes committed in this repo's own compassrose/fixes now default to
   // 'critical' severity (fail-safe upward -- see readFixSeverityAndOwnership) until formalized,
   // so they would otherwise outrank this scenario's synthetic feature in the clone and hijack
   // the run. Remove them; this test only exercises feature task-request backfill.
-  rmSync(join(cloneRoot, 'docs', 'fixes'), { recursive: true, force: true });
+  rmSync(join(cloneRoot, 'compassrose', 'fixes'), { recursive: true, force: true });
   seedTargetFeature(cloneRoot);
   writeExecutableScript(join(tempRoot, 'codex-mock.cjs'), CODEX_BACKFILL_MOCK);
   writeExecutableScript(join(tempRoot, 'opencode-mock.cjs'), OPENCODE_STUB_MOCK);
@@ -140,7 +140,7 @@ function copyTree(sourceRoot: string, targetRoot: string): void {
 }
 
 function seedTargetFeature(cloneRoot: string): void {
-  const featureRoot = join(cloneRoot, 'docs', 'features', TARGET_FEATURE_ID);
+  const featureRoot = join(cloneRoot, 'compassrose', 'features', TARGET_FEATURE_ID);
   const tasksDirectory = join(featureRoot, 'tasks');
   mkdirSync(tasksDirectory, { recursive: true });
 

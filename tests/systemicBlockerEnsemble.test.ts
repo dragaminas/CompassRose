@@ -50,11 +50,11 @@ None.
 function createWorkspace(featureId: string): TempWorkspace {
   const workspace = createTempWorkspace({
     files: {
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-      'docs/compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
-      [`docs/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
-      [`docs/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
-      [`docs/features/${featureId}/state.md`]: `# State: Fixture Feature\n\n## Lifecycle State\n\nblocked\n\n## Source Request\n\n\`request.md\`\n\n## Operational Status\n\n- formalization: complete\n- active_task: none\n- active_correction_task: none\n- active_unblock_task: none\n- last_implementation_result: not_run\n- last_quality_gate_result: unknown\n- last_review_result: not_run\n- last_unblock_result: not_run\n\n## Current Reality\n\nFixture state.\n\n## Implemented Deliverables\n\n- None yet.\n\n## Remaining Deliverables\n\n- None yet.\n\n## Outline Progress\n\n- Fixture: not started\n\n## Blocked By\n\n- None\n\n## Blocked From\n\n- lifecycle_state: none\n- active_task: none\n- active_correction_task: none\n- active_unblock_task: none\n\n## Last Approved Change\n\nNone\n\n## Known Gaps\n\n- None\n\n## Next Planning Hint\n\nNone\n`,
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
+      [`compassrose/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
+      [`compassrose/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
+      [`compassrose/features/${featureId}/state.md`]: `# State: Fixture Feature\n\n## Lifecycle State\n\nblocked\n\n## Source Request\n\n\`request.md\`\n\n## Operational Status\n\n- formalization: complete\n- active_task: none\n- active_correction_task: none\n- active_unblock_task: none\n- last_implementation_result: not_run\n- last_quality_gate_result: unknown\n- last_review_result: not_run\n- last_unblock_result: not_run\n\n## Current Reality\n\nFixture state.\n\n## Implemented Deliverables\n\n- None yet.\n\n## Remaining Deliverables\n\n- None yet.\n\n## Outline Progress\n\n- Fixture: not started\n\n## Blocked By\n\n- None\n\n## Blocked From\n\n- lifecycle_state: none\n- active_task: none\n- active_correction_task: none\n- active_unblock_task: none\n\n## Last Approved Change\n\nNone\n\n## Known Gaps\n\n- None\n\n## Next Planning Hint\n\nNone\n`,
     },
   });
   copyContractsIntoWorkspace(workspace.root);

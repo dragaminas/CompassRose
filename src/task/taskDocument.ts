@@ -2,6 +2,7 @@ import type {
   BlockerKind,
   BlockerRecoverability,
 } from '../contracts/runtime/diagnosticAutocorrection.js';
+import { DEFAULT_COMPASSROSE_ROOT, isUnderCompassRoseRoot } from '../config/compassRosePaths.js';
 import type {
   DevelopmentPolicyMode,
   ExpectedDeliverable,
@@ -192,7 +193,13 @@ function parseExpectedDeliverables(
     return uniqueStrings(sectionItems) as ExpectedDeliverable[];
   }
 
-  const documentationOnly = allowedPaths.length > 0 && allowedPaths.every((item) => item.startsWith('docs/'));
+  // A task scoped entirely to either the target repository's own docs/ tree or CompassRose's
+  // own isolated compassrose/ root is documentation-only -- both are legitimately "docs" for
+  // this heuristic's purpose, since a task correcting CompassRose's own tracked state (e.g.
+  // compassrose/features/<id>/state.md) is no less documentation-only than one editing the
+  // target project's own docs/.
+  const documentationOnly = allowedPaths.length > 0
+    && allowedPaths.every((item) => item.startsWith('docs/') || isUnderCompassRoseRoot(item, DEFAULT_COMPASSROSE_ROOT));
   return documentationOnly ? ['documentation'] : ['code', 'tests'];
 }
 

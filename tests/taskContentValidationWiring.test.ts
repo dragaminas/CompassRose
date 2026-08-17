@@ -157,12 +157,12 @@ echo unused
 function createWorkspace(featureId: string, taskId: string): TempWorkspace {
   const workspace = createTempWorkspace({
     files: {
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-      'docs/compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
-      [`docs/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
-      [`docs/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
-      [`docs/features/${featureId}/state.md`]: featureStateSeed(taskId),
-      [`docs/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId),
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
+      [`compassrose/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
+      [`compassrose/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
+      [`compassrose/features/${featureId}/state.md`]: featureStateSeed(taskId),
+      [`compassrose/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId),
     },
   });
   copyContractsIntoWorkspace(workspace.root);
@@ -236,7 +236,7 @@ describe('task-content validation wiring (planDoctorRecoveryTask)', () => {
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     asAccess(orchestrator).planDoctorRecoveryTask('fixture-feature', 'quality gates failed');
 
-    const tasksDir = join(workspace.root, 'docs', 'features', 'fixture-feature', 'tasks');
+    const tasksDir = join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'tasks');
     const recoveryTaskFile = readdirSync(tasksDir).find((name) => name !== '001-fixture-task.md');
     expect(recoveryTaskFile).toBeDefined();
 
@@ -258,7 +258,7 @@ describe('task-content validation wiring (planDoctorRecoveryTask)', () => {
       /git diff ... --exit-code.*no explicit ref/,
     );
 
-    const tasksDir = join(workspace.root, 'docs', 'features', 'fixture-feature', 'tasks');
+    const tasksDir = join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'tasks');
     expect(readdirSync(tasksDir)).toEqual(['001-fixture-task.md']);
   });
 
@@ -293,7 +293,7 @@ describe('task-content validation wiring (planDoctorRecoveryTask)', () => {
     expect(result?.continueLoop).toBe(false);
     expect(result?.summary).toMatch(/git diff ... --exit-code.*no explicit ref/);
 
-    const tasksDir = join(workspace.root, 'docs', 'features', 'fixture-feature', 'tasks');
+    const tasksDir = join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'tasks');
     expect(readdirSync(tasksDir)).toEqual(['001-fixture-task.md']);
   });
 
@@ -307,7 +307,7 @@ describe('task-content validation wiring (planDoctorRecoveryTask)', () => {
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     expect(() => asAccess(orchestrator).planDoctorRecoveryTask('fixture-feature', 'quality gates failed')).not.toThrow();
 
-    const tasksDir = join(workspace.root, 'docs', 'features', 'fixture-feature', 'tasks');
+    const tasksDir = join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'tasks');
     expect(readdirSync(tasksDir)).toHaveLength(2);
   });
 });

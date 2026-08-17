@@ -8,6 +8,7 @@ import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { getCurrentSupportedPlatform } from '../platform/platformInfo.js';
 import { isDirectory, pathExists, resolveRepositoryRelativePath } from '../filesystem/pathResolver.js';
 import { buildDiagnosticReport, createCheckContext } from './doctorDiagnostics.js';
+import { getBootstrapConfigPath } from '../config/compassRosePaths.js';
 
 export function runDoctor(options: DoctorOptions = {}): DoctorReport {
   const workingDirectory = options.cwd ?? process.cwd();
@@ -35,12 +36,19 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
     details: [`Git repository root: ${repositoryRoot}`],
   });
 
-  const configPath = join(repositoryRoot, 'docs/compassrose/CONFIG.md');
+  const configPath = getBootstrapConfigPath(repositoryRoot);
   if (!existsSync(configPath)) {
+    // A specific, actionable message for the pre-relocation layout instead of a generic
+    // "missing" error -- this repository (or one bootstrapped before the compassrose/ move)
+    // may still have its config at the old nested docs/compassrose/CONFIG.md location.
+    const legacyConfigPath = join(repositoryRoot, 'docs', 'compassrose', 'CONFIG.md');
+    const details = existsSync(legacyConfigPath)
+      ? [`Legacy docs/compassrose/ layout detected: found ${legacyConfigPath}. Move CompassRose's own docs into compassrose/ at the repository root (see the ADR recording this relocation) and rerun.`]
+      : [`Missing configuration file: ${configPath}`];
     checks.push({
       name: 'configuration',
       status: 'fail',
-      details: [`Missing configuration file: docs/compassrose/CONFIG.md`],
+      details,
     });
 
     return buildDoctorReport({
@@ -70,7 +78,7 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
   checks.push({
     name: 'configuration',
     status: 'pass',
-    details: [`Parsed and validated docs/compassrose/CONFIG.md`],
+    details: [`Parsed and validated ${configPath}`],
   });
 
   // Constructed only now, from the successfully normalized configuration value, and given the

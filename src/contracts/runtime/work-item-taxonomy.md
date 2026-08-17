@@ -29,7 +29,7 @@ The outline is for visibility and coordination, not for execution.
 
 ### fix request
 
-A human-authored bug report stored in `docs/fixes/NNN-slug/request.md`.
+A human-authored bug report stored in `compassrose/fixes/NNN-slug/request.md`.
 
 It captures a defect in already-shipped behavior, not a gap in an in-progress feature and not
 a review finding inside an active task (see `correction task` below) — those are distinct

@@ -24,7 +24,7 @@ export interface PlannedFeatureDocs {
 }
 
 /**
- * Formalization output for a fix request (see docs/fixes/README.md). A fix has no
+ * Formalization output for a fix request (see compassrose/fixes/README.md). A fix has no
  * architecture.md — it repairs already-shipped behavior rather than introducing new
  * architectural surface.
  */

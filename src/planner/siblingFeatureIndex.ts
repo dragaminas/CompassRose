@@ -40,13 +40,13 @@ function truncate(text: string, limit: number): string {
 
 /**
  * Builds a lightweight {featureId, title, summary} index of every other feature under
- * docs/features/ so a planning step can ground "does this belong to another feature?"
+ * compassrose/features/ so a planning step can ground "does this belong to another feature?"
  * in the repository's own documents instead of the model's memory. Reads request.md
  * (present from the moment a feature is requested) and prefers feature.md's Purpose
  * section once a feature is formalized, since that's a more deliberate summary than
  * a request's free-form prose.
  *
- * `definitionFileName` generalizes this same reader for docs/fixes/: pass 'fix.md' to build
+ * `definitionFileName` generalizes this same reader for compassrose/fixes/: pass 'fix.md' to build
  * a sibling-fix index instead (used only for dedup awareness in fix task planning, since
  * fixes have no scope-guard equivalent) -- the reader logic is identical either way.
  */

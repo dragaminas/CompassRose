@@ -29,7 +29,7 @@ export interface StepDecision {
    * directory id under fixes_root; for every other kind it's a feature's directory id
    * under features_root (or, for task-scoped kinds, resolved transparently by
    * resolveWorkItemContext() from the task's own feature_id/fix_id). The field name is
-   * unchanged for either case -- see docs/fixes/README.md.
+   * unchanged for either case -- see compassrose/fixes/README.md.
    */
   readonly feature_id: string | null;
   readonly task_id: string | null;

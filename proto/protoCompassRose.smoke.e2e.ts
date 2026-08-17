@@ -49,7 +49,7 @@ function main(): number {
     return 1;
   }
 
-  // The bare clone inherits every docs/features/* directory as committed at HEAD, not just
+  // The bare clone inherits every compassrose/features/* directory as committed at HEAD, not just
   // 002-configuration-model's. This scenario only ever seeds and asserts on that one feature (see
   // seedSmokeFeatureStateDocs below), so remove every other feature directory before anything
   // else touches the clone -- see ADR-0034/ADR-0035, and the identical live contamination this
@@ -143,11 +143,11 @@ function syncPrototypeRuntime(repoRoot: string, cloneRoot: string): void {
 // This scenario and its mocked codex response are scripted around exactly one primary task
 // per `run --loop` invocation (the mock always returns the same hardcoded task_id for any
 // planner-kind call). Pin the limit here instead of inheriting whatever the live repository's
-// docs/compassrose/CONFIG.md happens to say today, so a real project tuning change (e.g.
+// compassrose/CONFIG.md happens to say today, so a real project tuning change (e.g.
 // raising limits.max_tasks_per_run) can't silently make the runtime plan a second, unscripted
 // task mid-run and collide on that reused task_id.
 function pinScenarioConfigLimits(cloneRoot: string): void {
-  const configPath = join(cloneRoot, 'docs', 'compassrose', 'CONFIG.md');
+  const configPath = join(cloneRoot, 'compassrose', 'CONFIG.md');
   const config = readFileSync(configPath, 'utf8');
   const pinned = config.replace(/max_tasks_per_run:\s*\d+/, 'max_tasks_per_run: 1');
   writeFileSync(configPath, pinned, 'utf8');
@@ -171,7 +171,7 @@ function copyTree(sourceRoot: string, targetRoot: string): void {
 }
 
 function seedSmokeFeatureStateDocs(cloneRoot: string): void {
-  const targetState = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+  const targetState = join(cloneRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
   mkdirSync(dirname(targetState), { recursive: true });
   writeFileSync(
     targetState,
@@ -378,9 +378,9 @@ if (kind === 'diagnostic') {
             'src/config/configReader.ts',
           ],
           forbidden_paths: [
-            'docs/compassrose/CONFIG.md',
-            'docs/compassrose/PROJECT_STATE.md',
-            'docs/features/002-configuration-model/state.md',
+            'compassrose/CONFIG.md',
+            'compassrose/PROJECT_STATE.md',
+            'compassrose/features/002-configuration-model/state.md',
           ],
         },
         constraints: [
@@ -603,18 +603,18 @@ const SEEDED_TASK = {
       summary: 'Minimal control-flow smoke task for the prototype harness.',
       relevant_paths: [
         'proto/e2e-control.txt',
-        'docs/compassrose/PROJECT_STATE.md',
-        'docs/compassrose/CONFIG.md',
+        'compassrose/PROJECT_STATE.md',
+        'compassrose/CONFIG.md',
       ],
       relevant_modules: ['PrototypeCompassRose', 'CodexCli', 'OpenCodeCli'],
     },
     scope: {
       allowed_paths: [
         'proto/e2e-control.txt',
-        'docs/compassrose/PROJECT_STATE.md',
+        'compassrose/PROJECT_STATE.md',
       ],
       forbidden_paths: [
-        'docs/compassrose/CONFIG.md',
+        'compassrose/CONFIG.md',
         'src/cli/main.ts',
       ],
     },

@@ -163,12 +163,12 @@ function createWorkspace(
 ): TempWorkspace {
   const workspace = createTempWorkspace({
     files: {
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-      'docs/compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
-      [`docs/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
-      [`docs/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
-      [`docs/features/${featureId}/state.md`]: featureStateSeed(lifecycleState, taskId, doctorRecoveryAttempts, doctorRecoveryLifetimeCount),
-      [`docs/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId),
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
+      [`compassrose/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
+      [`compassrose/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
+      [`compassrose/features/${featureId}/state.md`]: featureStateSeed(lifecycleState, taskId, doctorRecoveryAttempts, doctorRecoveryLifetimeCount),
+      [`compassrose/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId),
     },
   });
   copyContractsIntoWorkspace(workspace.root);
@@ -226,7 +226,7 @@ afterEach(() => {
 describe('doctor-recovery iteration limit', () => {
   test('readDoctorRecoveryAttempts defaults to 0 when the field is absent or unparsable', () => {
     workspace = createWorkspace('fixture-feature', 'F001-T01', 'quality_failed', 0);
-    const statePath = join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md');
+    const statePath = join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md');
     writeFileSync(statePath, readFileSync(statePath, 'utf8').replace('- doctor_recovery_attempts: 0\n', ''), 'utf8');
 
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
@@ -235,7 +235,7 @@ describe('doctor-recovery iteration limit', () => {
 
   test('readDoctorRecoveryAttempts reads back a previously persisted count', () => {
     workspace = createWorkspace('fixture-feature', 'F001-T01', 'quality_failed', 2);
-    const statePath = join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md');
+    const statePath = join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md');
 
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     expect(asAccess(orchestrator).readDoctorRecoveryAttempts(statePath)).toBe(2);
@@ -274,7 +274,7 @@ describe('doctor-recovery iteration limit', () => {
 
   test('updateFeatureStateForDoctorRecovery persists the incremented attempt count', () => {
     workspace = createWorkspace('fixture-feature', 'F001-T01', 'quality_failed', 1);
-    const statePath = join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md');
+    const statePath = join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md');
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     const access = asAccess(orchestrator);
 
@@ -296,7 +296,7 @@ describe('doctor-recovery iteration limit', () => {
     // qualityGateWaiver.test.ts's "resets doctor_recovery_attempts once quality gates genuinely
     // pass").
     workspace = createWorkspace('fixture-feature', 'F001-T01', 'unblock_pending', 2);
-    const statePath = join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md');
+    const statePath = join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md');
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     const access = asAccess(orchestrator);
     const task = access.loadTask('F001-T01');
@@ -324,7 +324,7 @@ describe('doctor-recovery iteration limit', () => {
     // cycles for the same unresolved blocker must exhaust the budget on the fourth, instead of
     // planDoctorRecoveryTask reading the count back as 0 every time.
     workspace = createWorkspace('fixture-feature', 'F001-T01', 'quality_failed', 0);
-    const statePath = join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md');
+    const statePath = join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md');
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     const access = asAccess(orchestrator);
     const task = access.loadTask('F001-T01');
@@ -364,7 +364,7 @@ describe('doctor-recovery iteration limit', () => {
 describe('doctor-recovery lifetime limit (ADR-0040)', () => {
   test('readDoctorRecoveryLifetimeCount defaults to 0 when the field is absent or unparsable', () => {
     workspace = createWorkspace('fixture-feature', 'F001-T01', 'quality_failed', 0);
-    const statePath = join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md');
+    const statePath = join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md');
     writeFileSync(statePath, readFileSync(statePath, 'utf8').replace('- doctor_recovery_lifetime_count: 0\n', ''), 'utf8');
 
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
@@ -409,7 +409,7 @@ describe('doctor-recovery lifetime limit (ADR-0040)', () => {
     // another recovery, then resolves that one too, and so on -- never once threatening the
     // per-signature limit -- must still eventually trip the lifetime limit.
     workspace = createWorkspace('fixture-feature', 'F001-T01', 'quality_failed', 0, 0);
-    const statePath = join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md');
+    const statePath = join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md');
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     const access = asAccess(orchestrator) as DoctorRecoveryLimitAccess & {
       updateFeatureStateAfterImplementation(

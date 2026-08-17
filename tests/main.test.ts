@@ -30,7 +30,7 @@ describe('main([]) — configuration-backed runtime preflight', () => {
     );
 
     const workspace = createTempWorkspace({
-      'docs/compassrose/CONFIG.md': config,
+      'compassrose/CONFIG.md': config,
     });
 
     try {
@@ -56,7 +56,7 @@ describe('main([]) — configuration-backed runtime preflight', () => {
     );
 
     const workspace = createTempWorkspace({
-      'docs/compassrose/CONFIG.md': config,
+      'compassrose/CONFIG.md': config,
     });
 
     try {
@@ -86,7 +86,7 @@ describe('main([]) — configuration-backed runtime preflight', () => {
     );
 
     const workspace = createTempWorkspace({
-      'docs/compassrose/CONFIG.md': config,
+      'compassrose/CONFIG.md': config,
     });
 
     try {
@@ -157,8 +157,8 @@ describe('main([]) — missing project configuration', () => {
 describe('main([]) — runtime preconditions', () => {
   test('returns non-zero when invoked outside a Git repository', () => {
     const root = mkdtempSync(join(tmpdir(), 'compassrose-main-test-nogit-'));
-    mkdirSync(join(root, 'docs/compassrose'), { recursive: true });
-    writeFileSync(join(root, 'docs/compassrose/CONFIG.md'), readFixtureConfigMarkdown(), 'utf8');
+    mkdirSync(join(root, 'compassrose'), { recursive: true });
+    writeFileSync(join(root, 'compassrose/CONFIG.md'), readFixtureConfigMarkdown(), 'utf8');
 
     try {
       const stderrMessages: string[] = [];
@@ -181,7 +181,7 @@ describe('main([]) — runtime preconditions', () => {
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
 
     const workspace = createTempWorkspace({
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
     });
 
     try {
@@ -235,7 +235,7 @@ describe('main([]) — nested directory from repo root', () => {
     );
 
     const workspace = createTempWorkspace({
-      'docs/compassrose/CONFIG.md': config,
+      'compassrose/CONFIG.md': config,
     });
 
     const nestedDir = join(workspace.root, 'src', 'deeply', 'nested');
@@ -267,7 +267,7 @@ describe('main([]) — role-to-adapter wiring validation', () => {
     );
 
     const workspace = createTempWorkspace({
-      'docs/compassrose/CONFIG.md': config,
+      'compassrose/CONFIG.md': config,
     });
 
     try {
@@ -298,7 +298,7 @@ describe('main([]) — role-to-adapter wiring validation', () => {
       );
 
     const workspace = createTempWorkspace({
-      'docs/compassrose/CONFIG.md': config,
+      'compassrose/CONFIG.md': config,
     });
 
     try {
@@ -329,7 +329,7 @@ describe('main([]) — role-to-adapter wiring validation', () => {
       );
 
     const workspace = createTempWorkspace({
-      'docs/compassrose/CONFIG.md': config,
+      'compassrose/CONFIG.md': config,
     });
 
     try {
@@ -386,8 +386,8 @@ function createTempGitWorkspace(
   }
 
   // Create and commit a base file so git considers the repo clean initially
-  mkdirSync(join(root, 'docs/compassrose'), { recursive: true });
-  writeFileSync(join(root, 'docs/compassrose/CONFIG.md'), dirtyConfig, 'utf8');
+  mkdirSync(join(root, 'compassrose'), { recursive: true });
+  writeFileSync(join(root, 'compassrose/CONFIG.md'), dirtyConfig, 'utf8');
   writeFileSync(join(root, 'README.md'), '# Test\n', 'utf8');
   // Needed for ContractRegistry (via CompassRoseOrchestrator) to construct once preflight
   // passes and main() hands off to the real orchestrator.
@@ -523,7 +523,7 @@ describe('main([]) — dirty worktree enforcement', () => {
 describe('main([\'doctor\']) — regression', () => {
   test('still routes to doctor command and returns doctor exit code', () => {
     const workspace = createTempWorkspace({
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
     });
 
     try {

@@ -59,6 +59,19 @@ import type {
 } from '../contracts/runtime/protoRuntime.js';
 import type { ProjectConfiguration } from '../config/configTypes.js';
 import { readProjectConfiguration } from '../config/configReader.js';
+import {
+  buildAdrPath,
+  buildDmsPath,
+  buildFeaturesReadmePath,
+  buildFeaturesRoot,
+  buildFixesRoot,
+  buildFixesReadmePath,
+  buildRoadmapPath,
+  buildSadPath,
+  buildTemplatePath,
+  getBootstrapConfigPath,
+  resolveCompassRoseRoot,
+} from '../config/compassRosePaths.js';
 import { resolveRepositoryRelativePath } from '../filesystem/pathResolver.js';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { normalizeTextForWrite, readUtf8 } from '../filesystem/textNormalization.js';
@@ -289,6 +302,11 @@ export class CompassRoseOrchestrator {
   private readonly projectStatePath: string;
   private readonly featuresRoot: string;
   private readonly fixesRoot: string;
+  // Repo-relative root for every CompassRose-owned document that isn't config/project-state
+  // (ADR.md, SAD.md, ROADMAP.md, DMS.md, templates/, features/README.md, fixes/README.md, and
+  // the default features_root/fixes_root) -- isolated from the target repository's own docs/
+  // tree. See src/config/compassRosePaths.ts.
+  private readonly compassRoseRoot: string;
   private readonly maxTasksPerRun: number;
   private readonly maxReviewIterations: number;
   private readonly maxRecoveryIterations: number;
@@ -330,7 +348,7 @@ export class CompassRoseOrchestrator {
     this.implementer = options.implementer === 'codex' ? this.codex : this.opencode;
     this.skipCleanWorktreeCheck = process.env.PROTO_COMPASSROSE_SKIP_CLEAN_CHECK === '1';
 
-    const configurationPath = join(repositoryRoot, 'docs', 'compassrose', 'CONFIG.md');
+    const configurationPath = getBootstrapConfigPath(repositoryRoot);
     const configuration = readProjectConfiguration(configurationPath);
     if (!configuration.ok) {
       throw new Error(`Unable to load project configuration from ${configurationPath}.`);
@@ -342,14 +360,15 @@ export class CompassRoseOrchestrator {
     const documentation = projectConfiguration.documentation as Record<string, unknown>;
     const limitsCandidate = projectConfiguration.limits;
     const limits = isRecord(limitsCandidate) ? limitsCandidate : {};
+    this.compassRoseRoot = resolveCompassRoseRoot(projectConfiguration);
     const projectStatePath = resolveRepositoryRelativePath(repositoryRoot, projectConfiguration.documentation.project_state);
     const featuresRoot = resolveRepositoryRelativePath(
       repositoryRoot,
-      readRecordString(documentation, 'features_root') ?? 'docs/features',
+      readRecordString(documentation, 'features_root') ?? buildFeaturesRoot(this.compassRoseRoot),
     );
     const fixesRoot = resolveRepositoryRelativePath(
       repositoryRoot,
-      readRecordString(documentation, 'fixes_root') ?? 'docs/fixes',
+      readRecordString(documentation, 'fixes_root') ?? buildFixesRoot(this.compassRoseRoot),
     );
 
     if (!projectStatePath || !featuresRoot || !fixesRoot) {
@@ -598,7 +617,7 @@ export class CompassRoseOrchestrator {
 
   /**
    * Two-pass scheduler so severity can affect what starts next without ever aborting
-   * something already in flight (confirmed policy -- see docs/fixes/README.md):
+   * something already in flight (confirmed policy -- see compassrose/fixes/README.md):
    *
    * Pass 1 scans for anything already mid-execution -- features first in today's exact
    * numeric order, then fixes -- and resumes the first one found, regardless of severity.
@@ -1319,12 +1338,12 @@ export class CompassRoseOrchestrator {
     }
 
     this.git.ensureCleanWorktree([
-      'docs/compassrose/PROJECT_STATE.md',
+      relativePath(this.repositoryRoot, this.projectStatePath),
       // No trailing slash: isPathAllowedByPrefix (gitClient.ts) appends its own '/' when
       // checking a directory prefix, so a prefix that already ends in '/' never matches
       // anything inside it (a latent bug found and fixed alongside findDisallowedDirtyPaths()
       // below, which had the same mistake).
-      `docs/features/${featureId}`,
+      this.featureRelativePath(featureId),
     ]);
   }
 
@@ -1359,9 +1378,9 @@ export class CompassRoseOrchestrator {
       return dirtyPaths;
     }
 
-    const allowedPrefixes: string[] = ['docs/compassrose/PROJECT_STATE.md'];
+    const allowedPrefixes: string[] = [relativePath(this.repositoryRoot, this.projectStatePath)];
     if (decision.feature_id) {
-      allowedPrefixes.push(`docs/features/${decision.feature_id}`, `docs/fixes/${decision.feature_id}`);
+      allowedPrefixes.push(this.featureRelativePath(decision.feature_id), this.fixRelativePath(decision.feature_id));
     }
 
     if (decision.task_id) {
@@ -1417,9 +1436,9 @@ export class CompassRoseOrchestrator {
     }
 
     const newAllowedPrefixes = [
-      'docs/compassrose/PROJECT_STATE.md',
-      `docs/features/${featureId}`,
-      `docs/fixes/${featureId}`,
+      relativePath(this.repositoryRoot, this.projectStatePath),
+      this.featureRelativePath(featureId),
+      this.fixRelativePath(featureId),
       ...newAllowedPaths,
     ];
 
@@ -1441,18 +1460,18 @@ export class CompassRoseOrchestrator {
     const sourcePaths = [
       'src/contracts/planner/feature-planning-prompt.md',
       relativePath(this.repositoryRoot, feature.requestPath),
-      'docs/compassrose/PROJECT_STATE.md',
-      'docs/compassrose/CONFIG.md',
-      'docs/features/README.md',
-      'docs/templates/feature.md',
-      'docs/templates/architecture.md',
-      'docs/templates/state.md',
+      relativePath(this.repositoryRoot, this.projectStatePath),
+      relativePath(this.repositoryRoot, this.configurationPath),
+      buildFeaturesReadmePath(this.compassRoseRoot),
+      buildTemplatePath(this.compassRoseRoot, 'feature.md'),
+      buildTemplatePath(this.compassRoseRoot, 'architecture.md'),
+      buildTemplatePath(this.compassRoseRoot, 'state.md'),
       'src/contracts/state/feature-state.md',
       'src/contracts/planner/feature-scope-guard.md',
-      'docs/ROADMAP.md',
-      'docs/SAD.md',
-      'docs/ADR.md',
-      'docs/DMS.md',
+      buildRoadmapPath(this.compassRoseRoot),
+      buildSadPath(this.compassRoseRoot),
+      buildAdrPath(this.compassRoseRoot),
+      buildDmsPath(this.compassRoseRoot),
     ];
     const prompt = [
       'Act as the CompassRose Planner.',
@@ -1462,18 +1481,18 @@ export class CompassRoseOrchestrator {
       'Read only:',
       '- `src/contracts/planner/feature-planning-prompt.md`',
       `- \`${relativePath(this.repositoryRoot, feature.requestPath)}\``,
-      '- `docs/compassrose/PROJECT_STATE.md`',
-      '- `docs/compassrose/CONFIG.md`',
-      '- `docs/features/README.md`',
-      '- `docs/templates/feature.md`',
-      '- `docs/templates/architecture.md`',
-      '- `docs/templates/state.md`',
+      `- \`${relativePath(this.repositoryRoot, this.projectStatePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, this.configurationPath)}\``,
+      `- \`${buildFeaturesReadmePath(this.compassRoseRoot)}\``,
+      `- \`${buildTemplatePath(this.compassRoseRoot, 'feature.md')}\``,
+      `- \`${buildTemplatePath(this.compassRoseRoot, 'architecture.md')}\``,
+      `- \`${buildTemplatePath(this.compassRoseRoot, 'state.md')}\``,
       '- `src/contracts/state/feature-state.md`',
       '- `src/contracts/planner/feature-scope-guard.md`',
-      '- `docs/ROADMAP.md`',
-      '- `docs/SAD.md`',
-      '- `docs/ADR.md`',
-      '- `docs/DMS.md`',
+      `- \`${buildRoadmapPath(this.compassRoseRoot)}\``,
+      `- \`${buildSadPath(this.compassRoseRoot)}\``,
+      `- \`${buildAdrPath(this.compassRoseRoot)}\``,
+      `- \`${buildDmsPath(this.compassRoseRoot)}\``,
       '',
       'Sibling features (use these to fill each task request\'s `sibling_check`; do not pre-claim scope one of them already owns):',
       ...(siblingFeatures.length > 0
@@ -1543,7 +1562,7 @@ export class CompassRoseOrchestrator {
   }
 
   /**
-   * Mirrors planFeature(), narrower: no docs/ROADMAP.md/SAD.md/ADR.md/DMS.md reads (a fix
+   * Mirrors planFeature(), narrower: no compassrose/ROADMAP.md/SAD.md/ADR.md/DMS.md reads (a fix
    * repairs already-shipped behavior rather than introducing new architectural surface), and
    * produces fix.md + state.md only -- no architecture.md. See
    * src/contracts/planner/fix-planning-prompt.md.
@@ -1554,11 +1573,11 @@ export class CompassRoseOrchestrator {
     const sourcePaths = [
       'src/contracts/planner/fix-planning-prompt.md',
       relativePath(this.repositoryRoot, fix.requestPath),
-      'docs/compassrose/PROJECT_STATE.md',
-      'docs/compassrose/CONFIG.md',
-      'docs/fixes/README.md',
-      'docs/templates/fix.md',
-      'docs/templates/state.md',
+      relativePath(this.repositoryRoot, this.projectStatePath),
+      relativePath(this.repositoryRoot, this.configurationPath),
+      buildFixesReadmePath(this.compassRoseRoot),
+      buildTemplatePath(this.compassRoseRoot, 'fix.md'),
+      buildTemplatePath(this.compassRoseRoot, 'state.md'),
       'src/contracts/state/feature-state.md',
     ];
     const prompt = [
@@ -1569,11 +1588,11 @@ export class CompassRoseOrchestrator {
       'Read only:',
       '- `src/contracts/planner/fix-planning-prompt.md`',
       `- \`${relativePath(this.repositoryRoot, fix.requestPath)}\``,
-      '- `docs/compassrose/PROJECT_STATE.md`',
-      '- `docs/compassrose/CONFIG.md`',
-      '- `docs/fixes/README.md`',
-      '- `docs/templates/fix.md`',
-      '- `docs/templates/state.md`',
+      `- \`${relativePath(this.repositoryRoot, this.projectStatePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, this.configurationPath)}\``,
+      `- \`${buildFixesReadmePath(this.compassRoseRoot)}\``,
+      `- \`${buildTemplatePath(this.compassRoseRoot, 'fix.md')}\``,
+      `- \`${buildTemplatePath(this.compassRoseRoot, 'state.md')}\``,
       '- `src/contracts/state/feature-state.md` (read "feature" as "fix" throughout; this fix has no architecture.md)',
       '',
       'Return JSON with complete Markdown for `fix.md` and `state.md`.',
@@ -1835,8 +1854,8 @@ export class CompassRoseOrchestrator {
       relativePath(this.repositoryRoot, feature.featurePath),
       relativePath(this.repositoryRoot, feature.architecturePath),
       relativePath(this.repositoryRoot, feature.statePath),
-      'docs/compassrose/PROJECT_STATE.md',
-      'docs/compassrose/CONFIG.md',
+      relativePath(this.repositoryRoot, this.projectStatePath),
+      relativePath(this.repositoryRoot, this.configurationPath),
       'src/contracts/runtime/operation-loop.md',
       'src/config/',
       'src/doctor/',
@@ -1858,8 +1877,8 @@ export class CompassRoseOrchestrator {
       `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
-      '- `docs/compassrose/PROJECT_STATE.md`',
-      '- `docs/compassrose/CONFIG.md`',
+      `- \`${relativePath(this.repositoryRoot, this.projectStatePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, this.configurationPath)}\``,
       '- `src/contracts/runtime/operation-loop.md`',
       '- `src/config/`',
       '- `src/doctor/`',
@@ -1936,8 +1955,8 @@ export class CompassRoseOrchestrator {
       'src/contracts/task/task.md',
       relativePath(this.repositoryRoot, feature.featurePath),
       relativePath(this.repositoryRoot, feature.statePath),
-      'docs/compassrose/PROJECT_STATE.md',
-      'docs/compassrose/CONFIG.md',
+      relativePath(this.repositoryRoot, this.projectStatePath),
+      relativePath(this.repositoryRoot, this.configurationPath),
       'src/contracts/runtime/operation-loop.md',
       ...taskRequest.scope.allowed_paths,
     ];
@@ -1954,8 +1973,8 @@ export class CompassRoseOrchestrator {
       '- `src/contracts/task/task.md`',
       `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
       `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
-      '- `docs/compassrose/PROJECT_STATE.md`',
-      '- `docs/compassrose/CONFIG.md`',
+      `- \`${relativePath(this.repositoryRoot, this.projectStatePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, this.configurationPath)}\``,
       '- `src/contracts/runtime/operation-loop.md`',
       ...taskRequest.scope.allowed_paths.map((path) => `- \`${path}\``),
       ...this.buildRecoveryLessonPromptLines(featureId),
@@ -2037,7 +2056,7 @@ export class CompassRoseOrchestrator {
   /**
    * Mirrors planTask(), narrower: no architecture.md reference (a fix has none), a sibling-fix
    * index instead of the sibling-feature index, and no scope_justification/feature-scope-guard
-   * check -- that mechanism stays feature-only in v1 (see docs/fixes/README.md and the plan).
+   * check -- that mechanism stays feature-only in v1 (see compassrose/fixes/README.md and the plan).
    * Fix-owned tasks reuse the same feature_id/`## Parent Feature` field a feature task already
    * uses (see resolveWorkItemContext()), with task ids prefixed `FX` instead of `F` so a task id
    * alone still tells a human which lifecycle it belongs to.
@@ -2054,8 +2073,8 @@ export class CompassRoseOrchestrator {
       'src/contracts/task/task.md',
       relativePath(this.repositoryRoot, fix.fixPath),
       relativePath(this.repositoryRoot, fix.statePath),
-      'docs/compassrose/PROJECT_STATE.md',
-      'docs/compassrose/CONFIG.md',
+      relativePath(this.repositoryRoot, this.projectStatePath),
+      relativePath(this.repositoryRoot, this.configurationPath),
       'src/contracts/runtime/operation-loop.md',
     ];
     const prompt = [
@@ -2071,8 +2090,8 @@ export class CompassRoseOrchestrator {
       '- `src/contracts/task/task.md`',
       `- \`${relativePath(this.repositoryRoot, fix.fixPath)}\``,
       `- \`${relativePath(this.repositoryRoot, fix.statePath)}\``,
-      '- `docs/compassrose/PROJECT_STATE.md`',
-      '- `docs/compassrose/CONFIG.md`',
+      `- \`${relativePath(this.repositoryRoot, this.projectStatePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, this.configurationPath)}\``,
       '- `src/contracts/runtime/operation-loop.md`',
       ...this.buildRecoveryLessonPromptLines(fixId),
       '',
@@ -2221,8 +2240,8 @@ export class CompassRoseOrchestrator {
       ...(owner.architecturePath ? [relativePath(this.repositoryRoot, owner.architecturePath)] : []),
       relativePath(this.repositoryRoot, owner.statePath),
       ...(recoveryActiveTask ? [`.git/proto-compassrose/implementation-attempts/${recoveryActiveTask}.json`] : []),
-      'docs/compassrose/PROJECT_STATE.md',
-      'docs/compassrose/CONFIG.md',
+      relativePath(this.repositoryRoot, this.projectStatePath),
+      relativePath(this.repositoryRoot, this.configurationPath),
       'src/contracts/runtime/operation-loop.md',
     ];
     const prompt = [
@@ -2241,8 +2260,8 @@ export class CompassRoseOrchestrator {
       ...(owner.architecturePath ? [`- \`${relativePath(this.repositoryRoot, owner.architecturePath)}\``] : []),
       `- \`${relativePath(this.repositoryRoot, owner.statePath)}\``,
       ...(recoveryActiveTask ? [`- \`.git/proto-compassrose/implementation-attempts/${recoveryActiveTask}.json\``] : []),
-      '- `docs/compassrose/PROJECT_STATE.md`',
-      '- `docs/compassrose/CONFIG.md`',
+      `- \`${relativePath(this.repositoryRoot, this.projectStatePath)}\``,
+      `- \`${relativePath(this.repositoryRoot, this.configurationPath)}\``,
       '- `src/contracts/runtime/operation-loop.md`',
       ...this.buildLatestDiagnosticPromptLines(featureId),
       ...this.buildRecoveryLessonPromptLines(featureId, restorationTarget.active_task),
@@ -2837,7 +2856,7 @@ export class CompassRoseOrchestrator {
       '- `src/contracts/runtime/diagnostic-autocorrection.md`',
       '- `src/contracts/task/doctor-recovery-task.md`',
       `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
-      '- `docs/compassrose/PROJECT_STATE.md`',
+      `- \`${relativePath(this.repositoryRoot, this.projectStatePath)}\``,
       '',
       'Blocker context:',
       `- kind: ${blocker.kind}`,
@@ -3304,7 +3323,7 @@ export class CompassRoseOrchestrator {
       relativePath(this.repositoryRoot, owner.definitionPath),
       ...(owner.architecturePath ? [relativePath(this.repositoryRoot, owner.architecturePath)] : []),
       relativePath(this.repositoryRoot, owner.statePath),
-      'docs/compassrose/CONFIG.md',
+      relativePath(this.repositoryRoot, this.configurationPath),
       diffPath,
       implementationPath,
       qualityPath,
@@ -3333,7 +3352,7 @@ export class CompassRoseOrchestrator {
       `- \`${relativePath(this.repositoryRoot, owner.definitionPath)}\``,
       ...(owner.architecturePath ? [`- \`${relativePath(this.repositoryRoot, owner.architecturePath)}\``] : []),
       `- \`${relativePath(this.repositoryRoot, owner.statePath)}\``,
-      '- `docs/compassrose/CONFIG.md`',
+      `- \`${relativePath(this.repositoryRoot, this.configurationPath)}\``,
       `- \`${diffPath}\``,
       `- \`${implementationPath}\``,
       '- `implementation.implementation_notes` inside the implementation artifact (the field is named `implementation_notes`, not `notes`); if it is null or empty, treat that as an execution defect and report it explicitly.',
@@ -3829,7 +3848,7 @@ export class CompassRoseOrchestrator {
       relativePath(this.repositoryRoot, owner.definitionPath),
       ...(owner.architecturePath ? [relativePath(this.repositoryRoot, owner.architecturePath)] : []),
       relativePath(this.repositoryRoot, owner.statePath),
-      'docs/compassrose/CONFIG.md',
+      relativePath(this.repositoryRoot, this.configurationPath),
       join(tempDir, 'implementation.json'),
       join(tempDir, 'quality-gates.json'),
       reviewPath,
@@ -3854,7 +3873,7 @@ export class CompassRoseOrchestrator {
       `- \`${relativePath(this.repositoryRoot, owner.definitionPath)}\``,
       ...(owner.architecturePath ? [`- \`${relativePath(this.repositoryRoot, owner.architecturePath)}\``] : []),
       `- \`${relativePath(this.repositoryRoot, owner.statePath)}\``,
-      '- `docs/compassrose/CONFIG.md`',
+      `- \`${relativePath(this.repositoryRoot, this.configurationPath)}\``,
       `- \`${join(tempDir, 'implementation.json')}\``,
       '- `implementation.implementation_notes` inside `implementation.json` (the field is named `implementation_notes`, not `notes`); if it is null or empty, treat that as an execution defect and report it explicitly.',
       `- \`${join(tempDir, 'quality-gates.json')}\``,
@@ -4942,7 +4961,7 @@ export class CompassRoseOrchestrator {
         ],
         relevant_modules: [
           'src/contracts/state/feature-state.md',
-          'docs/compassrose/PROJECT_STATE.md',
+          relativePath(this.repositoryRoot, this.projectStatePath),
         ],
       },
       scope: {
@@ -4953,9 +4972,9 @@ export class CompassRoseOrchestrator {
         forbidden_paths: [
           'src/',
           'tests/',
-          `docs/features/${feature.id}/feature.md`,
-          `docs/features/${feature.id}/architecture.md`,
-          'docs/compassrose/CONFIG.md',
+          this.featureRelativePath(feature.id, 'feature.md'),
+          this.featureRelativePath(feature.id, 'architecture.md'),
+          relativePath(this.repositoryRoot, this.configurationPath),
         ],
       },
       constraints: [
@@ -5504,6 +5523,20 @@ export class CompassRoseOrchestrator {
     };
   }
 
+  // Repo-relative path under this.featuresRoot/this.fixesRoot (which already respect an
+  // explicit documentation.features_root/fixes_root override, unlike compassRoseRoot alone) --
+  // every prompt "Read only" bullet and allowed-path entry that names a specific feature/fix
+  // document must go through these, not re-derive the root itself.
+  private featureRelativePath(featureId: string, ...segments: readonly string[]): string {
+    const base = relativePath(this.repositoryRoot, this.featuresRoot);
+    return [base, featureId, ...segments].filter((segment) => segment.length > 0).join('/');
+  }
+
+  private fixRelativePath(fixId: string, ...segments: readonly string[]): string {
+    const base = relativePath(this.repositoryRoot, this.fixesRoot);
+    return [base, fixId, ...segments].filter((segment) => segment.length > 0).join('/');
+  }
+
   private listFeatures(): FeatureRecord[] {
     if (!existsSync(this.featuresRoot)) {
       return [];
@@ -5616,7 +5649,7 @@ export class CompassRoseOrchestrator {
       markdown,
       'Current Reality',
       `- The active feature pointer currently targets \`${featureId}\``,
-      `- The active feature pointer currently targets \`${featureId}\`; the detailed task and lifecycle state for that feature lives in \`docs/features/${featureId}/state.md\`.`,
+      `- The active feature pointer currently targets \`${featureId}\`; the detailed task and lifecycle state for that feature lives in \`${this.featureRelativePath(featureId, 'state.md')}\`.`,
     );
     return markdown;
   }
@@ -5643,7 +5676,7 @@ export class CompassRoseOrchestrator {
       markdown,
       'Current Reality',
       `- The active work-item pointer currently targets fix \`${fixId}\``,
-      `- The active work-item pointer currently targets fix \`${fixId}\`; the detailed task and lifecycle state for that fix lives in \`docs/fixes/${fixId}/state.md\`.`,
+      `- The active work-item pointer currently targets fix \`${fixId}\`; the detailed task and lifecycle state for that fix lives in \`${this.fixRelativePath(fixId, 'state.md')}\`.`,
     );
     return markdown;
   }
@@ -6546,7 +6579,7 @@ export class CompassRoseOrchestrator {
       created_at: new Date().toISOString(),
       trigger,
       selected_step: selectedStep,
-      likely_sources: inferLikelySources(trigger, selectedStep),
+      likely_sources: inferLikelySources(trigger, selectedStep, this.compassRoseRoot),
       observations: buildObservations(trigger, selectedStep),
       next_questions: buildNextQuestions(trigger, selectedStep),
     };

@@ -36,7 +36,7 @@ afterEach(() => {
 describe('resolveSourceTaskRequestId', () => {
   test('reads source_task_request_id directly off the task\'s own stored artifact', () => {
     workspace = createTempWorkspace({
-      files: { 'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown() },
+      files: { 'compassrose/CONFIG.md': readFixtureConfigMarkdown() },
     });
     copyContractsIntoWorkspace(workspace.root);
     execFileSync('git', ['init', '--quiet'], { cwd: workspace.root });
@@ -58,7 +58,7 @@ describe('resolveSourceTaskRequestId', () => {
     // -- only the original task-planning-created task does. A later task-planning pass then
     // proposed recreating F002-T17 from scratch, colliding with the original task's own history.
     workspace = createTempWorkspace({
-      files: { 'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown() },
+      files: { 'compassrose/CONFIG.md': readFixtureConfigMarkdown() },
     });
     copyContractsIntoWorkspace(workspace.root);
     execFileSync('git', ['init', '--quiet'], { cwd: workspace.root });
@@ -77,7 +77,7 @@ describe('resolveSourceTaskRequestId', () => {
 
   test('returns null when neither the task nor its anchor carries a source_task_request_id', () => {
     workspace = createTempWorkspace({
-      files: { 'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown() },
+      files: { 'compassrose/CONFIG.md': readFixtureConfigMarkdown() },
     });
     copyContractsIntoWorkspace(workspace.root);
     execFileSync('git', ['init', '--quiet'], { cwd: workspace.root });

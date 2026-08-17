@@ -26,9 +26,9 @@ const minimalMvpConfig = [
   '  build: ""',
   '',
   'documentation:',
-  '  roadmap: docs/ROADMAP.md',
-  '  project_state: docs/compassrose/PROJECT_STATE.md',
-  '  config: docs/compassrose/CONFIG.md',
+  '  roadmap: compassrose/ROADMAP.md',
+  '  project_state: compassrose/PROJECT_STATE.md',
+  '  config: compassrose/CONFIG.md',
   '  contracts_root: src/contracts',
   '```',
 ].join('\n');
@@ -36,11 +36,14 @@ const minimalMvpConfig = [
 describe('doctor command', () => {
   test('passes on a repository that satisfies the MVP configuration contract', () => {
     const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
+      // 'docs' is this fixture's own (empty) documentation root -- project.documentation_root's
+      // existence check needs it; it used to be created implicitly as CONFIG.md's own parent
+      // directory before CompassRose's docs moved out of docs/.
+      directories: ['.git', 'src/contracts', 'docs'],
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
-        'docs/ROADMAP.md': '# roadmap\n',
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });
 
@@ -58,10 +61,13 @@ describe('doctor command', () => {
 
   test('fails when a required documentation path is missing', () => {
     const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
+      // 'docs' is this fixture's own (empty) documentation root -- project.documentation_root's
+      // existence check needs it; it used to be created implicitly as CONFIG.md's own parent
+      // directory before CompassRose's docs moved out of docs/.
+      directories: ['.git', 'src/contracts', 'docs'],
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
       },
     });
 
@@ -71,7 +77,7 @@ describe('doctor command', () => {
       expect(report.exitCode).toBe(1);
       expect(report.success).toBe(false);
       expect(report.checks.some((check) => check.status === 'fail')).toBe(true);
-      expect(formatDoctorReport(report)).toContain('docs/ROADMAP.md');
+      expect(formatDoctorReport(report)).toContain('compassrose/ROADMAP.md');
     } finally {
       workspace.dispose();
     }
@@ -79,11 +85,14 @@ describe('doctor command', () => {
 
   test('passes configuration check with minimal MVP configuration', () => {
     const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
+      // 'docs' is this fixture's own (empty) documentation root -- project.documentation_root's
+      // existence check needs it; it used to be created implicitly as CONFIG.md's own parent
+      // directory before CompassRose's docs moved out of docs/.
+      directories: ['.git', 'src/contracts', 'docs'],
       files: {
-        'docs/compassrose/CONFIG.md': minimalMvpConfig,
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
-        'docs/ROADMAP.md': '# roadmap\n',
+        'compassrose/CONFIG.md': minimalMvpConfig,
+        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });
 
@@ -102,12 +111,15 @@ describe('doctor command', () => {
 describe('doctor command — project state', () => {
   test('reports project-state as a distinct check when it is valid', () => {
     const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
+      // 'docs' is this fixture's own (empty) documentation root -- project.documentation_root's
+      // existence check needs it; it used to be created implicitly as CONFIG.md's own parent
+      // directory before CompassRose's docs moved out of docs/.
+      directories: ['.git', 'src/contracts', 'docs'],
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'docs/compassrose/PROJECT_STATE.md':
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/PROJECT_STATE.md':
           '# State: Test\n\n## Status\n\nIn progress\n',
-        'docs/ROADMAP.md': '# roadmap\n',
+        'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });
 
@@ -128,14 +140,17 @@ describe('doctor command — project state', () => {
     // We need a valid config that points to a path that doesn't exist.
     // Read fixture and replace project_state path with a non-existent one.
     const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
+      // 'docs' is this fixture's own (empty) documentation root -- project.documentation_root's
+      // existence check needs it; it used to be created implicitly as CONFIG.md's own parent
+      // directory before CompassRose's docs moved out of docs/.
+      directories: ['.git', 'src/contracts', 'docs'],
       files: {
-        'docs/compassrose/CONFIG.md':
+        'compassrose/CONFIG.md':
           readFixtureConfigMarkdown().replace(
-            'project_state: docs/compassrose/PROJECT_STATE.md',
-            'project_state: docs/compassrose/MISSING_STATE.md',
+            'project_state: compassrose/PROJECT_STATE.md',
+            'project_state: compassrose/MISSING_STATE.md',
           ),
-        'docs/ROADMAP.md': '# roadmap\n',
+        'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });
 
@@ -156,11 +171,14 @@ describe('doctor command — project state', () => {
 
   test('reports project-state failure when content is malformed', () => {
     const workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
+      // 'docs' is this fixture's own (empty) documentation root -- project.documentation_root's
+      // existence check needs it; it used to be created implicitly as CONFIG.md's own parent
+      // directory before CompassRose's docs moved out of docs/.
+      directories: ['.git', 'src/contracts', 'docs'],
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'docs/compassrose/PROJECT_STATE.md': 'not a real state doc\n',
-        'docs/ROADMAP.md': '# roadmap\n',
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/PROJECT_STATE.md': 'not a real state doc\n',
+        'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });
 

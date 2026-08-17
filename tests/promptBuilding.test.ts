@@ -25,7 +25,7 @@ function buildParsedTask(overrides: Partial<ParsedTaskDocument> = {}): ParsedTas
     doctorRecovery: null,
     unblock: null,
     reviewableDiffHandoff: { requireLiveDiff: true, allowGitCommitBeforeHandoff: false, requiredChangedFiles: [] },
-    path: 'docs/features/001-widgets/tasks/001-add-widget-support.md',
+    path: 'compassrose/features/001-widgets/tasks/001-add-widget-support.md',
     ...overrides,
   };
 }
@@ -61,7 +61,7 @@ describe('buildImplementerPrompt', () => {
       minimum_progress_evidence: [],
       trace: { roadmap_objective: 'x', feature_goal: 'y', state_gap: 'z' },
       state_target: {
-        feature_state_path: 'docs/features/001-widgets/state.md',
+        feature_state_path: 'compassrose/features/001-widgets/state.md',
         project_state_path: null,
         contract_reference: '',
         detected_issue: '',

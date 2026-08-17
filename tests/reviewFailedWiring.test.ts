@@ -146,12 +146,12 @@ echo unused
 function createWorkspace(featureId: string, taskId: string): TempWorkspace {
   const workspace = createTempWorkspace({
     files: {
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-      'docs/compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
-      [`docs/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
-      [`docs/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
-      [`docs/features/${featureId}/state.md`]: featureStateSeed(taskId),
-      [`docs/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId),
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
+      [`compassrose/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
+      [`compassrose/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
+      [`compassrose/features/${featureId}/state.md`]: featureStateSeed(taskId),
+      [`compassrose/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId),
     },
   });
   copyContractsIntoWorkspace(workspace.root);
@@ -239,7 +239,7 @@ describe('reviewer failed -> review_failed wiring', () => {
 
     expect(blocker.kind).toBeTruthy();
 
-    const featureState = readFileSync(join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'), 'utf8');
+    const featureState = readFileSync(join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md'), 'utf8');
     expect(featureState.match(/## Lifecycle State\n\n(\S+)/)?.[1]).toBe('review_failed');
     expect(featureState).toContain('- last_review_result: failed');
     expect(featureState).toContain(blocker.signature);

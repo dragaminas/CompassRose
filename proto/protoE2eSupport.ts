@@ -2,7 +2,7 @@ import { existsSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * Removes every `docs/features/*` entry from a disposable clone except the ones a scenario
+ * Removes every `compassrose/features/*` entry from a disposable clone except the ones a scenario
  * explicitly declares it depends on (see ADR-0034/ADR-0035).
  *
  * A clone produced by `git clone` of this repository inherits every feature directory as of the
@@ -17,7 +17,7 @@ import { join } from 'node:path';
  * builds on a clone that already contains exactly the declared features and nothing inherited.
  */
 export function isolateFeatureDirectories(cloneRoot: string, allowedFeatureIds: readonly string[]): void {
-  const featuresRoot = join(cloneRoot, 'docs', 'features');
+  const featuresRoot = join(cloneRoot, 'compassrose', 'features');
   if (!existsSync(featuresRoot)) {
     return;
   }

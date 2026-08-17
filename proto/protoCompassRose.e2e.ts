@@ -18,7 +18,7 @@ const SCENARIO_FEATURE_IDS = ['002-configuration-model'] as const;
 // the task id, or a rename here will silently stop matching what the runtime actually produces.
 //
 // This scenario runs against a real clone of this repository, so the task-id chosen here must
-// never collide with a real historical correction under docs/features/002-configuration-model/tasks/
+// never collide with a real historical correction under compassrose/features/002-configuration-model/tasks/
 // (buildStateCorrectionTaskId scans that directory for existing `<id>-C<n>` references and picks the
 // next number, regardless of whether they came from this fixture or real project history). An
 // out-of-range task number keeps this fixture-only anchor from ever landing on a real task.
@@ -75,14 +75,14 @@ function main(): number {
   isolateFeatureDirectories(cloneRoot, SCENARIO_FEATURE_IDS);
   syncFeatureStateDocs(repoRoot, cloneRoot, SCENARIO_FEATURE_IDS);
   pinScenarioConfigLimits(cloneRoot);
-  // Real, still-unformalized fixes committed in this repo's own docs/fixes now default to
+  // Real, still-unformalized fixes committed in this repo's own compassrose/fixes now default to
   // 'critical' severity (fail-safe upward -- see readFixSeverityAndOwnership) until formalized.
   // Once the scenario's targeted feature stops being "continuing" (e.g. after a doctor recovery
   // task completes), the scheduler would otherwise pick up a real fix the mocks below know
   // nothing about and crash. These scenarios never seed or assert on any fix, so the declared set
   // is empty -- remove real fixes from the disposable clone entirely (ADR-0034's same rule, with
   // an empty allow-list).
-  rmSync(join(cloneRoot, 'docs', 'fixes'), { recursive: true, force: true });
+  rmSync(join(cloneRoot, 'compassrose', 'fixes'), { recursive: true, force: true });
 
   // A fresh local clone (and the sync steps above, which rewrite files with content that's
   // still identical to HEAD) can leave the index stat-cache out of sync with the checked-out
@@ -183,7 +183,7 @@ function main(): number {
   };
   const markerPath = join(cloneRoot, 'proto', markerFileNameForScenario(scenario));
   const markerExists = existsSync(markerPath);
-  const featureTasksDirectory = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'tasks');
+  const featureTasksDirectory = join(cloneRoot, 'compassrose', 'features', '002-configuration-model', 'tasks');
   const protoTasksDirectory = join(cloneRoot, '.git', 'proto-compassrose', 'tasks');
   const blockerProfilePath = join(
     cloneRoot,
@@ -194,7 +194,7 @@ function main(): number {
   );
   const unblockTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-U1.json');
   // Deliberately not "F002-T04-C1": that id already belongs to a real, committed correction
-  // task in this repository's actual history (docs/features/002-configuration-model/tasks/
+  // task in this repository's actual history (compassrose/features/002-configuration-model/tasks/
   // 004.1-repair-feature-state-for-f002-t04.md). Reusing it here would collide with real task
   // history once the e2e harness clones the current repository as its test workspace.
   const correctionTaskPath = join(cloneRoot, '.git', 'proto-compassrose', 'tasks', 'F002-T04-C90.json');
@@ -213,7 +213,7 @@ function main(): number {
     'implementation-attempts',
     'F002-T04.json',
   );
-  const malformedFeatureStatePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+  const malformedFeatureStatePath = join(cloneRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
   const worktreeStatus = spawnSync('git', ['status', '--porcelain'], {
     cwd: cloneRoot,
     encoding: 'utf8',
@@ -355,7 +355,7 @@ function buildScenarioChecks(input: {
   }
 
   if (scenario === 'terminal-review-blocked') {
-    const fixesRoot = join(cloneRoot, 'docs', 'fixes');
+    const fixesRoot = join(cloneRoot, 'compassrose', 'fixes');
     const fixedFixDirectories = existsSync(fixesRoot) ? readdirSync(fixesRoot) : [];
     const featureState = readFileSync(malformedFeatureStatePath, 'utf8');
     return [
@@ -603,11 +603,11 @@ function markerFileNameForScenario(scenario: string): string {
 
 // These scenarios and their mocked codex/opencode responses are scripted around exactly one
 // primary task per `run --loop` invocation. Pin that here instead of inheriting whatever the
-// live repository's docs/compassrose/CONFIG.md happens to say today, so a real project tuning
+// live repository's compassrose/CONFIG.md happens to say today, so a real project tuning
 // change (e.g. raising limits.max_tasks_per_run for faster unattended progress) can't silently
 // make the runtime plan a second, unscripted task mid-scenario and fail in an unrelated way.
 function pinScenarioConfigLimits(cloneRoot: string): void {
-  const configPath = join(cloneRoot, 'docs', 'compassrose', 'CONFIG.md');
+  const configPath = join(cloneRoot, 'compassrose', 'CONFIG.md');
   const config = readFileSync(configPath, 'utf8');
   const pinned = config.replace(/max_tasks_per_run:\s*\d+/, 'max_tasks_per_run: 1');
   writeFileSync(configPath, pinned, 'utf8');
@@ -618,8 +618,8 @@ function pinScenarioConfigLimits(cloneRoot: string): void {
 // above: the clone's feature set is exactly what the caller declares, not everything present in
 // the live repository at sync time.
 function syncFeatureStateDocs(repoRoot: string, cloneRoot: string, featureIds: readonly string[]): void {
-  const sourceRoot = join(repoRoot, 'docs', 'features');
-  const targetRoot = join(cloneRoot, 'docs', 'features');
+  const sourceRoot = join(repoRoot, 'compassrose', 'features');
+  const targetRoot = join(cloneRoot, 'compassrose', 'features');
 
   for (const featureId of featureIds) {
     const sourceState = join(sourceRoot, featureId, 'state.md');
@@ -723,19 +723,19 @@ function seedTaskArtifacts(cloneRoot: string): void {
 }
 
 function seedBlockedFeatureState(cloneRoot: string): void {
-  const statePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+  const statePath = join(cloneRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
   writeFileSync(statePath, BLOCKED_STATE_SEED, 'utf8');
 }
 
 function seedImplementationFailedFeatureState(cloneRoot: string): void {
-  const statePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+  const statePath = join(cloneRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
   writeFileSync(statePath, IMPLEMENTATION_FAILED_STATE_SEED, 'utf8');
 }
 
 function seedMalformedFeatureState(cloneRoot: string): void {
-  const statePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+  const statePath = join(cloneRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
   writeFileSync(statePath, MALFORMED_STATE_MISSING_ACTIVE_TASK_SEED, 'utf8');
-  // resolveStateCorrectionActiveTask() checks docs/compassrose/PROJECT_STATE.md's Pending/Next
+  // resolveStateCorrectionActiveTask() checks compassrose/PROJECT_STATE.md's Pending/Next
   // Planning Hint/Current Reality sections for a task-id hint *before* falling back to the
   // seeded STATE_CORRECTION_FALLBACK_TASK_ID artifact. Left un-reset, this file is whatever the
   // real repository's PROJECT_STATE.md currently says - which drifts every time real feature
@@ -750,7 +750,7 @@ function seedStateCorrectionFallbackTaskArtifact(cloneRoot: string): void {
   // loadTask() prefers this cached artifact's own fields (scope included) over the live .md
   // document it's meant to mirror -- see the "task snapshot caching" gotcha. The scope below must
   // therefore match what the .md fixture written just below actually declares
-  // (docs/features/002-configuration-model/tasks/), not SEEDED_TASK's unrelated real scope,
+  // (compassrose/features/002-configuration-model/tasks/), not SEEDED_TASK's unrelated real scope,
   // or the runtime's deterministic review-time scope check will flag this fixture's own task
   // document as an out-of-scope change.
   writeFileSync(
@@ -763,7 +763,7 @@ function seedStateCorrectionFallbackTaskArtifact(cloneRoot: string): void {
         scope: {
           // 'proto/' covers the mock opencode implementer's own marker file convention (see
           // OPENCODE_MOCK_SCRIPT), which is not real implementation work either.
-          allowed_paths: ['docs/features/002-configuration-model/tasks/', 'proto/'],
+          allowed_paths: ['compassrose/features/002-configuration-model/tasks/', 'proto/'],
           forbidden_paths: ['all other paths'],
         },
       },
@@ -776,7 +776,7 @@ function seedStateCorrectionFallbackTaskArtifact(cloneRoot: string): void {
   // STATE_CORRECTION_FALLBACK_TASK_ID is a fixture-only id chosen precisely so it can never match
   // a real historical task, so unlike a real task number it has no pre-existing document in the
   // cloned repository's history - this scenario has to seed its own minimal one.
-  const featureTasksDirectory = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'tasks');
+  const featureTasksDirectory = join(cloneRoot, 'compassrose', 'features', '002-configuration-model', 'tasks');
   mkdirSync(featureTasksDirectory, { recursive: true });
   const taskNumber = taskNumberSlug(STATE_CORRECTION_FALLBACK_TASK_ID);
   writeFileSync(
@@ -796,7 +796,7 @@ repair anchor.
 
 ## Scope
 Allowed:
-- \`docs/features/002-configuration-model/tasks/\`
+- \`compassrose/features/002-configuration-model/tasks/\`
 - \`proto/\`
 
 Forbidden:
@@ -807,12 +807,12 @@ Forbidden:
 }
 
 function seedCleanProjectState(cloneRoot: string): void {
-  const projectStatePath = join(cloneRoot, 'docs', 'compassrose', 'PROJECT_STATE.md');
+  const projectStatePath = join(cloneRoot, 'compassrose', 'PROJECT_STATE.md');
   writeFileSync(projectStatePath, CLEAN_PROJECT_STATE_SEED, 'utf8');
 }
 
 function seedTaskReadyState(cloneRoot: string): void {
-  const statePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+  const statePath = join(cloneRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
   writeFileSync(
     statePath,
     `# State: Configuration Model
@@ -993,9 +993,9 @@ function sequenceForScenario(scenario) {
               'src/config/configReader.ts',
             ],
             forbidden_paths: [
-              'docs/features/002-configuration-model/state.md',
-              'docs/compassrose/PROJECT_STATE.md',
-              'docs/compassrose/CONFIG.md',
+              'compassrose/features/002-configuration-model/state.md',
+              'compassrose/PROJECT_STATE.md',
+              'compassrose/CONFIG.md',
             ],
           },
           constraints: [
@@ -1048,9 +1048,9 @@ function sequenceForScenario(scenario) {
               'src/config/configReader.ts',
             ],
             forbidden_paths: [
-              'docs/features/002-configuration-model/state.md',
-              'docs/compassrose/PROJECT_STATE.md',
-              'docs/compassrose/CONFIG.md',
+              'compassrose/features/002-configuration-model/state.md',
+              'compassrose/PROJECT_STATE.md',
+              'compassrose/CONFIG.md',
             ],
           },
           constraints: [
@@ -1103,9 +1103,9 @@ function sequenceForScenario(scenario) {
               'src/config/configReader.ts',
             ],
             forbidden_paths: [
-              'docs/features/002-configuration-model/state.md',
-              'docs/compassrose/PROJECT_STATE.md',
-              'docs/compassrose/CONFIG.md',
+              'compassrose/features/002-configuration-model/state.md',
+              'compassrose/PROJECT_STATE.md',
+              'compassrose/CONFIG.md',
             ],
           },
           constraints: [
@@ -1161,7 +1161,7 @@ function sequenceForScenario(scenario) {
             forbidden_paths: [
               'src/cli/main.ts',
               'src/config/configReader.ts',
-              'docs/compassrose/PROJECT_STATE.md',
+              'compassrose/PROJECT_STATE.md',
             ],
           },
           constraints: [
@@ -1218,7 +1218,7 @@ function sequenceForScenario(scenario) {
           findings: [
             {
               severity: 'warning',
-              message: 'The reviewable diff includes docs/compassrose/PROJECT_STATE.md and docs/features/002-configuration-model/state.md, so the recovery boundary needs to exclude orchestration state.',
+              message: 'The reviewable diff includes compassrose/PROJECT_STATE.md and compassrose/features/002-configuration-model/state.md, so the recovery boundary needs to exclude orchestration state.',
               path: null,
               related_acceptance_criterion: 'prototype records interface adjustments, model limitations, or scope-isolation lessons',
             },
@@ -1226,8 +1226,8 @@ function sequenceForScenario(scenario) {
           scope_check: {
             status: 'failed',
             unrelated_changes: [
-              'docs/compassrose/PROJECT_STATE.md',
-              'docs/features/002-configuration-model/state.md',
+              'compassrose/PROJECT_STATE.md',
+              'compassrose/features/002-configuration-model/state.md',
             ],
           },
           quality_gate_check: {
@@ -1248,8 +1248,8 @@ function sequenceForScenario(scenario) {
             review_findings: ['The implementer needed a tighter first step to proceed safely.'],
             scope: {
               allowed_paths: [
-                'docs/features/002-configuration-model/tasks/F002-T04.md',
-                'docs/features/002-configuration-model/tasks/F002-T04-C90.md',
+                'compassrose/features/002-configuration-model/tasks/F002-T04.md',
+                'compassrose/features/002-configuration-model/tasks/F002-T04-C90.md',
                 'proto/interface-gap.txt',
               ],
               forbidden_paths: ['src/cli/main.ts', 'src/config/configReader.ts'],
@@ -1321,7 +1321,7 @@ function sequenceForScenario(scenario) {
             forbidden_paths: [
               'src/cli/main.ts',
               'src/config/configReader.ts',
-              'docs/compassrose/PROJECT_STATE.md',
+              'compassrose/PROJECT_STATE.md',
             ],
           },
           constraints: [
@@ -1696,9 +1696,9 @@ const SEEDED_TASK = {
     feature_id: '002-configuration-model',
     title: 'Validate runtime-precondition policy fields in the project config loader',
     objective:
-      'Extend the repository-local configuration model so runtime orchestration can safely consume execution, roles, and git_policy from docs/compassrose/CONFIG.md.',
+      'Extend the repository-local configuration model so runtime orchestration can safely consume execution, roles, and git_policy from compassrose/CONFIG.md.',
     first_executable_step:
-      'Extend ProjectConfiguration in src/config/configTypes.ts with typed execution, roles, and git_policy sections that match the canonical keys already present in docs/compassrose/CONFIG.md.',
+      'Extend ProjectConfiguration in src/config/configTypes.ts with typed execution, roles, and git_policy sections that match the canonical keys already present in compassrose/CONFIG.md.',
     minimum_progress_evidence: [
       'readProjectConfiguration() returns typed execution, roles, and git_policy data when loading the canonical project config.',
       'Invalid runtime-precondition values such as an unsupported execution.mode, a missing required role entry, or an invalid git_policy value produce field-specific ConfigurationIssue results.',
@@ -1714,8 +1714,8 @@ const SEEDED_TASK = {
       summary:
         'The repository already has a working Markdown-backed config loader and a Doctor preflight, but the typed configuration surface still stops at the narrow Doctor MVP contract.',
       relevant_paths: [
-        'docs/features/002-configuration-model/state.md',
-        'docs/compassrose/CONFIG.md',
+        'compassrose/features/002-configuration-model/state.md',
+        'compassrose/CONFIG.md',
         'src/contracts/runtime/operation-loop.md',
         'src/cli/main.ts',
         'src/config/configTypes.ts',
@@ -1740,15 +1740,15 @@ const SEEDED_TASK = {
         'proto/',
       ],
       forbidden_paths: [
-        'docs/compassrose/CONFIG.md',
-        'docs/features/002-configuration-model/',
+        'compassrose/CONFIG.md',
+        'compassrose/features/002-configuration-model/',
         'src/cli/main.ts',
         'src/doctor/projectState.ts',
         'tests/projectState.test.ts',
       ],
     },
     constraints: [
-      'Treat docs/compassrose/CONFIG.md as the only project-level source of truth.',
+      'Treat compassrose/CONFIG.md as the only project-level source of truth.',
       'Validate only the runtime-precondition sections needed for the first orchestration handoff.',
       'Keep the implementation provider-independent and limited to repository-owned policy already documented in the canonical config.',
       "Preserve current Doctor behavior on the repository's existing canonical config while expanding the loader contract.",
@@ -1760,7 +1760,7 @@ const SEEDED_TASK = {
       before_review: ['node -e "process.exit(0)"', 'test -f package.json'],
     },
     acceptance_criteria: [
-      'readProjectConfiguration() succeeds on the current canonical docs/compassrose/CONFIG.md and exposes typed execution, roles, and git_policy values to callers.',
+      'readProjectConfiguration() succeeds on the current canonical compassrose/CONFIG.md and exposes typed execution, roles, and git_policy values to callers.',
       'The loader reports field-specific validation failures for unsupported execution.mode values, missing required role entries, and invalid git_policy enum or boolean fields.',
       'runDoctor() continues to pass on the happy-path fixture without requiring changes to the documented project config.',
     ],
@@ -1804,7 +1804,7 @@ The feature is temporarily blocked, but the suspension target is recorded so an 
 ## Outline Progress
 
 - Formalize the configuration model in canonical feature documents: complete
-- Stabilize the project-local configuration contract and any gaps in \`docs/compassrose/CONFIG.md\`: complete
+- Stabilize the project-local configuration contract and any gaps in \`compassrose/CONFIG.md\`: complete
 - Implement configuration loading and validation for the documented MVP scope: complete
 - Connect configuration validation to the doctor/runtime flow and update state based on approved behavior: complete
 
@@ -1906,7 +1906,7 @@ The project-local configuration and doctor contract are in place and the active 
 
 ## Implemented
 
-- \`docs/compassrose/CONFIG.md\` and \`docs/compassrose/PROJECT_STATE.md\` are present as the project-local operational documents.
+- \`compassrose/CONFIG.md\` and \`compassrose/PROJECT_STATE.md\` are present as the project-local operational documents.
 
 ## Pending
 
@@ -1949,26 +1949,26 @@ task_ready
 
 ## Current Reality
 
-The repository already contains \`docs/compassrose/CONFIG.md\` as a project-local CompassRose configuration document with a YAML configuration block, allowed values, override records, isolation rules, and a stabilized MVP Doctor contract.
+The repository already contains \`compassrose/CONFIG.md\` as a project-local CompassRose configuration document with a YAML configuration block, allowed values, override records, isolation rules, and a stabilized MVP Doctor contract.
 
 The current work target is planned and ready to execute. Add configuration-backed runtime preflight to the default CLI entrypoint.
 
 CompassRose can now load that project-local configuration, validate the MVP doctor contract, and report the repository readiness checks through \`compassrose doctor\`, including a distinct preflight for the configured project-state document.
 
-The accepted architecture documentation already supports repository-local state, hierarchical configuration precedence, non-invasive external tool integration, configurable review policy, and quality-gate configuration. The MVP contract for Doctor is now explicit: only the project-level scope in \`docs/compassrose/CONFIG.md\` is in scope, the minimum required sections and fields are fixed, and command semantics distinguish missing keys from intentionally empty values.
+The accepted architecture documentation already supports repository-local state, hierarchical configuration precedence, non-invasive external tool integration, configurable review policy, and quality-gate configuration. The MVP contract for Doctor is now explicit: only the project-level scope in \`compassrose/CONFIG.md\` is in scope, the minimum required sections and fields are fixed, and command semantics distinguish missing keys from intentionally empty values.
 
-This feature is now formalized under \`docs/features/002-configuration-model/\`, and the first implementation tasks have now been completed against the configuration target defined in \`docs/compassrose/CONFIG.md\`.
+This feature is now formalized under \`compassrose/features/002-configuration-model/\`, and the first implementation tasks have now been completed against the configuration target defined in \`compassrose/CONFIG.md\`.
 
 The typed configuration loader has now been approved. It validates and exposes \`execution\`, \`roles\`, and \`git_policy\` data needed for the first broader orchestration handoff without expanding into feature selection or task execution.
 
 ## Implemented Deliverables
 
-- the source feature request exists at \`docs/features/002-configuration-model/request.md\`
-- the project-local configuration contract already exists at \`docs/compassrose/CONFIG.md\`
+- the source feature request exists at \`compassrose/features/002-configuration-model/request.md\`
+- the project-local configuration contract already exists at \`compassrose/CONFIG.md\`
 - canonical feature documents now exist for feature \`002-configuration-model\`
 - the repository already documents the configuration hierarchy and non-invasive tool expectations in project-wide architecture docs
-- the runtime can now load \`docs/compassrose/CONFIG.md\`, validate the MVP doctor contract, and report readiness through \`compassrose doctor\`
-- \`compassrose doctor\` now validates \`docs/compassrose/PROJECT_STATE.md\` as a distinct preflight step
+- the runtime can now load \`compassrose/CONFIG.md\`, validate the MVP doctor contract, and report readiness through \`compassrose doctor\`
+- \`compassrose doctor\` now validates \`compassrose/PROJECT_STATE.md\` as a distinct preflight step
 - \`readProjectConfiguration()\` now validates and exposes typed \`execution\`, \`roles\`, and \`git_policy\` policy data from the canonical project config
 
 ## Remaining Deliverables
@@ -1979,7 +1979,7 @@ The typed configuration loader has now been approved. It validates and exposes \
 ## Outline Progress
 
 - Formalize the configuration model in canonical feature documents: complete
-- Stabilize the project-local configuration contract and any gaps in \`docs/compassrose/CONFIG.md\`: complete
+- Stabilize the project-local configuration contract and any gaps in \`compassrose/CONFIG.md\`: complete
 - Implement configuration loading and validation for the documented MVP scope: complete
 - Connect configuration validation to the doctor/runtime flow and update state based on approved behavior: complete
 
@@ -1996,7 +1996,7 @@ The typed configuration loader has now been approved. It validates and exposes \
 
 ## Last Approved Change
 
-The typed config loader was approved, extending its tests to validate the first runtime-precondition policy fields from \`docs/compassrose/CONFIG.md\`.
+The typed config loader was approved, extending its tests to validate the first runtime-precondition policy fields from \`compassrose/CONFIG.md\`.
 
 ## Known Gaps
 

@@ -14,40 +14,40 @@ afterEach(() => {
 describe('buildSiblingFeatureIndex', () => {
   test('returns an empty array when the features root does not exist', () => {
     workspace = createTempWorkspace();
-    expect(buildSiblingFeatureIndex(join(workspace.root, 'docs/features'))).toEqual([]);
+    expect(buildSiblingFeatureIndex(join(workspace.root, 'compassrose/features'))).toEqual([]);
   });
 
   test('ignores non-numbered directories and files', () => {
     workspace = createTempWorkspace({
-      directories: ['docs/features/README-not-a-feature', 'docs/features/010-generic-external-cli-adapter'],
+      directories: ['compassrose/features/README-not-a-feature', 'compassrose/features/010-generic-external-cli-adapter'],
       files: {
-        'docs/features/010-generic-external-cli-adapter/request.md':
+        'compassrose/features/010-generic-external-cli-adapter/request.md':
           '# Request: Generic External CLI Adapter\n\nWe want one generic adapter.\n',
-        'docs/features/not-a-file.txt': 'ignore me',
+        'compassrose/features/not-a-file.txt': 'ignore me',
       },
     });
 
-    const index = buildSiblingFeatureIndex(join(workspace.root, 'docs/features'));
+    const index = buildSiblingFeatureIndex(join(workspace.root, 'compassrose/features'));
     expect(index.map((entry) => entry.featureId)).toEqual(['010-generic-external-cli-adapter']);
   });
 
   test('excludes the given feature id', () => {
     workspace = createTempWorkspace({
       files: {
-        'docs/features/002-configuration-model/request.md': '# Request: Configuration Model\n\nConfig stuff.\n',
-        'docs/features/010-generic-external-cli-adapter/request.md': '# Request: Generic External CLI Adapter\n\nAdapter stuff.\n',
+        'compassrose/features/002-configuration-model/request.md': '# Request: Configuration Model\n\nConfig stuff.\n',
+        'compassrose/features/010-generic-external-cli-adapter/request.md': '# Request: Generic External CLI Adapter\n\nAdapter stuff.\n',
       },
     });
 
-    const index = buildSiblingFeatureIndex(join(workspace.root, 'docs/features'), '002-configuration-model');
+    const index = buildSiblingFeatureIndex(join(workspace.root, 'compassrose/features'), '002-configuration-model');
     expect(index.map((entry) => entry.featureId)).toEqual(['010-generic-external-cli-adapter']);
   });
 
   test('prefers feature.md\'s Purpose section over request.md once formalized', () => {
     workspace = createTempWorkspace({
       files: {
-        'docs/features/006-feature-formalization/request.md': '# Request: Feature Formalization\n\nRaw request text.\n',
-        'docs/features/006-feature-formalization/feature.md': [
+        'compassrose/features/006-feature-formalization/request.md': '# Request: Feature Formalization\n\nRaw request text.\n',
+        'compassrose/features/006-feature-formalization/feature.md': [
           '# Feature: Feature Formalization',
           '',
           '## Purpose',
@@ -61,7 +61,7 @@ describe('buildSiblingFeatureIndex', () => {
       },
     });
 
-    const index = buildSiblingFeatureIndex(join(workspace.root, 'docs/features'));
+    const index = buildSiblingFeatureIndex(join(workspace.root, 'compassrose/features'));
     expect(index).toEqual([
       {
         featureId: '006-feature-formalization',
@@ -74,7 +74,7 @@ describe('buildSiblingFeatureIndex', () => {
   test('falls back to the first paragraph of request.md when unformalized', () => {
     workspace = createTempWorkspace({
       files: {
-        'docs/features/012-implementation-runner/request.md': [
+        'compassrose/features/012-implementation-runner/request.md': [
           '# Request: Implementation Runner',
           '',
           'I want a runner that invokes the configured implementer role.',
@@ -84,7 +84,7 @@ describe('buildSiblingFeatureIndex', () => {
       },
     });
 
-    const index = buildSiblingFeatureIndex(join(workspace.root, 'docs/features'));
+    const index = buildSiblingFeatureIndex(join(workspace.root, 'compassrose/features'));
     expect(index).toEqual([
       {
         featureId: '012-implementation-runner',
@@ -97,11 +97,11 @@ describe('buildSiblingFeatureIndex', () => {
   test('falls back to a humanized directory name when no title heading is found', () => {
     workspace = createTempWorkspace({
       files: {
-        'docs/features/014-git-integration/request.md': 'no heading here, just prose.\n',
+        'compassrose/features/014-git-integration/request.md': 'no heading here, just prose.\n',
       },
     });
 
-    const index = buildSiblingFeatureIndex(join(workspace.root, 'docs/features'));
+    const index = buildSiblingFeatureIndex(join(workspace.root, 'compassrose/features'));
     expect(index[0]?.title).toBe('Git Integration');
   });
 
@@ -109,26 +109,26 @@ describe('buildSiblingFeatureIndex', () => {
     const longSentence = 'word '.repeat(200).trim();
     workspace = createTempWorkspace({
       files: {
-        'docs/features/018-deterministic-orchestration-loop/request.md': `# Request: Loop\n\n${longSentence}\n`,
+        'compassrose/features/018-deterministic-orchestration-loop/request.md': `# Request: Loop\n\n${longSentence}\n`,
       },
     });
 
-    const index = buildSiblingFeatureIndex(join(workspace.root, 'docs/features'));
+    const index = buildSiblingFeatureIndex(join(workspace.root, 'compassrose/features'));
     expect(index[0]?.summary.endsWith('...')).toBe(true);
     expect(index[0]?.summary.length).toBeLessThanOrEqual(323);
   });
 
   test('handles a feature directory with neither request.md nor feature.md', () => {
-    workspace = createTempWorkspace({ directories: ['docs/features/099-empty'] });
-    mkdirSync(join(workspace.root, 'docs/features/099-empty'), { recursive: true });
-    writeFileSync(join(workspace.root, 'docs/features/099-empty/state.md'), '# State\n', 'utf8');
+    workspace = createTempWorkspace({ directories: ['compassrose/features/099-empty'] });
+    mkdirSync(join(workspace.root, 'compassrose/features/099-empty'), { recursive: true });
+    writeFileSync(join(workspace.root, 'compassrose/features/099-empty/state.md'), '# State\n', 'utf8');
 
-    const index = buildSiblingFeatureIndex(join(workspace.root, 'docs/features'));
+    const index = buildSiblingFeatureIndex(join(workspace.root, 'compassrose/features'));
     expect(index).toEqual([{ featureId: '099-empty', title: 'Empty', summary: '' }]);
   });
 
   test('reads the real repository roadmap features without throwing', () => {
-    const index = buildSiblingFeatureIndex(join(process.cwd(), 'docs/features'));
+    const index = buildSiblingFeatureIndex(join(process.cwd(), 'compassrose/features'));
     expect(index.length).toBeGreaterThanOrEqual(20);
     expect(index.every((entry) => entry.featureId.length > 0 && entry.title.length > 0)).toBe(true);
   });

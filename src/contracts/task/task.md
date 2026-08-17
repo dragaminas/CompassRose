@@ -91,8 +91,8 @@ The earlier task remains historical evidence and must not be deleted just becaus
 ### feature_id
 
 The id of the owning work item — a feature's directory id, or a fix's directory id when the
-task belongs to a fix request (see `docs/fixes/README.md`). The runtime resolves this id
-against both `docs/features/` and `docs/fixes/`; the field name is unchanged for either case.
+task belongs to a fix request (see `compassrose/fixes/README.md`). The runtime resolves this id
+against both `compassrose/features/` and `compassrose/fixes/`; the field name is unchanged for either case.
 
 ### objective
 

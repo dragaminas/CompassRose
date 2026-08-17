@@ -56,9 +56,9 @@ AI must not be used for:
 
 The runtime must load:
 
-- project configuration from `docs/compassrose/CONFIG.md`
-- project state from `docs/compassrose/PROJECT_STATE.md`
-- feature folders from `docs/features/`
+- project configuration from `compassrose/CONFIG.md`
+- project state from `compassrose/PROJECT_STATE.md`
+- feature folders from `compassrose/features/`
 - the canonical work-item taxonomy from `src/contracts/runtime/work-item-taxonomy.md`
 - feature state using `src/contracts/state/feature-state.md`
 - planner, implementer, reviewer, task, correction-task, state-correction-task, and doctor-recovery-task contracts from `src/contracts/`
@@ -105,7 +105,7 @@ If preconditions fail, the runtime must stop before feature selection.
 CompassRose must split repository behavior into:
 
 - invariant contracts owned by `src/contracts/`
-- configurable policy owned by `docs/compassrose/CONFIG.md`
+- configurable policy owned by `compassrose/CONFIG.md`
 
 Contracts own:
 
@@ -414,7 +414,7 @@ If review returns `changes_required` and produces a correction task, the runtime
 After an accepted result, the runtime must:
 
 - update the feature `state.md`
-- update `docs/compassrose/PROJECT_STATE.md` when project-wide reality changed
+- update `compassrose/PROJECT_STATE.md` when project-wide reality changed
 
 The runtime must not:
 

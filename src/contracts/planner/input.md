@@ -44,7 +44,7 @@ Optional inputs:
 - Known blockers
 - Recent recovery lessons
 - User-provided planning hint
-- Sibling-feature index (`{feature_id, title, summary}` for every other feature under `docs/features/`; see `src/planner/siblingFeatureIndex.ts` and `src/contracts/planner/feature-scope-guard.md`)
+- Sibling-feature index (`{feature_id, title, summary}` for every other feature under `compassrose/features/`; see `src/planner/siblingFeatureIndex.ts` and `src/contracts/planner/feature-scope-guard.md`)
 
 ---
 

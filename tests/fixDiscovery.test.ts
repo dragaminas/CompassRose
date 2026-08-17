@@ -34,9 +34,9 @@ function asFixDiscovery(orchestrator: CompassRoseOrchestrator): FixDiscoveryAcce
 describe('fix discovery (listFixes/loadFix)', () => {
   test('lists fixes under fixes_root sorted by numeric id, mirroring listFeatures', () => {
     const workspace = createWorkspace({
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-      'docs/fixes/002-second-fix/request.md': '# Request: Second Fix\n',
-      'docs/fixes/001-first-fix/request.md': '# Request: First Fix\n',
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/fixes/002-second-fix/request.md': '# Request: Second Fix\n',
+      'compassrose/fixes/001-first-fix/request.md': '# Request: First Fix\n',
     });
     copyContractsIntoWorkspace(workspace.root);
 
@@ -46,9 +46,9 @@ describe('fix discovery (listFixes/loadFix)', () => {
 
       expect(fixes.map((fix) => fix.id)).toEqual(['001-first-fix', '002-second-fix']);
       expect(fixes[0].name).toBe('first-fix');
-      expect(fixes[0].fixPath.replace(/\\/g, '/')).toContain('docs/fixes/001-first-fix/fix.md');
-      expect(fixes[0].statePath.replace(/\\/g, '/')).toContain('docs/fixes/001-first-fix/state.md');
-      expect(fixes[0].tasksDirectory.replace(/\\/g, '/')).toContain('docs/fixes/001-first-fix/tasks');
+      expect(fixes[0].fixPath.replace(/\\/g, '/')).toContain('compassrose/fixes/001-first-fix/fix.md');
+      expect(fixes[0].statePath.replace(/\\/g, '/')).toContain('compassrose/fixes/001-first-fix/state.md');
+      expect(fixes[0].tasksDirectory.replace(/\\/g, '/')).toContain('compassrose/fixes/001-first-fix/tasks');
       expect('architecturePath' in fixes[0]).toBe(false);
     } finally {
       workspace.dispose();
@@ -57,7 +57,7 @@ describe('fix discovery (listFixes/loadFix)', () => {
 
   test('returns an empty list when fixes_root does not exist yet', () => {
     const workspace = createWorkspace({
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
     });
     copyContractsIntoWorkspace(workspace.root);
 
@@ -71,8 +71,8 @@ describe('fix discovery (listFixes/loadFix)', () => {
 
   test('loadFix returns the matching record', () => {
     const workspace = createWorkspace({
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-      'docs/fixes/003-a-fix/request.md': '# Request: A Fix\n',
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/fixes/003-a-fix/request.md': '# Request: A Fix\n',
     });
     copyContractsIntoWorkspace(workspace.root);
 
@@ -87,7 +87,7 @@ describe('fix discovery (listFixes/loadFix)', () => {
 
   test('loadFix throws for an id not found under fixes_root', () => {
     const workspace = createWorkspace({
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
     });
     copyContractsIntoWorkspace(workspace.root);
 

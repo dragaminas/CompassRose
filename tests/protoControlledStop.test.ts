@@ -40,7 +40,7 @@ describe('proto controlled stop', () => {
       expect(runSummary.status).toBe('stopped');
       expect(runSummary.exit_code).toBe(130);
 
-      const featureState = readFileSync(join(workspace.cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md'), 'utf8');
+      const featureState = readFileSync(join(workspace.cloneRoot, 'compassrose', 'features', '002-configuration-model', 'state.md'), 'utf8');
       expect(featureState).toContain('## Lifecycle State\n\nimplementation_running');
       expect(featureState).toContain('- active_task: F002-T04');
       expect(featureState).not.toContain('implementation_failed');
@@ -139,7 +139,7 @@ function copyTree(sourceRoot: string, targetRoot: string): void {
 }
 
 function seedTaskReadyState(cloneRoot: string): void {
-  const statePath = join(cloneRoot, 'docs', 'features', '002-configuration-model', 'state.md');
+  const statePath = join(cloneRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
   mkdirSync(dirname(statePath), { recursive: true });
   writeFileSync(
     statePath,
@@ -274,9 +274,9 @@ const SEEDED_TASK = {
     feature_id: '002-configuration-model',
     title: 'Validate runtime-precondition policy fields in the project config loader',
     objective:
-      'Extend the repository-local configuration model so runtime orchestration can safely consume execution, roles, and git_policy from docs/compassrose/CONFIG.md.',
+      'Extend the repository-local configuration model so runtime orchestration can safely consume execution, roles, and git_policy from compassrose/CONFIG.md.',
     first_executable_step:
-      'Extend ProjectConfiguration in src/config/configTypes.ts with typed execution, roles, and git_policy sections that match the canonical keys already present in docs/compassrose/CONFIG.md.',
+      'Extend ProjectConfiguration in src/config/configTypes.ts with typed execution, roles, and git_policy sections that match the canonical keys already present in compassrose/CONFIG.md.',
     minimum_progress_evidence: [
       'readProjectConfiguration() returns typed execution, roles, and git_policy data when loading the canonical project config.',
       'Invalid runtime-precondition values such as an unsupported execution.mode, a missing required role entry, or an invalid git_policy value produce field-specific ConfigurationIssue results.',
@@ -292,8 +292,8 @@ const SEEDED_TASK = {
       summary:
         'The repository already has a working Markdown-backed config loader and a Doctor preflight, but the typed configuration surface still stops at the narrow Doctor MVP contract.',
       relevant_paths: [
-        'docs/features/002-configuration-model/state.md',
-        'docs/compassrose/CONFIG.md',
+        'compassrose/features/002-configuration-model/state.md',
+        'compassrose/CONFIG.md',
         'src/contracts/runtime/operation-loop.md',
         'src/cli/main.ts',
         'src/config/configTypes.ts',
@@ -312,15 +312,15 @@ const SEEDED_TASK = {
         'tests/doctorCommand.test.ts',
       ],
       forbidden_paths: [
-        'docs/compassrose/CONFIG.md',
-        'docs/features/002-configuration-model/',
+        'compassrose/CONFIG.md',
+        'compassrose/features/002-configuration-model/',
         'src/cli/main.ts',
         'src/doctor/projectState.ts',
         'tests/projectState.test.ts',
       ],
     },
     constraints: [
-      'Treat docs/compassrose/CONFIG.md as the only project-level source of truth.',
+      'Treat compassrose/CONFIG.md as the only project-level source of truth.',
       'Validate only the runtime-precondition sections needed for the first orchestration handoff.',
       'Keep the implementation provider-independent and limited to repository-owned policy already documented in the canonical config.',
       "Preserve current Doctor behavior on the repository's existing canonical config while expanding the loader contract.",
@@ -332,7 +332,7 @@ const SEEDED_TASK = {
       before_review: ['npm test', 'npm run typecheck'],
     },
     acceptance_criteria: [
-      'readProjectConfiguration() succeeds on the current canonical docs/compassrose/CONFIG.md and exposes typed execution, roles, and git_policy values to callers.',
+      'readProjectConfiguration() succeeds on the current canonical compassrose/CONFIG.md and exposes typed execution, roles, and git_policy values to callers.',
       'The loader reports field-specific validation failures for unsupported execution.mode values, missing required role entries, and invalid git_policy enum or boolean fields.',
       'runDoctor() continues to pass on the happy-path fixture without requiring changes to the documented project config.',
     ],

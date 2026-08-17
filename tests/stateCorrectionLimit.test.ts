@@ -118,9 +118,9 @@ describe('limitStateCorrectionTaskId', () => {
 
   test('correct_state refuses before writing artifacts or mutating feature and project state', () => {
     const repositoryRoot = process.cwd();
-    const featureStatePath = join(repositoryRoot, 'docs', 'features', '002-configuration-model', 'state.md');
-    const projectStatePath = join(repositoryRoot, 'docs', 'compassrose', 'PROJECT_STATE.md');
-    const tasksDirectory = join(repositoryRoot, 'docs', 'features', '002-configuration-model', 'tasks');
+    const featureStatePath = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
+    const projectStatePath = join(repositoryRoot, 'compassrose', 'PROJECT_STATE.md');
+    const tasksDirectory = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'tasks');
     const artifactTasksDirectory = join(repositoryRoot, '.git', 'proto-compassrose', 'tasks');
     const featureStateBefore = readFileSync(featureStatePath, 'utf8');
     const projectStateBefore = readFileSync(projectStatePath, 'utf8');
@@ -192,8 +192,8 @@ describe('limitStateCorrectionTaskId', () => {
     // and crashed the whole CLI process instead of returning a bounded stop. Observed live on
     // feature 003-doctor-command's F003-T01 anchor.
     const repositoryRoot = process.cwd();
-    const featureStatePath = join(repositoryRoot, 'docs', 'features', '002-configuration-model', 'state.md');
-    const tasksDirectory = join(repositoryRoot, 'docs', 'features', '002-configuration-model', 'tasks');
+    const featureStatePath = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
+    const tasksDirectory = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'tasks');
     const artifactTasksDirectory = join(repositoryRoot, '.git', 'proto-compassrose', 'tasks');
     const featureStateBefore = readFileSync(featureStatePath, 'utf8');
     const nestedFeatureState = featureStateBefore.replace(
@@ -269,8 +269,8 @@ describe('limitStateCorrectionTaskId', () => {
     // StateCorrectionLimitReachedError again -- an unrecoverable loop with no escape but manual
     // intervention. Observed live on feature 003-doctor-command's F003-T01 anchor.
     const repositoryRoot = process.cwd();
-    const featureStatePath = join(repositoryRoot, 'docs', 'features', '002-configuration-model', 'state.md');
-    const tasksDirectory = join(repositoryRoot, 'docs', 'features', '002-configuration-model', 'tasks');
+    const featureStatePath = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
+    const tasksDirectory = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'tasks');
     const featureStateBefore = readFileSync(featureStatePath, 'utf8');
     const taskFilesBefore = readdirSync(tasksDirectory).sort();
 

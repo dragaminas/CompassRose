@@ -17,8 +17,8 @@ keeping the Markdown contracts readable for humans.
 - `state/implementationMachine.ts`: durable implementation states, events, and transition maps.
 - `state/workflowState.ts`: nested repo/feature/task/subtask runtime state.
 - `state/featureStateSnapshot.ts`: compact feature snapshot used by runtime diagnostics.
-- `state/projectState.ts`: parsed project-state document and validator for `docs/compassrose/PROJECT_STATE.md`.
-- `state/projectStateSnapshot.ts`: compact project-state snapshot for `docs/compassrose/PROJECT_STATE.md`.
+- `state/projectState.ts`: parsed project-state document and validator for `compassrose/PROJECT_STATE.md`.
+- `state/projectStateSnapshot.ts`: compact project-state snapshot for `compassrose/PROJECT_STATE.md`.
 - `doctor/doctorContracts.ts`: doctor command input and output shapes.
 - `adapters/adapterShared.ts`: shared adapter envelope fields.
 - `adapters/plannerAdapterContracts.ts`: planner adapter input and output shapes.

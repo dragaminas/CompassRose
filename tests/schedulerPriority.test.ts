@@ -160,7 +160,7 @@ function fixState(lifecycleState: string, severity: string, owningFeature = 'non
 }
 
 function seedFeature(root: string, id: string, lifecycleState: string, activeTask = 'none'): void {
-  const dir = join(root, 'docs', 'features', id);
+  const dir = join(root, 'compassrose', 'features', id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'request.md'), `# Request: ${id}\n`, 'utf8');
   writeFileSync(join(dir, 'feature.md'), `# Feature: ${id}\n\n## Purpose\n\nFixture.\n`, 'utf8');
@@ -169,7 +169,7 @@ function seedFeature(root: string, id: string, lifecycleState: string, activeTas
 }
 
 function seedFix(root: string, id: string, lifecycleState: string, severity: string, owningFeature = 'none'): void {
-  const dir = join(root, 'docs', 'fixes', id);
+  const dir = join(root, 'compassrose', 'fixes', id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'request.md'), `# Request: ${id}\n`, 'utf8');
   writeFileSync(join(dir, 'fix.md'), `# Fix: ${id}\n\n## Purpose\n\nFixture.\n`, 'utf8');
@@ -177,14 +177,14 @@ function seedFix(root: string, id: string, lifecycleState: string, severity: str
 }
 
 function seedRawFixRequest(root: string, id: string): void {
-  const dir = join(root, 'docs', 'fixes', id);
+  const dir = join(root, 'compassrose', 'fixes', id);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'request.md'), `# Request: ${id}\n\nFresh, unformalized request.\n`, 'utf8');
 }
 
 describe('scheduler priority: features vs fixes', () => {
   test('a continuing (in-flight) feature wins over a lower-numbered startable feature', () => {
-    const workspace = createWorkspace({ 'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown() });
+    const workspace = createWorkspace({ 'compassrose/CONFIG.md': readFixtureConfigMarkdown() });
     copyContractsIntoWorkspace(workspace.root);
 
     try {
@@ -202,7 +202,7 @@ describe('scheduler priority: features vs fixes', () => {
   });
 
   test('a critical fix preempts a startable feature when nothing is in flight', () => {
-    const workspace = createWorkspace({ 'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown() });
+    const workspace = createWorkspace({ 'compassrose/CONFIG.md': readFixtureConfigMarkdown() });
     copyContractsIntoWorkspace(workspace.root);
 
     try {
@@ -219,7 +219,7 @@ describe('scheduler priority: features vs fixes', () => {
   });
 
   test('a critical fix does NOT interrupt a feature task already in flight', () => {
-    const workspace = createWorkspace({ 'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown() });
+    const workspace = createWorkspace({ 'compassrose/CONFIG.md': readFixtureConfigMarkdown() });
     copyContractsIntoWorkspace(workspace.root);
 
     try {
@@ -237,7 +237,7 @@ describe('scheduler priority: features vs fixes', () => {
   });
 
   test('a medium-severity fix does not preempt a startable feature (only critical/high do)', () => {
-    const workspace = createWorkspace({ 'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown() });
+    const workspace = createWorkspace({ 'compassrose/CONFIG.md': readFixtureConfigMarkdown() });
     copyContractsIntoWorkspace(workspace.root);
 
     try {
@@ -254,7 +254,7 @@ describe('scheduler priority: features vs fixes', () => {
   });
 
   test('a medium-severity fix is still scheduled once no feature has new work to start', () => {
-    const workspace = createWorkspace({ 'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown() });
+    const workspace = createWorkspace({ 'compassrose/CONFIG.md': readFixtureConfigMarkdown() });
     copyContractsIntoWorkspace(workspace.root);
 
     try {
@@ -271,7 +271,7 @@ describe('scheduler priority: features vs fixes', () => {
   });
 
   test('among multiple startable fixes, higher severity wins regardless of numeric id', () => {
-    const workspace = createWorkspace({ 'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown() });
+    const workspace = createWorkspace({ 'compassrose/CONFIG.md': readFixtureConfigMarkdown() });
     copyContractsIntoWorkspace(workspace.root);
 
     try {
@@ -288,7 +288,7 @@ describe('scheduler priority: features vs fixes', () => {
   });
 
   test('a fresh, unformalized fix request defaults to critical and preempts an existing medium fix', () => {
-    const workspace = createWorkspace({ 'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown() });
+    const workspace = createWorkspace({ 'compassrose/CONFIG.md': readFixtureConfigMarkdown() });
     copyContractsIntoWorkspace(workspace.root);
 
     try {

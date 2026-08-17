@@ -139,12 +139,12 @@ echo unused
 function createWorkspace(featureId: string, taskId: string): TempWorkspace {
   const workspace = createTempWorkspace({
     files: {
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-      'docs/compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
-      [`docs/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
-      [`docs/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
-      [`docs/features/${featureId}/state.md`]: featureStateSeed(taskId),
-      [`docs/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId),
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
+      [`compassrose/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
+      [`compassrose/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
+      [`compassrose/features/${featureId}/state.md`]: featureStateSeed(taskId),
+      [`compassrose/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId),
     },
   });
   copyContractsIntoWorkspace(workspace.root);
@@ -170,7 +170,7 @@ function asAccess(orchestrator: CompassRoseOrchestrator): DeterministicScopeChec
 }
 
 function listTaskFiles(root: string, featureId: string): string[] {
-  return readdirSync(join(root, 'docs', 'features', featureId, 'tasks'));
+  return readdirSync(join(root, 'compassrose', 'features', featureId, 'tasks'));
 }
 
 let workspace: TempWorkspace | undefined;
@@ -203,11 +203,11 @@ describe('deterministic review-time scope check', () => {
     const correctionFile = taskFiles.find((name) => name !== '001-fixture-task.md');
     expect(correctionFile).toBeDefined();
 
-    const correctionMarkdown = readFileSync(join(workspace.root, 'docs', 'features', 'fixture-feature', 'tasks', correctionFile as string), 'utf8');
+    const correctionMarkdown = readFileSync(join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'tasks', correctionFile as string), 'utf8');
     expect(correctionMarkdown).toContain('src/unrelated.ts');
     expect(correctionMarkdown).toMatch(/F001-T01-C1/);
 
-    const featureState = readFileSync(join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'), 'utf8');
+    const featureState = readFileSync(join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md'), 'utf8');
     expect(featureState.match(/## Lifecycle State\n\n(\S+)/)?.[1]).toBe('correction_pending');
     expect(featureState).toContain('- active_correction_task: F001-T01-C1');
   });

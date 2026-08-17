@@ -1,7 +1,8 @@
 import type { RefinementFeedback } from '../contracts/runtime/attempts.js';
 import type { StepDecision } from '../contracts/runtime/stepDecision.js';
+import { buildConfigPath, buildDmsPath, buildFeaturesReadmePath } from '../config/compassRosePaths.js';
 
-export function inferLikelySources(trigger: string, selectedStep: StepDecision | null): string[] {
+export function inferLikelySources(trigger: string, selectedStep: StepDecision | null, compassRoseRoot: string): string[] {
   const sources = new Set<string>();
   const normalized = trigger.toLowerCase();
 
@@ -9,7 +10,7 @@ export function inferLikelySources(trigger: string, selectedStep: StepDecision |
 
   if (selectedStep?.kind === 'plan_feature') {
     sources.add('src/contracts/planner/feature-planning-prompt.md');
-    sources.add('docs/features/README.md');
+    sources.add(buildFeaturesReadmePath(compassRoseRoot));
   }
 
   if (selectedStep?.kind === 'plan_task' || selectedStep?.kind === 'plan_subtask') {
@@ -44,7 +45,7 @@ export function inferLikelySources(trigger: string, selectedStep: StepDecision |
   }
 
   if (normalized.includes('project configuration') || normalized.includes('configuration paths')) {
-    sources.add('docs/compassrose/CONFIG.md');
+    sources.add(buildConfigPath(compassRoseRoot));
     sources.add('src/config/configReader.ts');
   }
 
@@ -77,7 +78,7 @@ export function inferLikelySources(trigger: string, selectedStep: StepDecision |
 
   if (normalized.includes('section "##')) {
     sources.add('src/contracts/state/feature-state.md');
-    sources.add('docs/features/README.md');
+    sources.add(buildFeaturesReadmePath(compassRoseRoot));
   }
 
   if (normalized.includes('test_guided')) {
@@ -97,7 +98,7 @@ export function inferLikelySources(trigger: string, selectedStep: StepDecision |
   }
 
   if (normalized.includes('task document')) {
-    sources.add('docs/DMS.md');
+    sources.add(buildDmsPath(compassRoseRoot));
     sources.add('src/contracts/task/task.md');
   }
 

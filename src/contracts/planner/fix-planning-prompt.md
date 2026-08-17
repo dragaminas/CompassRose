@@ -26,14 +26,14 @@ The planner must transform a bug report into fix-scoped documentation that is:
 The planner should read:
 
 - the target `request.md`
-- `docs/fixes/README.md`
-- `docs/templates/fix.md`
-- `docs/templates/state.md`
+- `compassrose/fixes/README.md`
+- `compassrose/templates/fix.md`
+- `compassrose/templates/state.md`
 - `src/contracts/state/feature-state.md` (the fix's `state.md` follows this contract unchanged — read "feature" as "fix" throughout)
 - relevant repository paths for the fix scope
 
-Unlike feature formalization, this prompt does **not** read `docs/ROADMAP.md`, `docs/SAD.md`,
-`docs/ADR.md`, `docs/DMS.md`, or produce an `architecture.md` — a fix repairs already-shipped
+Unlike feature formalization, this prompt does **not** read `compassrose/ROADMAP.md`, `compassrose/SAD.md`,
+`compassrose/ADR.md`, `compassrose/DMS.md`, or produce an `architecture.md` — a fix repairs already-shipped
 behavior and does not introduce new architectural surface by itself. If a fix's investigation
 reveals it actually requires an architectural change, that belongs to a feature, not this fix
 (see `Owning Feature` below).
@@ -86,9 +86,9 @@ Your job is to formalize a user-reported bug into the canonical CompassRose fix 
 
 Before responding, read and align with:
 - the target `request.md`
-- `docs/fixes/README.md`
-- `docs/templates/fix.md`
-- `docs/templates/state.md`
+- `compassrose/fixes/README.md`
+- `compassrose/templates/fix.md`
+- `compassrose/templates/state.md`
 - `src/contracts/state/feature-state.md` (read "feature" as "fix" throughout — the lifecycle
   contract is identical, this fix simply has no architecture.md)
 - relevant repository paths needed to ground the fix in current reality

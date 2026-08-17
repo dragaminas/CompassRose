@@ -56,7 +56,7 @@ requires:
 - the target feature's `feature.md` `## Scope` section in full (both "includes" and "does not
   include"), or `request.md` if the feature isn't formalized yet
 - the supplied sibling-feature index (`{feature_id, title, summary}` for every other feature under
-  `docs/features/`)
+  `compassrose/features/`)
 
 ---
 

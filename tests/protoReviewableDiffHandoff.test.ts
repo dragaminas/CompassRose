@@ -12,7 +12,7 @@ describe('proto reviewable diff handoff', () => {
   test('infers single-path live-diff handoff requirements from the legacy task contract', () => {
     const taskPath = join(
       repoRoot,
-      'docs',
+      'compassrose',
       'features',
       '002-configuration-model',
       'tasks',
@@ -23,14 +23,14 @@ describe('proto reviewable diff handoff', () => {
     expect(task.reviewableDiffHandoff.requireLiveDiff).toBe(true);
     expect(task.reviewableDiffHandoff.allowGitCommitBeforeHandoff).toBe(false);
     expect(task.reviewableDiffHandoff.requiredChangedFiles).toEqual([
-      'docs/features/002-configuration-model/tasks/F002-T04-C2-U1-preserve-the-f002-t04-c2-task-anchor-during-implementation-failure-recovery.md',
+      'compassrose/features/002-configuration-model/tasks/F002-T04-C2-U1-preserve-the-f002-t04-c2-task-anchor-during-implementation-failure-recovery.md',
     ]);
   });
 
   test('reconstructs state-correction metadata directly from the task markdown', () => {
     const taskPath = join(
       repoRoot,
-      'docs',
+      'compassrose',
       'features',
       '002-configuration-model',
       'tasks',
@@ -78,7 +78,7 @@ describe('proto reviewable diff handoff', () => {
       '- `src/contracts/planner/output.md`',
       '',
       'Forbidden:',
-      '- `docs/features/`',
+      '- `compassrose/features/`',
       '',
       '## Constraints',
       '',
@@ -111,7 +111,7 @@ describe('proto reviewable diff handoff', () => {
   test('reconstructs unblock metadata directly from the task markdown', () => {
     const taskPath = join(
       repoRoot,
-      'docs',
+      'compassrose',
       'features',
       '002-configuration-model',
       'tasks',

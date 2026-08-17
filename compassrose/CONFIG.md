@@ -47,6 +47,9 @@ project:
   supported_platforms:
     - linux
     - windows
+  # This project's OWN documentation root (not CompassRose's -- see documentation.compassrose_root
+  # below). Doctor only validates that this path exists; a project with no separate documentation
+  # of its own can leave it as an otherwise-empty placeholder directory.
   documentation_root: docs
   source_root: src
 
@@ -135,16 +138,21 @@ platform:
   line_endings: preserve
 
 documentation:
-  roadmap: docs/ROADMAP.md
-  project_state: docs/compassrose/PROJECT_STATE.md
-  config: docs/compassrose/CONFIG.md
-  features_root: docs/features
+  # Optional; defaults to 'compassrose' when omitted. Root for every CompassRose-owned document
+  # below (this file, PROJECT_STATE.md, ADR.md, SAD.md, ROADMAP.md, DMS.md, features/, fixes/,
+  # templates/) -- isolated from this project's own docs/ tree so CompassRose never restructures
+  # a target project's pre-existing documentation. See src/config/compassRosePaths.ts.
+  compassrose_root: compassrose
+  roadmap: compassrose/ROADMAP.md
+  project_state: compassrose/PROJECT_STATE.md
+  config: compassrose/CONFIG.md
+  features_root: compassrose/features
   feature_request_file: request.md
   feature_files:
     - feature.md
     - architecture.md
     - state.md
-  fixes_root: docs/fixes
+  fixes_root: compassrose/fixes
   fix_request_file: request.md
   fix_files:
     - fix.md
@@ -156,7 +164,7 @@ documentation:
     task_execution: src/contracts/implementer/task-execution-prompt.md
     review: src/contracts/reviewer/review-prompt.md
     correction_task: src/contracts/reviewer/correction-task-prompt.md
-  templates_root: docs/templates
+  templates_root: compassrose/templates
   contracts_root: src/contracts
   state_contract: src/contracts/state/feature-state.md
   runtime_operation: src/contracts/runtime/operation-loop.md

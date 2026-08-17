@@ -32,7 +32,7 @@ export function createTempWorkspace(options: TempWorkspaceOptions = {}): TempWor
 }
 
 export function readFixtureConfigMarkdown(): string {
-  return readFileSync(new URL('../docs/compassrose/CONFIG.md', import.meta.url), 'utf8');
+  return readFileSync(new URL('../compassrose/CONFIG.md', import.meta.url), 'utf8');
 }
 
 /**

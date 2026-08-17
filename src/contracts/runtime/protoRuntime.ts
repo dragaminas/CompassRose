@@ -47,7 +47,7 @@ export interface WorkItemContext {
 }
 
 /**
- * Lightweight inventory record for a fix-request folder (see docs/fixes/README.md).
+ * Lightweight inventory record for a fix-request folder (see compassrose/fixes/README.md).
  * A fix has no architecture.md, unlike a feature.
  */
 export interface FixRecord {

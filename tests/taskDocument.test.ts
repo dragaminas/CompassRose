@@ -57,7 +57,7 @@ describe('parseTaskDocument', () => {
 
   test('falls back to documentation-only deliverables when every allowed path is under docs/', () => {
     const markdown = buildTaskMarkdown({
-      scope: '## Scope\n\nAllowed:\n- docs/features/001-widgets/feature.md\n\nForbidden:\n- src/',
+      scope: '## Scope\n\nAllowed:\n- compassrose/features/001-widgets/feature.md\n\nForbidden:\n- src/',
       expectedDeliverables: '',
     });
     expect(parseTaskDocument('/tasks/F1-T1.md', markdown).expectedDeliverables).toEqual(['documentation']);
@@ -68,7 +68,7 @@ describe('parseTaskDocument', () => {
       stateTarget: [
         '## State Target',
         '',
-        '- feature_state_path: `docs/features/001-widgets/state.md`',
+        '- feature_state_path: `compassrose/features/001-widgets/state.md`',
         '- restored_lifecycle_state: task_ready',
         '- restored_active_task: `F1-T1`',
       ].join('\n'),

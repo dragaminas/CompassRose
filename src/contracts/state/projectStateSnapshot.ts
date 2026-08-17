@@ -1,5 +1,5 @@
 /**
- * Compact runtime snapshot of `docs/compassrose/PROJECT_STATE.md`.
+ * Compact runtime snapshot of `compassrose/PROJECT_STATE.md`.
  *
  * This stays deliberately small and flexible because the project state is a
  * human-reviewable summary, not a rigid database record.

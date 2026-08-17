@@ -24,14 +24,14 @@ The planner must transform user intent into feature-scoped documentation that is
 The planner should read:
 
 - the target `request.md`
-- `docs/features/README.md`
-- `docs/templates/feature.md`
-- `docs/templates/architecture.md`
-- `docs/templates/state.md`
+- `compassrose/features/README.md`
+- `compassrose/templates/feature.md`
+- `compassrose/templates/architecture.md`
+- `compassrose/templates/state.md`
 - `src/contracts/state/feature-state.md`
 - `src/contracts/planner/feature-scope-guard.md`
-- the supplied sibling-feature index (`{feature_id, title, summary}` for every other feature under `docs/features/`)
-- relevant project documentation such as `docs/ROADMAP.md`, `docs/SAD.md`, `docs/ADR.md`, and `docs/DMS.md`
+- the supplied sibling-feature index (`{feature_id, title, summary}` for every other feature under `compassrose/features/`)
+- relevant project documentation such as `compassrose/ROADMAP.md`, `compassrose/SAD.md`, `compassrose/ADR.md`, and `compassrose/DMS.md`
 - relevant repository paths for the feature scope
 
 ---
@@ -85,14 +85,14 @@ Your job is to formalize a user feature request into the canonical CompassRose f
 
 Before responding, read and align with:
 - the target `request.md`
-- `docs/features/README.md`
-- `docs/templates/feature.md`
-- `docs/templates/architecture.md`
-- `docs/templates/state.md`
+- `compassrose/features/README.md`
+- `compassrose/templates/feature.md`
+- `compassrose/templates/architecture.md`
+- `compassrose/templates/state.md`
 - `src/contracts/state/feature-state.md`
 - `src/contracts/planner/feature-scope-guard.md`
 - the supplied sibling-feature index
-- relevant sections of `docs/ROADMAP.md`, `docs/SAD.md`, `docs/ADR.md`, and `docs/DMS.md`
+- relevant sections of `compassrose/ROADMAP.md`, `compassrose/SAD.md`, `compassrose/ADR.md`, and `compassrose/DMS.md`
 - relevant repository paths needed to ground the feature in current reality
 
 Objective:

@@ -135,9 +135,9 @@ ${qualityGateCommand}
 function createWorkspace(featureId: string, taskId: string, qualityGateCommand: string): TempWorkspace {
   const workspace = createTempWorkspace({
     files: {
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-      'docs/compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
-      [`docs/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId, qualityGateCommand),
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
+      [`compassrose/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId, qualityGateCommand),
     },
   });
   copyContractsIntoWorkspace(workspace.root);
@@ -267,7 +267,7 @@ describe('updateFeatureStateAfterImplementation() quality_failed evidence', () =
     // recording any blocker evidence at all.
     const command = "node -e \"console.error('FAIL src/allowed.ts:1:1 real assertion failure'); process.exit(1)\"";
     workspace = createWorkspace('fixture-feature', 'F001-T01', command);
-    writeFileSync(join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'), FEATURE_STATE_SEED, 'utf8');
+    writeFileSync(join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md'), FEATURE_STATE_SEED, 'utf8');
 
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     const access = asQualityGateAccess(orchestrator);
@@ -291,7 +291,7 @@ describe('updateFeatureStateAfterImplementation() quality_failed evidence', () =
     const command = "node -e \"console.error('FAIL src/allowed.ts:1:1 real assertion failure'); process.exit(1)\"";
     workspace = createWorkspace('fixture-feature', 'F001-T01', command);
     writeFileSync(
-      join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'),
+      join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md'),
       FEATURE_STATE_SEED.replace('- last_unblock_result: not_run\n', '- last_unblock_result: not_run\n- doctor_recovery_attempts: 2\n'),
       'utf8',
     );
@@ -311,7 +311,7 @@ describe('updateFeatureStateAfterImplementation() quality_failed evidence', () =
     const command = 'node -e "process.exit(0)"';
     workspace = createWorkspace('fixture-feature', 'F001-T01', command);
     writeFileSync(
-      join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'),
+      join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md'),
       FEATURE_STATE_SEED.replace('- last_unblock_result: not_run\n', '- last_unblock_result: not_run\n- doctor_recovery_attempts: 2\n'),
       'utf8',
     );

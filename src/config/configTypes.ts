@@ -120,6 +120,15 @@ export interface DocumentationSection {
   readonly project_state: string;
   readonly config: string;
   readonly contracts_root: string;
+  /**
+   * Optional; defaults to 'compassrose' (src/config/compassRosePaths.ts's
+   * DEFAULT_COMPASSROSE_ROOT) when omitted. Documents where CompassRose's own operational
+   * docs (CONFIG.md, PROJECT_STATE.md, ADR.md, SAD.md, ROADMAP.md, DMS.md, features/, fixes/,
+   * templates/) live -- isolated from the target repository's own docs/ tree. This field is
+   * read back for a self-consistency check only (it can't redirect the bootstrap lookup,
+   * which must find CONFIG.md before any config value can be read at all).
+   */
+  readonly compassrose_root?: string;
   readonly [key: string]: unknown;
 }
 

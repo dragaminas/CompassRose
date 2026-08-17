@@ -12,7 +12,7 @@ the resulting files and exit codes.
 ## Files
 
 - `protoCompassRose.e2e.ts` — the full scenario harness. Clones this repository into a temp
-  worktree, seeds a fixture state for `docs/features/002-configuration-model/`, writes mock
+  worktree, seeds a fixture state for `compassrose/features/002-configuration-model/`, writes mock
   `codex`/`opencode` executables, and spawns the real CLI against it.
 - `protoCompassRose.smoke.e2e.ts` — a lighter smoke test: one control-flow pass
   (`implementer -> reviewer`) to catch wiring regressions fast.
@@ -49,4 +49,4 @@ what the CLI did.
 - Runtime/loop contract: `src/contracts/runtime/operation-loop.md`
 - Orchestrator implementation: `src/orchestrator/orchestrator.ts`
 - Work-item vocabulary (feature/fix/task/subtask/...): `src/contracts/runtime/work-item-taxonomy.md`
-- Fix-request lifecycle: `docs/fixes/README.md`
+- Fix-request lifecycle: `compassrose/fixes/README.md`

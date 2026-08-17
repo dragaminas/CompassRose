@@ -5,7 +5,7 @@ import { uniqueStrings } from '../shared/arrays.js';
  * "Recovery History" is not written by any deterministic code path (see ADR-0037) -- each
  * doctor-recovery task's own planner-generated instructions tell the executing AI to append a
  * new entry while preserving every prior one verbatim, so the section only ever grows. Because a
- * feature's own state.md (and docs/compassrose/PROJECT_STATE.md) is listed as "Read only" context
+ * feature's own state.md (and compassrose/PROJECT_STATE.md) is listed as "Read only" context
  * on every future doctor-recovery planning and execution prompt, that unbounded growth becomes
  * real, paid context on every subsequent recovery attempt for as long as the feature keeps
  * needing them -- exactly the accumulation ADR-0034 exists to prevent.

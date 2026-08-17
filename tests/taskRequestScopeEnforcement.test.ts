@@ -35,11 +35,11 @@ describe('task-request scope enforcement', () => {
       expect(`${result.stdout}${result.stderr}`).toContain('exceeding its pre-declared boundary');
       expect(`${result.stdout}${result.stderr}`).toContain('src/orchestrator/orchestrator.ts');
 
-      const tasksDirectory = join(workspace.cloneRoot, 'docs', 'features', TARGET_FEATURE_ID, 'tasks');
+      const tasksDirectory = join(workspace.cloneRoot, 'compassrose', 'features', TARGET_FEATURE_ID, 'tasks');
       const writtenTasks = existsSync(tasksDirectory) ? readdirSync(tasksDirectory) : [];
       expect(writtenTasks).toEqual([]);
 
-      const featureState = readFileSync(join(workspace.cloneRoot, 'docs', 'features', TARGET_FEATURE_ID, 'state.md'), 'utf8');
+      const featureState = readFileSync(join(workspace.cloneRoot, 'compassrose', 'features', TARGET_FEATURE_ID, 'state.md'), 'utf8');
       expect(featureState).toContain('## Lifecycle State\n\nblocked');
 
       // The task-requests artifact itself must be untouched -- this was a rejection, not a
@@ -69,7 +69,7 @@ describe('task-request scope enforcement', () => {
 
       expect(result.exitCode).toBe(0);
 
-      const tasksDirectory = join(workspace.cloneRoot, 'docs', 'features', TARGET_FEATURE_ID, 'tasks');
+      const tasksDirectory = join(workspace.cloneRoot, 'compassrose', 'features', TARGET_FEATURE_ID, 'tasks');
       const writtenTasks = existsSync(tasksDirectory) ? readdirSync(tasksDirectory) : [];
       expect(writtenTasks.length).toBe(1);
 
@@ -117,12 +117,12 @@ function prepareWorkspace(options: { withDeviationReason?: boolean } = {}): { cl
   // Remove every real feature -- this scenario needs nothing but our synthetic target, and (as
   // in tests/featurePlanningOutline.test.ts) a request_pending real feature can't be neutralized
   // by rewriting a lifecycle-state line that doesn't exist yet.
-  rmSync(join(cloneRoot, 'docs', 'features'), { recursive: true, force: true });
-  // Real, still-unformalized fixes committed in this repo's own docs/fixes now default to
+  rmSync(join(cloneRoot, 'compassrose', 'features'), { recursive: true, force: true });
+  // Real, still-unformalized fixes committed in this repo's own compassrose/fixes now default to
   // 'critical' severity (fail-safe upward -- see readFixSeverityAndOwnership) until formalized,
   // so they would otherwise outrank this scenario's synthetic feature in the clone and hijack
   // the run. Remove them; this test only exercises task-request scope enforcement.
-  rmSync(join(cloneRoot, 'docs', 'fixes'), { recursive: true, force: true });
+  rmSync(join(cloneRoot, 'compassrose', 'fixes'), { recursive: true, force: true });
   seedTargetFeature(cloneRoot);
   seedTaskRequestArtifact(cloneRoot);
   writeExecutableScript(
@@ -181,7 +181,7 @@ function copyTree(sourceRoot: string, targetRoot: string): void {
 }
 
 function seedTargetFeature(cloneRoot: string): void {
-  const featureRoot = join(cloneRoot, 'docs', 'features', TARGET_FEATURE_ID);
+  const featureRoot = join(cloneRoot, 'compassrose', 'features', TARGET_FEATURE_ID);
   mkdirSync(featureRoot, { recursive: true });
 
   writeFileSync(

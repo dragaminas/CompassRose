@@ -50,8 +50,8 @@ function createWorkspace(configOverride?: (config: string) => string): TempWorks
   const baseConfig = readFixtureConfigMarkdown();
   const workspace = createTempWorkspace({
     files: {
-      'docs/compassrose/CONFIG.md': configOverride ? configOverride(baseConfig) : baseConfig,
-      'docs/compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
+      'compassrose/CONFIG.md': configOverride ? configOverride(baseConfig) : baseConfig,
+      'compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
     },
   });
   copyContractsIntoWorkspace(workspace.root);

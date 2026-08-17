@@ -28,7 +28,7 @@ describe('fix lifecycle end-to-end', () => {
       expect(result.stdout).toContain('Next step: implement_subtask');
       expect(result.stdout).toContain('Next step: review_subtask');
 
-      const fixRoot = join(workspace.root, 'docs', 'fixes', FIX_ID);
+      const fixRoot = join(workspace.root, 'compassrose', 'fixes', FIX_ID);
       expect(existsSync(join(fixRoot, 'fix.md'))).toBe(true);
       expect(existsSync(join(fixRoot, 'architecture.md'))).toBe(false);
 
@@ -60,12 +60,12 @@ function prepareFixLifecycleWorkspace(): { root: string; dispose: () => void } {
 
   copyTree(join(repoRoot, 'src'), join(root, 'src'));
 
-  mkdirSync(join(root, 'docs', 'compassrose'), { recursive: true });
+  mkdirSync(join(root, 'compassrose'), { recursive: true });
   const config = readFixtureConfigMarkdown().replace(/max_tasks_per_run:\s*\d+/, 'max_tasks_per_run: 1');
-  writeFileSync(join(root, 'docs', 'compassrose', 'CONFIG.md'), config, 'utf8');
-  writeFileSync(join(root, 'docs', 'compassrose', 'PROJECT_STATE.md'), PROJECT_STATE_FIXTURE, 'utf8');
+  writeFileSync(join(root, 'compassrose', 'CONFIG.md'), config, 'utf8');
+  writeFileSync(join(root, 'compassrose', 'PROJECT_STATE.md'), PROJECT_STATE_FIXTURE, 'utf8');
 
-  const fixRoot = join(root, 'docs', 'fixes', FIX_ID);
+  const fixRoot = join(root, 'compassrose', 'fixes', FIX_ID);
   mkdirSync(fixRoot, { recursive: true });
   writeFileSync(
     join(fixRoot, 'request.md'),

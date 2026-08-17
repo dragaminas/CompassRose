@@ -165,12 +165,12 @@ echo unused
 function createWorkspace(featureId: string, taskId: string): TempWorkspace {
   const workspace = createTempWorkspace({
     files: {
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-      'docs/compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
-      [`docs/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
-      [`docs/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
-      [`docs/features/${featureId}/state.md`]: featureStateSeed(taskId),
-      [`docs/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId),
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
+      [`compassrose/features/${featureId}/feature.md`]: `# Feature: Fixture Feature\n\nFixture feature document.\n`,
+      [`compassrose/features/${featureId}/architecture.md`]: `# Architecture: Fixture Feature\n\nFixture architecture document.\n`,
+      [`compassrose/features/${featureId}/state.md`]: featureStateSeed(taskId),
+      [`compassrose/features/${featureId}/tasks/001-fixture-task.md`]: taskDoc(taskId, featureId),
     },
   });
   copyContractsIntoWorkspace(workspace.root);
@@ -219,7 +219,7 @@ function asAccess(orchestrator: CompassRoseOrchestrator): BlockingFixAccess {
 }
 
 function listFixDirectories(root: string): string[] {
-  const fixesRoot = join(root, 'docs', 'fixes');
+  const fixesRoot = join(root, 'compassrose', 'fixes');
   return existsSync(fixesRoot) ? readdirSync(fixesRoot) : [];
 }
 
@@ -248,17 +248,17 @@ describe('blockOnUnrelatedFixFailure', () => {
     expect(fixDirectories).toHaveLength(1);
     const [fixId] = fixDirectories;
 
-    const fixState = readFileSync(join(workspace.root, 'docs', 'fixes', fixId, 'state.md'), 'utf8');
+    const fixState = readFileSync(join(workspace.root, 'compassrose', 'fixes', fixId, 'state.md'), 'utf8');
     expect(fixState).toContain('task_planning_pending');
     expect(fixState).toMatch(/- severity: high/);
     expect(fixState).toMatch(/- owning_feature: none/);
 
-    const requestMarkdown = readFileSync(join(workspace.root, 'docs', 'fixes', fixId, 'request.md'), 'utf8');
+    const requestMarkdown = readFileSync(join(workspace.root, 'compassrose', 'fixes', fixId, 'request.md'), 'utf8');
     expect(requestMarkdown).toContain('tests/unrelated.test.ts');
     expect(requestMarkdown).toMatch(/Signature: `[0-9a-f]{12}`/);
-    expect(existsSync(join(workspace.root, 'docs', 'fixes', fixId, 'fix.md'))).toBe(true);
+    expect(existsSync(join(workspace.root, 'compassrose', 'fixes', fixId, 'fix.md'))).toBe(true);
 
-    const featureState = readFileSync(join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'), 'utf8');
+    const featureState = readFileSync(join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md'), 'utf8');
     expect(featureState.match(/## Lifecycle State\n\n(\S+)/)?.[1]).toBe('blocked');
     expect(featureState).toContain(`- blocked_on_fix: ${fixId}`);
   });
@@ -312,7 +312,7 @@ describe('blockOnUnrelatedFixFailure', () => {
     expect(result.exitCode).toBe(2);
 
     const [fixId] = listFixDirectories(workspace.root);
-    const fixMarkdown = readFileSync(join(workspace.root, 'docs', 'fixes', fixId, 'fix.md'), 'utf8');
+    const fixMarkdown = readFileSync(join(workspace.root, 'compassrose', 'fixes', fixId, 'fix.md'), 'utf8');
     expect(fixMarkdown).toContain('tests/unrelated.test.ts');
     expect(fixMarkdown).not.toContain('Pre-existing failure in `src/allowed.ts`');
   });
@@ -365,7 +365,7 @@ describe('blockOnUnrelatedFixFailure', () => {
     const [fixId] = listFixDirectories(workspace.root);
 
     // Simulate the fix's own task chain having reached completed.
-    const fixStatePath = join(workspace.root, 'docs', 'fixes', fixId, 'state.md');
+    const fixStatePath = join(workspace.root, 'compassrose', 'fixes', fixId, 'state.md');
     writeFileSync(fixStatePath, readFileSync(fixStatePath, 'utf8').replace('task_planning_pending', 'completed'), 'utf8');
 
     const feature = access.listFeatures().find((candidate) => candidate.id === 'fixture-feature');
@@ -376,7 +376,7 @@ describe('blockOnUnrelatedFixFailure', () => {
     expect(inspection.kind).toBe('implementation_running');
     expect(inspection.snapshot?.activeTask).toBe('F001-T01');
 
-    const featureState = readFileSync(join(workspace.root, 'docs', 'features', 'fixture-feature', 'state.md'), 'utf8');
+    const featureState = readFileSync(join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md'), 'utf8');
     expect(featureState).toContain('- blocked_on_fix: none');
     expect(featureState.match(/## Lifecycle State\n\n(\S+)/)?.[1]).toBe('implementation_running');
   });
@@ -403,9 +403,9 @@ describe('fileOrReuseBlockingFix (generalized scaffold, doctor-filed severity)',
       nextPlanningHint: 'diagnose and repair the systemic defect.',
     });
 
-    const fixState = readFileSync(join(workspace.root, 'docs', 'fixes', fixId, 'state.md'), 'utf8');
+    const fixState = readFileSync(join(workspace.root, 'compassrose', 'fixes', fixId, 'state.md'), 'utf8');
     expect(fixState).toMatch(/- severity: critical/);
-    expect(existsSync(join(workspace.root, 'docs', 'fixes', fixId, 'fix.md'))).toBe(true);
+    expect(existsSync(join(workspace.root, 'compassrose', 'fixes', fixId, 'fix.md'))).toBe(true);
 
     // Reusing the same signature must not spawn a duplicate fix.
     const reusedFixId = access.fileOrReuseBlockingFix({

@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { resolve, join } from 'node:path';
+import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
@@ -7,6 +7,7 @@ import { readProjectConfiguration, validateRuntimePreconditions } from '../confi
 import { getCurrentSupportedPlatform } from '../platform/platformInfo.js';
 import { CompassRoseOrchestrator } from '../orchestrator/orchestrator.js';
 import { parseRunArguments } from './runOptions.js';
+import { getBootstrapConfigPath } from '../config/compassRosePaths.js';
 
 export interface CliEnvironment {
   readonly cwd?: string;
@@ -46,9 +47,9 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     stderr('runtime preflight: git repository: current directory is not inside a git repository');
     return 1;
   }
-  const configPath = join(gitRoot, 'docs/compassrose/CONFIG.md');
+  const configPath = getBootstrapConfigPath(gitRoot);
   if (!existsSync(configPath)) {
-    stderr('runtime preflight: configuration: docs/compassrose/CONFIG.md is absent');
+    stderr(`runtime preflight: configuration: ${configPath} is absent`);
     return 1;
   }
   const configResult = readProjectConfiguration(configPath);

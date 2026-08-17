@@ -32,9 +32,9 @@ function makeMockConfig(overrides?: Partial<ProjectConfiguration>): ProjectConfi
       ...overrides?.commands,
     },
     documentation: {
-      roadmap: 'docs/ROADMAP.md',
-      project_state: 'docs/compassrose/PROJECT_STATE.md',
-      config: 'docs/compassrose/CONFIG.md',
+      roadmap: 'compassrose/ROADMAP.md',
+      project_state: 'compassrose/PROJECT_STATE.md',
+      config: 'compassrose/CONFIG.md',
       contracts_root: 'src/contracts',
       ...overrides?.documentation,
     },
@@ -179,11 +179,14 @@ describe('integration: context + report', () => {
 describe('runDoctor integration with the diagnostic boundary (correction F003-T01-C01)', () => {
   test('passing run: preserves the real repositoryRoot/currentPlatform/configPath instead of the standalone boundary\'s null placeholders, and derives success/exitCode through it', () => {
     workspace = createTempWorkspace({
-      directories: ['.git', 'src/contracts'],
+      // 'docs' is this fixture's own (empty) documentation root -- CONFIG.md's own
+      // project.documentation_root check needs it to exist; it used to be created implicitly
+      // as CONFIG.md's own parent directory before CompassRose's docs moved out of docs/.
+      directories: ['.git', 'src/contracts', 'docs'],
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
-        'docs/ROADMAP.md': '# roadmap\n',
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });
 
@@ -207,9 +210,9 @@ describe('runDoctor integration with the diagnostic boundary (correction F003-T0
     workspace = createTempWorkspace({
       directories: ['.git', 'src/contracts'],
       files: {
-        // No docs/ROADMAP.md -> the 'paths' check fails.
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        // No compassrose/ROADMAP.md -> the 'paths' check fails.
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
       },
     });
 
@@ -225,15 +228,15 @@ describe('runDoctor integration with the diagnostic boundary (correction F003-T0
     workspace = createTempWorkspace({
       directories: ['.git', 'src/contracts'],
       files: {
-        'docs/compassrose/CONFIG.md': configText,
-        'docs/compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
-        'docs/ROADMAP.md': '# roadmap\n',
+        'compassrose/CONFIG.md': configText,
+        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });
 
     runDoctor({ cwd: workspace.root });
 
-    const after = readFileSync(join(workspace.root, 'docs/compassrose/CONFIG.md'), 'utf8');
+    const after = readFileSync(join(workspace.root, 'compassrose/CONFIG.md'), 'utf8');
     expect(after).toBe(configText);
   });
 });

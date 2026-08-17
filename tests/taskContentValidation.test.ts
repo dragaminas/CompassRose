@@ -7,8 +7,8 @@ import {
 
 describe('sanitizeAllowedPaths', () => {
   test('leaves clean paths untouched with no notices', () => {
-    const result = sanitizeAllowedPaths(['src/allowed.ts', 'docs/features/foo/state.md']);
-    expect(result.allowedPaths).toEqual(['src/allowed.ts', 'docs/features/foo/state.md']);
+    const result = sanitizeAllowedPaths(['src/allowed.ts', 'compassrose/features/foo/state.md']);
+    expect(result.allowedPaths).toEqual(['src/allowed.ts', 'compassrose/features/foo/state.md']);
     expect(result.notices).toHaveLength(0);
   });
 
@@ -37,14 +37,14 @@ describe('sanitizeAllowedPaths', () => {
 describe('findMissingRefGitDiffExitCodeGates', () => {
   test('flags a git diff --exit-code gate with no explicit ref (the F002-T17-C1 bug)', () => {
     const offending = findMissingRefGitDiffExitCodeGates([
-      'git diff --name-only --exit-code -- docs/features/foo/tasks/bar.md',
+      'git diff --name-only --exit-code -- compassrose/features/foo/tasks/bar.md',
     ]);
     expect(offending).toHaveLength(1);
   });
 
   test('does not flag the same gate once it has an explicit ref', () => {
     const offending = findMissingRefGitDiffExitCodeGates([
-      'git diff --name-only --exit-code 023507f3 -- docs/features/foo/tasks/bar.md',
+      'git diff --name-only --exit-code 023507f3 -- compassrose/features/foo/tasks/bar.md',
     ]);
     expect(offending).toHaveLength(0);
   });

@@ -27,9 +27,9 @@ const minimalMvpConfig = [
   '  build: ""',
   '',
   'documentation:',
-  '  roadmap: docs/ROADMAP.md',
-  '  project_state: docs/compassrose/PROJECT_STATE.md',
-  '  config: docs/compassrose/CONFIG.md',
+  '  roadmap: compassrose/ROADMAP.md',
+  '  project_state: compassrose/PROJECT_STATE.md',
+  '  config: compassrose/CONFIG.md',
   '  contracts_root: src/contracts',
   '```',
 ].join('\n');
@@ -38,12 +38,12 @@ describe('project configuration loader', () => {
   test('accepts a minimal MVP configuration with only required fields', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': minimalMvpConfig,
+        'compassrose/CONFIG.md': minimalMvpConfig,
       },
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(true);
       if (!result.ok) {
@@ -58,9 +58,9 @@ describe('project configuration loader', () => {
       expect(result.value.commands.tests).toBe('npm test');
       expect(result.value.commands.lint).toBe('');
       expect(result.value.commands.build).toBe('');
-      expect(result.value.documentation.roadmap).toBe('docs/ROADMAP.md');
-      expect(result.value.documentation.project_state).toBe('docs/compassrose/PROJECT_STATE.md');
-      expect(result.value.documentation.config).toBe('docs/compassrose/CONFIG.md');
+      expect(result.value.documentation.roadmap).toBe('compassrose/ROADMAP.md');
+      expect(result.value.documentation.project_state).toBe('compassrose/PROJECT_STATE.md');
+      expect(result.value.documentation.config).toBe('compassrose/CONFIG.md');
       expect(result.value.documentation.contracts_root).toBe('src/contracts');
       expect(result.value.git_policy.require_clean_worktree_before_task).toBe(true);
       expect(result.value.git_policy.review_target).toBe('git_diff');
@@ -75,12 +75,12 @@ describe('project configuration loader', () => {
   test('loads the canonical project-local configuration from CONFIG.md', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
       },
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(true);
       if (!result.ok) {
@@ -99,12 +99,12 @@ describe('project configuration loader', () => {
   test('preserves existing top-level platform values from canonical configuration', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
       },
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(true);
       if (!result.ok) {
@@ -120,7 +120,7 @@ describe('project configuration loader', () => {
   test('rejects configuration that omits a required command key', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
           /  lint: "npm run lint"\n/,
           ''
         ),
@@ -128,7 +128,7 @@ describe('project configuration loader', () => {
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(false);
       if (result.ok) {
@@ -146,12 +146,12 @@ describe('runtime-precondition policy fields', () => {
   test('exposes typed execution, roles, and git_policy on valid canonical config', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
       },
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(true);
       if (!result.ok) {
@@ -180,7 +180,7 @@ describe('runtime-precondition policy fields', () => {
   test('rejects unsupported execution mode values', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
           'mode: interactive',
           'mode: unknown_mode'
         ),
@@ -188,7 +188,7 @@ describe('runtime-precondition policy fields', () => {
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(false);
       if (result.ok) {
@@ -204,7 +204,7 @@ describe('runtime-precondition policy fields', () => {
   test('rejects missing required role entries', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
           /  implementer:\n    enabled: true\n    adapter: external_cli\n\n/,
           ''
         ),
@@ -212,7 +212,7 @@ describe('runtime-precondition policy fields', () => {
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(false);
       if (result.ok) {
@@ -228,7 +228,7 @@ describe('runtime-precondition policy fields', () => {
   test('rejects invalid git_policy enum fields', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
           'review_target: git_diff',
           'review_target: invalid_target'
         ),
@@ -236,7 +236,7 @@ describe('runtime-precondition policy fields', () => {
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(false);
       if (result.ok) {
@@ -252,7 +252,7 @@ describe('runtime-precondition policy fields', () => {
   test('rejects invalid git_policy boolean fields', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
           'require_clean_worktree_before_task: true',
           'require_clean_worktree_before_task: maybe'
         ),
@@ -260,7 +260,7 @@ describe('runtime-precondition policy fields', () => {
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(false);
       if (result.ok) {
@@ -278,12 +278,12 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
   test('exposes canonical development_policy, review_policy, quality_gates, and limits values from valid canonical config', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
       },
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(true);
       if (!result.ok) {
@@ -315,14 +315,14 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
   test('accepts an explicit 0 for optional non-negative limits as a real, distinct value', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown()
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown()
           .replace(/max_lifetime_recovery_cycles:\s*\d+/, 'max_lifetime_recovery_cycles: 0')
           .replace(/max_ai_calls_per_run:\s*\d+/, 'max_ai_calls_per_run: 0'),
       },
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(true);
       if (!result.ok) {
@@ -339,14 +339,14 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
   test('treats a key with no inline value (parses to null) the same as an absent optional limit', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown()
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown()
           .replace(/max_lifetime_recovery_cycles:\s*\d+/, 'max_lifetime_recovery_cycles:')
           .replace(/max_ai_calls_per_run:\s*\d+/, 'max_ai_calls_per_run:'),
       },
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(true);
       if (!result.ok) {
@@ -363,7 +363,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
   test('rejects invalid development_policy.default enum value', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
           'default: implementation_first',
           'default: unknown_policy'
         ),
@@ -371,7 +371,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(false);
       if (result.ok) {
@@ -387,7 +387,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
   test('rejects invalid review_policy.mode enum value', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
           'mode: required',
           'mode: unknown_mode'
         ),
@@ -395,7 +395,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(false);
       if (result.ok) {
@@ -411,7 +411,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
   test('rejects non-string entries in quality_gates.required', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
           '    - typecheck\n    - tests',
           '    - typecheck\n    - 42'
         ),
@@ -419,7 +419,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(false);
       if (result.ok) {
@@ -435,7 +435,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
   test('rejects non-integer limit values', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown().replace(
           '  max_retries_per_task: 1',
           '  max_retries_per_task: -5'
         ),
@@ -443,7 +443,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(false);
       if (result.ok) {
@@ -459,7 +459,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
   test('rejects malformed present optional adapter fields', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': [
+        'compassrose/CONFIG.md': [
           '# CompassRose Project Configuration',
           '',
           '## Configuration',
@@ -484,9 +484,9 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
           '  build: ""',
           '',
           'documentation:',
-          '  roadmap: docs/ROADMAP.md',
-          '  project_state: docs/compassrose/PROJECT_STATE.md',
-          '  config: docs/compassrose/CONFIG.md',
+          '  roadmap: compassrose/ROADMAP.md',
+          '  project_state: compassrose/PROJECT_STATE.md',
+          '  config: compassrose/CONFIG.md',
           '  contracts_root: src/contracts',
           '```',
         ].join('\n'),
@@ -494,7 +494,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(false);
       if (result.ok) {
@@ -510,7 +510,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
   test('rejects non-object optional policy sections', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': [
+        'compassrose/CONFIG.md': [
           '# CompassRose Project Configuration',
           '',
           '## Configuration',
@@ -536,9 +536,9 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
           '  build: ""',
           '',
           'documentation:',
-          '  roadmap: docs/ROADMAP.md',
-          '  project_state: docs/compassrose/PROJECT_STATE.md',
-          '  config: docs/compassrose/CONFIG.md',
+          '  roadmap: compassrose/ROADMAP.md',
+          '  project_state: compassrose/PROJECT_STATE.md',
+          '  config: compassrose/CONFIG.md',
           '  contracts_root: src/contracts',
           '```',
         ].join('\n'),
@@ -546,7 +546,7 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(false);
       if (result.ok) {
@@ -562,12 +562,12 @@ describe('policy sections: development_policy, review_policy, quality_gates, and
   test('rejects boolean value in review_policy.record_skipped_review when string expected is not enforced (boolean is valid)', () => {
     const workspace = createTempWorkspace({
       files: {
-        'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
       },
     });
 
     try {
-      const result = readProjectConfiguration(join(workspace.root, 'docs/compassrose/CONFIG.md'));
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
 
       expect(result.ok).toBe(true);
       if (!result.ok) {

@@ -138,10 +138,10 @@ function createOrchestratorWorkspace(
   const previousTaskAllowedPaths = options.previousTaskAllowedPaths ?? ['src/'];
   const workspace = createTempWorkspace({
     files: {
-      'docs/compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-      'docs/compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
-      [`docs/features/${featureId}/state.md`]: featureStateSeed('FIX-T1'),
-      [`docs/features/${featureId}/tasks/001-fixture-previous-task.md`]: previousTaskDoc('FIX-T1', featureId, previousTaskAllowedPaths),
+      'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+      'compassrose/PROJECT_STATE.md': PROJECT_STATE_SEED,
+      [`compassrose/features/${featureId}/state.md`]: featureStateSeed('FIX-T1'),
+      [`compassrose/features/${featureId}/tasks/001-fixture-previous-task.md`]: previousTaskDoc('FIX-T1', featureId, previousTaskAllowedPaths),
     },
   });
   copyContractsIntoWorkspace(workspace.root);
@@ -190,14 +190,14 @@ describe('reconcileDirtyPathsForNewScope', () => {
     // the *new* scope, with no regard for whether the old task ever touched it -- which silently
     // wiped an unrelated config edit and even this repository's own gitClient.ts in a real e2e
     // run. The previous task here only ever declared 'src/orchestrator/', so an unrelated dirty
-    // edit to docs/compassrose/CONFIG.md must survive untouched.
+    // edit to compassrose/CONFIG.md must survive untouched.
     workspace = createOrchestratorWorkspace('fixture-feature', { previousTaskAllowedPaths: ['src/orchestrator/'] });
-    writeFileSync(join(workspace.root, 'docs/compassrose/CONFIG.md'), `${readFixtureConfigMarkdown()}\n# unrelated edit\n`, 'utf8');
+    writeFileSync(join(workspace.root, 'compassrose/CONFIG.md'), `${readFixtureConfigMarkdown()}\n# unrelated edit\n`, 'utf8');
 
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     asReconciliationAccess(orchestrator).reconcileDirtyPathsForNewScope('fixture-feature', 'FIX-T1', ['src/orchestrator/other.ts']);
 
-    expect(readFileSync(join(workspace.root, 'docs/compassrose/CONFIG.md'), 'utf8')).toContain('# unrelated edit');
+    expect(readFileSync(join(workspace.root, 'compassrose/CONFIG.md'), 'utf8')).toContain('# unrelated edit');
   });
 
   test('is a no-op when previousTaskId is "none"', () => {
@@ -244,18 +244,18 @@ describe('correctState() worktree reconciliation', () => {
 
     expect(existsSync(join(workspace.root, 'src', 'orchestrator', 'leftover.ts'))).toBe(false);
 
-    const featureStateMarkdown = readFileSync(join(workspace.root, 'docs/features/fixture-feature/state.md'), 'utf8');
+    const featureStateMarkdown = readFileSync(join(workspace.root, 'compassrose/features/fixture-feature/state.md'), 'utf8');
     expect(featureStateMarkdown).toContain('State correction artifact `FIX-T1-C1` was applied');
-    expect(existsSync(join(workspace.root, 'docs/features/fixture-feature/tasks'))).toBe(true);
+    expect(existsSync(join(workspace.root, 'compassrose/features/fixture-feature/tasks'))).toBe(true);
   });
 
   test('leaves a dirty file alone when it was never in the superseded active task scope', () => {
     workspace = createOrchestratorWorkspace('fixture-feature', { previousTaskAllowedPaths: ['src/orchestrator/'] });
-    writeFileSync(join(workspace.root, 'docs/compassrose/CONFIG.md'), `${readFixtureConfigMarkdown()}\n# unrelated edit\n`, 'utf8');
+    writeFileSync(join(workspace.root, 'compassrose/CONFIG.md'), `${readFixtureConfigMarkdown()}\n# unrelated edit\n`, 'utf8');
 
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     asReconciliationAccess(orchestrator).correctState('fixture-feature', 'test-driven state repair');
 
-    expect(readFileSync(join(workspace.root, 'docs/compassrose/CONFIG.md'), 'utf8')).toContain('# unrelated edit');
+    expect(readFileSync(join(workspace.root, 'compassrose/CONFIG.md'), 'utf8')).toContain('# unrelated edit');
   });
 });
