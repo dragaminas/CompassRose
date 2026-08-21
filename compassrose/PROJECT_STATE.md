@@ -43,7 +43,7 @@ In progress
 
 ## Pending
 
-- Execute correction subtask `F003-T01-C02` for the active feature.
+- Recover or finish implementation for `F003-T01-C02`.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -71,4 +71,4 @@ Doctor recovery task `F003-DR06` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-The active feature is `003-doctor-command`, and its next valid action is to execute correction subtask `F003-T01-C02`.
+The active feature is `003-doctor-command`, and subtask execution for `F003-T01-C02` is in progress.
