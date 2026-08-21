@@ -68,28 +68,40 @@ export interface DoctorRuntimeFacts {
 }
 
 /**
- * Build a {@link DoctorReport} from the supplied ordered check results.
+ * Build a {@link DoctorReport} from the complete diagnostic context.
  *
  * - `success` is `true` unless at least one check `fail`s (`info` checks -- e.g. a report of
  *   currently-blocked work, which is expected operational state to act on, not an
  *   environment/config defect -- never flip this to failure).
  * - `exitCode` is `0` when nothing fails, `1` otherwise.
  * - The supplied checks are preserved in order (reference copied).
- * - Runtime facts (repositoryRoot, currentPlatform, configPath) are propagated from
- *   the caller; defaults to null when omitted.
+ * - Runtime facts (repositoryRoot, currentPlatform, configPath) are propagated from the
+ *   same context that derives readiness, so the report cannot lose or patch them afterward.
  */
+export function buildDiagnosticReport(context: DoctorCheckContext): DoctorReport;
 export function buildDiagnosticReport(
   checks: readonly DoctorCheck[],
+  runtimeFacts: DoctorRuntimeFacts,
+): DoctorReport;
+export function buildDiagnosticReport(
+  contextOrChecks: DoctorCheckContext | readonly DoctorCheck[],
   runtimeFacts?: DoctorRuntimeFacts,
 ): DoctorReport {
-  const noFailures = checks.every((check) => check.status !== 'fail');
+  const isContext = !Array.isArray(contextOrChecks);
+  const context = isContext ? (contextOrChecks as DoctorCheckContext) : undefined;
+  const checks: readonly DoctorCheck[] = context
+    ? context.checks
+    : (contextOrChecks as readonly DoctorCheck[]);
+  const readiness = context
+    ? context.readiness
+    : checks.every((check: DoctorCheck) => check.status !== 'fail');
 
   return {
-    repositoryRoot: runtimeFacts?.repositoryRoot ?? null,
-    currentPlatform: runtimeFacts?.currentPlatform ?? null,
-    configPath: runtimeFacts?.configPath ?? null,
+    repositoryRoot: context?.repositoryRoot ?? runtimeFacts?.repositoryRoot ?? null,
+    currentPlatform: context?.currentPlatform ?? runtimeFacts?.currentPlatform ?? null,
+    configPath: context?.configPath ?? runtimeFacts?.configPath ?? null,
     checks: [...checks],
-    success: noFailures,
-    exitCode: noFailures ? 0 : 1,
+    success: readiness,
+    exitCode: readiness ? 0 : 1,
   };
 }

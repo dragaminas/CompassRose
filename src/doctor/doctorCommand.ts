@@ -137,12 +137,7 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
 
   checks.push(buildBlockedWorkCheck(repositoryRoot, configurationResult.value));
 
-  return buildDoctorReport({
-    repositoryRoot,
-    currentPlatform,
-    configPath,
-    checks: context.checks,
-  });
+  return buildDiagnosticReport(context);
 }
 
 /**

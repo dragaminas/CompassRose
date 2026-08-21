@@ -223,6 +223,31 @@ describe('integration: context + report', () => {
     expect(context.configPath).toBe('/repo/compassrose/CONFIG.md');
   });
 
+  test('builds a failed report from the complete context without dropping runtime facts', () => {
+    const config = makeMockConfig();
+    const checks: DoctorCheck[] = [
+      { name: 'repository', status: 'pass', details: ['ok'] },
+      { name: 'configuration', status: 'fail', details: ['missing'] },
+      { name: 'platform', status: 'pass', details: ['ok'] },
+    ];
+    const context = createCheckContext(config, checks, {
+      repositoryRoot: '/repo/root',
+      currentPlatform: 'windows',
+      configPath: '/repo/compassrose/CONFIG.md',
+    });
+
+    expect(context.readiness).toBe(false);
+
+    const report = buildDiagnosticReport(context);
+
+    expect(report.repositoryRoot).toBe('/repo/root');
+    expect(report.currentPlatform).toBe('windows');
+    expect(report.configPath).toBe('/repo/compassrose/CONFIG.md');
+    expect(report.checks).toEqual(checks);
+    expect(report.success).toBe(false);
+    expect(report.exitCode).toBe(1);
+  });
+
   test('context readiness is true when all ordered checks pass', () => {
     const config = makeMockConfig();
     const checks: DoctorCheck[] = [
