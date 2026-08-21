@@ -13,6 +13,7 @@
     "setup": "tsx src/cli/main.ts setup",
     "feature-validation": "tsx src/cli/main.ts feature-validation",
     "brainstorm": "tsx src/cli/main.ts brainstorm",
+    "acknowledge-blocker": "tsx src/cli/main.ts acknowledge-blocker",
     "dev": "tsx src/cli/main.ts",
     "doctor": "tsx src/cli/main.ts doctor",
     "dev:no-commit": "tsx src/cli/main.ts --no-commit",

@@ -11,6 +11,7 @@ import { getBootstrapConfigPath } from '../config/compassRosePaths.js';
 import { runSetupCli } from './setup.js';
 import { runFeatureValidationCli } from './featureValidation.js';
 import { runBrainstormCli } from './brainstorm.js';
+import { runAcknowledgeBlockerCli } from './acknowledgeBlocker.js';
 
 export interface CliEnvironment {
   readonly cwd?: string;
@@ -47,6 +48,10 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     return runBrainstormCli(argv.slice(1), { cwd, stdout, stderr });
   }
 
+  if (argv.length >= 1 && argv[0] === 'acknowledge-blocker') {
+    return runAcknowledgeBlockerCli(argv.slice(1), { cwd, stdout, stderr });
+  }
+
   let options;
   try {
     options = parseRunArguments(argv, cwd);
@@ -57,6 +62,7 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     stderr('Usage: compassrose setup');
     stderr('Usage: compassrose feature-validation [--no-commit] [--cwd <path>]');
     stderr('Usage: compassrose brainstorm [--no-commit]');
+    stderr('Usage: compassrose acknowledge-blocker [--no-commit] [--cwd <path>]');
     return 1;
   }
 

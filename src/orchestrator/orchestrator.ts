@@ -549,6 +549,23 @@ export class CompassRoseOrchestrator {
   }
 
   /**
+   * "npm run acknowledge-blocker": every feature/fix inspectFeature()/inspectFix() currently
+   * reports as `blocked_on_human` -- i.e. exactly the set both scheduler passes are silently
+   * skipping until a human explicitly clears it via acknowledgeBlocker(). Mirrors
+   * listFeaturesAwaitingValidation()'s shape.
+   */
+  listHumanBlockedWorkItems(): readonly WorkItemContext[] {
+    const featureIds = this.listFeatures()
+      .filter((feature) => this.inspectFeature(feature).kind === 'blocked_on_human')
+      .map((feature) => feature.id);
+    const fixIds = this.listFixes()
+      .filter((fix) => this.inspectFix(fix).kind === 'blocked_on_human')
+      .map((fix) => fix.id);
+
+    return [...featureIds, ...fixIds].map((id) => this.resolveWorkItemContext(id));
+  }
+
+  /**
    * Decides how much back-and-forth `id`'s definition needs before a human can confirm it, via
    * the same 3-vote unanimous-required ensemble pattern as classifySystemicBlockerNextStepByEnsemble
    * (ADR-0036/38). Unlike that ensemble's tie-break-to-stop, disagreement or unavailability here
@@ -948,12 +965,13 @@ export class CompassRoseOrchestrator {
   }
 
   private isContinuingInspectionKind(kind: WorkItemInspectionKind): boolean {
-    // 'blocked_on_fix' and 'awaiting_validation' are deliberately neither startable nor
-    // continuing: each must be invisible to both scheduler passes while unresolved (the
-    // blocking fix unresolved; a human hasn't confirmed the feature's definition, see
-    // ADR-0046/Flow 1), so other features/fixes keep making progress instead of this one being
-    // retried (and re-diagnosed) every run.
-    return kind !== 'completed' && kind !== 'blocked_on_fix' && kind !== 'awaiting_validation' && !this.isStartableInspectionKind(kind);
+    // 'blocked_on_fix', 'awaiting_validation', and 'blocked_on_human' are deliberately neither
+    // startable nor continuing: each must be invisible to both scheduler passes while unresolved
+    // (the blocking fix unresolved; a human hasn't confirmed the feature's definition, see
+    // ADR-0046/Flow 1; a human hasn't acknowledged an exhausted/terminal blocker, see
+    // acknowledgeBlocker()), so other features/fixes keep making progress instead of this one
+    // being retried (and re-diagnosed) every run.
+    return kind !== 'completed' && kind !== 'blocked_on_fix' && kind !== 'awaiting_validation' && kind !== 'blocked_on_human' && !this.isStartableInspectionKind(kind);
   }
 
   private static readonly FIX_SEVERITY_RANK: Record<FixSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -1046,13 +1064,27 @@ export class CompassRoseOrchestrator {
       ...fixInspections.filter(({ inspection }) => inspection.kind === 'awaiting_validation').map(({ fix }) => fix.id),
     ];
 
+    const blockedOnHumanIds = [
+      ...featureInspections.filter(({ inspection }) => inspection.kind === 'blocked_on_human').map(({ feature }) => feature.id),
+      ...fixInspections.filter(({ inspection }) => inspection.kind === 'blocked_on_human').map(({ fix }) => fix.id),
+    ];
+
+    const stopReasonSuffixes = [
+      awaitingValidationIds.length > 0
+        ? `${awaitingValidationIds.length} awaiting human validation (${awaitingValidationIds.join(', ')}) -- run "npm run feature-validation"`
+        : null,
+      blockedOnHumanIds.length > 0
+        ? `${blockedOnHumanIds.length} blocked pending human acknowledgment (${blockedOnHumanIds.join(', ')}) -- run "npm run acknowledge-blocker"`
+        : null,
+    ].filter((suffix): suffix is string => suffix !== null);
+
     return {
       kind: 'stop',
       feature_id: null,
       task_id: null,
       correction_task_id: null,
-      reason: awaitingValidationIds.length > 0
-        ? `No non-completed feature or fix remains ready for the autonomous pipeline; ${awaitingValidationIds.length} awaiting human validation (${awaitingValidationIds.join(', ')}) -- run "npm run feature-validation".`
+      reason: stopReasonSuffixes.length > 0
+        ? `No non-completed feature or fix remains ready for the autonomous pipeline; ${stopReasonSuffixes.join('; ')}.`
         : 'No non-completed feature or fix remains.',
     };
   }
@@ -1154,6 +1186,10 @@ export class CompassRoseOrchestrator {
       case 'awaiting_validation':
         throw new Error(
           `Feature ${feature.id} reached selectStepForFeature with kind 'awaiting_validation', which determineNextStep's continuing/startable filters should never allow through.`,
+        );
+      case 'blocked_on_human':
+        throw new Error(
+          `Feature ${feature.id} reached selectStepForFeature with kind 'blocked_on_human', which determineNextStep's continuing/startable filters should never allow through.`,
         );
       default:
         return assertNever(inspection.kind);
@@ -1345,6 +1381,18 @@ export class CompassRoseOrchestrator {
           };
         }
 
+        // Only set once diagnose_autocorrect's own bounded-retry machinery has already run this
+        // to exhaustion (see requiresHumanAcknowledgment()'s doc comment) -- re-diagnosing it
+        // every run would just spend an ensemble call to re-trip the same limit and re-print the
+        // same card. Skip it, like blocked_on_fix, until acknowledgeBlocker() clears it.
+        if (this.requiresHumanAcknowledgment(feature.statePath)) {
+          return {
+            kind: 'blocked_on_human',
+            reason: `Feature ${feature.id} is blocked and automatic recovery is exhausted; skipping until a human runs "npm run acknowledge-blocker" instead of re-diagnosing every run.`,
+            snapshot,
+          };
+        }
+
         return {
           kind: 'blocked',
           reason: `Feature ${feature.id} is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.`,
@@ -1500,6 +1548,16 @@ export class CompassRoseOrchestrator {
           };
         }
 
+        if (this.requiresHumanAcknowledgment(fix.statePath)) {
+          return {
+            kind: 'blocked_on_human',
+            reason: `Fix ${fix.id} is blocked and automatic recovery is exhausted; skipping until a human runs "npm run acknowledge-blocker" instead of re-diagnosing every run.`,
+            snapshot,
+            severity,
+            owningFeature,
+          };
+        }
+
         return { kind: 'blocked', reason: `Fix ${fix.id} is blocked and needs diagnosis/autocorrection to choose bounded recovery or an explicit stop.`, snapshot, severity, owningFeature };
       }
       case 'completed':
@@ -1617,6 +1675,10 @@ export class CompassRoseOrchestrator {
         throw new Error(
           `Fix ${fix.id} reached selectStepForFix with kind 'awaiting_validation', which determineNextStep's continuing/startable filters should never allow through.`,
         );
+      case 'blocked_on_human':
+        throw new Error(
+          `Fix ${fix.id} reached selectStepForFix with kind 'blocked_on_human', which determineNextStep's continuing/startable filters should never allow through.`,
+        );
       default:
         return assertNever(inspection.kind);
     }
@@ -1689,6 +1751,10 @@ export class CompassRoseOrchestrator {
         };
 
     this.persistBlockedFeatureWithKnownBlocker(owner, featureId, null, reason, blocker);
+    // The explicit, authoritative "diagnose_autocorrect already ran this to exhaustion" marker
+    // inspectFeature()/inspectFix() check -- see requiresHumanAcknowledgment()'s own doc comment
+    // for why this must NOT be inferred from `recoverability` alone.
+    this.setRequiresHumanAcknowledgment(owner.statePath, true);
     // Every other blocking call site commits its own persisted state immediately afterward
     // (commitDirtyWorktreeIfConfigured) rather than leaving it dirty indefinitely; this path must
     // match, or the newly-written `blocked` state.md just sits as an uncommitted diff forever.
@@ -5024,6 +5090,31 @@ export class CompassRoseOrchestrator {
     writeText(owner.statePath, replaceOperationalStatus(readUtf8(owner.statePath), { blocked_on_fix: fixId }));
   }
 
+  /**
+   * Marks that automatic recovery has been proven exhausted for this specific blocker (set only
+   * by recordExhaustedRecoveryAsBlocked) -- deliberately NOT derived from `recoverability` alone,
+   * because a freshly-classified 'human'/'terminal' blocker (e.g. an ensemble disagreement, or a
+   * review-time classification) still needs its first pass through diagnose_autocorrect, which
+   * is exactly where consultDoctorOnSystemicBlocker decides whether to file a systemic fix
+   * (blocked_on_fix, already excluded and self-resolving) -- excluding it before that pass ever
+   * runs would silently break that existing, working path (see tests/protoBlockerFlows.test.ts's
+   * 'terminal-review-blocked' scenario). This marker is only ever true for a blocker that has
+   * ALREADY been through that machinery and come back exhausted.
+   */
+  private requiresHumanAcknowledgment(statePath: string): boolean {
+    try {
+      const markdown = readUtf8(statePath);
+      const operationalStatus = requireSection(markdown, 'Operational Status');
+      return stripTicks(parsePreferredStatusValue(operationalStatus, 'human_ack_required') ?? 'none') === 'true';
+    } catch {
+      return false;
+    }
+  }
+
+  private setRequiresHumanAcknowledgment(statePath: string, value: boolean): void {
+    writeText(statePath, replaceOperationalStatus(readUtf8(statePath), { human_ack_required: value ? 'true' : 'none' }));
+  }
+
   private computeGateFailureSignature(command: string, referencedPaths: readonly string[]): string {
     return createHash('sha1').update(`${command}::${referencedPaths[0] ?? ''}`).digest('hex').slice(0, 12);
   }
@@ -5186,6 +5277,76 @@ export class CompassRoseOrchestrator {
       'Current Reality',
       `- \`${ownerId}\` resumed after a blocking fix`,
       `- \`${ownerId}\` resumed after fix \`${fixId}\` reached completed; the active task pointer was restored to \`${restorationTarget.active_task}\`.`,
+    );
+    return markdown;
+  }
+
+  /**
+   * "npm run acknowledge-blocker" (ADR-0007): the ONLY method allowed to clear a
+   * `blocked_on_human` exclusion, called exclusively from that CLI's own explicit "listo"
+   * branch, never from AI-response handling. No AI call, no re-diagnosis of whether the
+   * underlying issue is actually fixed -- the human's explicit action is the sole authority here,
+   * exactly like confirmFeatureValidation() is the sole authority to flip `validation: confirmed`.
+   * Mirrors resumeWorkItemBlockedOnFix()'s restoration shape (same RestorationTarget-driven
+   * write), minus the `blocked_on_fix` field, which is irrelevant to this path.
+   */
+  acknowledgeBlocker(id: string): void {
+    const owner = this.resolveWorkItemContext(id);
+    const feature = this.tryLoadFeature(id);
+    const inspection = feature ? this.inspectFeature(feature) : this.inspectFix(this.loadFix(id));
+
+    if (inspection.kind !== 'blocked_on_human') {
+      throw new Error(`Cannot acknowledge ${id}: it is not currently blocked_on_human (inspected kind: ${inspection.kind}).`);
+    }
+
+    const snapshot = inspection.snapshot!;
+    const restorationTarget = this.preferredRestorationTarget(snapshot);
+    writeText(owner.statePath, this.updateFeatureStateAfterHumanAcknowledged(owner.statePath, restorationTarget));
+    writeText(this.projectStatePath, this.updateProjectStateAfterHumanAcknowledged(id, restorationTarget));
+
+    if (this.options.commit) {
+      this.git.commit(
+        [
+          relativePath(this.repositoryRoot, owner.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+        ],
+        `proto: acknowledge human blocker for ${id}`,
+      );
+    }
+  }
+
+  private updateFeatureStateAfterHumanAcknowledged(featureStatePath: string, restorationTarget: RestorationTarget): string {
+    let markdown = readUtf8(featureStatePath);
+    markdown = replaceSection(markdown, 'Lifecycle State', restorationTarget.lifecycle_state);
+    markdown = replaceOperationalStatus(markdown, {
+      active_task: restorationTarget.active_task,
+      active_correction_task: restorationTarget.active_correction_task,
+      active_unblock_task: restorationTarget.active_unblock_task,
+      human_ack_required: 'none',
+    });
+    markdown = replaceSection(markdown, 'Blocked By', '- None');
+    markdown = replaceSection(markdown, 'Blocked From', [
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+    ].join('\n'));
+    markdown = replaceSection(markdown, 'Last Approved Change', 'Blocker acknowledged by a human; resumed automatically.');
+    markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(restorationTarget, restorationTarget.active_task));
+    return markdown;
+  }
+
+  private updateProjectStateAfterHumanAcknowledged(ownerId: string, restorationTarget: RestorationTarget): string {
+    let markdown = readUtf8(this.projectStatePath);
+    markdown = setOrInsertSection(markdown, 'Active Feature', `\`${ownerId}\``);
+    markdown = replaceSection(markdown, 'Pending', bulletList(restorationTargetProjectPendingLines(restorationTarget, restorationTarget.active_task)));
+    markdown = replaceSection(markdown, 'Last Approved Change', `Blocker acknowledged by a human; \`${ownerId}\` resumed automatically.`);
+    markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(restorationTarget, restorationTarget.active_task));
+    markdown = upsertBulletInSection(
+      markdown,
+      'Current Reality',
+      `- \`${ownerId}\` resumed after a human-acknowledged blocker`,
+      `- \`${ownerId}\` resumed after a human acknowledged its blocker; the active task pointer was restored to \`${restorationTarget.active_task}\`.`,
     );
     return markdown;
   }

@@ -84,6 +84,13 @@ export type WorkItemInspectionKind =
   | 'review_failed'
   | 'blocked'
   | 'blocked_on_fix'
+  // A 'blocked' feature/fix whose recorded BlockerProfile.recoverability is 'human' or
+  // 'terminal' -- the runtime has already concluded no further automatic action can help, so
+  // (like 'blocked_on_fix'/'awaiting_validation') it is invisible to both scheduler passes until
+  // a human explicitly clears it via acknowledgeBlocker(). Without this, the scheduler kept
+  // re-diagnosing an already-exhausted blocker every run, spending an ensemble call only to
+  // re-trip the same limit and re-print the same card each time.
+  | 'blocked_on_human'
   | 'completed'
   | 'malformed';
 

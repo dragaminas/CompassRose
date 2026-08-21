@@ -195,6 +195,7 @@ interface DoctorRecoveryLimitAccess {
     operation: () => void,
     onSuccess: () => { exitCode: number; continueLoop: boolean; summary: string },
   ): { exitCode: number; continueLoop: boolean; summary: string };
+  determineNextStep(): { kind: string; feature_id: string | null; reason: string };
   updateFeatureStateForDoctorRecovery(
     featureStatePath: string,
     taskId: string,
@@ -286,6 +287,13 @@ describe('doctor-recovery iteration limit', () => {
     expect(printedCards).toHaveLength(1);
     expect(printedCards[0]).toContain('=== BLOCKED: fixture-feature ===');
     consoleErrorSpy.mockRestore();
+
+    // Ties back to the structural fix (2026-08-21): persisting recoverability: human must also
+    // stop the scheduler from re-selecting this feature on the very next step -- otherwise it
+    // would just spend another ensemble call to re-trip this exact same limit again.
+    const nextDecision = access.determineNextStep();
+    expect(nextDecision.kind).toBe('stop');
+    expect(nextDecision.feature_id).toBeNull();
   });
 
   test('planDoctorRecoveryTask does not throw the limit error below the configured limit', () => {
