@@ -25,6 +25,7 @@ In progress
   target is applied with `implementation_running`, `F003-T01` active, and no correction or unblock
   task.
 - Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR06`; the active task pointer was restored to `F003-T01`.
+- Feature `003-doctor-command` now has a planned doctor recovery task, `F003-DR07`, to resolve a recoverable blocker and restore `implementation_running`.
 
 ## Implemented
 
@@ -43,7 +44,7 @@ In progress
 
 ## Pending
 
-- Recover or finish implementation for `F003-T01-C02`.
+- Execute doctor recovery task `F003-DR07` for the active feature.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -71,4 +72,4 @@ Doctor recovery task `F003-DR06` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-The active feature is `003-doctor-command`, and subtask execution for `F003-T01-C02` is in progress.
+The active feature is `003-doctor-command`, and its next valid action is to execute doctor recovery task `F003-DR07` from the captured `implementation_running` state.
