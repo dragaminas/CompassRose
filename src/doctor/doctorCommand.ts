@@ -84,13 +84,18 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
     details: [`Parsed and validated ${configPath}`],
   });
 
+  const currentPlatform = getCurrentSupportedPlatform(process.platform);
+
   // Constructed only now, from the successfully normalized configuration value, and given the
   // same `checks` array by reference so every check pushed to it below (platform, paths,
   // project-state) is reflected in context.checks/context.readiness -- not just the two already
   // pushed above.
-  const context = createCheckContext(configurationResult.value, checks);
+  const context = createCheckContext(configurationResult.value, checks, {
+    repositoryRoot,
+    currentPlatform,
+    configPath,
+  });
 
-  const currentPlatform = getCurrentSupportedPlatform(process.platform);
   if (!currentPlatform) {
     checks.push({
       name: 'platform',
@@ -282,20 +287,16 @@ function formatConfigurationIssues(issues: readonly ConfigurationIssue[]): strin
 }
 
 // Delegates check aggregation (success/exitCode derivation, check ordering) to the feature-owned
-// diagnostic boundary (src/doctor/doctorDiagnostics.ts) instead of re-deriving it inline here --
-// buildDiagnosticReport's own repositoryRoot/currentPlatform/configPath placeholders are always
-// null (it has no access to the coordinator's runtime context), so they are overridden with the
-// actual values every call site here already has.
+// diagnostic boundary (src/doctor/doctorDiagnostics.ts).
 function buildDoctorReport(input: {
   repositoryRoot: string | null;
   currentPlatform: string | null;
   configPath: string | null;
   checks: readonly DoctorCheck[];
 }): DoctorReport {
-  return {
-    ...buildDiagnosticReport(input.checks),
+  return buildDiagnosticReport(input.checks, {
     repositoryRoot: input.repositoryRoot,
     currentPlatform: input.currentPlatform,
     configPath: input.configPath,
-  };
+  });
 }

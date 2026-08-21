@@ -151,6 +151,34 @@ describe('buildDiagnosticReport', () => {
     expect(report.exitCode).toBe(0);
     expect(report.checks.length).toBe(0);
   });
+
+  test('propagates runtime facts through the diagnostic boundary', () => {
+    const checks: DoctorCheck[] = [
+      { name: 'repository', status: 'pass', details: ['ok'] },
+    ];
+    const report = buildDiagnosticReport(checks, {
+      repositoryRoot: '/repo/root',
+      currentPlatform: 'win32',
+      configPath: '/repo/compassrose/CONFIG.md',
+    });
+
+    expect(report.repositoryRoot).toBe('/repo/root');
+    expect(report.currentPlatform).toBe('win32');
+    expect(report.configPath).toBe('/repo/compassrose/CONFIG.md');
+  });
+
+  test('accepts null runtime facts', () => {
+    const checks: DoctorCheck[] = [];
+    const report = buildDiagnosticReport(checks, {
+      repositoryRoot: null,
+      currentPlatform: null,
+      configPath: null,
+    });
+
+    expect(report.repositoryRoot).toBeNull();
+    expect(report.currentPlatform).toBeNull();
+    expect(report.configPath).toBeNull();
+  });
 });
 
 describe('integration: context + report', () => {
@@ -171,6 +199,47 @@ describe('integration: context + report', () => {
   test('context exposes derived readiness matching the report aggregation', () => {
     const config = makeMockConfig();
     const context = createCheckContext(config);
+
+    expect(context.readiness).toBe(true);
+  });
+
+  test('context readiness is false when ordered checks contain a failure', () => {
+    const config = makeMockConfig();
+    const checks: DoctorCheck[] = [
+      { name: 'repository', status: 'pass', details: ['ok'] },
+      { name: 'configuration', status: 'fail', details: ['missing'] },
+      { name: 'platform', status: 'pass', details: ['ok'] },
+    ];
+    const context = createCheckContext(config, checks, {
+      repositoryRoot: '/repo/root',
+      currentPlatform: 'windows',
+      configPath: '/repo/compassrose/CONFIG.md',
+    });
+
+    expect(context.readiness).toBe(false);
+    expect(context.checks).toEqual(checks);
+    expect(context.repositoryRoot).toBe('/repo/root');
+    expect(context.currentPlatform).toBe('windows');
+    expect(context.configPath).toBe('/repo/compassrose/CONFIG.md');
+  });
+
+  test('context readiness is true when all ordered checks pass', () => {
+    const config = makeMockConfig();
+    const checks: DoctorCheck[] = [
+      { name: 'repository', status: 'pass', details: ['ok'] },
+      { name: 'configuration', status: 'pass', details: ['ok'] },
+    ];
+    const context = createCheckContext(config, checks);
+
+    expect(context.readiness).toBe(true);
+  });
+
+  test('context readiness is true when ordered checks contain only info status', () => {
+    const config = makeMockConfig();
+    const checks: DoctorCheck[] = [
+      { name: 'blocked-work', status: 'info', details: ['some blocked work'] },
+    ];
+    const context = createCheckContext(config, checks);
 
     expect(context.readiness).toBe(true);
   });
@@ -219,6 +288,9 @@ describe('runDoctor integration with the diagnostic boundary (correction F003-T0
 
     const report = runDoctor({ cwd: workspace.root });
 
+    expect(report.repositoryRoot).not.toBeNull();
+    expect(report.currentPlatform).not.toBeNull();
+    expect(report.configPath).not.toBeNull();
     expect(report.success).toBe(false);
     expect(report.exitCode).toBe(1);
     expect(report.checks.some((check) => check.status === 'fail')).toBe(true);

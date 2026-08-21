@@ -9,6 +9,10 @@ import type { ProjectConfiguration } from '../config/configTypes.js';
 export interface DoctorCheckContext {
   /** The original, unmodified normalised configuration. */
   readonly configuration: ProjectConfiguration;
+  /** Runtime facts computed by the doctor coordinator. */
+  readonly repositoryRoot: DoctorRuntimeFacts['repositoryRoot'];
+  readonly currentPlatform: DoctorRuntimeFacts['currentPlatform'];
+  readonly configPath: DoctorRuntimeFacts['configPath'];
   /** Per-check results populated by the doctor flow. */
   readonly checks: readonly DoctorCheck[];
   /** Overall readiness derived from {@link checks}. */
@@ -23,14 +27,30 @@ export interface DoctorCheckContext {
  * own array by reference so {@link checks}/{@link readiness} reflect
  * every check pushed to it afterward, not just the ones known at
  * construction time.
+ *
+ * Runtime facts (repositoryRoot, currentPlatform, configPath) default to null when omitted.
  */
 export function createCheckContext(
   configuration: ProjectConfiguration,
   checks: DoctorCheck[] = [],
+  runtimeFacts: DoctorRuntimeFacts = {
+    repositoryRoot: null,
+    currentPlatform: null,
+    configPath: null,
+  },
 ): DoctorCheckContext {
   return {
     get configuration() {
       return configuration;
+    },
+    get repositoryRoot() {
+      return runtimeFacts.repositoryRoot;
+    },
+    get currentPlatform() {
+      return runtimeFacts.currentPlatform;
+    },
+    get configPath() {
+      return runtimeFacts.configPath;
     },
     get checks() {
       return checks;
@@ -41,6 +61,12 @@ export function createCheckContext(
   };
 }
 
+export interface DoctorRuntimeFacts {
+  readonly repositoryRoot: DoctorReport['repositoryRoot'];
+  readonly currentPlatform: DoctorReport['currentPlatform'];
+  readonly configPath: DoctorReport['configPath'];
+}
+
 /**
  * Build a {@link DoctorReport} from the supplied ordered check results.
  *
@@ -49,14 +75,19 @@ export function createCheckContext(
  *   environment/config defect -- never flip this to failure).
  * - `exitCode` is `0` when nothing fails, `1` otherwise.
  * - The supplied checks are preserved in order (reference copied).
+ * - Runtime facts (repositoryRoot, currentPlatform, configPath) are propagated from
+ *   the caller; defaults to null when omitted.
  */
-export function buildDiagnosticReport(checks: readonly DoctorCheck[]): DoctorReport {
+export function buildDiagnosticReport(
+  checks: readonly DoctorCheck[],
+  runtimeFacts?: DoctorRuntimeFacts,
+): DoctorReport {
   const noFailures = checks.every((check) => check.status !== 'fail');
 
   return {
-    repositoryRoot: null,
-    currentPlatform: null,
-    configPath: null,
+    repositoryRoot: runtimeFacts?.repositoryRoot ?? null,
+    currentPlatform: runtimeFacts?.currentPlatform ?? null,
+    configPath: runtimeFacts?.configPath ?? null,
     checks: [...checks],
     success: noFailures,
     exitCode: noFailures ? 0 : 1,
