@@ -1633,8 +1633,15 @@ export class CompassRoseOrchestrator {
    * crashed the whole CLI process on a second recovery cycle for the same anchor (see the regression
    * test in tests/stateCorrectionLimit.test.ts, fixed in commit 68e9801a). A shared helper means a future
    * call site inherits correct handling automatically instead of needing to remember to add it.
+   *
+   * Also fixes a second, previously silent gap (found dogfooding this exact path on
+   * 003-doctor-command, 2026-08-21): reaching one of these limits used to leave `featureId`'s own
+   * state completely untouched -- no blocker card printed, no `## Blocked By` written, so
+   * `npm run doctor` had nothing to show either. Bounded-retry exhaustion IS a real blocker (the
+   * only thing left that can resolve it is a human), so it now persists one via
+   * `recordExhaustedRecoveryAsBlocked`, exactly like every other blocking path.
    */
-  private runBoundedOperation(operation: () => void, onSuccess: () => StepExecutionResult): StepExecutionResult {
+  private runBoundedOperation(featureId: string, operation: () => void, onSuccess: () => StepExecutionResult): StepExecutionResult {
     try {
       operation();
       return onSuccess();
@@ -1645,10 +1652,47 @@ export class CompassRoseOrchestrator {
         || error instanceof DoctorRecoveryLifetimeLimitReachedError
         || error instanceof DoctorRecoveryPlanningRejectedError
       ) {
+        this.recordExhaustedRecoveryAsBlocked(featureId, error.message);
         return { exitCode: 2, continueLoop: false, summary: error.message };
       }
       throw error;
     }
+  }
+
+  /**
+   * Persists a bounded-retry exhaustion (see runBoundedOperation) as a real blocked state instead
+   * of silently doing nothing: reuses whatever blocker profile is already recorded for
+   * `featureId` (kind/signature/evidence -- exactly what the automatic recovery was already
+   * trying against), but overrides `recoverability` to `human`, since the runtime has now proven
+   * automatic recovery is exhausted for this specific limit. Falls back to a generic `unknown`
+   * blocker only when nothing was already recorded to reuse.
+   */
+  private recordExhaustedRecoveryAsBlocked(featureId: string, reason: string): void {
+    const owner = this.resolveWorkItemContext(featureId);
+    if (!statSafeIsFile(owner.statePath)) {
+      // Nothing to persist against; this is the only case where the caller must still see the
+      // reason printed directly, since no card can be built without a readable state.md.
+      console.error(reason);
+      return;
+    }
+
+    const snapshot = this.tryReadFeatureStateSnapshot(owner);
+    const recorded = snapshot ? this.readRecordedBlockerProfile(snapshot) : null;
+    const blocker: BlockerProfile = recorded
+      ? { ...recorded, recoverability: 'human', evidence: uniqueStrings([...recorded.evidence, reason]) }
+      : {
+          kind: 'unknown',
+          signature: buildBlockerSignature('unknown', snapshot?.lifecycleState ?? 'unknown', reason, [featureId]),
+          recoverability: 'human',
+          evidence: [reason],
+          observed_state: `lifecycle=${snapshot?.lifecycleState ?? 'unknown'}`,
+        };
+
+    this.persistBlockedFeatureWithKnownBlocker(owner, featureId, null, reason, blocker);
+    // Every other blocking call site commits its own persisted state immediately afterward
+    // (commitDirtyWorktreeIfConfigured) rather than leaving it dirty indefinitely; this path must
+    // match, or the newly-written `blocked` state.md just sits as an uncommitted diff forever.
+    this.commitDirtyWorktreeIfConfigured(`proto: record exhausted recovery block for feature ${featureId}`);
   }
 
   private executeStep(decision: StepDecision): StepExecutionResult {
@@ -1669,6 +1713,7 @@ export class CompassRoseOrchestrator {
       case 'correct_state': {
         const correctionFeatureId = requireString(decision.feature_id, 'feature_id');
         return this.runBoundedOperation(
+          correctionFeatureId,
           () => this.correctState(correctionFeatureId, decision.reason),
           () => ({ exitCode: 0, continueLoop: true, summary: `State correction task created for feature ${correctionFeatureId}.` }),
         );
@@ -1678,6 +1723,7 @@ export class CompassRoseOrchestrator {
       case 'unblock_task': {
         const unblockFeatureId = requireString(decision.feature_id, 'feature_id');
         return this.runBoundedOperation(
+          unblockFeatureId,
           () => this.planDoctorRecoveryTask(unblockFeatureId, decision.reason),
           () => ({ exitCode: 0, continueLoop: true, summary: `Doctor recovery task planned for feature ${unblockFeatureId}.` }),
         );
@@ -2792,6 +2838,7 @@ export class CompassRoseOrchestrator {
       }
 
       return this.runBoundedOperation(
+        featureId,
         () => this.correctState(featureId, decision.next_step_reason),
         () => ({
           exitCode: 0,
@@ -2811,6 +2858,7 @@ export class CompassRoseOrchestrator {
       }
 
       return this.runBoundedOperation(
+        featureId,
         () => this.planDoctorRecoveryTask(featureId, decision.next_step_reason),
         () => ({
           exitCode: 0,

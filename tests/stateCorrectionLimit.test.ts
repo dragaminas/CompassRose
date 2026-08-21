@@ -116,7 +116,7 @@ describe('limitStateCorrectionTaskId', () => {
     expect(first).toBe(null);
   });
 
-  test('correct_state refuses before writing artifacts or mutating feature and project state', () => {
+  test('correct_state refuses before writing correction-task artifacts, and persists the exhaustion as a blocked state', () => {
     const repositoryRoot = process.cwd();
     const featureStatePath = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
     const projectStatePath = join(repositoryRoot, 'compassrose', 'PROJECT_STATE.md');
@@ -159,8 +159,15 @@ describe('limitStateCorrectionTaskId', () => {
         expect((result as { summary?: string }).summary).toMatch(/correction iteration limit reached/i);
         expectArtifactDirectoryUnchanged(correctionTasksBefore, snapshotArtifactDirectory(tasksDirectory));
         expectArtifactDirectoryUnchanged(correctionArtifactsBefore, snapshotArtifactDirectory(artifactTasksDirectory));
-        expect(readFileSync(featureStatePath, 'utf8')).toBe(nestedFeatureState);
-        expect(readFileSync(projectStatePath, 'utf8')).toBe(projectStateBefore);
+        // correctState()'s OWN correction-task-writing machinery never ran (asserted above) --
+        // but reaching the limit is itself a real blocker (only a human can resolve it now), so
+        // runBoundedOperation's catch persists that via recordExhaustedRecoveryAsBlocked instead
+        // of leaving state untouched and silent, matching every other blocking path this session.
+        const featureStateAfter = readFileSync(featureStatePath, 'utf8');
+        expect(featureStateAfter).not.toBe(nestedFeatureState);
+        expect(featureStateAfter).toContain('## Lifecycle State\n\nblocked');
+        expect(featureStateAfter).toContain('- recoverability: human');
+        expect(featureStateAfter).toContain('Correction iteration limit reached');
       } finally {
         git.dirtyPaths = originalDirtyPaths;
       }

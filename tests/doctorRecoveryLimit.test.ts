@@ -190,6 +190,11 @@ interface DoctorRecoveryLimitAccess {
   readDoctorRecoveryAttempts(statePath: string): number;
   readDoctorRecoveryLifetimeCount(statePath: string): number;
   planDoctorRecoveryTask(featureId: string, reason: string): void;
+  runBoundedOperation(
+    featureId: string,
+    operation: () => void,
+    onSuccess: () => { exitCode: number; continueLoop: boolean; summary: string },
+  ): { exitCode: number; continueLoop: boolean; summary: string };
   updateFeatureStateForDoctorRecovery(
     featureStatePath: string,
     taskId: string,
@@ -250,6 +255,37 @@ describe('doctor-recovery iteration limit', () => {
     expect(() => access.planDoctorRecoveryTask('fixture-feature', 'quality gates failed again')).toThrow(
       DoctorRecoveryLimitReachedError,
     );
+  });
+
+  test('reaching the limit through runBoundedOperation persists a blocked, human-recoverability state and prints the card instead of leaving state untouched', () => {
+    // Regression coverage for the live gap found dogfooding 003-doctor-command (2026-08-21):
+    // before this, hitting the limit left state.md completely untouched, so the next run
+    // silently repeated the exact same doomed attempt with no explanation, and `npm run doctor`
+    // had nothing to show either.
+    workspace = createWorkspace('fixture-feature', 'F001-T01', 'quality_failed', 3);
+    const statePath = join(workspace.root, 'compassrose', 'features', 'fixture-feature', 'state.md');
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const access = asAccess(orchestrator);
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = access.runBoundedOperation(
+      'fixture-feature',
+      () => access.planDoctorRecoveryTask('fixture-feature', 'quality gates failed again, same root cause'),
+      () => ({ exitCode: 0, continueLoop: true, summary: 'unreachable' }),
+    );
+
+    expect(result.exitCode).toBe(2);
+    expect(result.continueLoop).toBe(false);
+
+    const stateAfter = readFileSync(statePath, 'utf8');
+    expect(stateAfter).toContain('## Lifecycle State\n\nblocked');
+    expect(stateAfter).toContain('- recoverability: human');
+    expect(stateAfter).toContain('Doctor recovery iteration limit reached');
+
+    const printedCards = consoleErrorSpy.mock.calls.map((call) => String(call[0]));
+    expect(printedCards).toHaveLength(1);
+    expect(printedCards[0]).toContain('=== BLOCKED: fixture-feature ===');
+    consoleErrorSpy.mockRestore();
   });
 
   test('planDoctorRecoveryTask does not throw the limit error below the configured limit', () => {
