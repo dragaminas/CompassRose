@@ -26,10 +26,12 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
     });
 
     return buildDoctorReport({
-      repositoryRoot: null,
-      currentPlatform: getCurrentSupportedPlatform(process.platform),
-      configPath: null,
       checks,
+      runtimeFacts: {
+        repositoryRoot: null,
+        currentPlatform: getCurrentSupportedPlatform(process.platform),
+        configPath: null,
+      },
     });
   }
 
@@ -55,10 +57,12 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
     });
 
     return buildDoctorReport({
-      repositoryRoot,
-      currentPlatform: getCurrentSupportedPlatform(process.platform),
-      configPath,
       checks,
+      runtimeFacts: {
+        repositoryRoot,
+        currentPlatform: getCurrentSupportedPlatform(process.platform),
+        configPath,
+      },
     });
   }
 
@@ -71,10 +75,12 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
     });
 
     return buildDoctorReport({
-      repositoryRoot,
-      currentPlatform: getCurrentSupportedPlatform(process.platform),
-      configPath,
       checks,
+      runtimeFacts: {
+        repositoryRoot,
+        currentPlatform: getCurrentSupportedPlatform(process.platform),
+        configPath,
+      },
     });
   }
 
@@ -284,14 +290,12 @@ function formatConfigurationIssues(issues: readonly ConfigurationIssue[]): strin
 // Delegates check aggregation (success/exitCode derivation, check ordering) to the feature-owned
 // diagnostic boundary (src/doctor/doctorDiagnostics.ts).
 function buildDoctorReport(input: {
-  repositoryRoot: string | null;
-  currentPlatform: string | null;
-  configPath: string | null;
   checks: readonly DoctorCheck[];
+  runtimeFacts: {
+    repositoryRoot: string | null;
+    currentPlatform: string | null;
+    configPath: string | null;
+  };
 }): DoctorReport {
-  return buildDiagnosticReport(input.checks, {
-    repositoryRoot: input.repositoryRoot,
-    currentPlatform: input.currentPlatform,
-    configPath: input.configPath,
-  });
+  return buildDiagnosticReport(input.checks, input.runtimeFacts);
 }

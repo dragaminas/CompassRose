@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-unblock_pending
+implementation_running
 
 ## Source Request
 
@@ -13,14 +13,14 @@ unblock_pending
 - formalization: complete
 - active_task: F003-T01-C02
 - active_correction_task: none
-- active_unblock_task: F003-DR09
+- active_unblock_task: none
 - last_implementation_result: passed
-- last_quality_gate_result: failed
-- last_review_result: blocked
-- last_unblock_result: not_run
-- doctor_recovery_attempts: 3
+- last_quality_gate_result: passed
+- last_review_result: skipped
+- last_unblock_result: passed
+- doctor_recovery_attempts: 4
 - blocked_on_fix: none
-- doctor_recovery_lifetime_count: 3
+- doctor_recovery_lifetime_count: 4
 - validation: confirmed
 
 ## Current Reality
@@ -32,6 +32,8 @@ unblock_pending
 - No feature-specific implementation deliverable for the complete Doctor command is claimed complete by this feature state.
 
 Task `F003-T01` remains the active implementation target in `implementation_running` for deterministic re-entry. Doctor recovery task `F003-DR06`, the successor to `F003-DR05`, reconciled the state and recovery handoff only; it did not change the implementation attempt. Its doctor re-entry gates passed and applied the fixed restoration target `implementation_running` with `F003-T01` active and no correction or unblock task. The implementation remains incomplete.
+
+Doctor recovery task `F003-DR09`, the successor to `F003-DR08`, repaired the feature-owned diagnostic boundary and passed its doctor re-entry gates. Its fixed restoration target is applied with `implementation_running`, `F003-T01-C02` active, and no correction or unblock task. The implementation remains incomplete, and the recorded unrelated `npm test` failure remains failed evidence.
 
 ## Implemented Deliverables
 
@@ -90,58 +92,18 @@ npm test: - 0
 
 ## Blocked By
 
-- - kind: review_failure
-- - signature: review-failure-implementation-running-quality-gates-failed-after-implementing-f003-t01-c02-npm-t
-- - recoverability: agent
-- - observed_state: lifecycle=implementation_running
-- - evidence: Quality gates failed after implementing F003-T01-C02.
-npm test: [41m[1m FAIL [22m[49m tests/taskRequestScopeEnforcement.test.ts[2m > [22mtask-request scope enforcement[2m > [22mrefuses a task whose scope exceeds its task request boundary without a deviation_reason
-[31m[1mError[22m: Test timed out in 30000ms.
-If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
-[36m [2m❯[22m tests/taskRequestScopeEnforcement.test.ts:[2m28:3[22m[39m
-    [90m 26|[39m   // caught deterministically (checkTaskRequestContainment), not by tr…
-    [90m 27|[39m   [90m// self-reported scope_justification.deviation_reason honesty.[39m
-    [90m 28|[39m   test('refuses a task whose scope exceeds its task request boundary w…
-    [90m   |[39m   [31m^[39m
-    [90m 29|[39m     [35mconst[39m workspace [33m=[39m [34mprepareWorkspace[39m()[33m;[39m
-    [90m 30|[39m
-
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/15]⎯[22m[39m
-- - evidence: npm run typecheck: passed: > compassrose@1.0.0 typecheck
-> tsc --noEmit
-- - evidence: npx vitest run tests/doctor/doctorDiagnostics.test.ts: passed: [1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90mC:/Users/Eric/Documents/Repos/CompassRose[39m
-
- [32m✓[39m tests/doctor/doctorDiagnostics.test.ts [2m([22m[2m20 tests[22m[2m)[22m[32m 27[2mms[22m[39m
-
-[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
-[2m      Tests [22m [1m[32m20 passed[39m[22m[90m (20)[39m
-[2m   Start at [22m 13:18:57
-[2m   Duration [22m 340ms[2m (transform 117ms, setup 0ms, import 148ms, tests 27ms, environment 0ms)[22m
-- - evidence: npm test: failed: [41m[1m FAIL [22m[49m tests/taskRequestScopeEnforcement.test.ts[2m > [22mtask-request scope enforcement[2m > [22mrefuses a task whose scope exceeds its task request boundary without a deviation_reason
-[31m[1mError[22m: Test timed out in 30000ms.
-If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
-[36m [2m❯[22m tests/taskRequestScopeEnforcement.test.ts:[2m28:3[22m[39m
-    [90m 26|[39m   // caught deterministically (checkTaskRequestContainment), not by tr…
-    [90m 27|[39m   [90m// self-reported scope_justification.deviation_reason honesty.[39m
-    [90m 28|[39m   test('refuses a task whose scope exceeds its task request boundary w…
-    [90m   |[39m   [31m^[39m
-    [90m 29|[39m     [35mconst[39m workspace [33m=[39m [34mprepareWorkspace[39m()[33m;[39m
-    [90m 30|[39m
-
-[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/15]⎯[22m[39m
-- - evidence: lifecycle=implementation_running
-- - reason: Quality gates failed after implementing F003-T01-C02. | npm test: [41m[1m FAIL [22m[49m tests/taskRequestScopeEnforcement.test.ts[2m > [22mtask-request scope enforcement[2m > [22mrefuses a task whose scope exceeds its task request boundary without a deviation_reason | [31m[1mError[22m: Test timed out in 30000ms. | If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m | [36m [2m❯[22m tests/taskRequestScopeEnforcement.test.ts:[2m28:3[22m[39m | [90m 26|[39m   // caught deterministically (checkTaskRequestContainment), not by tr… | [90m 27|[39m   [90m// self-reported scope_justification.deviation_reason honesty.[39m | [90m 28|[39m   test('refuses a task whose scope exceeds its task request boundary w… | [90m   |[39m   [31m^[39m | [90m 29|[39m     [35mconst[39m workspace [33m=[39m [34mprepareWorkspace[39m()[33m;[39m | [90m 30|[39m | [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/15]⎯[22m[39m
+- None
 
 ## Blocked From
 
-- lifecycle_state: `implementation_running`
-- active_task: `F003-T01-C02`
-- active_correction_task: `none`
-- active_unblock_task: `none`
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Doctor recovery task `F003-DR08` passed re-entry quality gates and was applied by the prototype orchestrator.
+Doctor recovery task `F003-DR09` passed re-entry quality gates and was applied by the prototype orchestrator.
 
 ## Recovery History
 
@@ -162,4 +124,4 @@ Doctor recovery task `F003-DR08` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Execute doctor recovery task `F003-DR09` next.
+Resume `F003-T01-C02` implementation recovery before continuing.

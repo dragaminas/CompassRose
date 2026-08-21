@@ -28,17 +28,18 @@ export interface DoctorCheckContext {
  * every check pushed to it afterward, not just the ones known at
  * construction time.
  *
- * Runtime facts (repositoryRoot, currentPlatform, configPath) default to null when omitted.
+ * Runtime facts must be supplied by the coordinator. Individual facts may be null when the
+ * corresponding preflight step could not establish them, but the boundary never invents them.
  */
 export function createCheckContext(
   configuration: ProjectConfiguration,
   checks: DoctorCheck[] = [],
-  runtimeFacts: DoctorRuntimeFacts = {
-    repositoryRoot: null,
-    currentPlatform: null,
-    configPath: null,
-  },
+  runtimeFacts?: DoctorRuntimeFacts,
 ): DoctorCheckContext {
+  if (!runtimeFacts) {
+    throw new Error('Doctor runtime facts are required to create a diagnostic context.');
+  }
+
   return {
     get configuration() {
       return configuration;
@@ -88,6 +89,10 @@ export function buildDiagnosticReport(
   runtimeFacts?: DoctorRuntimeFacts,
 ): DoctorReport {
   const isContext = !Array.isArray(contextOrChecks);
+  if (!isContext && !runtimeFacts) {
+    throw new Error('Doctor runtime facts are required to build a diagnostic report.');
+  }
+
   const context = isContext ? (contextOrChecks as DoctorCheckContext) : undefined;
   const checks: readonly DoctorCheck[] = context
     ? context.checks
@@ -97,9 +102,9 @@ export function buildDiagnosticReport(
     : checks.every((check: DoctorCheck) => check.status !== 'fail');
 
   return {
-    repositoryRoot: context?.repositoryRoot ?? runtimeFacts?.repositoryRoot ?? null,
-    currentPlatform: context?.currentPlatform ?? runtimeFacts?.currentPlatform ?? null,
-    configPath: context?.configPath ?? runtimeFacts?.configPath ?? null,
+    repositoryRoot: context?.repositoryRoot ?? runtimeFacts!.repositoryRoot,
+    currentPlatform: context?.currentPlatform ?? runtimeFacts!.currentPlatform,
+    configPath: context?.configPath ?? runtimeFacts!.configPath,
     checks: [...checks],
     success: readiness,
     exitCode: readiness ? 0 : 1,

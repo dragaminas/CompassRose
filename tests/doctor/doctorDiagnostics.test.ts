@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 import {
   createCheckContext,
   buildDiagnosticReport,
+  type DoctorRuntimeFacts,
 } from '../../src/doctor/doctorDiagnostics.js';
 import { runDoctor } from '../../src/doctor/doctorCommand.js';
 import type { ProjectConfiguration } from '../../src/config/configTypes.js';
@@ -49,6 +50,14 @@ function makeMockConfig(overrides?: Partial<ProjectConfiguration>): ProjectConfi
   } as ProjectConfiguration;
 }
 
+function makeRuntimeFacts(): DoctorRuntimeFacts {
+  return {
+    repositoryRoot: '/repo/root',
+    currentPlatform: 'windows',
+    configPath: '/repo/compassrose/CONFIG.md',
+  };
+}
+
 let workspace: TempWorkspace | undefined;
 
 afterEach(() => {
@@ -59,7 +68,7 @@ afterEach(() => {
 describe('createCheckContext', () => {
   test('constructs a context from a normalized configuration object', () => {
     const config = makeMockConfig();
-    const context = createCheckContext(config);
+    const context = createCheckContext(config, [], makeRuntimeFacts());
 
     expect(context).toBeDefined();
     expect(context.configuration).toBe(config);
@@ -68,7 +77,7 @@ describe('createCheckContext', () => {
   test('does not mutate the supplied configuration', () => {
     const config = makeMockConfig();
     const configSnapshot = JSON.stringify(config);
-    const context = createCheckContext(config);
+    const context = createCheckContext(config, [], makeRuntimeFacts());
 
     expect(context).toBeDefined();
     expect(JSON.stringify(config)).toBe(configSnapshot);
@@ -76,14 +85,14 @@ describe('createCheckContext', () => {
 
   test('preserves the configuration reference without deep-copying', () => {
     const config = makeMockConfig();
-    const context = createCheckContext(config);
+    const context = createCheckContext(config, [], makeRuntimeFacts());
 
     expect(context.configuration).toBe(config);
   });
 
   test('context is readonly — assignment to checks does not expose mutation surface', () => {
     const config = makeMockConfig();
-    const context = createCheckContext(config);
+    const context = createCheckContext(config, [], makeRuntimeFacts());
 
     // The context should not expose a mutable `checks` setter.
     // Verify by confirming that `context.checks` is not defined as a writable property.
@@ -99,7 +108,7 @@ describe('buildDiagnosticReport', () => {
       { name: 'configuration', status: 'pass', details: ['ok'] },
     ];
 
-    const report = buildDiagnosticReport(checks);
+    const report = buildDiagnosticReport(checks, makeRuntimeFacts());
 
     expect(report.success).toBe(true);
     expect(report.exitCode).toBe(0);
@@ -112,7 +121,7 @@ describe('buildDiagnosticReport', () => {
       { name: 'configuration', status: 'fail', details: ['missing'] },
     ];
 
-    const report = buildDiagnosticReport(checks);
+    const report = buildDiagnosticReport(checks, makeRuntimeFacts());
 
     expect(report.success).toBe(false);
     expect(report.exitCode).toBe(1);
@@ -124,7 +133,7 @@ describe('buildDiagnosticReport', () => {
       { name: 'repository', status: 'fail', details: ['not a git repo'] },
     ];
 
-    const report = buildDiagnosticReport(checks);
+    const report = buildDiagnosticReport(checks, makeRuntimeFacts());
 
     expect(report.success).toBe(false);
     expect(report.exitCode).toBe(1);
@@ -137,7 +146,7 @@ describe('buildDiagnosticReport', () => {
       { name: 'c', status: 'pass', details: [] },
     ];
 
-    const report = buildDiagnosticReport(checks);
+    const report = buildDiagnosticReport(checks, makeRuntimeFacts());
 
     const names = report.checks.map((c) => c.name);
     expect(names).toEqual(['a', 'b', 'c']);
@@ -145,7 +154,7 @@ describe('buildDiagnosticReport', () => {
 
   test('returns empty success when no checks are provided', () => {
     const checks: DoctorCheck[] = [];
-    const report = buildDiagnosticReport(checks);
+    const report = buildDiagnosticReport(checks, makeRuntimeFacts());
 
     expect(report.success).toBe(true);
     expect(report.exitCode).toBe(0);
@@ -186,10 +195,10 @@ describe('integration: context + report', () => {
     const config = makeMockConfig();
     const before = JSON.stringify(config);
 
-    const context = createCheckContext(config);
+    const context = createCheckContext(config, [], makeRuntimeFacts());
     const checks = context.checks as DoctorCheck[];
 
-    const report = buildDiagnosticReport(checks);
+    const report = buildDiagnosticReport(context);
 
     expect(JSON.stringify(config)).toBe(before);
     expect(report.success).toBe(true);
@@ -198,7 +207,7 @@ describe('integration: context + report', () => {
 
   test('context exposes derived readiness matching the report aggregation', () => {
     const config = makeMockConfig();
-    const context = createCheckContext(config);
+    const context = createCheckContext(config, [], makeRuntimeFacts());
 
     expect(context.readiness).toBe(true);
   });
@@ -221,6 +230,26 @@ describe('integration: context + report', () => {
     expect(context.repositoryRoot).toBe('/repo/root');
     expect(context.currentPlatform).toBe('windows');
     expect(context.configPath).toBe('/repo/compassrose/CONFIG.md');
+  });
+
+  test('propagates runtime facts and rejects placeholder metadata for an ordered failed set', () => {
+    const config = makeMockConfig();
+    const checks: DoctorCheck[] = [
+      { name: 'repository', status: 'pass', details: ['ok'] },
+      { name: 'configuration', status: 'fail', details: ['missing'] },
+    ];
+    const context = createCheckContext(config, checks, {
+      repositoryRoot: '/repo/root',
+      currentPlatform: 'windows',
+      configPath: '/repo/compassrose/CONFIG.md',
+    });
+
+    expect(context.repositoryRoot).toBe('/repo/root');
+    expect(context.currentPlatform).toBe('windows');
+    expect(context.configPath).toBe('/repo/compassrose/CONFIG.md');
+    expect(context.readiness).toBe(false);
+
+    expect(() => buildDiagnosticReport(checks)).toThrow(/runtime facts/i);
   });
 
   test('builds a failed report from the complete context without dropping runtime facts', () => {
@@ -254,7 +283,7 @@ describe('integration: context + report', () => {
       { name: 'repository', status: 'pass', details: ['ok'] },
       { name: 'configuration', status: 'pass', details: ['ok'] },
     ];
-    const context = createCheckContext(config, checks);
+    const context = createCheckContext(config, checks, makeRuntimeFacts());
 
     expect(context.readiness).toBe(true);
   });
@@ -264,7 +293,7 @@ describe('integration: context + report', () => {
     const checks: DoctorCheck[] = [
       { name: 'blocked-work', status: 'info', details: ['some blocked work'] },
     ];
-    const context = createCheckContext(config, checks);
+    const context = createCheckContext(config, checks, makeRuntimeFacts());
 
     expect(context.readiness).toBe(true);
   });
