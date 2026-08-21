@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reply", "ready_to_draft", "proposed_title", "proposed_summary"],
+  "properties": {
+    "reply": { "type": "string" },
+    "ready_to_draft": { "type": "boolean" },
+    "proposed_title": { "type": ["string", "null"] },
+    "proposed_summary": { "type": ["string", "null"] }
+  }
+}

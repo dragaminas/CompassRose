@@ -5,24 +5,14 @@ import { getBootstrapConfigPath } from '../config/compassRosePaths.js';
 import { CompassRoseOrchestrator } from '../orchestrator/orchestrator.js';
 import { parseRunArguments } from './runOptions.js';
 import type { CliEnvironment } from './main.js';
-import type { ValidationRoundRecord } from '../contracts/validator/validatorContracts.js';
-
-// A round cap, not a retry budget (ADR-0033-style: every bounded loop in this codebase declares
-// its own ceiling rather than running unbounded) -- reached only if a human keeps answering
-// without ever typing the confirmation keyword; the item is simply left `awaiting_validation`
-// and picked up again on the next run.
-const MAX_ROUNDS_PER_ITEM = 25;
-// Hardcoded and case-insensitive by design (ADR-0046): this is the ONLY input that may end the
-// loop and call CompassRoseOrchestrator.confirmFeatureValidation -- never the model's own
-// `decision_points: []` signal, which only changes what gets displayed next.
-const CONFIRM_KEYWORD = 'listo';
+import { runValidationLoopForItem } from './validationLoop.js';
 
 /**
  * Flow 1 ("npm run feature-validation", ADR-0046): the human-confirmed gate between a feature/
  * fix's autonomous formalization and Flow 2's autonomous plan/implement/review pipeline. Walks
- * every feature/fix CompassRoseOrchestrator.listFeaturesAwaitingValidation() reports, running a
- * bounded propose/answer loop per item over the process's own stdin/stdout via Node's built-in
- * `readline` (no new runtime dependency), until the human types "listo".
+ * every feature/fix CompassRoseOrchestrator.listFeaturesAwaitingValidation() reports, running
+ * runValidationLoopForItem() (src/cli/validationLoop.ts) over the process's own stdin/stdout via
+ * Node's built-in `readline` (no new runtime dependency), until the human types "listo".
  */
 export async function runFeatureValidationCli(
   argv: readonly string[] = [],
@@ -68,66 +58,10 @@ export async function runFeatureValidationCli(
     for (const item of pending) {
       stdout('');
       stdout(`=== ${item.id} ===`);
-      const weight = orchestrator.classifyValidationWeight(item.id);
-      stdout(`Validation weight: ${weight}`);
 
-      const transcript: ValidationRoundRecord[] = [];
-      let confirmed = false;
-
-      roundLoop:
-      for (let round = 1; round <= MAX_ROUNDS_PER_ITEM; round += 1) {
-        const proposal = orchestrator.runNextValidationRound(item.id, weight, transcript);
-
-        if (proposal.decision_points.length === 0) {
-          stdout('');
-          stdout('The validator has nothing further to raise.');
-          const answer = await ask(`Type "${CONFIRM_KEYWORD}" to confirm, or provide a clarification to continue: `);
-          const trimmed = answer.trim();
-          if (trimmed.toLowerCase() === CONFIRM_KEYWORD) {
-            confirmed = true;
-            break roundLoop;
-          }
-
-          transcript.push({
-            decision_point: null,
-            chosen_option_id: null,
-            free_text: trimmed,
-            answered_at: new Date().toISOString(),
-          });
-          continue roundLoop;
-        }
-
-        for (const decisionPoint of proposal.decision_points) {
-          stdout('');
-          stdout(decisionPoint.question);
-          for (const option of decisionPoint.options) {
-            const recommended = option.id === decisionPoint.recommended_option_id ? ' (recommended)' : '';
-            stdout(`  [${option.id}] ${option.label}${recommended} -- ${option.detail}`);
-          }
-          stdout(`Rationale: ${decisionPoint.rationale}`);
-
-          const answer = await ask(
-            `Choose an option id, type free text, or type "${CONFIRM_KEYWORD}" to confirm: `,
-          );
-          const trimmed = answer.trim();
-          if (trimmed.toLowerCase() === CONFIRM_KEYWORD) {
-            confirmed = true;
-            break roundLoop;
-          }
-
-          const chosenOption = decisionPoint.options.find((option) => option.id === trimmed);
-          transcript.push({
-            decision_point: decisionPoint,
-            chosen_option_id: chosenOption ? chosenOption.id : null,
-            free_text: chosenOption ? null : trimmed,
-            answered_at: new Date().toISOString(),
-          });
-        }
-      }
-
+      const { confirmed, transcript } = await runValidationLoopForItem(orchestrator, item.id, ask, stdout);
       if (!confirmed) {
-        stdout('');
-        stdout(`Reached the ${MAX_ROUNDS_PER_ITEM}-round limit for ${item.id} without confirmation; leaving it awaiting validation. Rerun "npm run feature-validation" to continue.`);
+        stdout(`Rerun "npm run feature-validation" to continue ${item.id}.`);
         continue;
       }
 

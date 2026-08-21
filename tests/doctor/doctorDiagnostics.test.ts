@@ -203,6 +203,7 @@ describe('runDoctor integration with the diagnostic boundary (correction F003-T0
       'platform',
       'paths',
       'project-state',
+      'blocked-work',
     ]);
   });
 

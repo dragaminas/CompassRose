@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { ParsedTaskDocument } from '../src/contracts/task/taskContracts.js';
 import type { QualityGateResult } from '../src/contracts/runtime/attempts.js';
 import type { FeatureInspection, FeatureRecord, StepExecutionResult, WorkItemContext } from '../src/contracts/runtime/protoRuntime.js';
@@ -238,11 +238,20 @@ describe('blockOnUnrelatedFixFailure', () => {
     const owner = access.resolveWorkItemContext('fixture-feature');
     const task = access.loadTask('F001-T01');
     const command = "node -e \"console.error('FAIL tests/unrelated.test.ts:1:1'); process.exit(1)\"";
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const result = access.blockOnUnrelatedFixFailure(owner, task, [waivedResult(command, 'tests/unrelated.test.ts')]);
 
     expect(result.exitCode).toBe(2);
     expect(result.continueLoop).toBe(false);
+
+    // persistBlockedFeature prints the bounded blocker card exactly once (not the old raw,
+    // unbounded `reason` sentence the call site used to print manually).
+    const printedCards = consoleErrorSpy.mock.calls.map((call) => String(call[0]));
+    expect(printedCards).toHaveLength(1);
+    expect(printedCards[0]).toContain('=== BLOCKED: fixture-feature ===');
+    expect(printedCards[0]).toContain('full detail:');
+    consoleErrorSpy.mockRestore();
 
     const fixDirectories = listFixDirectories(workspace.root);
     expect(fixDirectories).toHaveLength(1);

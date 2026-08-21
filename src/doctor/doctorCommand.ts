@@ -8,7 +8,10 @@ import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { getCurrentSupportedPlatform } from '../platform/platformInfo.js';
 import { isDirectory, pathExists, resolveRepositoryRelativePath } from '../filesystem/pathResolver.js';
 import { buildDiagnosticReport, createCheckContext } from './doctorDiagnostics.js';
-import { getBootstrapConfigPath } from '../config/compassRosePaths.js';
+import { buildFeaturesRoot, buildFixesRoot, getBootstrapConfigPath, resolveCompassRoseRoot } from '../config/compassRosePaths.js';
+import { renderBlockerCard, scanBlockedWorkItems } from '../orchestrator/blockerCard.js';
+import { readRecordString } from '../orchestrator/runtimeHelpers.js';
+import type { ProjectConfiguration } from '../config/configTypes.js';
 
 export function runDoctor(options: DoctorOptions = {}): DoctorReport {
   const workingDirectory = options.cwd ?? process.cwd();
@@ -127,12 +130,60 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
     });
   }
 
+  checks.push(buildBlockedWorkCheck(repositoryRoot, configurationResult.value));
+
   return buildDoctorReport({
     repositoryRoot,
     currentPlatform,
     configPath,
     checks: context.checks,
   });
+}
+
+/**
+ * Surfaces every currently-blocked feature/fix's own bounded blocker card here too, so a human
+ * can see it again later without re-triggering the failure that produced it (the live blocking
+ * path already prints the identical card once, at the moment it happens -- see
+ * `persistBlockedFeature` in orchestrator.ts). Resolves `features`/`fixes` roots the same way
+ * `CompassRoseOrchestrator`'s constructor does, but stays a plain, read-only fs scan
+ * (`scanBlockedWorkItems`) instead of constructing a full orchestrator -- doctor has no need for
+ * the contract registry, git client, or CLI adapters just to list blocked work.
+ */
+function buildBlockedWorkCheck(repositoryRoot: string, configuration: ProjectConfiguration): DoctorCheck {
+  const documentation = configuration.documentation as Record<string, unknown>;
+  const compassRoseRoot = resolveCompassRoseRoot(configuration);
+  const featuresRoot = resolveRepositoryRelativePath(
+    repositoryRoot,
+    readRecordString(documentation, 'features_root') ?? buildFeaturesRoot(compassRoseRoot),
+  );
+  const fixesRoot = resolveRepositoryRelativePath(
+    repositoryRoot,
+    readRecordString(documentation, 'fixes_root') ?? buildFixesRoot(compassRoseRoot),
+  );
+
+  if (!featuresRoot || !fixesRoot) {
+    return {
+      name: 'blocked-work',
+      status: 'fail',
+      details: ['documentation.features_root/fixes_root are not valid repository-relative paths.'],
+    };
+  }
+
+  const blocked = scanBlockedWorkItems({ repositoryRoot, featuresRoot, fixesRoot });
+
+  if (blocked.length === 0) {
+    return {
+      name: 'blocked-work',
+      status: 'pass',
+      details: ['No features or fixes are currently blocked.'],
+    };
+  }
+
+  return {
+    name: 'blocked-work',
+    status: 'info',
+    details: blocked.flatMap((item) => renderBlockerCard(item)),
+  };
 }
 
 export function formatDoctorReport(report: DoctorReport): string {

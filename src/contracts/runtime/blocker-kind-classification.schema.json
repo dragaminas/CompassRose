@@ -15,6 +15,6 @@
         "unknown"
       ]
     },
-    "rationale": { "type": "string" }
+    "rationale": { "type": "string", "maxLength": 240 }
   }
 }

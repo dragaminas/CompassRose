@@ -4,7 +4,7 @@
  * These shapes describe the observable input and output of the repository
  * preflight command.
  */
-export type DoctorCheckStatus = "pass" | "fail";
+export type DoctorCheckStatus = "pass" | "fail" | "info";
 
 export interface DoctorCheck {
   readonly name: string;

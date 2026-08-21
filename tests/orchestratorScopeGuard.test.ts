@@ -24,9 +24,14 @@ describe('feature scope guard', () => {
 
       expect(result.exitCode).toBe(2);
       expect(result.stdout).toContain(`Next step: plan_task (${TARGET_FEATURE_ID})`);
-      expect(`${result.stdout}${result.stderr}`).toContain(
-        `identified as belonging to feature \`${SIBLING_FEATURE_ID}\` instead of this feature's own declared scope`,
-      );
+      // The console now prints a bounded blocker card (renderBlockerCard), not the raw,
+      // unbounded reason sentence -- this specific reason is long enough that the sibling
+      // feature's name falls past the card's truncation budget. The card itself (kind + target
+      // feature id) is asserted here; the full untruncated reason naming the sibling feature is
+      // asserted below via state.md's own `## Blocked By` section, which is where the design
+      // keeps full detail deliberately un-truncated.
+      expect(`${result.stdout}${result.stderr}`).toContain(`=== BLOCKED: ${TARGET_FEATURE_ID} ===`);
+      expect(`${result.stdout}${result.stderr}`).toContain('kind: task_interface_gap');
 
       const tasksDirectory = join(workspace.cloneRoot, 'compassrose', 'features', TARGET_FEATURE_ID, 'tasks');
       const writtenTasks = existsSync(tasksDirectory) ? readdirSync(tasksDirectory) : [];

@@ -12,7 +12,7 @@
   ],
   "properties": {
     "feature_id": { "type": "string" },
-    "diagnosis_summary": { "type": "string" },
+    "diagnosis_summary": { "type": "string", "maxLength": 240 },
     "blocker": {
       "type": "object",
       "additionalProperties": false,
@@ -42,7 +42,7 @@
         },
         "evidence": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": { "type": "string", "maxLength": 160 }
         }
       }
     },
@@ -55,7 +55,7 @@
         "file_blocking_fix"
       ]
     },
-    "next_step_reason": { "type": "string" },
+    "next_step_reason": { "type": "string", "maxLength": 240 },
     "interface_response": {
       "type": "object",
       "additionalProperties": false,
@@ -69,7 +69,7 @@
           "type": "string",
           "enum": ["none", "apply_in_doctor_recovery", "manual_review"]
         },
-        "summary": { "type": "string" },
+        "summary": { "type": "string", "maxLength": 200 },
         "target_paths": {
           "type": "array",
           "items": { "type": "string" }
@@ -85,8 +85,8 @@
           "required": ["title", "evidence_summary", "scope_note", "severity"],
           "properties": {
             "title": { "type": "string" },
-            "evidence_summary": { "type": "string" },
-            "scope_note": { "type": "string" },
+            "evidence_summary": { "type": "string", "maxLength": 240 },
+            "scope_note": { "type": "string", "maxLength": 200 },
             "severity": { "type": "string", "enum": ["critical"] }
           }
         }

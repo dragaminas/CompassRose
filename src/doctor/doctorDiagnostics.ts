@@ -36,7 +36,7 @@ export function createCheckContext(
       return checks;
     },
     get readiness() {
-      return checks.every((c) => c.status === 'pass');
+      return checks.every((c) => c.status !== 'fail');
     },
   };
 }
@@ -44,19 +44,21 @@ export function createCheckContext(
 /**
  * Build a {@link DoctorReport} from the supplied ordered check results.
  *
- * - `success` is `true` only when **every** check passes.
- * - `exitCode` is `0` when all pass, `1` otherwise.
+ * - `success` is `true` unless at least one check `fail`s (`info` checks -- e.g. a report of
+ *   currently-blocked work, which is expected operational state to act on, not an
+ *   environment/config defect -- never flip this to failure).
+ * - `exitCode` is `0` when nothing fails, `1` otherwise.
  * - The supplied checks are preserved in order (reference copied).
  */
 export function buildDiagnosticReport(checks: readonly DoctorCheck[]): DoctorReport {
-  const allPass = checks.every((check) => check.status === 'pass');
+  const noFailures = checks.every((check) => check.status !== 'fail');
 
   return {
     repositoryRoot: null,
     currentPlatform: null,
     configPath: null,
     checks: [...checks],
-    success: allPass,
-    exitCode: allPass ? 0 : 1,
+    success: noFailures,
+    exitCode: noFailures ? 0 : 1,
   };
 }

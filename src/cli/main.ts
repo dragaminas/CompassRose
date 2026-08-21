@@ -10,6 +10,7 @@ import { parseRunArguments } from './runOptions.js';
 import { getBootstrapConfigPath } from '../config/compassRosePaths.js';
 import { runSetupCli } from './setup.js';
 import { runFeatureValidationCli } from './featureValidation.js';
+import { runBrainstormCli } from './brainstorm.js';
 
 export interface CliEnvironment {
   readonly cwd?: string;
@@ -42,6 +43,10 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     return runFeatureValidationCli(argv.slice(1), { cwd, stdout, stderr });
   }
 
+  if (argv.length >= 1 && argv[0] === 'brainstorm') {
+    return runBrainstormCli(argv.slice(1), { cwd, stdout, stderr });
+  }
+
   let options;
   try {
     options = parseRunArguments(argv, cwd);
@@ -51,6 +56,7 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     stderr('Usage: compassrose doctor');
     stderr('Usage: compassrose setup');
     stderr('Usage: compassrose feature-validation [--no-commit] [--cwd <path>]');
+    stderr('Usage: compassrose brainstorm [--no-commit]');
     return 1;
   }
 

@@ -14,7 +14,8 @@ export type StructuredSchemaId =
   | 'blocker_kind_classification'
   | 'systemic_blocker_next_step'
   | 'feature_validation_weight'
-  | 'feature_validation_decision_points';
+  | 'feature_validation_decision_points'
+  | 'brainstorm_turn';
 
 interface FileFingerprint {
   readonly exists: boolean;
@@ -34,6 +35,7 @@ const STRUCTURED_SCHEMA_PATHS: Record<StructuredSchemaId, string> = {
   systemic_blocker_next_step: 'src/contracts/runtime/systemic-blocker-next-step.schema.json',
   feature_validation_weight: 'src/contracts/validator/feature-validation-weight.schema.json',
   feature_validation_decision_points: 'src/contracts/validator/decision-points-output.schema.json',
+  brainstorm_turn: 'src/contracts/brainstormer/brainstorm-turn-output.schema.json',
 };
 
 // The runtime-critical paths are the files that, if changed, mean the orchestrator's own

@@ -193,3 +193,73 @@ describe('doctor command — project state', () => {
     }
   });
 });
+
+describe('doctor command — blocked-work', () => {
+  test('reports a pass with no blocked features/fixes', () => {
+    const workspace = createTempWorkspace({
+      directories: ['.git', 'src/contracts', 'docs'],
+      files: {
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/ROADMAP.md': '# roadmap\n',
+      },
+    });
+
+    try {
+      const report = runDoctor({ cwd: workspace.root });
+
+      const blockedCheck = report.checks.find((c) => c.name === 'blocked-work');
+      expect(blockedCheck).toBeDefined();
+      expect(blockedCheck?.status).toBe('pass');
+      expect(report.success).toBe(true);
+      expect(report.exitCode).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('reports an info card for a blocked feature without failing the overall report', () => {
+    const stateMd = [
+      '# State: 001-widgets',
+      '',
+      '## Lifecycle State',
+      '',
+      'blocked',
+      '',
+      '## Blocked By',
+      '',
+      '- kind: implementation_failure',
+      '- signature: implementation-failure-F001-T01',
+      '- recoverability: agent',
+      '- observed_state: lifecycle=blocked',
+      '- evidence: the widget renderer crashed on null input',
+      '- reason: Implementation for F001-T01 failed; see the attempt artifact for detail.',
+      '',
+    ].join('\n');
+
+    const workspace = createTempWorkspace({
+      directories: ['.git', 'src/contracts', 'docs'],
+      files: {
+        'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
+        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/ROADMAP.md': '# roadmap\n',
+        'compassrose/features/001-widgets/state.md': stateMd,
+      },
+    });
+
+    try {
+      const report = runDoctor({ cwd: workspace.root });
+
+      const blockedCheck = report.checks.find((c) => c.name === 'blocked-work');
+      expect(blockedCheck).toBeDefined();
+      expect(blockedCheck?.status).toBe('info');
+      expect(blockedCheck?.details.join('\n')).toContain('001-widgets');
+      expect(blockedCheck?.details.join('\n')).toContain('kind: implementation_failure');
+      // An 'info' check must never flip the overall report to failure.
+      expect(report.success).toBe(true);
+      expect(report.exitCode).toBe(0);
+    } finally {
+      workspace.dispose();
+    }
+  });
+});

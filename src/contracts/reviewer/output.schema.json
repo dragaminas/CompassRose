@@ -18,7 +18,7 @@
       "type": "string",
       "enum": ["approved", "changes_required", "blocked", "failed"]
     },
-    "summary": { "type": "string" },
+    "summary": { "type": "string", "maxLength": 240 },
     "acceptance": {
       "type": "object",
       "additionalProperties": false,
@@ -58,7 +58,7 @@
             "type": "string",
             "enum": ["info", "warning", "error", "blocker"]
           },
-          "message": { "type": "string" },
+          "message": { "type": "string", "maxLength": 240 },
           "path": { "type": ["string", "null"] },
           "related_acceptance_criterion": { "type": ["string", "null"] }
         }

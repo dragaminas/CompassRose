@@ -60,6 +60,8 @@ import type {
 import type { ProjectConfiguration } from '../config/configTypes.js';
 import { readProjectConfiguration } from '../config/configReader.js';
 import type { ValidationDecisionPointsOutput, ValidationRoundRecord, ValidationWeight } from '../contracts/validator/validatorContracts.js';
+import type { BrainstormTurnOutput, BrainstormTurnRecord } from '../contracts/brainstormer/brainstormerContracts.js';
+import { renderBlockerCard, scanBlockedWorkItems, type BlockerCardInput } from './blockerCard.js';
 import {
   buildAdrPath,
   buildDmsPath,
@@ -532,6 +534,21 @@ export class CompassRoseOrchestrator {
   }
 
   /**
+   * Every feature/fix currently sitting in `blocked` or `review_failed`, rendered back into the
+   * same `BlockerCardInput` shape `persistBlockedFeature` already prints live -- so `npm run
+   * doctor` can show the human the identical card later without re-triggering the failure.
+   * Delegates to the shared, orchestrator-independent `scanBlockedWorkItems` (doctor calls the
+   * same function directly, without constructing a full orchestrator).
+   */
+  listBlockedWorkItems(): readonly BlockerCardInput[] {
+    return scanBlockedWorkItems({
+      repositoryRoot: this.repositoryRoot,
+      featuresRoot: this.featuresRoot,
+      fixesRoot: this.fixesRoot,
+    });
+  }
+
+  /**
    * Decides how much back-and-forth `id`'s definition needs before a human can confirm it, via
    * the same 3-vote unanimous-required ensemble pattern as classifySystemicBlockerNextStepByEnsemble
    * (ADR-0036/38). Unlike that ensemble's tie-break-to-stop, disagreement or unavailability here
@@ -712,6 +729,129 @@ export class CompassRoseOrchestrator {
       })
       .filter((line) => line.length > 0)
       .join('\n');
+  }
+
+  /**
+   * Flow B ("npm run brainstorm", ADR-0007/0046): one open-ended proposal from the brainstormer
+   * role, grounded in repo context and every already-existing feature, plus the running
+   * conversation. Pure proposal -- writes nothing, commits nothing. `ready_to_draft` is advisory
+   * only; only the human's own "crear" keystroke in the CLI loop may turn this into an actual
+   * feature (see draftBrainstormedFeature()).
+   */
+  runBrainstormTurn(transcript: readonly BrainstormTurnRecord[], userMessage: string): BrainstormTurnOutput {
+    const siblingFeatures = buildSiblingFeatureIndex(this.featuresRoot);
+    const sourcePaths = [
+      'src/contracts/brainstormer/brainstorm-turn-prompt.md',
+      buildRoadmapPath(this.compassRoseRoot),
+      buildSadPath(this.compassRoseRoot),
+      buildAdrPath(this.compassRoseRoot),
+      buildDmsPath(this.compassRoseRoot),
+    ];
+
+    const transcriptText = transcript.length > 0
+      ? transcript.map((turn) => `${turn.role === 'human' ? 'Human' : 'Assistant'}: ${turn.text}`).join('\n')
+      : '(none yet)';
+
+    const label = `brainstormer:turn:${this.runId}:${transcript.length + 1}`;
+    const prompt = [
+      'Act as the CompassRose Brainstormer.',
+      '',
+      'Help a human discover and refine one candidate feature at a time from a free-form idea.',
+      '',
+      'Read only:',
+      ...sourcePaths.map((path) => `- \`${path}\``),
+      '',
+      'Existing features (do not propose duplicates of these):',
+      ...(siblingFeatures.length > 0
+        ? siblingFeatures.map((sibling) => `- ${sibling.featureId}: ${sibling.title} — ${sibling.summary || 'no summary available'}`)
+        : ['- none']),
+      '',
+      'Conversation so far:',
+      transcriptText,
+      '',
+      `Human's latest message: ${userMessage}`,
+      '',
+      'Rules:',
+      '- Reply conversationally: ask a clarifying question, or note when this idea sounds like several distinct features and suggest tackling them one at a time.',
+      '- Respect the architecture-freedom stance declared in the conversation\'s first message: ask about language/framework/design-pattern preferences only if the human opted in and it is relevant to this idea; otherwise decide those independently.',
+      '- Always gather business-logic requirements explicitly, regardless of that stance.',
+      '- Set `ready_to_draft: true` only once business-logic requirements are concrete enough to formalize as one feature, and fill `proposed_title`/`proposed_summary` grounded only in what the human actually said.',
+      '- Never claim the idea has been turned into a feature, or that the session is over -- both are exclusively human keystrokes in the CLI loop that this role never sees or infers.',
+      '- Do not modify files.',
+      '',
+      'Return JSON only, matching the brainstorm-turn-output schema.',
+    ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'brainstormer',
+      kind: 'brainstorm_turn',
+      label,
+      feature_id: null,
+      task_id: null,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'brainstorm_turn',
+      },
+    }));
+
+    return this.codex.runStructured<BrainstormTurnOutput>(
+      prompt,
+      this.contracts.schema('brainstorm_turn'),
+      [],
+      label,
+    );
+  }
+
+  private nextFeatureId(slug: string): string {
+    const highestNumber = this.listFeatures().reduce((max, feature) => {
+      const match = feature.id.match(/^(\d+)-/);
+      const number = match?.[1] ? Number.parseInt(match[1], 10) : 0;
+      return Math.max(max, number);
+    }, 0);
+
+    return `${String(highestNumber + 1).padStart(3, '0')}-${slug}`;
+  }
+
+  /**
+   * Mints a new feature directory + `request.md` from the human side of a brainstorming
+   * segment (never the assistant's own words -- `request.md` stays human-authored content, per
+   * compassrose/DMS.md's Feature Intake Model, now transcribed by the CLI instead of hand-typed
+   * into a file), commits it if configured, then formalizes it via the existing, unmodified
+   * planFeature() -- the same path any hand-authored `request.md` already goes through. The
+   * freshly-formalized feature lands exactly where every other formalized feature does --
+   * `validation: not_started` -- ready for the same confirmation loop Flow 1 already drives.
+   */
+  draftBrainstormedFeature(
+    segmentTranscript: readonly BrainstormTurnRecord[],
+    proposedTitle: string,
+  ): { featureId: string } {
+    const featureId = this.nextFeatureId(slugify(proposedTitle));
+    const featureDirectory = join(this.featuresRoot, featureId);
+    mkdirSync(join(featureDirectory, 'tasks'), { recursive: true });
+
+    const humanMessages = segmentTranscript
+      .filter((turn) => turn.role === 'human')
+      .map((turn) => turn.text.trim())
+      .filter((text) => text.length > 0);
+
+    const requestPath = join(featureDirectory, 'request.md');
+    const requestMarkdown = `# Request: ${proposedTitle}\n\n${humanMessages.join('\n\n')}`;
+    writeText(requestPath, ensureTrailingNewline(requestMarkdown));
+
+    if (this.options.commit) {
+      this.git.commit(
+        [relativePath(this.repositoryRoot, requestPath)],
+        `proto: capture brainstormed request for ${featureId}`,
+      );
+    }
+
+    this.planFeature(featureId);
+
+    return { featureId };
   }
 
   private installControlledStopHandlers(): () => void {
@@ -1553,7 +1693,6 @@ export class CompassRoseOrchestrator {
       case 'review_subtask':
         return this.reviewTask(requireString(decision.task_id, 'task_id'));
       case 'blocked':
-        console.error(`Blocked: ${decision.reason}`);
         this.recordBlockedFeature(requireString(decision.feature_id, 'feature_id'), decision.reason);
         return { exitCode: 2, continueLoop: false, summary: decision.reason };
       case 'stop':
@@ -1909,7 +2048,6 @@ export class CompassRoseOrchestrator {
     const nextRequest = selectNextTaskRequest(taskRequests);
     if (!nextRequest) {
       const reason = `Task planning for feature \`${featureId}\` was invoked, but every pre-declared task request is already complete or superseded. Formalize additional task requests before continuing.`;
-      console.error(`Blocked: ${reason}`);
       // Explicit, not guessed: this call site already knows the exhausted-task-request cause
       // firsthand -- classifyBlockerKind's regex has no case matching this reason and would
       // otherwise fall through to 'unknown' with a generic doctor-recovery hint. See fix
@@ -1989,7 +2127,6 @@ export class CompassRoseOrchestrator {
     const reconciliation = reconcileBackfilledTaskRequests(backfilled.task_requests, existingTaskAnchors);
     if (!reconciliation.ok) {
       const reason = `Backfilling task requests for feature \`${featureId}\` couldn't reconcile them against existing tasks: ${reconciliation.reason}.`;
-      console.error(`Blocked: ${reason}`);
       this.recordBlockedFeature(featureId, reason);
       this.commitDirtyWorktreeIfConfigured(`proto: record task-request backfill block for feature ${featureId}`);
       return { exitCode: 2, continueLoop: false, summary: reason };
@@ -2007,7 +2144,6 @@ export class CompassRoseOrchestrator {
     }
 
     const reason = `Task planning for feature \`${featureId}\` proposed \`${task.title}\`, which the planner identified as belonging to feature \`${belongsToOtherFeature}\` instead of this feature's own declared scope. Refusing to write the task; formalize or advance \`${belongsToOtherFeature}\` before retrying.`;
-    console.error(`Blocked: ${reason}`);
     // Explicit, not guessed: this call site already knows the sibling-feature cause firsthand.
     // classifyBlockerKind's regex matches the word "scope" in `reason` today and happens to land
     // on task_interface_gap by accident -- fragile against any future rewording -- and its hint
@@ -2279,7 +2415,6 @@ export class CompassRoseOrchestrator {
       const deviationReason = task.scope_justification?.deviation_reason ?? null;
       if (!deviationReason) {
         const reason = `Task planning for feature \`${featureId}\` elaborated task request ${taskRequest.id} ("${taskRequest.title}") with scope exceeding its pre-declared boundary: \`${containment.exceedingPaths.join('`, `')}\` ${containment.exceedingPaths.length === 1 ? 'is' : 'are'} not covered by \`${taskRequest.scope.allowed_paths.join('`, `')}\`. Refusing to write the task; either stay within the pre-declared boundary or set scope_justification.deviation_reason.`;
-        console.error(`Blocked: ${reason}`);
         this.recordBlockedFeature(featureId, reason);
         this.commitDirtyWorktreeIfConfigured(`proto: record scope-boundary block for feature ${featureId}`);
         return { exitCode: 2, continueLoop: false, summary: reason };
@@ -2705,9 +2840,14 @@ export class CompassRoseOrchestrator {
         `Diagnostic/autocorrection classified the blocker on ${featureId} as systemic rather than a bounded `
         + `implementation issue; filed/reused fix \`${fixId}\` and stopped instead of attempting a bounded doctor recovery.`;
 
+      // recordBlockedFeature() already prints the blocker card (persistBlockedFeature's single
+      // choke point) whenever state.md exists to persist against; the fallback print below only
+      // ever fires for the malformed-state edge case, where there is no BlockerProfile to render.
+      let cardPrinted = false;
       if (statSafeIsFile(owner.statePath)) {
         this.recordBlockedFeature(featureId, reason);
         this.setBlockedOnFix(owner, fixId);
+        cardPrinted = true;
       }
 
       if (this.options.commit) {
@@ -2721,7 +2861,9 @@ export class CompassRoseOrchestrator {
         );
       }
 
-      console.error(reason);
+      if (!cardPrinted) {
+        console.error(reason);
+      }
       return {
         exitCode: 2,
         continueLoop: false,
@@ -2729,15 +2871,19 @@ export class CompassRoseOrchestrator {
       };
     }
 
+    let cardPrinted = false;
     if (statSafeIsFile(owner.statePath)) {
       try {
         this.recordBlockedFeature(featureId, decision.next_step_reason);
+        cardPrinted = true;
       } catch {
         // Keep the diagnostic artifact even when the malformed state cannot be persisted as blocked state.
       }
     }
 
-    console.error(decision.diagnosis_summary);
+    if (!cardPrinted) {
+      console.error(decision.diagnosis_summary);
+    }
     return {
       exitCode: 2,
       continueLoop: false,
@@ -3118,6 +3264,7 @@ export class CompassRoseOrchestrator {
       '- When choosing `file_blocking_fix`, populate `systemic_blocker` with `title` (short, specific, becomes the new fix\'s slug), `evidence_summary`, `scope_note` (must state the new fix excludes this feature/fix\'s own remaining work), and `severity` fixed to `"critical"`.',
       '- When choosing `plan_doctor_recovery`, set `systemic_blocker` to `null`.',
       '- Never let a `file_blocking_fix` scope include any of this feature/fix\'s own remaining work.',
+      '- `diagnosis_summary`, `next_step_reason`, and every `evidence`/`evidence_summary`/`scope_note`/`interface_response.summary` value are read directly by a human at the console, not only by the next AI call -- keep each to one short, plain sentence.',
       '- Return JSON only and do not modify files.',
     ].join('\n');
 
@@ -3626,6 +3773,7 @@ export class CompassRoseOrchestrator {
         : null,
       doctorRecovery ? '- If this is a doctor recovery task, verify that the blocker signature is resolved and the feature can resume from the captured lifecycle state without entering a reviewer loop for the recovery itself.' : null,
       '- Return JSON only.',
+      '- `summary` and every `findings[].message` are read directly by a human at the console when the task ends up blocked, not only by the next AI call -- keep each to one short, plain sentence; put any longer diagnostic detail in the correction task instead.',
       '- If status is `changes_required`, include a correction task narrower than the original subtask.',
       '- Ground every field of that correction task in artifacts, fields, and mechanisms that already exist in the contracts you were told to read; do not invent a manifest, validator, or artifact type to describe the gap, even if that makes the finding sound less concrete — a correction that demands a fictional mechanism can never be satisfied.',
       '- Do not modify files.',
@@ -4054,7 +4202,6 @@ export class CompassRoseOrchestrator {
       );
     }
 
-    console.error(reason);
     return {
       exitCode: 2,
       continueLoop: false,
@@ -4633,7 +4780,6 @@ export class CompassRoseOrchestrator {
       );
     }
 
-    console.error(reason);
     return {
       exitCode: 2,
       continueLoop: false,
@@ -5473,6 +5619,20 @@ export class CompassRoseOrchestrator {
     const artifactKey = taskId ?? featureId;
     this.artifacts.writeJson(join('blockers', `${this.runId}-${artifactKey}-blocked.json`), profile);
     this.artifacts.writeText(join('blockers', `${this.runId}-${artifactKey}-blocked.md`), renderBlockerProfileMarkdown(profile));
+
+    // Single choke point every blocking path (recordBlockedFeature/recordBlockedReview/
+    // recordFailedReview/persistBlockedFeatureWithKnownBlocker) funnels through -- printing the
+    // card here, once, means no call site has to remember to render it, and every blocked
+    // feature/fix gets the identical bounded, human-legible shape `listBlockedWorkItems()` also
+    // reconstructs later for `npm run doctor`.
+    console.error(renderBlockerCard({
+      itemId: featureId,
+      itemPathRelative: relativePath(this.repositoryRoot, feature.statePath),
+      kind: blocker.kind,
+      recoverability: blocker.recoverability,
+      reason,
+      evidence: blocker.evidence,
+    }).join('\n'));
   }
 
   private buildBlockedByLines(blocker: BlockerProfile, reason: string): string[] {
@@ -5600,6 +5760,8 @@ export class CompassRoseOrchestrator {
       '- implementation_failure: the produced change itself is wrong, incomplete, or does not do what the task asked.',
       '- review_failure: the change is plausible but did not meet the review/acceptance bar.',
       '- unknown: none of the above clearly applies.',
+      '',
+      '`rationale` is read directly by a human at the console, not only by the next AI call -- keep it to one short, plain sentence.',
       '',
       'Return JSON only and do not modify files.',
     ].join('\n');
@@ -5777,12 +5939,16 @@ export class CompassRoseOrchestrator {
   // every prompt "Read only" bullet and allowed-path entry that names a specific feature/fix
   // document must go through these, not re-derive the root itself.
   private featureRelativePath(featureId: string, ...segments: readonly string[]): string {
-    const base = relativePath(this.repositoryRoot, this.featuresRoot);
+    // node:path's relative() returns OS-native separators -- backslashes on Windows -- but every
+    // other path in this codebase, and every path git status/diff report, is forward-slash. A
+    // mixed-separator result here silently breaks isPathAllowedByPrefix's string comparison
+    // against those reports (e.g. ensureCleanWorktreeIfRequired's allowed-dirty-prefix check).
+    const base = relativePath(this.repositoryRoot, this.featuresRoot).split('\\').join('/');
     return [base, featureId, ...segments].filter((segment) => segment.length > 0).join('/');
   }
 
   private fixRelativePath(fixId: string, ...segments: readonly string[]): string {
-    const base = relativePath(this.repositoryRoot, this.fixesRoot);
+    const base = relativePath(this.repositoryRoot, this.fixesRoot).split('\\').join('/');
     return [base, fixId, ...segments].filter((segment) => segment.length > 0).join('/');
   }
 
