@@ -45,9 +45,13 @@ Every internal step commits separately, so the history reads as telemetry rather
 - `blockedDuringRun()`, and the session's end-of-run summary built from it.
 - `tests/loopOutcome.test.ts`: 8 tests over blocked-continues, failed-stops, exit codes, set-aside, and targeting.
 
+- acceptance-criteria verification (`src/contracts/runtime/acceptance-criteria-verification.schema.json`, `acceptanceCriteria.ts`) returning a per-criterion verdict with evidence rather than one boolean, so a refusal to close names exactly which criteria stand in the way. `unverifiable` counts as unmet: the default is always to leave a feature open.
+- the automatic completion transition, `attemptFeatureCompletion`, replacing the old unconditional "formalize additional task requests" block on an exhausted outline. Four preconditions checked in cost order — the cheap deterministic ones first, the AI call last — so a feature that obviously is not finished never pays for one.
+- the empty-versus-exhausted distinction: a feature that never declared a task request has completed nothing, and is still told to declare some rather than asked whether it is finished.
+- `tests/featureCompletion.test.ts`: 9 tests over closing, refusing to close, and each deterministic precondition short-circuiting the AI call.
+
 ## Remaining Deliverables
 
-- acceptance-criteria verification and the automatic completion transition
 - commit batching: one commit per approved task, absorbing intermediate bookkeeping
 - the structured `RunSummary` model for non-interactive callers (the session renders its own today)
 
@@ -55,7 +59,7 @@ Every internal step commits separately, so the history reads as telemetry rather
 
 - 1. Introduce the step-outcome distinction and rework `run()` around it: complete
 - 2. Add run targeting: complete
-- 3. Add acceptance-criteria verification and automatic completion: not started
+- 3. Add acceptance-criteria verification and automatic completion: complete
 - 4. Rework committing to one commit per approved task: not started
 - 5. Add the end-of-run summary: in progress
 

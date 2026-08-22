@@ -26,7 +26,8 @@ export type AgentInvocationKind =
   | "systemic_blocker_next_step"
   | "feature_validation_weight"
   | "feature_validation_decision_points"
-  | "brainstorm_turn";
+  | "brainstorm_turn"
+  | "acceptance_criteria_verification";
 
 export interface AgentToolContext {
   readonly name: AgentToolName;

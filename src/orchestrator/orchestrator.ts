@@ -45,6 +45,11 @@ import type {
 import { selectImplementationContextArtifactNames } from '../contracts/runtime/agentContext.js';
 import type { AgentInvocationContext, AgentInvocationKind, AgentToolName } from '../contracts/runtime/agentContext.js';
 import type { RunObserver } from '../contracts/runtime/runObserver.js';
+import { allCriteriaMet, unmetCriteria } from '../contracts/runtime/acceptanceCriteria.js';
+import type {
+  AcceptanceCriteriaVerification,
+  AcceptanceCriterionVerdict,
+} from '../contracts/runtime/acceptanceCriteria.js';
 import type {
   ContractRefreshResult,
   FeatureInspection,
@@ -2318,20 +2323,233 @@ export class CompassRoseOrchestrator {
 
     const nextRequest = selectNextTaskRequest(taskRequests);
     if (!nextRequest) {
-      const reason = `Task planning for feature \`${featureId}\` was invoked, but every pre-declared task request is already complete or superseded. Formalize additional task requests before continuing.`;
-      // Explicit, not guessed: this call site already knows the exhausted-task-request cause
-      // firsthand -- classifyBlockerKind's regex has no case matching this reason and would
-      // otherwise fall through to 'unknown' with a generic doctor-recovery hint. See fix
-      // 001-blocked-feature-scope-misclassification.
-      this.recordBlockedFeature(featureId, reason, null, {
-        kind: 'task_interface_gap',
-        nextPlanningHint: `Formalize additional task requests for feature \`${featureId}\`; every pre-declared task request is already complete or superseded.`,
-      });
-      this.commitDirtyWorktreeIfConfigured(`proto: record exhausted task requests block for feature ${featureId}`);
-      return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
+      // An *empty* outline and an *exhausted* one are different situations, and only the second can
+      // possibly mean "finished". A feature that never declared a task request has not completed
+      // anything; asking whether its acceptance criteria are met would be asking the wrong
+      // question, and would spend an AI call to do it.
+      if (taskRequests.length === 0) {
+        const reason = `Task planning for feature \`${featureId}\` was invoked, but no task requests are declared at all. Formalize additional task requests before continuing.`;
+        this.recordBlockedFeature(featureId, reason, null, {
+          kind: 'task_interface_gap',
+          nextPlanningHint: `Formalize additional task requests for feature \`${featureId}\`; none are declared.`,
+        });
+        this.commitDirtyWorktreeIfConfigured(`proto: record exhausted task requests block for feature ${featureId}`);
+        return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
+      }
+
+      // An exhausted outline has two possible meanings, and the runtime used to only know one of
+      // them: "a task request was forgotten" (block and ask for more) versus "the work is actually
+      // finished" (close the feature). 025-automated-development-loop adds the second reading,
+      // decided against the feature's own acceptance criteria rather than by assumption.
+      return this.attemptFeatureCompletion(featureId, feature);
     }
 
     return this.planTaskFromRequest(featureId, feature, nextRequest, taskRequests);
+  }
+
+  /**
+   * The path from "the outline is exhausted" to `completed` (025-automated-development-loop).
+   *
+   * Before this, there was no such path: an exhausted outline could only ever produce "formalize
+   * additional task requests", which is the right call when a task request was genuinely forgotten
+   * and the wrong one when the work is actually finished. Both features ever completed in this
+   * repository were closed by hand, and that gap was recorded in `002-configuration-model`'s own
+   * Known Gaps for months.
+   *
+   * Four conditions must all hold, and they are checked in cost order -- the cheap deterministic
+   * ones first, the AI call last, so a feature that obviously is not finished never pays for one.
+   */
+  private attemptFeatureCompletion(featureId: string, feature: FeatureRecord): StepExecutionResult {
+    const owner = this.resolveWorkItemContext(featureId);
+    const snapshot = this.tryReadFeatureStateSnapshot(owner);
+
+    const blockIncomplete = (reason: string, hint: string): StepExecutionResult => {
+      this.recordBlockedFeature(featureId, reason, null, { kind: 'task_interface_gap', nextPlanningHint: hint });
+      this.commitDirtyWorktreeIfConfigured(`proto: record exhausted task requests block for feature ${featureId}`);
+      return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
+    };
+
+    if (!snapshot) {
+      return blockIncomplete(
+        `Feature \`${featureId}\` has an exhausted outline but no readable state document, so the runtime cannot tell whether it is finished.`,
+        `Repair \`${featureId}\`'s state document before it can be closed.`,
+      );
+    }
+
+    const pendingPointers = [
+      snapshot.activeTask,
+      snapshot.activeCorrectionTask,
+      snapshot.activeUnblockTask,
+    ].filter((pointer) => pointer && pointer !== 'none');
+
+    if (pendingPointers.length > 0) {
+      return blockIncomplete(
+        `Feature \`${featureId}\` has an exhausted outline but still points at unfinished work (${pendingPointers.join(', ')}).`,
+        `Finish or clear ${pendingPointers.join(', ')} before \`${featureId}\` can be closed.`,
+      );
+    }
+
+    // Read straight from the document rather than widening FeatureStateSnapshot: these two fields
+    // matter only here, and the snapshot is deliberately the compact shape the scheduler needs.
+    const operationalStatus = parseStatusMap(requireSection(readUtf8(owner.statePath), 'Operational Status'));
+    const gateResult = operationalStatus.last_quality_gate_result ?? 'unknown';
+    const reviewResult = operationalStatus.last_review_result ?? 'not_run';
+
+    if (gateResult === 'failed' || reviewResult === 'blocked' || reviewResult === 'changes_required') {
+      return blockIncomplete(
+        `Feature \`${featureId}\` has an exhausted outline but its last quality gate or review did not pass (gates: ${gateResult}, review: ${reviewResult}).`,
+        `Resolve the failing gate or review for \`${featureId}\` before it can be closed.`,
+      );
+    }
+
+    const criteria = parseBulletSection(optionalSection(readUtf8(feature.featurePath), 'Acceptance Criteria')) ?? [];
+    if (criteria.length === 0) {
+      return blockIncomplete(
+        `Feature \`${featureId}\` has an exhausted outline but declares no acceptance criteria, so there is nothing to verify it against.`,
+        `Add acceptance criteria to \`${featureId}\`'s feature.md before it can be closed.`,
+      );
+    }
+
+    const verification = this.verifyAcceptanceCriteria(featureId, feature, criteria);
+    const unmet = unmetCriteria(verification);
+
+    if (!allCriteriaMet(verification)) {
+      const reason = `Feature \`${featureId}\`'s outline is exhausted but ${unmet.length} of ${verification.verdicts.length} acceptance criteria are not met: ${unmet.map((verdict: AcceptanceCriterionVerdict) => verdict.criterion).join('; ')}`;
+      // A blocked outcome, not a failed one: the run sets this feature aside and carries on.
+      this.recordBlockedFeature(featureId, reason, null, {
+        kind: 'task_interface_gap',
+        nextPlanningHint: `Feature \`${featureId}\` cannot be closed until these acceptance criteria are met: ${unmet.map((verdict: AcceptanceCriterionVerdict) => verdict.criterion).join('; ')}`,
+      });
+      this.commitDirtyWorktreeIfConfigured(`proto: record unmet acceptance criteria for feature ${featureId}`);
+      return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
+    }
+
+    writeText(owner.statePath, this.updateFeatureStateAfterCompletion(owner.statePath, verification));
+    writeText(this.projectStatePath, this.updateProjectStateAfterCompletion(featureId, verification));
+    this.commitDirtyWorktreeIfConfigured(`proto: complete feature ${featureId}`);
+
+    const summary = `Feature ${featureId} is complete: every task request is done and all ${verification.verdicts.length} acceptance criteria are met.`;
+    console.log(summary);
+    return { kind: 'advanced', exitCode: 0, continueLoop: true, summary };
+  }
+
+  /**
+   * Asks the reviewer role whether each of a feature's own acceptance criteria is actually
+   * satisfied by the repository, returning a per-criterion verdict with evidence rather than one
+   * boolean -- so a refusal to close names exactly which criteria stand in the way.
+   */
+  private verifyAcceptanceCriteria(
+    featureId: string,
+    feature: FeatureRecord,
+    criteria: readonly string[],
+  ): AcceptanceCriteriaVerification {
+    const sourcePaths = [
+      relativePath(this.repositoryRoot, feature.featurePath).split('\\').join('/'),
+      relativePath(this.repositoryRoot, feature.architecturePath).split('\\').join('/'),
+      relativePath(this.repositoryRoot, feature.statePath).split('\\').join('/'),
+    ];
+
+    const label = `acceptance-criteria:${featureId}`;
+    const prompt = [
+      'Act as the CompassRose Acceptance Verifier.',
+      '',
+      `Decide, for each acceptance criterion of feature \`${featureId}\`, whether the repository actually satisfies it.`,
+      '',
+      'Read:',
+      ...sourcePaths.map((path) => `- \`${path}\``),
+      '- the source and test files those documents name',
+      '',
+      'Acceptance criteria to verify, verbatim:',
+      ...criteria.map((criterion, index) => `${index + 1}. ${criterion}`),
+      '',
+      'Rules:',
+      '- Return exactly one verdict per criterion, in the same order, quoting the criterion verbatim.',
+      '- `evidence` must be concrete -- a path, a symbol, a test name -- never a restatement of the criterion.',
+      '- Use `unverifiable` when the evidence you would need is not present in what you read. Do not guess.',
+      '- `unverifiable` counts as unmet. Closing a feature is irreversible bookkeeping; the default is always to leave it open.',
+      '- Do not modify files.',
+      '',
+      'Return JSON only, matching the acceptance-criteria-verification schema.',
+    ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'reviewer',
+      kind: 'acceptance_criteria_verification',
+      label,
+      feature_id: featureId,
+      task_id: null,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'acceptance_criteria_verification',
+      },
+    }));
+
+    return this.codex.runStructured<AcceptanceCriteriaVerification>(
+      prompt,
+      this.contracts.schema('acceptance_criteria_verification'),
+      sourcePaths,
+      label,
+    );
+  }
+
+  private updateFeatureStateAfterCompletion(
+    featureStatePath: string,
+    verification: AcceptanceCriteriaVerification,
+  ): string {
+    let markdown = readUtf8(featureStatePath);
+    markdown = replaceSection(markdown, 'Lifecycle State', 'completed');
+    markdown = replaceOperationalStatus(markdown, {
+      active_task: 'none',
+      active_correction_task: 'none',
+      active_unblock_task: 'none',
+    });
+    markdown = replaceSection(markdown, 'Remaining Deliverables', '- None');
+    markdown = replaceSection(markdown, 'Blocked By', '- None');
+    // The verdicts are the record of *why* this feature was closed, which is the one thing a
+    // reader will want six months from now and the one thing a bare `completed` never says.
+    markdown = replaceSection(
+      markdown,
+      'Last Approved Change',
+      [
+        verification.summary,
+        '',
+        ...verification.verdicts.map((verdict: AcceptanceCriterionVerdict) => `- ${verdict.criterion} — ${verdict.status} (${verdict.evidence})`),
+      ].join('\n'),
+    );
+    markdown = replaceSection(
+      markdown,
+      'Next Planning Hint',
+      `Feature \`${verification.feature_id}\` is complete; select the next feature by the deterministic priority order.`,
+    );
+    return markdown;
+  }
+
+  private updateProjectStateAfterCompletion(
+    featureId: string,
+    verification: AcceptanceCriteriaVerification,
+  ): string {
+    let markdown = readUtf8(this.projectStatePath);
+    markdown = upsertBulletInSection(
+      markdown,
+      'Implemented',
+      `- Feature \`${featureId}\` is complete`,
+      `- Feature \`${featureId}\` is complete: all ${verification.verdicts.length} acceptance criteria verified.`,
+    );
+    markdown = replaceSection(
+      markdown,
+      'Last Approved Change',
+      `Feature \`${featureId}\` was completed after every acceptance criterion was verified as met.`,
+    );
+    markdown = replaceSection(
+      markdown,
+      'Next Planning Hint',
+      `Feature \`${featureId}\` is complete; select the next feature by the deterministic priority order.`,
+    );
+    return markdown;
   }
 
   /**

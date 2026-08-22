@@ -25,6 +25,7 @@ function seedSchemas(root: string): void {
     'src/contracts/validator/feature-validation-weight.schema.json': '{"type":"object","title":"feature_validation_weight"}',
     'src/contracts/validator/decision-points-output.schema.json': '{"type":"object","title":"feature_validation_decision_points"}',
     'src/contracts/brainstormer/brainstorm-turn-output.schema.json': '{"type":"object","title":"brainstorm_turn"}',
+    'src/contracts/runtime/acceptance-criteria-verification.schema.json': '{"type":"object","title":"acceptance_criteria_verification"}',
   };
 
   for (const [relativePath, contents] of Object.entries(schemaFiles)) {
@@ -35,7 +36,7 @@ function seedSchemas(root: string): void {
 }
 
 describe('ContractRegistry', () => {
-  test('loads all twelve structured schemas on construction', () => {
+  test('loads every structured schema on construction', () => {
     workspace = createTempWorkspace();
     seedSchemas(workspace.root);
     const registry = new ContractRegistry(workspace.root);
@@ -52,6 +53,7 @@ describe('ContractRegistry', () => {
     expect(registry.schema<{ title: string }>('feature_validation_weight').title).toBe('feature_validation_weight');
     expect(registry.schema<{ title: string }>('feature_validation_decision_points').title).toBe('feature_validation_decision_points');
     expect(registry.schema<{ title: string }>('brainstorm_turn').title).toBe('brainstorm_turn');
+    expect(registry.schema<{ title: string }>('acceptance_criteria_verification').title).toBe('acceptance_criteria_verification');
   });
 
   test('refresh reports no reload and no restart when nothing changed', () => {
