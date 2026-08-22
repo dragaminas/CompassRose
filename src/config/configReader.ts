@@ -1210,12 +1210,10 @@ function validateLimitsSection(section: Record<string, unknown>, issues: Configu
   const maxTasksPerRun = requireNonNegativeInteger(section, 'max_tasks_per_run', 'limits.max_tasks_per_run', issues);
   const maxRetriesPerTask = requireNonNegativeInteger(section, 'max_retries_per_task', 'limits.max_retries_per_task', issues);
   const maxReviewIterations = requireNonNegativeInteger(section, 'max_review_iterations', 'limits.max_review_iterations', issues);
-  const maxRecoveryIterations = requireNonNegativeInteger(section, 'max_recovery_iterations', 'limits.max_recovery_iterations', issues);
   const stopOnQualityGateFailure = requireBooleanValue(section, 'stop_on_quality_gate_failure', 'limits.stop_on_quality_gate_failure', issues);
   const stopOnReviewFailure = requireBooleanValue(section, 'stop_on_review_failure', 'limits.stop_on_review_failure', issues);
   // Optional (see ADR-0040/ADR-0041): unlike every field above, absence is not an issue -- an
   // existing config that predates these fields must validate exactly as it did before.
-  const maxLifetimeRecoveryCycles = optionalNonNegativeInteger(section, 'max_lifetime_recovery_cycles', 'limits.max_lifetime_recovery_cycles', issues);
   const maxAiCallsPerRun = optionalNonNegativeInteger(section, 'max_ai_calls_per_run', 'limits.max_ai_calls_per_run', issues);
   const contextBudgetCharacters = optionalNonNegativeInteger(section, 'context_budget_characters', 'limits.context_budget_characters', issues);
 
@@ -1224,7 +1222,6 @@ function validateLimitsSection(section: Record<string, unknown>, issues: Configu
       max_tasks_per_run: 0,
       max_retries_per_task: 0,
       max_review_iterations: 0,
-      max_recovery_iterations: 0,
       stop_on_quality_gate_failure: false,
       stop_on_review_failure: false,
     };
@@ -1234,10 +1231,8 @@ function validateLimitsSection(section: Record<string, unknown>, issues: Configu
     max_tasks_per_run: maxTasksPerRun,
     max_retries_per_task: maxRetriesPerTask,
     max_review_iterations: maxReviewIterations,
-    max_recovery_iterations: maxRecoveryIterations,
     stop_on_quality_gate_failure: stopOnQualityGateFailure,
     stop_on_review_failure: stopOnReviewFailure,
-    ...(maxLifetimeRecoveryCycles !== undefined ? { max_lifetime_recovery_cycles: maxLifetimeRecoveryCycles } : {}),
     ...(maxAiCallsPerRun !== undefined ? { max_ai_calls_per_run: maxAiCallsPerRun } : {}),
     ...(contextBudgetCharacters !== undefined ? { context_budget_characters: contextBudgetCharacters } : {}),
   };

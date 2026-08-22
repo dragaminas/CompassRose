@@ -19,15 +19,8 @@ export function inferLikelySources(trigger: string, selectedStep: StepDecision |
     sources.add('src/contracts/task/task.md');
   }
 
-  if (selectedStep?.kind === 'unblock_task' || selectedStep?.kind === 'doctor_recovery_task') {
-    sources.add('src/contracts/planner/doctor-recovery-planning-prompt.md');
-    sources.add('src/contracts/task/doctor-recovery-task.md');
-    sources.add('src/contracts/state/feature-state.md');
-  }
-
   if (selectedStep?.kind === 'diagnose_autocorrect') {
     sources.add('src/contracts/runtime/diagnostic-autocorrection.md');
-    sources.add('src/contracts/task/doctor-recovery-task.md');
     sources.add('src/contracts/task/state-correction-task.md');
     sources.add('src/contracts/state/feature-state.md');
   }
@@ -66,12 +59,11 @@ export function inferLikelySources(trigger: string, selectedStep: StepDecision |
   }
 
   if (normalized.includes('blocked') || normalized.includes('blocker')) {
-    sources.add('src/contracts/task/doctor-recovery-task.md');
+    sources.add('src/contracts/runtime/diagnostic-autocorrection.md');
     sources.add('src/contracts/runtime/operation-loop.md');
   }
 
   if (normalized.includes('implementation failed') || normalized.includes('implementation_failure')) {
-    sources.add('src/contracts/task/doctor-recovery-task.md');
     sources.add('src/contracts/state/feature-state.md');
     sources.add('src/contracts/runtime/operation-loop.md');
   }
@@ -90,11 +82,6 @@ export function inferLikelySources(trigger: string, selectedStep: StepDecision |
   if (normalized.includes('quality gates failed')) {
     sources.add('src/contracts/task/task.md');
     sources.add('src/contracts/reviewer/input.md');
-  }
-
-  if (normalized.includes('doctor recovery') || normalized.includes('unblock task') || normalized.includes('unblock_pending')) {
-    sources.add('src/contracts/task/doctor-recovery-task.md');
-    sources.add('src/contracts/state/feature-state.md');
   }
 
   if (normalized.includes('task document')) {
@@ -134,7 +121,7 @@ export function buildObservations(trigger: string, selectedStep: StepDecision | 
   }
 
   if (/implementation failed|implementation_failure/i.test(trigger)) {
-    observations.push('The runtime should continue into a bounded doctor recovery task instead of stopping on the failed implementation state.');
+    observations.push('The runtime should diagnose the failed implementation state rather than stopping on it.');
   }
 
   if (/implementation notes|justification/i.test(trigger)) {
@@ -164,11 +151,11 @@ export function buildNextQuestions(trigger: string, selectedStep: StepDecision |
   }
 
   if (/blocked|blocker/i.test(trigger)) {
-    questions.push('Should the blocker be classified into a reusable doctor recovery profile before the run stops?');
+    questions.push('Did the recorded blocker carry enough evidence for a person to recognize it without reopening the task?');
   }
 
   if (/implementation failed|implementation_failure/i.test(trigger)) {
-    questions.push('Should implementation failure automatically open a bounded doctor recovery task that restores the active task target?');
+    questions.push('Did the diagnosis recover a trustworthy active task anchor, or did it lose the target the failure happened on?');
   }
 
   if (/implementation notes|justification/i.test(trigger)) {
@@ -187,13 +174,9 @@ export function buildNextQuestions(trigger: string, selectedStep: StepDecision |
     questions.push('Did the reviewer receive enough structured implementation evidence beyond the raw diff?');
   }
 
-  if (selectedStep?.kind === 'unblock_task' || selectedStep?.kind === 'doctor_recovery_task') {
-    questions.push('Did the doctor recovery prompt expose enough blocker context and restoration target detail for planning?');
-  }
-
   if (selectedStep?.kind === 'diagnose_autocorrect') {
     questions.push('Did the diagnostic/autocorrection step choose the smallest safe recovery path instead of falling back to a generic stop?');
-    questions.push('If the blocker came from a weak interface, was that hardening captured for the doctor recovery task or the diagnostic stop?');
+    questions.push('If the blocker came from a weak interface, was that hardening captured for the recovery conversation or the diagnostic stop?');
   }
 
   return questions;

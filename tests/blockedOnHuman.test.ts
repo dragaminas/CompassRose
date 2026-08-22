@@ -78,13 +78,11 @@ function featureState(input: {
         `- lifecycle_state: ${input.blockedFrom.lifecycleState}`,
         `- active_task: ${input.blockedFrom.activeTask}`,
         '- active_correction_task: none',
-        '- active_unblock_task: none',
       ]
     : [
         '- lifecycle_state: none',
         '- active_task: none',
         '- active_correction_task: none',
-        '- active_unblock_task: none',
       ];
 
   return [
@@ -103,11 +101,9 @@ function featureState(input: {
     '- formalization: complete',
     `- active_task: ${activeTask}`,
     '- active_correction_task: none',
-    '- active_unblock_task: none',
     '- last_implementation_result: not_run',
     '- last_quality_gate_result: unknown',
     '- last_review_result: not_run',
-    '- last_unblock_result: not_run',
     `- human_ack_required: ${input.humanAckRequired ? 'true' : 'none'}`,
     '',
     '## Current Reality',

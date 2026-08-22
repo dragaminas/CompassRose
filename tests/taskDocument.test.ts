@@ -38,7 +38,6 @@ describe('parseTaskDocument', () => {
     expect(task.expectedDeliverables).toEqual(['code', 'tests']);
     expect(task.previousTaskId).toBeNull();
     expect(task.stateCorrection).toBeNull();
-    expect(task.doctorRecovery).toBeNull();
     expect(task.path).toBe('/tasks/F1-T1.md');
   });
 
@@ -80,30 +79,6 @@ describe('parseTaskDocument', () => {
     expect(task.stateCorrection?.state_target.restored_active_task).toBe('F1-T1');
   });
 
-  test('parses doctor-recovery metadata when Blocker Context and Restoration Target sections are present', () => {
-    const markdown = buildTaskMarkdown({
-      blockerContext: [
-        '## Blocker Context',
-        '',
-        '- kind: environment',
-        '- signature: missing-binary',
-        '- evidence: codex was not found on PATH',
-      ].join('\n'),
-      restorationTarget: [
-        '## Restoration Target',
-        '',
-        '- lifecycle_state: implementation_running',
-        '- active_task: `F1-T1`',
-      ].join('\n'),
-    });
-
-    const task = parseTaskDocument('/tasks/F1-T1-DOCTOR-RECOVERY-R1.md', markdown);
-    expect(task.doctorRecovery).not.toBeNull();
-    expect(task.doctorRecovery?.blocker.kind).toBe('environment');
-    expect(task.doctorRecovery?.restoration_target.lifecycle_state).toBe('implementation_running');
-    expect(task.doctorRecovery?.restoration_target.active_task).toBe('F1-T1');
-    expect(task.unblock).toEqual(task.doctorRecovery);
-  });
 });
 
 describe('storedTaskArtifactFromDocument', () => {

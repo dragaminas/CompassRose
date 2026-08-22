@@ -1,4 +1,4 @@
-import type { DoctorRecoveryTaskMetadata, ParsedTaskDocument, StateCorrectionTask } from '../contracts/task/taskContracts.js';
+import type { ParsedTaskDocument, StateCorrectionTask } from '../contracts/task/taskContracts.js';
 import { renderManifestForPrompt } from './contextManifest.js';
 import type { ContextManifest } from './contextManifest.js';
 
@@ -61,47 +61,5 @@ export function buildImplementerPrompt(
     '- If you made no repository changes because you are blocked, explain why and cite the evidence; do not use the `Status: already_complete` line unless the requested behavior genuinely already exists.',
     '- Keep implementation notes brief and separate from product documentation.',
     '- Do not claim approval.',
-  ].join('\n');
-}
-
-export function buildDoctorRecoveryPrompt(
-  task: ParsedTaskDocument,
-  doctorRecovery: DoctorRecoveryTaskMetadata,
-  recoveryLessonLines: readonly string[] = [],
-): string {
-  return [
-    'Act as the CompassRose Doctor.',
-    '',
-    `Execute doctor recovery task \`${task.taskId}\` for feature \`${task.featureId}\`.`,
-    '',
-    'Read only:',
-    '- `src/contracts/runtime/doctor-recovery-execution-prompt.md`',
-    '- `src/contracts/task/doctor-recovery-task.md`',
-    `- \`${task.path}\``,
-    ...task.likelyAffectedFiles.map((item) => `- \`${item}\``),
-    '',
-    'Recovery context:',
-    `- blocker_kind: ${doctorRecovery.blocker.kind}`,
-    `- blocker_signature: ${doctorRecovery.blocker.signature}`,
-    `- restoration_lifecycle_state: ${doctorRecovery.restoration_target.lifecycle_state}`,
-    `- restoration_active_task: ${doctorRecovery.restoration_target.active_task}`,
-    ...doctorRecovery.blocker.evidence.map((item) => `- blocker_evidence: ${item}`),
-    '',
-    'Instructions:',
-    `- Start with: ${task.firstExecutableStep}`,
-    '- Follow `src/contracts/runtime/doctor-recovery-execution-prompt.md`.',
-    '- Keep the recovery bounded to the blocker and restoration target.',
-    '- Preserve task lineage and blocker evidence.',
-    '- You may touch docs, state, src, and tests only when they are required by the recorded recovery scope.',
-    '- Do not widen into unrelated backlog work.',
-    '- Do not run `git commit`; leave the recovery diff available for the runtime handoff.',
-    '- Treat `quality_gates.before_review` as doctor re-entry gates.',
-    '- If the task or any recovery-lesson context below references a mechanism, manifest, validator, or field that is not in the contracts you were told to read, report that as a task-interface defect in your notes; do not fabricate placeholder artifacts or files to satisfy it.',
-    ...recoveryLessonLines,
-    `- Follow \`${task.developmentPolicy}\`.`,
-    '- End every attempt with a short `## Implementation Notes` section written in your own final reply text, not only inside an edited file; the runtime reads it from what you say, not from a diff.',
-    '- If you changed repository files, justify the recovery briefly and cite the blocker evidence.',
-    '- If you made no repository changes because the restoration target already holds, start the notes with the line `Status: already_complete` and cite the evidence; the runtime relies on that exact line to tell an already-satisfied recovery apart from one that could not proceed.',
-    '- If you made no repository changes because the recovery could not proceed, explain why; do not use the `Status: already_complete` line unless the restoration target genuinely already holds.',
   ].join('\n');
 }

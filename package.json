@@ -24,7 +24,6 @@
     "proto:typecheck": "tsc -p proto/tsconfig.json",
     "proto:e2e": "tsx proto/protoCompassRose.e2e.ts",
     "proto:e2e:codex": "cross-env PROTO_E2E_IMPLEMENTER=codex tsx proto/protoCompassRose.e2e.ts",
-    "proto:e2e:unblock": "cross-env PROTO_E2E_SCENARIO=unblock tsx proto/protoCompassRose.e2e.ts",
     "proto:smoke": "tsx proto/protoCompassRose.smoke.e2e.ts"
   },
   "repository": {

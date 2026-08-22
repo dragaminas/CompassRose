@@ -108,22 +108,6 @@ describe('proto reviewable diff handoff', () => {
     expect(task.previousTaskId).toBe('F002-T04-C8');
   });
 
-  test('reconstructs unblock metadata directly from the task markdown', () => {
-    const taskPath = join(
-      repoRoot,
-      'compassrose',
-      'features',
-      '002-configuration-model',
-      'tasks',
-      'F002-T04-C2-U1-preserve-the-f002-t04-c2-task-anchor-during-implementation-failure-recovery.md',
-    );
-    const task = parseTaskDocument(taskPath, readFileSync(taskPath, 'utf8'));
-
-    expect(task.unblock).not.toBeNull();
-    expect(task.unblock?.blocker.kind).toBe('implementation_failure');
-    expect(task.unblock?.restoration_target.active_task).toBe('F002-T04-C2');
-  });
-
   test('classifies committed-away diffs as reviewable_diff_lost before generic no-diff outcomes', () => {
     const classification = classifyImplementation(
       {

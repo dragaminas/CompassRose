@@ -124,18 +124,12 @@ limits:
   max_tasks_per_run: 50
   max_retries_per_task: 1
   max_review_iterations: 1
-  max_recovery_iterations: 3
   stop_on_quality_gate_failure: true
   stop_on_review_failure: true
-  # Optional; unlike every field above, omitting it means unbounded. max_recovery_iterations
-  # bounds attempts against the SAME blocker signature and resets on genuine forward progress;
-  # this bounds the sum of every doctor-recovery cycle across the feature's entire life and
-  # never resets.
-  max_lifetime_recovery_cycles: 10
-  # Optional; unlike every field above except max_lifetime_recovery_cycles, omitting it means
-  # unbounded. max_tasks_per_run only counts primary task completions; this bounds every
-  # structured AI call in a `--loop` run -- planning, review, doctor recovery, classification
-  # ensembles, all of it -- checked once per step, centrally, rather than at each call site.
+  # Optional; unlike every field above, omitting it means unbounded. max_tasks_per_run only
+  # counts primary task completions; this bounds every structured AI call in a `--loop` run --
+  # planning, review, classification ensembles, all of it -- checked once per step, centrally,
+  # rather than at each call site.
   max_ai_calls_per_run: 200
 
 platform:

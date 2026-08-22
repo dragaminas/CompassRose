@@ -102,7 +102,6 @@ export type PlannerLifecycleState =
   | "review_pending"
   | "review_failed"
   | "correction_pending"
-  | "unblock_pending"
   | "blocked"
   | "completed";
 
@@ -143,18 +142,15 @@ export interface PlannerBlockedFromState {
   readonly lifecycle_state: string | "none";
   readonly active_task: string | "none";
   readonly active_correction_task: string | "none";
-  readonly active_unblock_task: string | "none";
 }
 
 export interface PlannerOperationalStatus {
   readonly formalization: PlannerResultStatus;
   readonly active_task: string | "none";
   readonly active_correction_task: string | "none";
-  readonly active_unblock_task: string | "none";
   readonly last_implementation_result: PlannerAttemptResult;
   readonly last_quality_gate_result: "unknown" | "passed" | "failed" | "skipped";
   readonly last_review_result: PlannerReviewResult;
-  readonly last_unblock_result: "not_run" | "passed" | "failed" | "skipped";
 }
 
 export interface PlannerStateContext {

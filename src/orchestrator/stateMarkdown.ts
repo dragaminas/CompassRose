@@ -21,14 +21,20 @@ export function replaceOperationalStatus(markdown: string, overrides: Partial<Re
     validation: 'confirmed',
     active_task: 'none',
     active_correction_task: 'none',
-    active_unblock_task: 'none',
     last_implementation_result: 'not_run',
     last_quality_gate_result: 'unknown',
     last_review_result: 'not_run',
-    last_unblock_result: 'not_run',
-    doctor_recovery_attempts: '0',
-    doctor_recovery_lifetime_count: '0',
   };
+
+  // Keys the automatic doctor-recovery pipeline owned, before 026-conversational-doctor-recovery
+  // replaced it with a conversation. Nothing reads or writes them any more, but this function
+  // carries every existing key forward by design, so without an explicit prune they would sit in
+  // every state.md for the life of the repository. Dropping them here migrates each document the
+  // first time the runtime touches it.
+  const retired = ['active_unblock_task', 'last_unblock_result', 'doctor_recovery_attempts', 'doctor_recovery_lifetime_count'];
+  for (const key of retired) {
+    delete values[key];
+  }
 
   for (const [key, value] of Object.entries(defaults)) {
     if (!(key in values)) {

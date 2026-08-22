@@ -63,7 +63,6 @@ describe('renderBlockerProfileMarkdown', () => {
         lifecycle_state: 'implementation_running',
         active_task: 'F001-T01',
         active_correction_task: 'none',
-        active_unblock_task: 'none',
       },
     });
 

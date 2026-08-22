@@ -13,11 +13,9 @@ implementation_running
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 - last_implementation_result: not_run
 - last_quality_gate_result: unknown
 - last_review_result: not_run
-- last_unblock_result: not_run
 - validation: confirmed
 
 ## Current Reality
@@ -78,7 +76,6 @@ runs inventory → conversation → human decision → `024-specification-flow`.
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

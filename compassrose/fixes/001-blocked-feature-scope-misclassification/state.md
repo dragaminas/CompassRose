@@ -13,11 +13,9 @@ completed
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
 - last_review_result: not_run
-- last_unblock_result: not_run
 - severity: medium
 - owning_feature: none
 
@@ -52,7 +50,6 @@ Implemented directly (see `docs/REFACTOR_PLAN.md` item 6): `buildBlockerProfile`
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

@@ -1,9 +1,7 @@
 import type { PlannedTask, TaskRequest } from '../contracts/planner/plannerContracts.js';
 import type {
   CorrectionTask,
-  DoctorRecoveryTaskMetadata,
   StateCorrectionTask,
-  UnblockTaskMetadata,
 } from '../contracts/task/taskContracts.js';
 import { humanCorrectionNumber, humanTaskNumber } from '../task/taskId.js';
 
@@ -240,35 +238,4 @@ export function renderStateCorrectionTaskMarkdown(stateCorrection: StateCorrecti
     `- restored_active_correction_task: \`${stateCorrection.state_target.restored_active_correction_task}\``,
     '',
   ].join('\n');
-}
-
-export function renderDoctorRecoveryTaskMarkdown(task: PlannedTask, doctorRecovery: DoctorRecoveryTaskMetadata): string {
-  return [
-    renderTaskMarkdown(task).trimEnd(),
-    '',
-    '## Doctor Recovery',
-    '',
-    `- executor_role: ${doctorRecovery.executor_role ?? 'doctor'}`,
-    `- review_policy: ${doctorRecovery.review_policy ?? 'no_review_loop'}`,
-    '',
-    '## Blocker Context',
-    '',
-    `- kind: ${doctorRecovery.blocker.kind}`,
-    `- signature: ${doctorRecovery.blocker.signature}`,
-    `- recoverability: ${doctorRecovery.blocker.recoverability}`,
-    `- observed_state: ${doctorRecovery.blocker.observed_state}`,
-    ...(doctorRecovery.blocker.evidence.length > 0 ? doctorRecovery.blocker.evidence.map((item) => `- evidence: ${item}`) : ['- evidence: none']),
-    '',
-    '## Restoration Target',
-    '',
-    `- lifecycle_state: ${doctorRecovery.restoration_target.lifecycle_state}`,
-    `- active_task: \`${doctorRecovery.restoration_target.active_task}\``,
-    `- active_correction_task: \`${doctorRecovery.restoration_target.active_correction_task}\``,
-    `- active_unblock_task: \`${doctorRecovery.restoration_target.active_unblock_task}\``,
-    '',
-  ].join('\n');
-}
-
-export function renderUnblockTaskMarkdown(task: PlannedTask, unblock: UnblockTaskMetadata): string {
-  return renderDoctorRecoveryTaskMarkdown(task, unblock);
 }

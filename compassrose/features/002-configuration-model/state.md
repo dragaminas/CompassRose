@@ -13,12 +13,9 @@ completed
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
 - last_review_result: approved
-- last_unblock_result: not_run
-- doctor_recovery_attempts: 0
 
 ## Current Reality
 
@@ -105,7 +102,6 @@ Every task request in this feature's Implementation Outline is now `complete`. T
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

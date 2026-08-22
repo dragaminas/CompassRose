@@ -10,12 +10,10 @@ import type {
   TaskTrace,
 } from '../contracts/task/workItem.js';
 import type {
-  DoctorRecoveryTaskMetadata,
   ParsedTaskDocument,
   ReviewableDiffHandoff,
   StateCorrectionTask,
   StoredTaskArtifact,
-  UnblockTaskMetadata,
 } from '../contracts/task/taskContracts.js';
 import { uniqueStrings } from '../shared/arrays.js';
 import {
@@ -31,7 +29,7 @@ import {
 } from '../markdown/sections.js';
 
 /**
- * Parses a task markdown document (regular task, correction task, doctor-recovery
+ * Parses a task markdown document (regular task, correction task,
  * task, or state-correction task) into the structured shape the runtime operates on.
  */
 export function parseTaskDocument(taskPath: string, markdown: string): ParsedTaskDocument {
@@ -75,7 +73,6 @@ export function parseTaskDocument(taskPath: string, markdown: string): ParsedTas
     expectedDeliverables,
     markdown,
   );
-  const doctorRecovery = parseDoctorRecoveryTaskMetadataFromDocument(markdown);
   const reviewableDiffHandoff = inferReviewableDiffHandoff(markdown, constraints, acceptanceCriteria, qualityGates);
 
   return {
@@ -97,8 +94,6 @@ export function parseTaskDocument(taskPath: string, markdown: string): ParsedTas
     context,
     expectedDeliverables,
     stateCorrection,
-    doctorRecovery,
-    unblock: doctorRecovery,
     reviewableDiffHandoff,
     path: taskPath,
   };
@@ -133,8 +128,6 @@ export function storedTaskArtifactFromDocument(taskPath: string, markdown: strin
       expected_deliverables: parsed.expectedDeliverables,
     },
     ...(parsed.stateCorrection ? { state_correction: parsed.stateCorrection } : {}),
-    ...(parsed.doctorRecovery ? { doctor_recovery: parsed.doctorRecovery } : {}),
-    ...(parsed.unblock ? { unblock: parsed.unblock } : {}),
   };
 }
 
@@ -261,47 +254,6 @@ function parseStateCorrectionTaskFromDocument(
     acceptance_criteria: acceptanceCriteria,
     expected_deliverables: expectedDeliverables.includes('documentation') ? ['documentation'] : ['documentation'],
   };
-}
-
-function parseDoctorRecoveryTaskMetadataFromDocument(markdown: string): DoctorRecoveryTaskMetadata | null {
-  const doctorRecoverySection = optionalSection(markdown, 'Doctor Recovery');
-  const blockerSection = optionalSection(markdown, 'Blocker Context');
-  const restorationSection = optionalSection(markdown, 'Restoration Target');
-  if (!blockerSection || !restorationSection) {
-    return null;
-  }
-
-  const doctorRecoveryMap = doctorRecoverySection ? parseStatusMap(doctorRecoverySection) : {};
-  const blockerMap = parseStatusMap(blockerSection);
-  const restorationMap = parseStatusMap(restorationSection);
-  const evidence = (parseBulletSection(blockerSection) ?? [])
-    .filter((item) => item.startsWith('evidence:'))
-    .map((item) => item.slice('evidence:'.length).trim())
-    .filter((item) => item.length > 0 && item !== 'none');
-
-  return {
-    blocker: {
-      kind: parseBlockerKindValue(blockerMap.kind),
-      signature: blockerMap.signature ?? 'unknown',
-      evidence,
-      recoverability: parseBlockerRecoverabilityValue(blockerMap.recoverability),
-      observed_state: blockerMap.observed_state ?? 'unknown',
-    },
-    restoration_target: {
-      lifecycle_state: stripTicks(restorationMap.lifecycle_state ?? 'none'),
-      active_task: stripTicks(restorationMap.active_task ?? 'none'),
-      active_correction_task: stripTicks(restorationMap.active_correction_task ?? 'none'),
-      active_unblock_task: stripTicks(restorationMap.active_unblock_task ?? 'none'),
-    },
-    executor_role: stripTicks(doctorRecoveryMap.executor_role ?? 'doctor') === 'doctor' ? 'doctor' : 'doctor',
-    review_policy: stripTicks(doctorRecoveryMap.review_policy ?? 'no_review_loop') === 'no_review_loop' ? 'no_review_loop' : 'no_review_loop',
-  };
-}
-
-// The unblock and doctor-recovery task shapes are identical; an "unblock" task is simply how a
-// doctor-recovery task reads before the runtime's own vocabulary settled on "doctor recovery".
-export function parseUnblockTaskMetadataFromDocument(markdown: string): UnblockTaskMetadata | null {
-  return parseDoctorRecoveryTaskMetadataFromDocument(markdown);
 }
 
 function isExpectedDeliverable(value: string): value is ExpectedDeliverable {

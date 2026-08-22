@@ -57,7 +57,6 @@ export function renderBlockerProfileMarkdown(profile: {
     `- lifecycle_state: ${profile.restoration_target.lifecycle_state}`,
     `- active_task: \`${profile.restoration_target.active_task}\``,
     `- active_correction_task: \`${profile.restoration_target.active_correction_task}\``,
-    `- active_unblock_task: \`${profile.restoration_target.active_unblock_task}\``,
     '',
   ].join('\n');
 }

@@ -13,11 +13,9 @@ implementation_running
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
 - last_review_result: not_run
-- last_unblock_result: not_run
 - validation: confirmed
 
 ## Current Reality
@@ -88,7 +86,6 @@ real change with its own design, not a detail of this one. Tracked as a remainin
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

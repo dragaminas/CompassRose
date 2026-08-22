@@ -37,7 +37,7 @@ export interface FeatureRecord {
 
 /**
  * Unified view of "whatever owns this task" — a feature or a fix — used by the generic
- * execution machinery (implementation, review, blockers, doctor recovery) so it doesn't need
+ * execution machinery (implementation, review, blockers) so it doesn't need
  * to branch on which kind of work item it's handling. `architecturePath` is null for fixes,
  * since a fix has no architecture.md.
  */
@@ -79,7 +79,6 @@ export type WorkItemInspectionKind =
   | 'awaiting_validation'
   | 'task_planning_pending'
   | 'task_ready'
-  | 'unblock_pending'
   | 'implementation_running'
   | 'quality_gates_pending'
   | 'review_pending'

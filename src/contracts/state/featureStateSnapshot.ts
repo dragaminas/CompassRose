@@ -10,7 +10,6 @@ export interface FeatureStateSnapshot {
   readonly lifecycleState: string;
   readonly activeTask: string;
   readonly activeCorrectionTask: string;
-  readonly activeUnblockTask: string;
   readonly blockedBy: readonly string[];
   readonly blockedFrom: RestorationTarget | null;
   /**

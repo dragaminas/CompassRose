@@ -13,11 +13,9 @@ implementation_running
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 - last_implementation_result: not_run
 - last_quality_gate_result: unknown
 - last_review_result: not_run
-- last_unblock_result: not_run
 - validation: confirmed
 
 ## Current Reality
@@ -77,7 +75,6 @@ being alive and holding the shell as its child — makes `taskkill /T` reach the
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

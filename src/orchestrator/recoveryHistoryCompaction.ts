@@ -3,10 +3,10 @@ import { uniqueStrings } from '../shared/arrays.js';
 
 /**
  * "Recovery History" is not written by any deterministic code path (see ADR-0037) -- each
- * doctor-recovery task's own planner-generated instructions tell the executing AI to append a
+ * recovery task's own planner-generated instructions told the executing AI to append a
  * new entry while preserving every prior one verbatim, so the section only ever grows. Because a
  * feature's own state.md (and compassrose/PROJECT_STATE.md) is listed as "Read only" context
- * on every future doctor-recovery planning and execution prompt, that unbounded growth becomes
+ * on every future planning, implementation, and review prompt, that unbounded growth becomes
  * real, paid context on every subsequent recovery attempt for as long as the feature keeps
  * needing them -- exactly the accumulation ADR-0034 exists to prevent.
  */
@@ -31,7 +31,7 @@ export function compactRecoveryHistorySection(markdown: string): string {
   ).filter((id) => id.length > 0);
 
   const summary = recoveryTaskIds.length > 0
-    ? `- Compacted ${recoveryTaskIds.length} doctor recovery cycle(s) recorded before this point (${recoveryTaskIds.join(', ')}). Full detail: \`.git/proto-compassrose/blockers/\`, \`.git/proto-compassrose/recovery-lessons/\`, and git history.`
+    ? `- Compacted ${recoveryTaskIds.length} recovery cycle(s) recorded before this point (${recoveryTaskIds.join(', ')}). Full detail: \`.git/proto-compassrose/blockers/\`, \`.git/proto-compassrose/recovery-lessons/\`, and git history.`
     : '- Recovery history recorded before this point was compacted. Full detail: git history.';
 
   return replaceSection(markdown, 'Recovery History', summary);

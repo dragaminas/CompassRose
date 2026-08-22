@@ -13,14 +13,11 @@ completed
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 - severity: high
 - owning_feature: none
 - last_implementation_result: not_applicable
 - last_quality_gate_result: passed
 - last_review_result: superseded
-- last_unblock_result: not_run
-- doctor_recovery_attempts: 0
 
 ## Current Reality
 
@@ -86,7 +83,6 @@ If this is a long-running test, pass a timeout value as the last argument or con
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

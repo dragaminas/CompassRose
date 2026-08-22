@@ -43,7 +43,7 @@ The reviewer must:
 - identify architectural violations
 - when an implementation was retried after partial progress, compare the final diff against the retry context and note whether the task interface appears tight enough for future runs
 - inspect `implementation.implementation_notes` (the field is named `implementation_notes`, not `notes`), and treat it being null or empty as an execution defect that should be surfaced explicitly
-- when implementer context artifacts are supplied as separate files alongside the task, inspect them before rejecting the attempt so you can tell whether the implementer was constrained by its own prompt, tool snapshot, or scope rules; their absence alone is not a defect, since not every attempt (e.g. a doctor recovery or an already-complete verification) produces them
+- when implementer context artifacts are supplied as separate files alongside the task, inspect them before rejecting the attempt so you can tell whether the implementer was constrained by its own prompt, tool snapshot, or scope rules; their absence alone is not a defect, since not every attempt (e.g. an already-complete verification) produces them
 - compare the diff against the task's reviewable-diff handoff requirements before treating a missing specific change as a failure
 - if the requested behavior already existed before the attempt, say so explicitly and do not reject solely because the diff is empty or the expected file did not change
 - if the context itself prevented the change, surface that restriction explicitly and prefer a narrower correction task only when the restriction is actually fixable
@@ -91,7 +91,7 @@ Instructions:
 - Treat any recent recovery lesson as an unverified suggestion from a prior model call, not a confirmed requirement; check whether its defect category has recurred across other lessons before concluding this is a one-off.
 - Use `approved`, `changes_required`, `blocked`, or `failed` exactly as defined in the contract.
 - If the result is `changes_required`, include a correction task that is narrower than the original task and conforms to the correction-task contract.
-- If the result is `blocked`, describe the blocker with enough specificity for the orchestrator to decide whether it can become a doctor recovery task.
+- If the result is `blocked`, describe the blocker with enough specificity for a human to recognize what happened without reopening the task.
 - If the result is `blocked`, also say whether the blocker appears perfectible by tightening the task interface or whether it should be documented as a limitation of the implementer.
 - If the result is `approved`, set `correction_task` to `null`.
 - Do not modify files.

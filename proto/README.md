@@ -23,7 +23,6 @@ the resulting files and exit codes.
 ```bash
 npm run proto:e2e              # standard scenario
 npm run proto:e2e:codex        # standard scenario, codex as the implementer
-npm run proto:e2e:unblock      # PROTO_E2E_SCENARIO=unblock
 npm run proto:smoke
 npm run proto:typecheck
 ```
@@ -35,8 +34,14 @@ PROTO_E2E_SCENARIO=recoverable-review-blocked npm run proto:e2e
 ```
 
 Available scenarios (see `protoCompassRose.e2e.ts` for the full list and what each one
-seeds): `standard`, `unblock`, `recoverable-review-blocked`, `terminal-review-blocked`,
-`interface-gap`, `state-correction-missing-active-task`, `unblock-doc-code-mismatch`.
+seeds): `standard`, `recoverable-review-blocked`, `terminal-review-blocked`,
+`interface-gap`, `state-correction-missing-active-task`, `implementation-failed-recovery`,
+`implementation-notes`, `implementation-missing-notes`, `implementation-retry`.
+
+The `unblock` and `unblock-doc-code-mismatch` scenarios were retired with the automatic
+doctor-recovery pipeline they exercised (026-conversational-doctor-recovery). What replaced
+them is asserted by `recoverable-review-blocked` and `implementation-failed-recovery`, which
+now check that no recovery task is planned at all.
 
 Useful env vars: `PROTO_E2E_IMPLEMENTER` (`codex`|`opencode`), `PROTO_E2E_COMMIT=1`.
 

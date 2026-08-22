@@ -158,11 +158,9 @@ task_ready
 - formalization: complete
 - active_task: F002-T04
 - active_correction_task: none
-- active_unblock_task: none
 - last_implementation_result: not_run
 - last_quality_gate_result: unknown
 - last_review_result: not_run
-- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -190,7 +188,6 @@ The configuration loader task is ready to execute.
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

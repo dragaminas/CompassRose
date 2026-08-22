@@ -25,7 +25,6 @@ export function preferredRestorationTarget(snapshot: FeatureStateSnapshot): Rest
     lifecycle_state: forwardRestorationLifecycleState(snapshot.lifecycleState),
     active_task: snapshot.activeTask,
     active_correction_task: snapshot.activeCorrectionTask,
-    active_unblock_task: snapshot.activeUnblockTask,
   };
 }
 
@@ -64,7 +63,7 @@ export function resolveImplementationFailureActiveTask(
 export function restorationTargetNextPlanningHint(
   restorationTarget: RestorationTarget,
   activeTaskId: string,
-  activeTaskLabel: 'state_correction' | 'doctor' | 'unblock' | 'task' = 'task',
+  activeTaskLabel: 'state_correction' | 'task' = 'task',
 ): string {
   switch (restorationTarget.lifecycle_state) {
     case 'task_ready':
@@ -76,11 +75,7 @@ export function restorationTargetNextPlanningHint(
     case 'formalized':
       return 'Plan the next task that advances this feature from the remaining gap.';
     case 'correction_pending':
-      return activeTaskLabel === 'doctor' || activeTaskLabel === 'unblock'
-        ? `Execute doctor recovery task \`${activeTaskId}\` next.`
-        : `Execute correction task \`${activeTaskId}\` next.`;
-    case 'unblock_pending':
-      return `Execute doctor recovery task \`${activeTaskId}\` next.`;
+      return `Execute correction task \`${activeTaskId}\` next.`;
     default:
       return `Continue from the repaired \`${restorationTarget.lifecycle_state}\` state for \`${activeTaskId}\`.`;
   }
@@ -89,7 +84,7 @@ export function restorationTargetNextPlanningHint(
 export function restorationTargetProjectPendingLines(
   restorationTarget: RestorationTarget,
   activeTaskId: string,
-  activeTaskLabel: 'state_correction' | 'doctor' | 'unblock' | 'task' = 'task',
+  activeTaskLabel: 'state_correction' | 'task' = 'task',
 ): string[] {
   switch (restorationTarget.lifecycle_state) {
     case 'task_ready':
@@ -113,18 +108,8 @@ export function restorationTargetProjectPendingLines(
         'Continue updating this file with approved repository facts as feature work lands.',
       ];
     case 'correction_pending':
-      return activeTaskLabel === 'doctor' || activeTaskLabel === 'unblock'
-        ? [
-            `Execute doctor recovery task \`${activeTaskId}\` for the active feature.`,
-            'Continue updating this file with approved repository facts as feature work lands.',
-          ]
-        : [
-            `Execute correction task \`${activeTaskId}\` for the active feature.`,
-            'Continue updating this file with approved repository facts as feature work lands.',
-          ];
-    case 'unblock_pending':
       return [
-        `Execute doctor recovery task \`${activeTaskId}\` for the active feature.`,
+        `Execute correction task \`${activeTaskId}\` for the active feature.`,
         'Continue updating this file with approved repository facts as feature work lands.',
       ];
     default:
@@ -140,7 +125,6 @@ export function stateCorrectionNextPlanningHint(stateCorrection: StateCorrection
     lifecycle_state: stateCorrection.state_target.restored_lifecycle_state,
     active_task: stateCorrection.state_target.restored_active_task,
     active_correction_task: stateCorrection.state_target.restored_active_correction_task,
-    active_unblock_task: 'none',
   }, stateCorrection.task_id, 'state_correction');
 }
 
@@ -149,6 +133,5 @@ export function stateCorrectionProjectPendingLines(stateCorrection: StateCorrect
     lifecycle_state: stateCorrection.state_target.restored_lifecycle_state,
     active_task: stateCorrection.state_target.restored_active_task,
     active_correction_task: stateCorrection.state_target.restored_active_correction_task,
-    active_unblock_task: 'none',
   }, stateCorrection.task_id, 'state_correction');
 }

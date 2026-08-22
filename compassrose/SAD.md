@@ -555,7 +555,7 @@ CLI flags should override project config.
 
 ---
 
-## 5.13 Diagnostic/Autocorrection and Doctor Recovery Subsystem
+## 5.13 Diagnostic/Autocorrection Subsystem
 
 Not present in earlier revisions of this document, though it makes up the majority of this
 project's actual runtime complexity as of this writing -- added per ADR-0003 (Documentation as
@@ -568,44 +568,50 @@ deterministic-first:
 
 - **Blocker classification.** Every blocked/failed result is classified into a closed `BlockerKind`
   taxonomy (`state_corruption`, `task_interface_gap`, `cli_mismatch`, `environment`,
-  `implementation_failure`, `review_failure`, `unknown`) and a `recoverability` tier (`auto`,
+  `implementation_failure`, `review_failure`, `smoke_failure`, `unknown`) and a `recoverability` tier (`auto`,
   `agent`, `human`, `terminal`). Whenever a call site already knows the cause (e.g. a structured
   implementation diagnostic, an objective quality-gate result, or a deterministic scope check), the
   kind is read directly from that fact rather than reconstructed by matching keywords in free text.
   Free-text classification remains the fallback only for calls with no structured signal to read.
-- **Bounded recovery.** A blocked feature is either corrected deterministically (`correct_state`,
-  for stale/malformed state documents) or handed to a doctor-recovery task (`plan_doctor_recovery`,
-  a bounded task confined to the feature's own frame) or escalated to a new tracked fix
-  (`file_blocking_fix`, for defects outside that frame entirely). Each of these bounded operations
-  has its own configured iteration limit, enforced *before* any planner call is spent, and every
-  limit-exceeded error routes through one shared handler that converts it into a clean stop instead
-  of an uncaught crash.
-- **Two independent recovery budgets.** A per-blocker-signature counter resets once a feature makes
-  genuine forward progress past its *current* blocker. A separate, never-reset lifetime counter
-  bounds the *sum* of every recovery cycle a feature accumulates across its entire life, so a
-  feature that keeps hitting new, different blockers cannot accumulate unlimited total recoveries
-  just because each individual blocker eventually clears.
+- **Three outcomes, and none of them is an automatic repair.** A blocked feature is either
+  corrected deterministically (`correct_state`, for stale/malformed state documents), or escalated
+  to a new tracked fix (`file_blocking_fix`, for defects outside its own frame entirely), or set
+  aside for a recovery conversation with a person (`block_for_conversation`). The run carries on in
+  the last two cases rather than grinding on the blocked item. `correct_state` has its own
+  configured iteration limit, enforced *before* any planner call is spent, and its limit-exceeded
+  error routes through one shared handler that converts it into a clean stop instead of an uncaught
+  crash.
+- **Why there is no fourth outcome.** An earlier revision had one: a bounded "doctor recovery" task,
+  planned and executed by an agent, chaining into another when it failed. Feature
+  `003-doctor-command` accumulated nine of them without ever unblocking, and not one asked a person
+  anything. Every ceiling built over that mechanism (two independent recovery budgets, a shared
+  limit handler, a reset rule) bounded how long it would fail for, never whether it could succeed.
+  It was deleted; ADR-0047 records why, and `compassrose/features/026-conversational-doctor-recovery/`
+  specifies what replaced it.
 - **A run-wide AI call budget.** A single counter, incremented at the same recording choke point
   every structured AI call already passes through (5.6), is checked centrally once per step, before
   any feature or fix is even inspected -- bounding total AI spend for an entire `--loop` invocation,
   not just primary task completions.
 - **Cross-checked consequential decisions.** The two most consequential single-AI-vote decisions in
-  this subsystem -- whether to file a new tracked fix instead of a bounded recovery, and whether to
-  trust an approval that gates whether a diff lands -- are not trusted from a single response.
+  this subsystem -- whether to file a new tracked fix instead of handing the blocker to a person,
+  and whether to trust an approval that gates whether a diff lands -- are not trusted from a single
+  response.
   Filing a fix is cross-checked by firing the choice itself (never the fix's own free-text payload)
   as several independent, fresh-context votes and requiring unanimous agreement before acting,
   escalating to a safe stop on disagreement. A review's approval is checked deterministically
   against the quality-gate facts the orchestrator already computed itself, since the reviewer's
   relay of an already-known fact has exactly one legitimate value by the time review runs.
 - **Bounded historical narration.** A feature's own recovery narrative is read back as live context
-  on every subsequent recovery attempt for that feature. Once accumulated narration is no longer
-  live troubleshooting context, it is compacted into a single summary naming the recovery task ids
-  it covers, with full detail left to git history and the Artifact Store rather than duplicated in
-  the document.
+  on every subsequent planning, implementation, and review call for that feature. Once accumulated
+  narration is no longer live troubleshooting context, it is compacted into a single summary naming
+  the task ids it covers, with full detail left to git history and the Artifact Store rather than
+  duplicated in the document.
 
-See `docs/ADR.md` (ADR-0031 through ADR-0041) for the specific decisions this subsystem
-implements, each closing a concrete defect found by auditing this project's own real recovery
-incidents while developing itself (ADR-0022, Self-Hosting Documentation Model).
+See `compassrose/ADR.md` (ADR-0031 through ADR-0041, and ADR-0047) for the specific decisions this
+subsystem implements, each closing a concrete defect found by auditing this project's own real
+recovery incidents while developing itself (ADR-0022, Self-Hosting Documentation Model). ADR-0047
+is the one that withdraws rather than adds: it records that most of ADR-0031 through ADR-0041 were
+ceilings over a mechanism that should not have existed.
 
 ---
 

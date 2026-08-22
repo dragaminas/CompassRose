@@ -8,9 +8,9 @@ This role is model-agnostic, not tied to any specific implementation. The runtim
 
 It reads current implementation artifacts, feature and project documentation, and the latest run data; compares them for drift; and chooses the smallest safe recovery action.
 
-If docs or state are broken, it selects `correct_state` so the runtime applies the repair directly; if the blocker requires bounded repository recovery, it selects `plan_doctor_recovery`.
+If docs or state are broken, it selects `correct_state` so the runtime applies the repair directly; if the blocker needs something only a person can supply, it selects `block_for_conversation`.
 
-Most of this decision is deterministic and never consults a model. The one exception: when a `quality_failed`, `review_failed`, or `blocked` rejection cannot be resolved deterministically into `plan_doctor_recovery` (the point where the runtime would otherwise stop the whole run), the runtime consults the configured agent/model exactly once, offering only `plan_doctor_recovery` or `file_blocking_fix` as valid answers, to judge whether the rejection is a bounded implementation/interface gap or a systemic defect outside the blocked work item's frame. Any malformed or untrusted response from that call falls back to the same `stop_with_diagnostic` halt the deterministic path would have produced anyway — never a worse outcome.
+Most of this decision is deterministic and never consults a model. The one exception: when a `quality_failed`, `review_failed`, or `blocked` rejection cannot be resolved deterministically into `block_for_conversation` (the point where the runtime would otherwise stop the whole run), the runtime consults the configured agent/model exactly once, offering only `block_for_conversation` or `file_blocking_fix` as valid answers, to judge whether the rejection is bounded to the blocked work item's own frame or a systemic defect outside it. Any malformed or untrusted response from that call falls back to the same `stop_with_diagnostic` halt the deterministic path would have produced anyway — never a worse outcome.
 
 TypeScript contract: `src/contracts/runtime/diagnosticAutocorrection.ts`.
 
@@ -24,7 +24,7 @@ Diagnostic Autocorrection must:
 - diagnose the current blocker from repository evidence
 - compare implementation reality against documented state and surface mismatches explicitly
 - decide whether deterministic state or documentation repair is enough and route it through `correct_state`
-- decide whether a bounded doctor recovery task should tighten the task interface or repair the stale recovery path
+- decide whether the blocker needs a person, and route it through `block_for_conversation`
 - stop with a diagnostic when the fix needs architectural review, human judgment, or a non-obvious tradeoff
 - distinguish a stale recovery interface from a fresh malformed state and call that out explicitly
 
@@ -56,24 +56,24 @@ Use only when:
 
 The runtime applies the repair directly and then resumes from the restored lifecycle state.
 
-### `plan_doctor_recovery`
+### `block_for_conversation`
 
 Use when:
 
-- the blocker is recoverable
-- a bounded doctor recovery task can remove the blocker
-- interface hardening, prompt tightening, contract cleanup, or repository-state synchronization should happen inside that doctor recovery task
-- the blocker is a stale recovery interface, obsolete task ID, mismatched restoration target, or missing prior-attempt evidence that must be preserved before the feature can resume
-- the recovery needs the `doctor` role because the smallest safe fix may touch docs, state, source, tests, or task interfaces together
-- if that interface gap means the task must be reissued, have the successor task point back to the earlier task with `previous_task_id` instead of deleting or rewriting history
-- if the issue is pure documentation or state drift, choose `correct_state` instead
+- the blocker is bounded to this work item's own frame, but nothing in the repository settles it
+- the missing piece is a decision, an intent, or a fact that exists only in a person's head
+- the blocker is a stale recovery interface, obsolete task ID, mismatched restoration target, or missing prior-attempt evidence, and it is not obvious which of those it is
 
-When this action is chosen:
+When this action is chosen, the runtime records the blocker on the work item, sets that item aside,
+and carries on with the rest of the run. The way back in is `/desbloquear <id>`: a diagnosis with
+two or three ordered hypotheses, each with the evidence supporting it, and the one question a
+person can answer that the repository cannot. See
+`compassrose/features/026-conversational-doctor-recovery/`.
 
-- plan exactly one bounded doctor recovery task
-- preserve blocker and lineage evidence
-- mark the recovery as `doctor` + `no_review_loop`
-- validate re-entry through doctor quality gates instead of a reviewer pass
+This deliberately replaced an automatic repair-task pipeline. That pipeline planned a bounded
+"doctor recovery" task, executed it, and chained into another when it failed; feature
+`003-doctor-command` accumulated nine of them without ever unblocking, and not one asked a person
+anything — while the information that would have resolved it existed only in a person's head.
 
 ### `stop_with_diagnostic`
 
@@ -83,20 +83,22 @@ Use when:
 - the best recovery path is not obvious
 - multiple materially different solutions exist and the orchestrator should not choose silently
 
+Unlike `block_for_conversation`, this halts the whole run rather than setting one item aside.
+
 ### `file_blocking_fix`
 
 The runtime only asks for this choice at the one point where deterministic classification
 already cannot resolve a `quality_failed`, `review_failed`, or `blocked` rejection into
-`plan_doctor_recovery` on its own (recoverability `terminal`/`human`, or no safe recovery anchor
+`block_for_conversation` on its own (recoverability `terminal`/`human`, or no safe recovery anchor
 found) — i.e. exactly where the runtime would otherwise stop the whole run. At that point, choose
 between exactly two outcomes:
 
-- `plan_doctor_recovery`, if the evidence actually shows a bounded task-interface gap the normal
-  doctor recovery task can tighten (prompt, scope, stale anchor, missing evidence) despite the
-  deterministic classifier not finding a safe anchor.
+- `block_for_conversation`, if the evidence shows a gap bounded to this work item that a person
+  could resolve by answering one question about it (prompt, scope, stale anchor, missing evidence),
+  despite the deterministic classifier not finding a safe anchor.
 - `file_blocking_fix`, if the evidence shows the defect is outside this task's frame entirely —
-  architectural, framework-level, or otherwise systemic — so no bounded recovery task confined to
-  this feature/fix could resolve it.
+  architectural, framework-level, or otherwise systemic — so no conversation confined to this
+  feature/fix could resolve it.
 
 When choosing `file_blocking_fix`, populate `systemic_blocker` with:
 
@@ -112,9 +114,9 @@ The runtime then files a new fix from these fields, blocks the origin feature/fi
 resumes other available work — it never halts the whole run for this outcome, unlike
 `stop_with_diagnostic`.
 
-Do not choose `file_blocking_fix` for anything `correct_state` or an ordinary
-`plan_doctor_recovery` task could resolve; reserve it for defects that would otherwise force the
-runtime to give up and stop with a diagnostic.
+Do not choose `file_blocking_fix` for anything `correct_state` or an ordinary recovery
+conversation could resolve; reserve it for defects that would otherwise force the runtime to give
+up and stop with a diagnostic.
 
 ---
 
@@ -124,6 +126,6 @@ If the blocker was caused by a weak task, prompt, adapter, or contract interface
 
 Stale recovery interfaces include obsolete task IDs, a restoration target that no longer matches the observed active task, or recovery artifacts that omit required implementation-failure evidence such as no diff or missing Implementation Notes.
 
-If that hardening can be applied safely through a bounded doctor recovery task, choose `plan_doctor_recovery`.
+If that hardening is bounded to this work item but needs a person to say which reading is right, choose `block_for_conversation`.
 
-If the hardening changes architecture or needs human validation, choose `stop_with_diagnostic`.
+If the hardening changes architecture or needs human validation of the architecture itself, choose `stop_with_diagnostic`.

@@ -721,7 +721,7 @@ Accepted
 
 ### Decision
 
-The choice between planning a bounded doctor recovery and filing a new systemic fix shall not be trusted from a single AI vote. It shall be cross-checked by the same deterministic ensemble mechanism as ADR-0036: independent, fresh-context votes on the choice itself, requiring unanimous agreement before either outcome is acted on, with disagreement escalating to a safe stop rather than trusting any single vote.
+The choice between resolving a blocker inside its own work item's frame and filing a new systemic fix shall not be trusted from a single AI vote. (Since ADR-0047 the first option is `block_for_conversation` — hand it to a person — rather than planning a repair task. The ensemble mechanism itself is unchanged.) It shall be cross-checked by the same deterministic ensemble mechanism as ADR-0036: independent, fresh-context votes on the choice itself, requiring unanimous agreement before either outcome is acted on, with disagreement escalating to a safe stop rather than trusting any single vote.
 
 The ensemble shall vote only on the choice itself, never on the free-text content of a systemic fix's own payload (title, evidence summary, scope note). Voting on free text would relocate the prose-guessing problem ADR-0031 exists to prevent, one level up, since independently-generated prose has no meaningful notion of "agreement" to check. Once the choice is confirmed by unanimous vote, a single further call may generate that payload; a response that contradicts the confirmed choice is treated as untrustworthy, never silently accepted over the ensemble's consensus.
 
@@ -753,7 +753,7 @@ Feature-Lifetime Doctor-Recovery Budget
 
 ### Status
 
-Accepted
+Superseded by ADR-0047
 
 ### Decision
 
@@ -762,6 +762,8 @@ The per-blocker-signature doctor-recovery counter (`doctor_recovery_attempts`, b
 A separate counter (`doctor_recovery_lifetime_count`) shall track every doctor-recovery cycle a feature accumulates across its entire life and shall never reset. It is bounded by an independent, optional configuration limit (`limits.max_lifetime_recovery_cycles`) that defaults to unbounded when omitted, so an existing project configuration is unaffected until it opts in.
 
 This is an instance of ADR-0034.
+
+**Superseded by ADR-0047.** Both counters, both limits, and the cycles they bounded are gone.
 
 ## ADR-0041
 
@@ -878,3 +880,25 @@ CompassRose's own documents shall live under one isolated root, `compassrose/`, 
 This also settles the fresh-bootstrap-vs-existing-project signal the not-yet-built "Flow 0" (`npm run setup`, SAD.md 5.3's Project Analyzer) needs: the bootstrap config path's existence is exactly that check.
 
 This is an instance of ADR-0034, applied to the tool's own footprint rather than a single bounded operation.
+
+## ADR-0047
+
+### Title
+
+A Blocker The Runtime Cannot Diagnose Deterministically Goes To A Person, Not To Another Agent
+
+### Status
+
+Accepted
+
+### Decision
+
+When deterministic diagnosis cannot resolve a blocker, the runtime shall record it, set that one work item aside, and carry on with the rest of the run. It shall not plan, execute, or chain an automatic repair task.
+
+The way back in is a conversation: two or three ordered hypotheses, each with the evidence supporting it, and the one discriminating question a person can answer that the repository cannot (`/desbloquear`, ADR-0007's rule that only a literal human action crosses a state gate).
+
+The evidence for this is direct. The replaced pipeline planned a bounded "doctor recovery" task, executed it, and chained into another when it failed. Feature `003-doctor-command` accumulated nine of them without ever unblocking. Not one asked a person anything, while the information that would have resolved it existed only in a person's head. Every ceiling added over that pipeline's life (ADR-0032's reset rule, ADR-0033's shared limit handler, ADR-0040's lifetime budget) bounded how long it would fail for, never whether it could succeed.
+
+The consequence for the bounded-retry machinery is narrow: ADR-0032 and ADR-0033 still hold, and still govern state correction, which remains a genuine deterministic repair. What is withdrawn is the assumption that an *agent* is the right recipient of a blocker no deterministic check could classify.
+
+This is an instance of ADR-0034 read one level up: bounding an operation's scope is not enough if the operation should not run at all.

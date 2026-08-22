@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { buildDoctorRecoveryPrompt, buildImplementerPrompt } from '../src/orchestrator/promptBuilding.js';
-import type { DoctorRecoveryTaskMetadata, ParsedTaskDocument } from '../src/contracts/task/taskContracts.js';
+import { buildImplementerPrompt } from '../src/orchestrator/promptBuilding.js';
+import type { ParsedTaskDocument } from '../src/contracts/task/taskContracts.js';
 
 function buildParsedTask(overrides: Partial<ParsedTaskDocument> = {}): ParsedTaskDocument {
   return {
@@ -87,35 +87,5 @@ describe('buildImplementerPrompt', () => {
   test('includes supplied recovery-lesson lines', () => {
     const prompt = buildImplementerPrompt(buildParsedTask(), false, null, ['- Avoid the same mistake as last time.']);
     expect(prompt).toContain('- Avoid the same mistake as last time.');
-  });
-});
-
-describe('buildDoctorRecoveryPrompt', () => {
-  function buildDoctorRecovery(): DoctorRecoveryTaskMetadata {
-    return {
-      executor_role: 'doctor',
-      review_policy: 'no_review_loop',
-      blocker: {
-        kind: 'implementation_failure',
-        signature: 'implementation-failure-F001-T01',
-        recoverability: 'agent',
-        observed_state: 'lifecycle=implementation_failed',
-        evidence: ['no diff was produced'],
-      },
-      restoration_target: {
-        lifecycle_state: 'implementation_running',
-        active_task: 'F001-T01',
-        active_correction_task: 'none',
-        active_unblock_task: 'none',
-      },
-    };
-  }
-
-  test('describes the doctor recovery task and cites blocker evidence', () => {
-    const prompt = buildDoctorRecoveryPrompt(buildParsedTask(), buildDoctorRecovery());
-    expect(prompt).toContain('Execute doctor recovery task `F001-T01` for feature `001-widgets`.');
-    expect(prompt).toContain('- blocker_kind: implementation_failure');
-    expect(prompt).toContain('- blocker_evidence: no diff was produced');
-    expect(prompt).toContain('Do not run `git commit`');
   });
 });

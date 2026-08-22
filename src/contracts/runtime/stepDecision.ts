@@ -11,8 +11,6 @@ export type StepKind =
   | "plan_fix_task"
   | "plan_subtask"
   | "correct_state"
-  | "doctor_recovery_task"
-  | "unblock_task"
   | "diagnose_autocorrect"
   | "implement_task"
   | "implement_subtask"

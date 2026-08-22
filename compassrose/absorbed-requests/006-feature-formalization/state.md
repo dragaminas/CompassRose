@@ -13,11 +13,9 @@ formalized
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 - last_implementation_result: not_run
 - last_quality_gate_result: unknown
 - last_review_result: not_run
-- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -55,7 +53,6 @@ Feature `006-feature-formalization` is now itself formalized under the canonical
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

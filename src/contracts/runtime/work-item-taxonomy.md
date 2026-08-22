@@ -104,14 +104,6 @@ A documentation and state repair task used when repository state is malformed.
 
 It restores canonical state without reopening feature planning.
 
-### doctor recovery task
-
-A bounded recovery task used when the repository is blocked or a failed attempt can be safely repaired.
-
-It is not a feature-planning task.
-
-It may touch docs, state, source, or tests only as needed for deterministic re-entry.
-
 ---
 
 ## Rules
@@ -119,7 +111,7 @@ It may touch docs, state, source, or tests only as needed for deterministic re-e
 - `request`/`fix request` and the work-item outline (a feature's or a fix's) are user-visible planning intent.
 - `task` is the only canonical executable planning unit.
 - `subtask` and `attempt` are execution iterations, not planning units.
-- `correction task`, `state correction task`, and `doctor recovery task` are temporary recovery artifacts.
+- `correction task` and `state correction task` are temporary recovery artifacts. There is no third kind: when the runtime cannot repair a blocker deterministically, it does not plan a task at all -- it blocks the work item for a conversation with a human (026-conversational-doctor-recovery).
 - CompassRose must not treat a work-item outline as a long-lived executable task list.
 - A visible work-item outline may show the intended number of implementation steps, but the runtime still generates only the next executable task.
 - A task request is a binding boundary for the next executable task, not a task itself: it constrains what task planning may propose, but the runtime still elaborates and dispatches exactly one task at a time, deterministically selected as the next task request that isn't already `complete`/`superseded`.

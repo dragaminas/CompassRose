@@ -77,8 +77,8 @@ function main(): number {
   pinScenarioConfigLimits(cloneRoot);
   // Real, still-unformalized fixes committed in this repo's own compassrose/fixes now default to
   // 'critical' severity (fail-safe upward -- see readFixSeverityAndOwnership) until formalized.
-  // Once the scenario's targeted feature stops being "continuing" (e.g. after a doctor recovery
-  // task completes), the scheduler would otherwise pick up a real fix the mocks below know
+  // Once the scenario's targeted feature stops being "continuing" (e.g. after its blocker is
+  // recorded), the scheduler would otherwise pick up a real fix the mocks below know
   // nothing about and crash. These scenarios never seed or assert on any fix, so the declared set
   // is empty -- remove real fixes from the disposable clone entirely (ADR-0034's same rule, with
   // an empty allow-list).
@@ -115,13 +115,7 @@ function main(): number {
   const binPath = join(repoRoot, 'node_modules', '.bin');
 
   seedTaskArtifacts(cloneRoot);
-  if (scenario === 'unblock') {
-    seedBlockedFeatureState(cloneRoot);
-  }
   if (scenario === 'implementation-failed-recovery') {
-    seedImplementationFailedFeatureState(cloneRoot);
-  }
-  if (scenario === 'unblock-doc-code-mismatch') {
     seedImplementationFailedFeatureState(cloneRoot);
   }
   if (scenario === 'state-correction-missing-active-task') {
@@ -129,9 +123,7 @@ function main(): number {
     seedStateCorrectionFallbackTaskArtifact(cloneRoot);
   }
   if (
-    scenario !== 'unblock' &&
     scenario !== 'implementation-failed-recovery' &&
-    scenario !== 'unblock-doc-code-mismatch' &&
     scenario !== 'state-correction-missing-active-task'
   ) {
     seedTaskReadyState(cloneRoot);
@@ -541,15 +533,6 @@ function buildScenarioChecks(input: {
     ];
   }
 
-  if (scenario === 'unblock') {
-    return [
-      { name: 'codex was called enough times to plan, execute doctor recovery, and review the restored task', ok: codexCalls >= 3 },
-      { name: 'opencode was called once for the restored task after doctor recovery', ok: opencodeCalls === 1 },
-      { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
-      { name: 'opencode touched the repo', ok: markerExists },
-    ];
-  }
-
   if (implementerTool === 'codex') {
     return [
       { name: 'codex was called enough times for implementer and reviewer under the deterministic loop', ok: codexCalls >= 2 },
@@ -590,10 +573,6 @@ function expectedProtoExitCodesForScenario(scenario: string): readonly number[] 
     return [3];
   }
 
-  if (scenario === 'unblock-doc-code-mismatch') {
-    return [0];
-  }
-
   if (scenario === 'implementation-missing-notes') {
     return [0, 1, 3];
   }
@@ -603,8 +582,6 @@ function expectedProtoExitCodesForScenario(scenario: string): readonly number[] 
 
 function markerFileNameForScenario(scenario: string): string {
   switch (scenario) {
-    case 'unblock':
-      return 'unblock-e2e.txt';
     case 'recoverable-review-blocked':
       return 'recoverable-review-blocked.txt';
     case 'terminal-review-blocked':
@@ -621,8 +598,6 @@ function markerFileNameForScenario(scenario: string): string {
       return 'implementation-notes.txt';
     case 'implementation-missing-notes':
       return 'implementation-missing-notes.txt';
-    case 'unblock-doc-code-mismatch':
-      return 'unblock-doc-code-mismatch.txt';
     default:
       return 'e2e-control.txt';
   }
@@ -749,11 +724,6 @@ function seedTaskArtifacts(cloneRoot: string): void {
   );
 }
 
-function seedBlockedFeatureState(cloneRoot: string): void {
-  const statePath = join(cloneRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
-  writeFileSync(statePath, BLOCKED_STATE_SEED, 'utf8');
-}
-
 function seedImplementationFailedFeatureState(cloneRoot: string): void {
   const statePath = join(cloneRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
   writeFileSync(statePath, IMPLEMENTATION_FAILED_STATE_SEED, 'utf8');
@@ -857,11 +827,9 @@ task_ready
 - formalization: complete
 - active_task: F002-T04
 - active_correction_task: none
-- active_unblock_task: none
 - last_implementation_result: not_run
 - last_quality_gate_result: unknown
 - last_review_result: not_run
-- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -889,7 +857,6 @@ The configuration loader task is ready to execute.
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 
@@ -985,60 +952,6 @@ process.exit(0);
 
 function sequenceForScenario(scenario) {
   switch (scenario) {
-    case 'unblock':
-      return [
-        () => plannerTask({
-          task_id: 'F002-T05-U1',
-          feature_id: '002-configuration-model',
-          title: 'Restore progress after a recoverable blocker',
-          objective: 'Use the blocked-from target in feature state so the feature can resume from task readiness through doctor recovery.',
-          first_executable_step: 'Open src/doctor/projectState.ts and tighten the blocked-from recovery path.',
-          minimum_progress_evidence: [
-            'src/doctor/projectState.ts records the recovery anchor for the blocked feature.',
-            'The doctor recovery task restores the feature to task_ready.',
-          ],
-          trace: {
-            roadmap_objective: 'Deterministic Orchestration',
-            feature_goal: 'Recover from a recoverable blocker without widening the feature scope.',
-            state_gap: 'The feature state needs an unblock path that can restore progress after a recoverable blocker.',
-          },
-          context: {
-            summary: 'The feature is blocked, but the blocked-from target is known.',
-            relevant_paths: [
-              'src/doctor/projectState.ts',
-              'src/cli/main.ts',
-              'src/config/configReader.ts',
-              'src/contracts/runtime/operation-loop.md',
-              'src/contracts/state/feature-state.md',
-            ],
-            relevant_modules: ['Feature state', 'Project state', 'Runtime operation loop'],
-          },
-          scope: {
-            allowed_paths: [
-              'src/doctor/projectState.ts',
-              'src/cli/main.ts',
-              'src/config/configReader.ts',
-            ],
-            forbidden_paths: [
-              'compassrose/features/002-configuration-model/state.md',
-              'compassrose/PROJECT_STATE.md',
-              'compassrose/CONFIG.md',
-            ],
-          },
-          constraints: [
-            'Keep the doctor recovery task narrowly focused on restoring progress from the blocked-from target.',
-            'Do not broaden the feature scope.',
-          ],
-          development_policy: { mode: 'test_guided' },
-          quality_gates: { before_review: ['git diff --check'] },
-          acceptance_criteria: [
-            'The blocked-from target is explicit and usable for restoration.',
-            'The doctor recovery task keeps the feature narrow and bounded.',
-          ],
-          expected_deliverables: ['code', 'tests'],
-        }),
-        () => approvedReview('F002-T05', 'prototype resumes the restored task after doctor recovery', 'e2e mock review approved the restored task after doctor recovery'),
-      ];
     case 'recoverable-review-blocked':
       return [
         () => blockedReview('F002-T04', 'recoverable blocker: the task needs a doctor recovery pass before review can proceed', 'The blocker is recoverable by planning a focused doctor recovery task.', 'passed'),
@@ -1149,61 +1062,6 @@ function sequenceForScenario(scenario) {
         }),
         (prompt) => approvedReview(extractTaskIdFromPrompt(prompt), 'prototype resumes the original task after implementation_failed recovery', 'e2e mock review approved the resumed implementation'),
         (prompt) => approvedReview(extractTaskIdFromPrompt(prompt), 'prototype resumes the original task after implementation_failed recovery', 'e2e mock review approved the resumed implementation'),
-      ];
-    case 'unblock-doc-code-mismatch':
-      return [
-        () => plannerTask({
-          task_id: 'F002-T05-U2',
-          feature_id: '002-configuration-model',
-          title: 'Repair the doctor recovery interface for mixed deliverables',
-          objective: 'Demonstrate that doctor recovery may carry documentation together with executable work when the recovery requires both.',
-          first_executable_step: 'Read src/contracts/planner/doctor-recovery-planning-prompt.md and confirm the deliverable policy.',
-          minimum_progress_evidence: [
-            'The doctor recovery planning contract allows mixed documentation and executable deliverables when recovery requires them.',
-            'The prototype accepts the doctor recovery task and re-enters the deterministic loop.',
-          ],
-          trace: {
-            roadmap_objective: 'Deterministic Orchestration',
-            feature_goal: 'Keep doctor recovery planning consistent with its broader recovery surface.',
-            state_gap: 'The recovery planning contract must allow documentation together with executable work when the recovery needs both.',
-          },
-          context: {
-            summary: 'The doctor recovery task may carry documentation and code together when that is the smallest safe recovery.',
-            relevant_paths: [
-              'src/contracts/planner/doctor-recovery-planning-prompt.md',
-              'src/contracts/planner/output.md',
-              'src/contracts/task/doctor-recovery-task.md',
-              'src/contracts/runtime/operation-loop.md',
-            ],
-            relevant_modules: ['Planner output contract', 'Doctor recovery task contract', 'Runtime operation loop'],
-          },
-          scope: {
-            allowed_paths: [
-              'src/contracts/planner/doctor-recovery-planning-prompt.md',
-              'src/contracts/planner/output.md',
-              'src/contracts/task/doctor-recovery-task.md',
-              'src/contracts/runtime/operation-loop.md',
-              'proto/unblock-doc-code-mismatch.txt',
-            ],
-            forbidden_paths: [
-              'src/cli/main.ts',
-              'src/config/configReader.ts',
-              'compassrose/PROJECT_STATE.md',
-            ],
-          },
-          constraints: [
-            'Keep the doctor recovery task bounded to the deliverable-policy mismatch.',
-            'Allow documentation only because this recovery explicitly needs contract and runtime changes together.',
-          ],
-          development_policy: { mode: 'test_guided' },
-          quality_gates: { before_review: ['git diff --check'] },
-          acceptance_criteria: [
-            'The doctor recovery contract and planner prompt agree on mixed recovery deliverables.',
-            'The doctor recovery task does not pretend to be source-only when documentation is part of the bounded recovery.',
-          ],
-          expected_deliverables: ['documentation', 'code'],
-        }),
-        (prompt) => approvedReview(extractTaskIdFromPrompt(prompt), 'prototype approves the mixed-deliverable doctor recovery task', 'e2e mock review approved the mixed-deliverable doctor recovery task'),
       ];
     case 'terminal-review-blocked':
       return [
@@ -1575,8 +1433,6 @@ function appendLog(filePath, line) {
 
 function markerFileNameForScenario(scenario) {
   switch (scenario) {
-    case 'unblock':
-      return 'unblock-e2e.txt';
     case 'recoverable-review-blocked':
       return 'recoverable-review-blocked.txt';
     case 'terminal-review-blocked':
@@ -1593,8 +1449,6 @@ function markerFileNameForScenario(scenario) {
       return 'implementation-notes.txt';
     case 'implementation-missing-notes':
       return 'implementation-missing-notes.txt';
-    case 'unblock-doc-code-mismatch':
-      return 'unblock-doc-code-mismatch.txt';
     default:
       return 'e2e-control.txt';
   }
@@ -1673,8 +1527,6 @@ process.exit(0);
 
 function markerFileNameForScenario(scenario) {
   switch (scenario) {
-    case 'unblock':
-      return 'unblock-e2e.txt';
     case 'recoverable-review-blocked':
       return 'recoverable-review-blocked.txt';
     case 'terminal-review-blocked':
@@ -1795,70 +1647,6 @@ const SEEDED_TASK = {
   },
 };
 
-const BLOCKED_STATE_SEED = `# State: Configuration Model
-
-## Lifecycle State
-
-blocked
-
-## Source Request
-
-\`request.md\`
-
-## Operational Status
-
-- formalization: complete
-- active_task: F002-T05
-- active_correction_task: none
-- active_unblock_task: none
-- last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: blocked
-- last_unblock_result: not_run
-
-## Current Reality
-
-The feature is temporarily blocked, but the suspension target is recorded so an unblock task can restore progress.
-
-## Implemented Deliverables
-
-- feature formalization exists
-
-## Remaining Deliverables
-
-- connect configuration validation to the broader runtime flow
-
-## Outline Progress
-
-- Formalize the configuration model in canonical feature documents: complete
-- Stabilize the project-local configuration contract and any gaps in \`compassrose/CONFIG.md\`: complete
-- Implement configuration loading and validation for the documented MVP scope: complete
-- Connect configuration validation to the doctor/runtime flow and update state based on approved behavior: complete
-
-## Blocked By
-
-- state: deterministic unblock path required
-
-## Blocked From
-
-- lifecycle_state: task_ready
-- active_task: F002-T05
-- active_correction_task: none
-- active_unblock_task: none
-
-## Last Approved Change
-
-Task \`F002-T05\` was approved before the blocker was introduced in the e2e scenario.
-
-## Known Gaps
-
-- The feature needs an unblock task before the active task can resume.
-
-## Next Planning Hint
-
-Execute an unblock task to restore the feature to task readiness.
-`;
-
 const IMPLEMENTATION_FAILED_STATE_SEED = `# State: Configuration Model
 
 ## Lifecycle State
@@ -1874,11 +1662,9 @@ implementation_failed
 - formalization: complete
 - active_task: F002-T04
 - active_correction_task: none
-- active_unblock_task: none
 - last_implementation_result: failed
 - last_quality_gate_result: unknown
 - last_review_result: not_run
-- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -1898,7 +1684,6 @@ The feature reached implementation_failed after an implementation attempt did no
 - lifecycle_state: task_ready
 - active_task: F002-T04
 - active_correction_task: none
-- active_unblock_task: none
 - recoverability: agent
 
 ## Last Approved Change
@@ -2019,7 +1804,6 @@ The typed configuration loader has now been approved. It validates and exposes \
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

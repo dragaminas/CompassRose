@@ -106,7 +106,7 @@ A correction task should be provided.
 ### blocked
 
 The task cannot proceed due to missing information, broken environment, external dependency, or architectural conflict.
-The orchestrator may use a blocked result to plan a doctor recovery task if the blocker is recoverable.
+The orchestrator uses a blocked result to set the work item aside for a recovery conversation with a human.
 The blocker description should be specific enough to decide whether the task interface can be tightened for future runs or whether the limitation should be documented explicitly.
 
 ### failed
@@ -115,7 +115,7 @@ The implementation attempt is invalid or unusable.
 
 The orchestrator persists this as lifecycle `review_failed` and runs diagnostic/autocorrection
 against it, exactly like a `blocked` result — it is not a silent dead end. Diagnostic/
-autocorrection may resolve it with a bounded doctor recovery task, or, if the evidence shows a
+autocorrection may block it for a recovery conversation, or, if the evidence shows a
 systemic defect outside this task's own frame, file a new blocking fix instead (see
 `src/contracts/runtime/diagnostic-autocorrection.md`).
 

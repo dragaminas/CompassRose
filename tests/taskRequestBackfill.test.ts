@@ -208,11 +208,9 @@ task_planning_pending
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
 - last_review_result: approved
-- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -240,7 +238,6 @@ The loader task is done; the wiring task has not been planned yet.
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

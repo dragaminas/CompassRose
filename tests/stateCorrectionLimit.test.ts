@@ -86,11 +86,9 @@ function featureStateFixture(input: {
     '- formalization: complete',
     `- active_task: ${input.activeTask}`,
     '- active_correction_task: none',
-    '- active_unblock_task: none',
     '- last_implementation_result: passed',
     '- last_quality_gate_result: failed',
     '- last_review_result: not_run',
-    '- last_unblock_result: not_run',
     '- validation: confirmed',
     '',
     '## Current Reality',
@@ -118,7 +116,6 @@ function featureStateFixture(input: {
     '- lifecycle_state: none',
     '- active_task: none',
     '- active_correction_task: none',
-    '- active_unblock_task: none',
     '',
     '## Last Approved Change',
     '',
@@ -359,7 +356,7 @@ describe('limitStateCorrectionTaskId', () => {
     }
   });
 
-  test('runDiagnosticAutocorrection() escalates to doctor recovery instead of re-proposing an exhausted correction', () => {
+  test('runDiagnosticAutocorrection() escalates to a recovery conversation instead of re-proposing an exhausted correction', () => {
     // Regression test: a state_corruption blocker whose anchor has already used up its
     // correction limit used to unconditionally get next_step: 'correct_state' again anyway, with
     // no check for whether correctState() would actually allow it. Since this whole decision path
@@ -397,7 +394,7 @@ describe('limitStateCorrectionTaskId', () => {
 
       const decision = runDiagnosticAutocorrection.call(orchestrator, owner, 'fixture reason');
 
-      expect(decision.next_step).toBe('plan_doctor_recovery');
+      expect(decision.next_step).toBe('block_for_conversation');
     } finally {
       workspace.dispose();
     }

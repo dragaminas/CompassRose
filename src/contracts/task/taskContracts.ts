@@ -17,7 +17,7 @@ import type { PlannedTask } from "../planner/plannerContracts.js";
  * Task execution and recovery contracts.
  *
  * This file groups the temporary artifacts that drive implementation, review,
- * correction, and doctor recovery.
+ * and correction.
  */
 export interface StateCorrectionTarget {
   readonly feature_state_path: string;
@@ -66,7 +66,6 @@ export interface RestorationTarget {
   readonly lifecycle_state: string;
   readonly active_task: string;
   readonly active_correction_task: string;
-  readonly active_unblock_task: string;
 }
 
 export interface BlockerProfile {
@@ -76,15 +75,6 @@ export interface BlockerProfile {
   readonly recoverability: BlockerRecoverability;
   readonly observed_state: string;
 }
-
-export interface UnblockTaskMetadata {
-  readonly blocker: BlockerProfile;
-  readonly restoration_target: RestorationTarget;
-  readonly executor_role?: "doctor";
-  readonly review_policy?: "no_review_loop";
-}
-
-export type DoctorRecoveryTaskMetadata = UnblockTaskMetadata;
 
 export interface ReviewableDiffHandoff {
   readonly requireLiveDiff: boolean;
@@ -111,8 +101,6 @@ export interface ParsedTaskDocument {
   readonly context: TaskContext;
   readonly expectedDeliverables: readonly ExpectedDeliverable[];
   readonly stateCorrection: StateCorrectionTask | null;
-  readonly doctorRecovery: DoctorRecoveryTaskMetadata | null;
-  readonly unblock: UnblockTaskMetadata | null;
   readonly reviewableDiffHandoff: ReviewableDiffHandoff;
   readonly path: string;
 }
@@ -120,6 +108,4 @@ export interface ParsedTaskDocument {
 export interface StoredTaskArtifact {
   readonly task: PlannedTask;
   readonly state_correction?: StateCorrectionTask;
-  readonly doctor_recovery?: DoctorRecoveryTaskMetadata;
-  readonly unblock?: UnblockTaskMetadata;
 }

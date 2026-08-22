@@ -15,7 +15,7 @@ In progress
 - Feature `023-terminal-session` is implemented and usable: `compassrose` with no arguments opens the interactive session, and the old no-argument behavior moved to `compassrose run`. Its live view has a documented limitation — no in-step interruption or animated progress, because `run()` is synchronous.
 - Feature `024-specification-flow`: the loop can no longer author a specification. Unspecified items are reported by name, the session surfaces them before anything else, and `compassrose/DIMENSIONS.md` holds the project's coverage. Structured decisions and specification provenance remain.
 - Feature `025-automated-development-loop`: a blocked work item is set aside instead of ending the run, runs can be targeted at one item, and the runtime can close a feature whose acceptance criteria it has verified. Commit batching and the structured run summary remain.
-- Feature `026-conversational-doctor-recovery`: automatic repair is no longer attempted at all; a blocker is diagnosed and handed to a human through `/desbloquear`. Deleting the now-unreachable pipeline remains.
+- Feature `026-conversational-doctor-recovery`: automatic repair is no longer attempted at all; a blocker is diagnosed and handed to a human through `/desbloquear`. The pipeline that used to attempt it is deleted, not merely unreachable — with the `unblock_pending` lifecycle state, four Operational Status fields, two config limits, and five contract documents that existed only to serve it. Recorded as ADR-0047, which supersedes ADR-0040. The `open_fix` exit and two turn bounds remain.
 - Feature `027-bounded-work-item-context`: context is a declared, measured manifest with a planning-time budget check. Planner and reviewer manifests, and the implementer recording what it read, remain.
 - Feature `028-project-understanding`: CompassRose reads a repository it has never seen, records every fact with its provenance, and a confirmed fact is never overwritten by a later detection. Gap inference remains.
 - Feature `029-runnable-application-gate`: a feature cannot close unless the application starts. Start-command proposal remains, and belongs to `028`.
@@ -48,12 +48,14 @@ documented success shape `CompassRose Doctor` / `Status: OK` — was satisfied.
 
 ## Known Gaps
 
-- No runtime code path transitions a feature from an exhausted outline to `completed`; both `002` and `003` were closed by hand. Feature `025-automated-development-loop` adds that path.
+- Nothing asserts that planner-output sanitization (`sanitizeAllowedPaths`, `validateQualityGateRefs`) is actually wired into the planners that call it. The only wiring test proved it through `planDoctorRecoveryTask` and went with that function; the helpers themselves stay covered. Recorded under `026`'s Remaining Deliverables.
+- `tests/smokeGate.test.ts` fails intermittently under full-suite parallel load — always in teardown (`ENOTEMPTY`/timeout on removing the scratch directory), never in isolation, and on a different test each time. A killed process tree on Windows does not always release its working directory before `rmSync` runs, even with `maxRetries`.
 - The provider-specific adapters in `src/agents/` (`codexCli.ts`, `openCodeCli.ts`) contradict absorbed request `010-generic-external-cli-adapter`, which explicitly excluded them. Feature `025-automated-development-loop` owns the reconciliation.
 - This repository's own e2e suite clones the current `HEAD`, so a feature or fix sitting in a non-terminal lifecycle state can make unrelated tests fail. The standing cause of that — feature `003` recorded as blocked, plus `tests/stateCorrectionLimit.test.ts` mutating the live repository on every run — is fixed; the harness's dependence on `HEAD` remains.
 
 ## Next Planning Hint
 
 Every feature from the specification round has working implementation; what remains is listed under
-each one's Remaining Deliverables. The largest single item is deleting the now-unreachable
-doctor-recovery code (`026`).
+each one's Remaining Deliverables. The next item is commit batching (`025`): one commit per approved
+task. It is also the transaction boundary `023`'s in-step interruption needs, since aborting a run
+is only safe where a commit boundary is.

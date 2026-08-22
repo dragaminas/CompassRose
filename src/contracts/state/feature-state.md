@@ -83,11 +83,9 @@ formalized
 - formalization: complete | not_started
 - active_task: none | <task-id>
 - active_correction_task: none | <correction-task-id>
-- active_unblock_task: none | <unblock-task-id>
 - last_implementation_result: not_run | passed | failed
 - last_quality_gate_result: unknown | passed | failed | skipped
 - last_review_result: not_run | approved | changes_required | blocked | failed | skipped
-- last_unblock_result: not_run | passed | failed | skipped
 
 ## Current Reality
 
@@ -114,7 +112,6 @@ formalized
 - lifecycle_state: none | <suspended-lifecycle-state>
 - active_task: none | <task-id>
 - active_correction_task: none | <correction-task-id>
-- active_unblock_task: none | <unblock-task-id>
 
 ## Last Approved Change
 
@@ -149,7 +146,6 @@ States recorded in `## Lifecycle State`:
 - `review_pending`
 - `review_failed`
 - `correction_pending`
-- `unblock_pending`
 - `blocked`
 - `completed`
 
@@ -187,7 +183,7 @@ A controlled stop does not convert the feature to `implementation_failed` or `bl
 
 ### implementation_failed
 
-The last implementation attempt failed and the runtime must either plan a bounded doctor recovery task that restores the recorded active task or require explicit recovery before continuing.
+The last implementation attempt failed. The runtime diagnoses it and either repairs the state deterministically or blocks the item for a recovery conversation with a human; it never plans an automatic repair task (see 026-conversational-doctor-recovery).
 
 ### quality_gates_pending
 
@@ -208,11 +204,6 @@ The review step failed to produce a valid result or reported an unrecoverable fa
 ### correction_pending
 
 A reviewer requested a bounded correction task, or the runtime generated a state repair task, and that correction task is now the active execution target.
-
-### unblock_pending
-
-This compatibility state records that a bounded doctor recovery task is now the active execution target.
-After the doctor quality gates pass, the runtime restores the captured lifecycle state and clears `active_unblock_task`.
 
 ### blocked
 
@@ -263,14 +254,9 @@ correction_pending
     -> implementation_running
     -> blocked
 
-unblock_pending
-    -> implementation_running
-    -> blocked
-
 implementation_failed
 quality_failed
 review_failed
-    -> unblock_pending
     -> blocked
     -> task_planning_pending
     -> correction_pending
@@ -279,7 +265,6 @@ blocked
     -> formalized
     -> task_planning_pending
     -> correction_pending
-    -> unblock_pending
 
 completed
     -> completed
@@ -299,7 +284,6 @@ The orchestrator must not invent transitions outside this contract.
 - `blocked` requires a suspended execution target under `## Blocked From`
 - `task_ready`, `implementation_running`, `quality_gates_pending`, `review_pending`, and `review_failed` require `active_task` to be set
 - `correction_pending` requires `active_correction_task` to be set
-- `unblock_pending` requires `active_unblock_task` to be set
 - `last_review_result: changes_required` must not coexist with `active_correction_task: none`
 - `lifecycle_state` is the primary transition key; descriptive sections must not contradict it
 
@@ -314,11 +298,10 @@ Recovery rules:
 - `implementation_running`: inspect execution artifacts and either resume the implementation step or transition explicitly to `implementation_failed` or `blocked`
 - `implementation_running`: inspect execution artifacts first; if the latest attempt left partial repository changes, retry the same active task once before deciding whether to stop
 - `operator-requested stop`: preserve the recorded lifecycle state and active task pointer; do not infer a failure transition from the interrupt alone
-- `implementation_failed`: inspect execution artifacts first; if the failed task can be recovered, plan a bounded doctor recovery task and transition to `unblock_pending`
+- `implementation_failed`: inspect execution artifacts first, then either repair the state deterministically or block for a recovery conversation
 - `quality_gates_pending`: re-run or resume quality gates instead of planning a new task
 - `review_pending`: re-run or resume review instead of planning a new task
 - `correction_pending`: continue with the recorded correction task instead of generating a broader replacement task
-- `unblock_pending`: continue with the recorded doctor recovery task instead of generating a broader replacement task
 - `blocked`: recover the blocker explicitly before generating new planning work
 
 CompassRose must prefer explicit recovery over silent state rewriting.

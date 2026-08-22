@@ -9,7 +9,7 @@ import { CompassRoseOrchestrator } from '../src/orchestrator/orchestrator.js';
 import { copyContractsIntoWorkspace, createTempWorkspace, readFixtureConfigMarkdown, type TempWorkspace } from './testUtils.js';
 
 // Covers consultDoctorOnSystemicBlocker()'s ensemble gate (see ADR-0038): the next_step choice
-// between plan_doctor_recovery and file_blocking_fix is cross-checked by
+// between block_for_conversation and file_blocking_fix is cross-checked by
 // BLOCKER_KIND_ENSEMBLE_SIZE independent votes before either outcome is trusted.
 
 const PROJECT_STATE_SEED = `# CompassRose Project State
@@ -79,7 +79,7 @@ function fixtureBlocker(): BlockerProfile {
   };
 }
 
-function fullDiagnosticPayload(nextStep: 'plan_doctor_recovery' | 'file_blocking_fix'): DiagnosticAutocorrectionDecision {
+function fullDiagnosticPayload(nextStep: 'block_for_conversation' | 'file_blocking_fix'): DiagnosticAutocorrectionDecision {
   return {
     feature_id: 'fixture-feature',
     diagnosis_summary: 'Detail call diagnosis.',
@@ -87,7 +87,7 @@ function fullDiagnosticPayload(nextStep: 'plan_doctor_recovery' | 'file_blocking
     next_step: nextStep,
     next_step_reason: 'Detail call reason.',
     interface_response: {
-      mode: nextStep === 'file_blocking_fix' ? 'manual_review' : 'apply_in_doctor_recovery',
+      mode: nextStep === 'file_blocking_fix' ? 'manual_review' : 'recovery_conversation',
       summary: 'Detail call interface summary.',
       target_paths: [],
     },
@@ -151,9 +151,9 @@ afterEach(() => {
 });
 
 describe('consultDoctorOnSystemicBlocker ensemble gate (ADR-0038)', () => {
-  test('constructs a plan_doctor_recovery decision deterministically when the ensemble unanimously agrees, with no detail call', () => {
+  test('constructs a block_for_conversation decision deterministically when the ensemble unanimously agrees, with no detail call', () => {
     workspace = createWorkspace('fixture-feature');
-    const mock = writeSequentialMock(workspace.root, [{ next_step: 'plan_doctor_recovery', rationale: 'vote' }]);
+    const mock = writeSequentialMock(workspace.root, [{ next_step: 'block_for_conversation', rationale: 'vote' }]);
     vi.stubEnv('PROTO_COMPASSROSE_CODEX_COMMAND', mock.command);
 
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
@@ -162,10 +162,10 @@ describe('consultDoctorOnSystemicBlocker ensemble gate (ADR-0038)', () => {
 
     const decision = access.consultDoctorOnSystemicBlocker(owner, fixtureBlocker(), 'fixture reason', null);
 
-    expect(decision.next_step).toBe('plan_doctor_recovery');
+    expect(decision.next_step).toBe('block_for_conversation');
     expect(decision.systemic_blocker).toBeNull();
     expect(decision.blocker).toEqual(fixtureBlocker());
-    // Exactly 3 calls (the ensemble) -- no 4th detail call needed for plan_doctor_recovery.
+    // Exactly 3 calls (the ensemble) -- no 4th detail call needed for block_for_conversation.
     expect(Number(require('node:fs').readFileSync(mock.countPath, 'utf8'))).toBe(3);
   });
 
@@ -194,7 +194,7 @@ describe('consultDoctorOnSystemicBlocker ensemble gate (ADR-0038)', () => {
     workspace = createWorkspace('fixture-feature');
     const mock = writeSequentialMock(workspace.root, [
       { next_step: 'file_blocking_fix', rationale: 'vote' },
-      { next_step: 'plan_doctor_recovery', rationale: 'vote' },
+      { next_step: 'block_for_conversation', rationale: 'vote' },
       { next_step: 'file_blocking_fix', rationale: 'vote' },
     ]);
     vi.stubEnv('PROTO_COMPASSROSE_CODEX_COMMAND', mock.command);
@@ -218,7 +218,7 @@ describe('consultDoctorOnSystemicBlocker ensemble gate (ADR-0038)', () => {
       { next_step: 'file_blocking_fix', rationale: 'vote' },
       { next_step: 'file_blocking_fix', rationale: 'vote' },
       { next_step: 'file_blocking_fix', rationale: 'vote' },
-      fullDiagnosticPayload('plan_doctor_recovery'),
+      fullDiagnosticPayload('block_for_conversation'),
     ]);
     vi.stubEnv('PROTO_COMPASSROSE_CODEX_COMMAND', mock.command);
 
@@ -239,7 +239,7 @@ describe('consultDoctorOnSystemicBlocker ensemble gate (ADR-0038)', () => {
     // back to exactly one single-call consultation, matching pre-ensemble behavior for that call.
     const mock = writeSequentialMock(workspace.root, [
       { next_step: 'not_a_real_value', rationale: 'malformed vote' },
-      fullDiagnosticPayload('plan_doctor_recovery'),
+      fullDiagnosticPayload('block_for_conversation'),
     ]);
     vi.stubEnv('PROTO_COMPASSROSE_CODEX_COMMAND', mock.command);
 
@@ -249,7 +249,7 @@ describe('consultDoctorOnSystemicBlocker ensemble gate (ADR-0038)', () => {
 
     const decision = access.consultDoctorOnSystemicBlocker(owner, fixtureBlocker(), 'fixture reason', null);
 
-    expect(decision.next_step).toBe('plan_doctor_recovery');
+    expect(decision.next_step).toBe('block_for_conversation');
     expect(decision.diagnosis_summary).toBe('Detail call diagnosis.');
     // Exactly 2 calls: the one malformed ensemble vote, then the single-call fallback.
     expect(Number(require('node:fs').readFileSync(mock.countPath, 'utf8'))).toBe(2);

@@ -26,7 +26,6 @@ describe('resolveImplementationFailureActiveTask', () => {
         lifecycle_state: 'task_ready',
         active_task: 'F002-T04-C2',
         active_correction_task: 'none',
-        active_unblock_task: 'none',
       },
     });
     expect(resolveImplementationFailureActiveTask(snapshot, () => null)).toBe('F002-T04-C2');
@@ -44,7 +43,6 @@ describe('resolveImplementationFailureActiveTask', () => {
         lifecycle_state: 'none',
         active_task: 'none',
         active_correction_task: 'none',
-        active_unblock_task: 'none',
       },
       blockedBy: [
         '- kind: implementation_failure',

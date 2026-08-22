@@ -50,7 +50,7 @@
       "type": "string",
       "enum": [
         "correct_state",
-        "plan_doctor_recovery",
+        "block_for_conversation",
         "stop_with_diagnostic",
         "file_blocking_fix"
       ]
@@ -67,7 +67,7 @@
       "properties": {
         "mode": {
           "type": "string",
-          "enum": ["none", "apply_in_doctor_recovery", "manual_review"]
+          "enum": ["none", "recovery_conversation", "manual_review"]
         },
         "summary": { "type": "string", "maxLength": 200 },
         "target_paths": {

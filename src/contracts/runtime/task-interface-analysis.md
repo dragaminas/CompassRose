@@ -31,4 +31,4 @@ Return JSON that conforms to `src/contracts/runtime/task-interface-analysis.sche
 - If satisfying the gap would require a mechanism the runtime does not implement, say so explicitly as a limitation instead of proposing one, so it does not get carried into a future task as if it already existed.
 - If the failure is mostly an implementer limitation, say so explicitly.
 - If both are true, record both.
-- Keep recommendations bounded enough to feed future doctor-recovery or correction planning. This output is downstream input for another model call, not a verified requirement — a later reader will not re-derive whether it is grounded, so grounding it here is your responsibility.
+- Keep recommendations bounded enough to feed future correction planning. This output is downstream input for another model call, not a verified requirement — a later reader will not re-derive whether it is grounded, so grounding it here is your responsibility.

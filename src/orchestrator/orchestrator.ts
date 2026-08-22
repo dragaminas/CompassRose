@@ -10,7 +10,6 @@ import type {
   BlockerRecoverability,
   CorrectionTask,
   DevelopmentPolicyMode,
-  DoctorRecoveryTaskMetadata,
   DiagnosticAutocorrectionDecision,
   DiagnosticClassification,
   FeatureStateSnapshot,
@@ -40,7 +39,6 @@ import type {
   TaskRequestStatus,
   ReviewableDiffHandoff,
   ExpectedDeliverable,
-  UnblockTaskMetadata,
 } from '../contracts/types.js';
 import { selectImplementationContextArtifactNames } from '../contracts/runtime/agentContext.js';
 import type { AgentInvocationContext, AgentInvocationKind, AgentToolName } from '../contracts/runtime/agentContext.js';
@@ -156,12 +154,10 @@ import {
   bulletList,
   correctionTaskToTask,
   renderCorrectionTaskMarkdown,
-  renderDoctorRecoveryTaskMarkdown,
   renderImplementationOutlineMarkdown,
   renderOutlineProgressMarkdown,
   renderStateCorrectionTaskMarkdown,
   renderTaskMarkdown,
-  renderUnblockTaskMarkdown,
   stateCorrectionTaskToTask,
 } from './taskRendering.js';
 import {
@@ -170,7 +166,7 @@ import {
   readValueFromStructuredLines,
   renderBlockerProfileMarkdown,
 } from './blockerRendering.js';
-import { buildDoctorRecoveryPrompt, buildImplementerPrompt } from './promptBuilding.js';
+import { buildImplementerPrompt } from './promptBuilding.js';
 import { compactRecoveryHistorySection } from './recoveryHistoryCompaction.js';
 import {
   buildImplementationDiagnostics,
@@ -281,42 +277,6 @@ export class StateCorrectionLimitReachedError extends Error {
   }
 }
 
-export class DoctorRecoveryLimitReachedError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'DoctorRecoveryLimitReachedError';
-  }
-}
-
-/**
- * Distinct from DoctorRecoveryLimitReachedError: that error bounds attempts against the SAME
- * blocker signature and resets once the feature makes real forward progress (ADR-0032). This one
- * bounds the sum of every doctor-recovery cycle a feature accumulates over its entire life,
- * regardless of how many different blockers caused them, and never resets. See ADR-0040.
- */
-export class DoctorRecoveryLifetimeLimitReachedError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'DoctorRecoveryLifetimeLimitReachedError';
-  }
-}
-
-/**
- * A planned doctor recovery task failed deterministic content validation (unenforceable quality
- * gate ref, missing deliverables, colliding task id, etc.) -- an expected, recurring planner-output
- * defect (see taskContentValidation.ts's own history of these), not a runtime programming bug. Like
- * DoctorRecoveryLimitReachedError, this must surface as a clean diagnostic stop rather than an
- * uncaught crash: the run can be safely retried (nothing has been written yet at this point in
- * planDoctorRecoveryTask), and a raw stack trace tells the operator nothing the validation error's
- * own message doesn't already say better.
- */
-export class DoctorRecoveryPlanningRejectedError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'DoctorRecoveryPlanningRejectedError';
-  }
-}
-
 export class CompassRoseOrchestrator {
   private readonly repositoryRoot: string;
   private readonly git: GitClient;
@@ -338,8 +298,6 @@ export class CompassRoseOrchestrator {
   private readonly compassRoseRoot: string;
   private readonly maxTasksPerRun: number;
   private readonly maxReviewIterations: number;
-  private readonly maxRecoveryIterations: number;
-  private readonly maxLifetimeRecoveryCycles: number;
   private readonly maxAiCallsPerRun: number;
   private readonly contextBudgetCharacters: number;
   private readonly runId: string;
@@ -349,7 +307,7 @@ export class CompassRoseOrchestrator {
   private readonly stepRecords: StepRunRecord[] = [];
   private readonly completedPrimaryTaskAnchors = new Set<string>();
   // Every task-document path this process itself has authored (plan_task/plan_fix_task/
-  // doctor-recovery/correction/state-correction writers below), so the review-time scope check
+  // correction/state-correction writers below), so the review-time scope check
   // (reviewTask()) can tell "the runtime's own bookkeeping from an earlier step in this run" apart
   // from "an implementer wrote to a task document outside its declared scope" -- the latter is
   // exactly the class of bug causa A exists to catch, so this must stay narrow: only paths this
@@ -424,13 +382,8 @@ export class CompassRoseOrchestrator {
     // not silently coerce a configured 0 into "unset" -> unbounded/default. See ADR-0042.
     this.maxTasksPerRun = readNonNegativeInteger(limits, 'max_tasks_per_run') ?? Number.POSITIVE_INFINITY;
     this.maxReviewIterations = readNonNegativeInteger(limits, 'max_review_iterations') ?? 1;
-    this.maxRecoveryIterations = readNonNegativeInteger(limits, 'max_recovery_iterations') ?? 3;
-    // Opt-in only, unlike the sibling limits above: unbounded by default so this doesn't retroactively
-    // trip for any feature (e.g. this repository's own 003-doctor-command) that already accumulated
-    // recovery cycles before this limit existed. See ADR-0040.
-    this.maxLifetimeRecoveryCycles = readNonNegativeInteger(limits, 'max_lifetime_recovery_cycles') ?? Number.POSITIVE_INFINITY;
-    // Opt-in only, same reasoning: unbounded by default so no existing project config is
-    // retroactively affected. See ADR-0041.
+    // Opt-in only, unlike the sibling limits above: unbounded by default so no existing project
+    // config is retroactively affected. See ADR-0041.
     this.maxAiCallsPerRun = readNonNegativeInteger(limits, 'max_ai_calls_per_run') ?? Number.POSITIVE_INFINITY;
     // 0 means unbounded, matching how every other optional limit here treats absence (ADR-0040).
     this.contextBudgetCharacters = readNonNegativeInteger(limits, 'context_budget_characters') ?? 0;
@@ -1465,14 +1418,6 @@ export class CompassRoseOrchestrator {
           correction_task_id: null,
           reason: inspection.reason,
         };
-      case 'unblock_pending':
-        return {
-          kind: 'doctor_recovery_task',
-          feature_id: feature.id,
-          task_id: requireNonNoneValue(inspection.snapshot?.activeUnblockTask, `Feature ${feature.id} requires active_unblock_task for unblock_pending.`),
-          correction_task_id: null,
-          reason: inspection.reason,
-        };
       case 'implementation_running':
         return {
           kind: 'implement_subtask',
@@ -1622,18 +1567,6 @@ export class CompassRoseOrchestrator {
               reason: `Feature ${feature.id} is task_ready but active_task is missing, so diagnosis/autocorrection must restore the execution anchor.`,
               snapshot,
             };
-      case 'unblock_pending':
-        return snapshot.activeUnblockTask !== 'none'
-          ? {
-              kind: 'unblock_pending',
-              reason: `Feature ${feature.id} is unblock_pending with active doctor recovery task ${snapshot.activeUnblockTask}.`,
-              snapshot,
-            }
-          : {
-              kind: 'malformed',
-              reason: `Feature ${feature.id} is unblock_pending but active_unblock_task is missing, so diagnosis/autocorrection must restore the doctor recovery anchor.`,
-              snapshot,
-            };
       case 'implementation_running':
         return snapshot.activeTask !== 'none'
           ? {
@@ -1643,7 +1576,7 @@ export class CompassRoseOrchestrator {
             }
           : {
               kind: 'malformed',
-              reason: `Feature ${feature.id} is implementation_running but active_task is missing, so diagnosis/autocorrection must decide whether to repair state or plan doctor recovery.`,
+              reason: `Feature ${feature.id} is implementation_running but active_task is missing, so diagnosis/autocorrection must decide whether to repair state or block for a recovery conversation.`,
               snapshot,
             };
       case 'quality_gates_pending':
@@ -1839,14 +1772,10 @@ export class CompassRoseOrchestrator {
         return snapshot.activeTask !== 'none'
           ? { kind: 'task_ready', reason: `Fix ${fix.id} is task_ready with active task ${snapshot.activeTask}.`, snapshot, severity, owningFeature }
           : { kind: 'malformed', reason: `Fix ${fix.id} is task_ready but active_task is missing, so diagnosis/autocorrection must restore the execution anchor.`, snapshot, severity, owningFeature };
-      case 'unblock_pending':
-        return snapshot.activeUnblockTask !== 'none'
-          ? { kind: 'unblock_pending', reason: `Fix ${fix.id} is unblock_pending with active doctor recovery task ${snapshot.activeUnblockTask}.`, snapshot, severity, owningFeature }
-          : { kind: 'malformed', reason: `Fix ${fix.id} is unblock_pending but active_unblock_task is missing, so diagnosis/autocorrection must restore the doctor recovery anchor.`, snapshot, severity, owningFeature };
       case 'implementation_running':
         return snapshot.activeTask !== 'none'
           ? { kind: 'implementation_running', reason: `Fix ${fix.id} is implementation_running for ${snapshot.activeTask} and should resume deterministically.`, snapshot, severity, owningFeature }
-          : { kind: 'malformed', reason: `Fix ${fix.id} is implementation_running but active_task is missing, so diagnosis/autocorrection must decide whether to repair state or plan doctor recovery.`, snapshot, severity, owningFeature };
+          : { kind: 'malformed', reason: `Fix ${fix.id} is implementation_running but active_task is missing, so diagnosis/autocorrection must decide whether to repair state or block for a recovery conversation.`, snapshot, severity, owningFeature };
       case 'quality_gates_pending':
         return snapshot.activeTask !== 'none'
           ? { kind: 'quality_gates_pending', reason: `Fix ${fix.id} is quality_gates_pending for ${snapshot.activeTask}; the runtime should resume review-side validation deterministically.`, snapshot, severity, owningFeature }
@@ -1951,14 +1880,6 @@ export class CompassRoseOrchestrator {
           correction_task_id: null,
           reason: inspection.reason,
         };
-      case 'unblock_pending':
-        return {
-          kind: 'doctor_recovery_task',
-          feature_id: fix.id,
-          task_id: requireNonNoneValue(inspection.snapshot?.activeUnblockTask, `Fix ${fix.id} requires active_unblock_task for unblock_pending.`),
-          correction_task_id: null,
-          reason: inspection.reason,
-        };
       case 'implementation_running':
         return {
           kind: 'implement_subtask',
@@ -2017,9 +1938,9 @@ export class CompassRoseOrchestrator {
   }
 
   /**
-   * Runs an operation that may refuse via a bounded-retry limit error (StateCorrectionLimitReachedError,
-   * DoctorRecoveryLimitReachedError, DoctorRecoveryPlanningRejectedError) and converts that refusal into
-   * a clean StepExecutionResult stop instead of letting it propagate as an uncaught exception.
+   * Runs an operation that may refuse via a bounded-retry limit error (StateCorrectionLimitReachedError)
+   * and converts that refusal into a clean StepExecutionResult stop instead of letting it propagate as
+   * an uncaught exception.
    *
    * Every call site that can trigger one of these errors must go through this helper rather than its
    * own inline try/catch. Before this existed, the same catch-and-convert logic was hand-copied at each
@@ -2040,12 +1961,7 @@ export class CompassRoseOrchestrator {
       operation();
       return onSuccess();
     } catch (error) {
-      if (
-        error instanceof StateCorrectionLimitReachedError
-        || error instanceof DoctorRecoveryLimitReachedError
-        || error instanceof DoctorRecoveryLifetimeLimitReachedError
-        || error instanceof DoctorRecoveryPlanningRejectedError
-      ) {
+      if (error instanceof StateCorrectionLimitReachedError) {
         this.recordExhaustedRecoveryAsBlocked(featureId, error.message);
         return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: error.message };
       }
@@ -2121,16 +2037,6 @@ export class CompassRoseOrchestrator {
           correctionFeatureId,
           () => this.correctState(correctionFeatureId, decision.reason),
           () => ({ kind: 'advanced', exitCode: 0, continueLoop: true, summary: `State correction task created for feature ${correctionFeatureId}.` }),
-        );
-      }
-      case 'doctor_recovery_task':
-        return this.runDoctorRecoveryTask(requireString(decision.task_id, 'task_id'));
-      case 'unblock_task': {
-        const unblockFeatureId = requireString(decision.feature_id, 'feature_id');
-        return this.runBoundedOperation(
-          unblockFeatureId,
-          () => this.planDoctorRecoveryTask(unblockFeatureId, decision.reason),
-          () => ({ kind: 'advanced', exitCode: 0, continueLoop: true, summary: `Doctor recovery task planned for feature ${unblockFeatureId}.` }),
         );
       }
       case 'diagnose_autocorrect':
@@ -2224,7 +2130,7 @@ export class CompassRoseOrchestrator {
   /**
    * Reconciles the worktree when a new active task/scope is about to supersede a specific
    * previous task (`previousTaskId`) whose own attempt is being abandoned -- e.g. a
-   * doctor-recovery task, or a state correction whose scope is always just the state docs,
+   * state correction whose scope is always just the state docs,
    * replacing a failed implementation whose allowed_paths were wider. Left alone, that leftover
    * dirty diff falls outside every future run's active-task allowlist and blocks git_policy's
    * require_clean_worktree_before_task preflight in src/cli/main.ts forever, requiring manual
@@ -2554,7 +2460,6 @@ export class CompassRoseOrchestrator {
     const pendingPointers = [
       snapshot.activeTask,
       snapshot.activeCorrectionTask,
-      snapshot.activeUnblockTask,
     ].filter((pointer) => pointer && pointer !== 'none');
 
     if (pendingPointers.length > 0) {
@@ -2701,7 +2606,6 @@ export class CompassRoseOrchestrator {
     markdown = replaceOperationalStatus(markdown, {
       active_task: 'none',
       active_correction_task: 'none',
-      active_unblock_task: 'none',
     });
     markdown = replaceSection(markdown, 'Remaining Deliverables', '- None');
     markdown = replaceSection(markdown, 'Blocked By', '- None');
@@ -2838,7 +2742,7 @@ export class CompassRoseOrchestrator {
     // Explicit, not guessed: this call site already knows the sibling-feature cause firsthand.
     // classifyBlockerKind's regex matches the word "scope" in `reason` today and happens to land
     // on task_interface_gap by accident -- fragile against any future rewording -- and its hint
-    // always says "plan a doctor recovery task", never naming the sibling feature that actually
+    // always says "recover the blocker", never naming the sibling feature that actually
     // needs attention. See fix 001-blocked-feature-scope-misclassification.
     this.recordBlockedFeature(featureId, reason, null, {
       kind: 'task_interface_gap',
@@ -3274,194 +3178,6 @@ export class CompassRoseOrchestrator {
     }
   }
 
-  private planDoctorRecoveryTask(featureId: string, reason: string): void {
-    const owner = this.resolveWorkItemContext(featureId);
-    const snapshot = this.readFeatureStateSnapshot(owner);
-
-    // Enforce the configured recovery-cycle depth limit before spending a planner call: the
-    // catastrophic 2026-06-28 incident (2,804 unbounded correction commits in one day) was this
-    // same unbounded-loop failure mode on the sibling correction path -- see
-    // limitStateCorrectionTaskId/StateCorrectionLimitReachedError for that guard. This is the
-    // twin guard for doctor-recovery/unblock cycles, which had no ceiling at all.
-    const priorAttempts = this.readDoctorRecoveryAttempts(owner.statePath);
-    if (priorAttempts >= this.maxRecoveryIterations) {
-      throw new DoctorRecoveryLimitReachedError(
-        `Doctor recovery iteration limit reached for feature ${featureId} after ${this.maxRecoveryIterations} attempt(s) recovering the same blocked state; refusing to plan another doctor recovery task.`,
-      );
-    }
-
-    // Twin guard, one level up: priorAttempts above resets on genuine forward progress, so a
-    // feature that keeps hitting new, different blockers over its life could otherwise
-    // accumulate unlimited total recovery cycles. This one never resets. See ADR-0040.
-    const lifetimeRecoveryCount = this.readDoctorRecoveryLifetimeCount(owner.statePath);
-    if (lifetimeRecoveryCount >= this.maxLifetimeRecoveryCycles) {
-      throw new DoctorRecoveryLifetimeLimitReachedError(
-        `Doctor recovery lifetime limit reached for feature ${featureId} after ${this.maxLifetimeRecoveryCycles} total recovery cycle(s) across its life; refusing to plan another doctor recovery task without human review.`,
-      );
-    }
-
-    const recoveryActiveTask = snapshot.lifecycleState === 'implementation_failed'
-      ? this.resolveImplementationFailureActiveTask(owner, snapshot)
-      : null;
-    const blocker = this.buildBlockerProfile(snapshot, reason);
-    const restorationTarget = snapshot.lifecycleState === 'implementation_failed'
-      ? this.buildImplementationFailureRestorationTarget(owner, snapshot)
-      : this.preferredRestorationTarget(snapshot);
-    const sourcePaths = [
-      'src/contracts/planner/doctor-recovery-planning-prompt.md',
-      'src/contracts/planner/input.md',
-      'src/contracts/planner/output.md',
-      'src/contracts/state/feature-state.md',
-      'src/contracts/task/doctor-recovery-task.md',
-      'src/contracts/task/state-correction-task.md',
-      relativePath(this.repositoryRoot, owner.definitionPath),
-      ...(owner.architecturePath ? [relativePath(this.repositoryRoot, owner.architecturePath)] : []),
-      relativePath(this.repositoryRoot, owner.statePath),
-      ...(recoveryActiveTask ? [`.git/proto-compassrose/implementation-attempts/${recoveryActiveTask}.json`] : []),
-      relativePath(this.repositoryRoot, this.projectStatePath),
-      relativePath(this.repositoryRoot, this.configurationPath),
-      'src/contracts/runtime/operation-loop.md',
-    ];
-    const prompt = [
-      'Act as the CompassRose Planner.',
-      '',
-      `Plan the next doctor recovery task for feature \`${featureId}\`.`,
-      '',
-      'Read only:',
-      '- `src/contracts/planner/doctor-recovery-planning-prompt.md`',
-      '- `src/contracts/planner/input.md`',
-      '- `src/contracts/planner/output.md`',
-      '- `src/contracts/state/feature-state.md`',
-      '- `src/contracts/task/doctor-recovery-task.md`',
-      '- `src/contracts/task/state-correction-task.md`',
-      `- \`${relativePath(this.repositoryRoot, owner.definitionPath)}\``,
-      ...(owner.architecturePath ? [`- \`${relativePath(this.repositoryRoot, owner.architecturePath)}\``] : []),
-      `- \`${relativePath(this.repositoryRoot, owner.statePath)}\``,
-      ...(recoveryActiveTask ? [`- \`.git/proto-compassrose/implementation-attempts/${recoveryActiveTask}.json\``] : []),
-      `- \`${relativePath(this.repositoryRoot, this.projectStatePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, this.configurationPath)}\``,
-      '- `src/contracts/runtime/operation-loop.md`',
-      ...this.buildLatestDiagnosticPromptLines(featureId),
-      ...this.buildRecoveryLessonPromptLines(featureId, restorationTarget.active_task),
-      '',
-      'Blocker context:',
-      `- kind: ${blocker.kind}`,
-      `- signature: ${blocker.signature}`,
-      `- recoverability: ${blocker.recoverability}`,
-      `- observed_state: ${blocker.observed_state}`,
-      ...blocker.evidence.map((item) => `- evidence: ${item}`),
-      '',
-      'Restoration target:',
-      `- lifecycle_state: ${restorationTarget.lifecycle_state}`,
-      `- active_task: ${restorationTarget.active_task}`,
-      `- active_correction_task: ${restorationTarget.active_correction_task}`,
-      `- active_unblock_task: ${restorationTarget.active_unblock_task}`,
-      '',
-      'Rules:',
-      '- Generate exactly one doctor recovery task.',
-      '- Keep the task narrowly focused on removing the blocker or tightening the interface that caused it.',
-      '- Allow documentation, state, source, and tests only when they are truly required by the recovery.',
-      '- If the recovery task is a later version of an earlier task, set `previous_task_id` to that earlier task so the earlier task remains historical evidence; otherwise set it to `null`.',
-      '- If the blocker is pure documentation or state drift, do not plan doctor recovery; use `correct_state` instead.',
-      '- Mark the recovery as `doctor` with `no_review_loop` semantics.',
-      '- The restoration target above is fixed by the runtime and represents forward progress, not the failed state the blocker was diagnosed from; do not propose a different one.',
-      '- Use `test_guided` when the recovery produces code or tests.',
-      '- `quality_gates.before_review` must contain runnable shell commands, not prose.',
-      '- Every `git diff ... --exit-code` gate must include an explicit ref before the `--` pathspec separator (the commit before the recovered task began) — never a bare comparison against the current worktree/HEAD, since HEAD already contains whatever this recovery exists to undo; a ref-less gate is deterministically rejected.',
-      '- Any recovery lesson above is an unverified suggestion from a prior model call, not a confirmed requirement — only carry a suggested field, artifact, or mechanism into this task if it already exists in the contracts you were told to read; never invent a new manifest, validator, or artifact type to satisfy one.',
-      '- Return JSON only and do not modify files.',
-    ].join('\n');
-
-    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
-      role: 'planner',
-      kind: 'doctor_recovery_planning',
-      label: `planner:doctor-recovery:${featureId}`,
-      feature_id: featureId,
-      task_id: recoveryActiveTask,
-      source_paths: sourcePaths,
-      prompt,
-      tool: {
-        name: 'codex',
-        command: this.codexCommand,
-        model: resolveCodexPlannerModel(),
-        output_schema_id: 'planner_output',
-      },
-    }));
-
-    const planned = this.codex.runStructured<PlannerOutput>(
-      prompt,
-      this.contracts.schema('planner_output'),
-      [],
-      `planner:doctor-recovery:${featureId}`,
-    );
-    let task: PlannedTask;
-    try {
-      const scopeSanitization = sanitizeAllowedPaths(planned.task.scope.allowed_paths);
-      this.logScopeSanitizationNotices(scopeSanitization.notices);
-      task = {
-        ...planned.task,
-        scope: { ...planned.task.scope, allowed_paths: scopeSanitization.allowedPaths },
-      };
-      validateTaskDeliverables(task, 'doctor recovery task');
-      // Doctor recovery IS a correction/recovery of a specific prior task -- unlike a first-time
-      // task's own gates, a bare-HEAD `git diff --exit-code` here can only ever pass by leaving
-      // the very thing this recovery exists to undo untouched. See validateQualityGateRefs.
-      validateQualityGateRefs(task.quality_gates.before_review, 'doctor recovery task');
-      this.assertTaskIdIsUnused(owner.tasksDirectory, task.task_id, 'Doctor recovery planning');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw new DoctorRecoveryPlanningRejectedError(
-        `Planned doctor recovery task for feature ${featureId} failed content validation: ${message}`,
-      );
-    }
-    this.reconcileDirtyPathsForNewScope(featureId, snapshot.activeTask, task.scope.allowed_paths);
-
-    const doctorRecoveryMetadata: DoctorRecoveryTaskMetadata = {
-      blocker,
-      restoration_target: {
-        lifecycle_state: restorationTarget.lifecycle_state,
-        active_task: restorationTarget.active_task,
-        active_correction_task: restorationTarget.active_correction_task,
-        active_unblock_task: 'none',
-      },
-      executor_role: 'doctor',
-      review_policy: 'no_review_loop',
-    };
-
-    const taskPath = join(owner.tasksDirectory, buildTaskFileName(task.task_id, task.title));
-    const taskMarkdown = renderDoctorRecoveryTaskMarkdown(task, doctorRecoveryMetadata);
-
-    this.writeTaskDocument(taskPath, taskMarkdown);
-    this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), {
-      ...planned,
-      task,
-      doctor_recovery: doctorRecoveryMetadata,
-    });
-    this.writeBlockerProfile(featureId, task.task_id, blocker, doctorRecoveryMetadata.restoration_target, reason);
-
-    const updatedFeatureState = this.updateFeatureStateForDoctorRecovery(
-      owner.statePath,
-      task.task_id,
-      restorationTarget,
-      priorAttempts + 1,
-      lifetimeRecoveryCount + 1,
-    );
-    const updatedProjectState = this.updateProjectStateForDoctorRecovery(featureId, task.task_id, restorationTarget.lifecycle_state);
-    writeText(owner.statePath, updatedFeatureState);
-    writeText(this.projectStatePath, updatedProjectState);
-
-    if (this.options.commit) {
-      this.git.commit(
-        [
-          relativePath(this.repositoryRoot, taskPath),
-          relativePath(this.repositoryRoot, owner.statePath),
-          relativePath(this.repositoryRoot, this.projectStatePath),
-        ],
-        `proto: plan doctor recovery ${featureId}`,
-      );
-    }
-  }
-
   private buildImplementationFailureRestorationTarget(feature: Pick<WorkItemContext, 'id'>, snapshot: FeatureStateSnapshot): RestorationTarget {
     const activeTask = this.resolveImplementationFailureActiveTask(feature, snapshot);
     if (!activeTask) {
@@ -3472,7 +3188,6 @@ export class CompassRoseOrchestrator {
       lifecycle_state: 'task_ready',
       active_task: activeTask,
       active_correction_task: 'none',
-      active_unblock_task: 'none',
     };
   }
 
@@ -3503,7 +3218,7 @@ export class CompassRoseOrchestrator {
       );
     }
 
-    if (decision.next_step === 'plan_doctor_recovery') {
+    if (decision.next_step === 'block_for_conversation') {
       // 026-conversational-doctor-recovery: this used to plan and execute a repair task, and chain
       // into another when that failed. Feature 003-doctor-command accumulated nine of them without
       // ever unblocking, and not one asked a human anything -- while the information that would
@@ -3543,7 +3258,7 @@ export class CompassRoseOrchestrator {
       });
       const reason =
         `Diagnostic/autocorrection classified the blocker on ${featureId} as systemic rather than a bounded `
-        + `implementation issue; filed/reused fix \`${fixId}\` and stopped instead of attempting a bounded doctor recovery.`;
+        + `implementation issue; filed/reused fix \`${fixId}\` and stopped instead of blocking it for a recovery conversation.`;
 
       // recordBlockedFeature() already prints the blocker card (persistBlockedFeature's single
       // choke point) whenever state.md exists to persist against; the fallback print below only
@@ -3634,10 +3349,9 @@ export class CompassRoseOrchestrator {
               : this.resolveStateCorrectionActiveTaskFromArtifacts(feature.id);
           const taskPath = recoveryAnchor ? this.tryFindTaskDocumentPath(recoveryAnchor, feature.tasksDirectory) : null;
 
-          return this.buildDeterministicDoctorRecoveryDecision(feature, snapshot, blocker, reason, [
+          return this.buildDeterministicRecoveryConversationDecision(feature, snapshot, blocker, reason, [
             relativePath(this.repositoryRoot, feature.statePath),
             relativePath(this.repositoryRoot, this.projectStatePath),
-            'src/contracts/task/doctor-recovery-task.md',
             'src/contracts/runtime/operation-loop.md',
             taskPath ? relativePath(this.repositoryRoot, taskPath) : null,
           ]);
@@ -3663,16 +3377,15 @@ export class CompassRoseOrchestrator {
       // diagnose_autocorrect run for this feature deterministically re-proposed the same doomed
       // correction and immediately hit the same limit again, forever, with no escape but manual
       // intervention. Observed live on feature 003-doctor-command's F003-T01 anchor. Escalate to
-      // a bounded doctor recovery instead, exactly like the analogous `blocked` branch above.
+      // a recovery conversation instead, exactly like the analogous `blocked` branch above.
       const correctionAnchor = snapshot.activeTask !== 'none'
         ? snapshot.activeTask
         : this.resolveStateCorrectionActiveTaskFromArtifacts(feature.id);
       if (correctionAnchor && this.buildStateCorrectionTaskId(feature.tasksDirectory, correctionAnchor) === null) {
         const taskPath = this.tryFindTaskDocumentPath(correctionAnchor, feature.tasksDirectory);
-        return this.buildDeterministicDoctorRecoveryDecision(feature, snapshot, blocker, reason, [
+        return this.buildDeterministicRecoveryConversationDecision(feature, snapshot, blocker, reason, [
           relativePath(this.repositoryRoot, feature.statePath),
           relativePath(this.repositoryRoot, this.projectStatePath),
-          'src/contracts/task/doctor-recovery-task.md',
           'src/contracts/runtime/operation-loop.md',
           taskPath ? relativePath(this.repositoryRoot, taskPath) : null,
         ]);
@@ -3684,10 +3397,9 @@ export class CompassRoseOrchestrator {
     if (snapshot.lifecycleState === 'implementation_failed') {
       const activeTask = this.resolveImplementationFailureActiveTask(feature, snapshot);
       if (activeTask) {
-        return this.buildDeterministicDoctorRecoveryDecision(feature, snapshot, blocker, reason, [
+        return this.buildDeterministicRecoveryConversationDecision(feature, snapshot, blocker, reason, [
           relativePath(this.repositoryRoot, feature.statePath),
           relativePath(this.repositoryRoot, this.projectStatePath),
-          'src/contracts/task/doctor-recovery-task.md',
           'src/contracts/runtime/operation-loop.md',
           this.tryFindTaskDocumentPath(activeTask, feature.tasksDirectory)
             ? relativePath(this.repositoryRoot, this.tryFindTaskDocumentPath(activeTask, feature.tasksDirectory) as string)
@@ -3705,7 +3417,7 @@ export class CompassRoseOrchestrator {
         'src/contracts/runtime/operation-loop.md',
         ],
         reason,
-        'The implementation failed, but the runtime could not recover a trusted active task anchor for bounded doctor recovery.',
+        'The implementation failed, and the runtime could not recover a trusted active task anchor to name in a recovery conversation.',
       );
     }
 
@@ -3722,10 +3434,9 @@ export class CompassRoseOrchestrator {
 
       if (recoveryAnchor) {
         const taskPath = this.tryFindTaskDocumentPath(recoveryAnchor, feature.tasksDirectory);
-        return this.buildDeterministicDoctorRecoveryDecision(feature, snapshot, blocker, reason, [
+        return this.buildDeterministicRecoveryConversationDecision(feature, snapshot, blocker, reason, [
           relativePath(this.repositoryRoot, feature.statePath),
           relativePath(this.repositoryRoot, this.projectStatePath),
-          'src/contracts/task/doctor-recovery-task.md',
           'src/contracts/runtime/operation-loop.md',
           taskPath ? relativePath(this.repositoryRoot, taskPath) : null,
         ]);
@@ -3751,7 +3462,7 @@ export class CompassRoseOrchestrator {
   /**
    * The one place diagnostic/autocorrection consults a model instead of deciding
    * deterministically: reached only when a quality_failed/review_failed/blocked rejection
-   * cannot be resolved into plan_doctor_recovery by the deterministic checks above (terminal/
+   * cannot be resolved into block_for_conversation by the deterministic checks above (terminal/
    * human recoverability, or no safe recovery anchor) -- i.e. exactly where the runtime would
    * otherwise stop the whole run. Filing file_blocking_fix is expensive and hard to reverse (a
    * new tracked work item, visible throughout the project's docs), so per ADR-0038 the choice
@@ -3785,18 +3496,18 @@ export class CompassRoseOrchestrator {
       );
     }
 
-    if (resolved.value === 'plan_doctor_recovery') {
-      // No further call needed: plan_doctor_recovery carries no extra payload to generate, and
+    if (resolved.value === 'block_for_conversation') {
+      // No further call needed: block_for_conversation carries no extra payload to generate, and
       // `blocker` is already the caller's own trusted profile -- reuse it rather than asking the
       // model to restate it.
       return {
         feature_id: feature.id,
-        diagnosis_summary: `The blocker-kind classification ensemble agreed this defect is bounded to ${feature.id}'s own frame; planning a doctor recovery.`,
+        diagnosis_summary: `The blocker-kind classification ensemble agreed this defect is bounded to ${feature.id}'s own frame; blocking it for a recovery conversation.`,
         blocker,
-        next_step: 'plan_doctor_recovery',
+        next_step: 'block_for_conversation',
         next_step_reason: reason,
         interface_response: {
-          mode: 'apply_in_doctor_recovery',
+          mode: 'recovery_conversation',
           summary: 'Ensemble-confirmed bounded recovery; no systemic fix required.',
           target_paths: [],
         },
@@ -3809,7 +3520,7 @@ export class CompassRoseOrchestrator {
     // the ADR-0031 prose-guessing problem one level up (three independently-phrased payloads
     // have no meaningful "agreement" to check). A single further call generates that payload now
     // that the decision itself is validated; if it contradicts the ensemble by returning
-    // plan_doctor_recovery anyway, that is treated as an untrustworthy response, not silently
+    // block_for_conversation anyway, that is treated as an untrustworthy response, not silently
     // accepted over the ensemble's consensus.
     const detail = this.consultDoctorOnSystemicBlockerSingleVote(feature, blocker, reason, taskId);
     if (detail.next_step !== 'file_blocking_fix') {
@@ -3896,11 +3607,11 @@ export class CompassRoseOrchestrator {
     blocker: BlockerProfile,
     reason: string,
     taskId: string | null,
-  ): readonly ('plan_doctor_recovery' | 'file_blocking_fix')[] | null {
+  ): readonly ('block_for_conversation' | 'file_blocking_fix')[] | null {
     const prompt = [
       'Act as the CompassRose Systemic Blocker Triage role.',
       '',
-      `Decide only whether \`${feature.id}\`'s blocker needs a bounded doctor recovery or a systemic fix filed outside its own frame. Do not describe the fix itself.`,
+      `Decide only whether \`${feature.id}\`'s blocker is bounded to its own frame or a systemic defect outside it. Do not describe the fix itself.`,
       '',
       'Blocker context:',
       `- kind: ${blocker.kind}`,
@@ -3912,14 +3623,14 @@ export class CompassRoseOrchestrator {
       `Reason this diagnosis was triggered: ${reason}`,
       '',
       'Rules:',
-      '- Choose exactly one next_step: `plan_doctor_recovery` or `file_blocking_fix`. No other value is valid.',
-      "- Choose `plan_doctor_recovery` only if the evidence shows a bounded task-interface gap (stale anchor, prompt/scope tightening, missing evidence) that a single doctor recovery task confined to this feature/fix's own frame could resolve.",
+      '- Choose exactly one next_step: `block_for_conversation` or `file_blocking_fix`. No other value is valid.',
+      "- Choose `block_for_conversation` only if the evidence shows a bounded gap (stale anchor, prompt/scope tightening, missing evidence) confined to this feature/fix's own frame, which a human could resolve by answering one question about it.",
       "- Choose `file_blocking_fix` if the defect is outside this feature/fix's own frame entirely -- architectural, framework-level, or otherwise systemic -- so no bounded recovery task confined to it could resolve the root cause.",
       '- Reason independently from the evidence above only -- do not assume any other attempt\'s conclusion.',
       '- Return JSON only and do not modify files.',
     ].join('\n');
 
-    return this.runClassifierEnsemble<'plan_doctor_recovery' | 'file_blocking_fix'>({
+    return this.runClassifierEnsemble<'block_for_conversation' | 'file_blocking_fix'>({
       size: BLOCKER_KIND_ENSEMBLE_SIZE,
       prompt,
       labelPrefix: `classifier:systemic-blocker-next-step:${feature.id}`,
@@ -3927,7 +3638,7 @@ export class CompassRoseOrchestrator {
       schemaId: 'systemic_blocker_next_step',
       featureId: feature.id,
       taskId,
-      extractVote: (raw) => (raw.next_step === 'plan_doctor_recovery' || raw.next_step === 'file_blocking_fix' ? raw.next_step : null),
+      extractVote: (raw) => (raw.next_step === 'block_for_conversation' || raw.next_step === 'file_blocking_fix' ? raw.next_step : null),
     });
   }
 
@@ -3939,7 +3650,6 @@ export class CompassRoseOrchestrator {
   ): DiagnosticAutocorrectionDecision {
     const sourcePaths = [
       'src/contracts/runtime/diagnostic-autocorrection.md',
-      'src/contracts/task/doctor-recovery-task.md',
       relativePath(this.repositoryRoot, feature.statePath),
       relativePath(this.repositoryRoot, this.projectStatePath),
     ];
@@ -3951,7 +3661,6 @@ export class CompassRoseOrchestrator {
       '',
       'Read only:',
       '- `src/contracts/runtime/diagnostic-autocorrection.md`',
-      '- `src/contracts/task/doctor-recovery-task.md`',
       `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
       `- \`${relativePath(this.repositoryRoot, this.projectStatePath)}\``,
       '',
@@ -3965,11 +3674,11 @@ export class CompassRoseOrchestrator {
       `Reason this diagnosis was triggered: ${reason}`,
       '',
       'Rules:',
-      '- Choose exactly one next_step: `plan_doctor_recovery` or `file_blocking_fix`. No other value is valid from this call.',
-      "- Choose `plan_doctor_recovery` only if the evidence shows a bounded task-interface gap (stale anchor, prompt/scope tightening, missing evidence) that a single doctor recovery task confined to this feature/fix's own frame could resolve.",
+      '- Choose exactly one next_step: `block_for_conversation` or `file_blocking_fix`. No other value is valid from this call.',
+      "- Choose `block_for_conversation` only if the evidence shows a bounded gap (stale anchor, prompt/scope tightening, missing evidence) confined to this feature/fix's own frame, which a human could resolve by answering one question about it.",
       "- Choose `file_blocking_fix` if the defect is outside this feature/fix's own frame entirely -- architectural, framework-level, or otherwise systemic -- so no bounded recovery task confined to it could resolve the root cause.",
       '- When choosing `file_blocking_fix`, populate `systemic_blocker` with `title` (short, specific, becomes the new fix\'s slug), `evidence_summary`, `scope_note` (must state the new fix excludes this feature/fix\'s own remaining work), and `severity` fixed to `"critical"`.',
-      '- When choosing `plan_doctor_recovery`, set `systemic_blocker` to `null`.',
+      '- When choosing `block_for_conversation`, set `systemic_blocker` to `null`.',
       '- Never let a `file_blocking_fix` scope include any of this feature/fix\'s own remaining work.',
       '- `diagnosis_summary`, `next_step_reason`, and every `evidence`/`evidence_summary`/`scope_note`/`interface_response.summary` value are read directly by a human at the console, not only by the next AI call -- keep each to one short, plain sentence.',
       '- Return JSON only and do not modify files.',
@@ -4074,7 +3783,7 @@ export class CompassRoseOrchestrator {
     };
   }
 
-  private buildDeterministicDoctorRecoveryDecision(
+  private buildDeterministicRecoveryConversationDecision(
     feature: WorkItemContext,
     snapshot: FeatureStateSnapshot,
     blocker: BlockerProfile,
@@ -4089,20 +3798,19 @@ export class CompassRoseOrchestrator {
 
     return {
       feature_id: feature.id,
-      diagnosis_summary: 'The blocker is recoverable, so the runtime should plan a bounded doctor recovery task instead of guessing or stopping early.',
+      diagnosis_summary: 'The blocker needs something only a human can supply, so the runtime blocks this item for a recovery conversation instead of guessing or stopping the whole run.',
       blocker,
-      next_step: 'plan_doctor_recovery',
+      next_step: 'block_for_conversation',
       next_step_reason: reason,
       interface_response: {
-        mode: 'apply_in_doctor_recovery',
+        mode: 'recovery_conversation',
         summary: activeTask
-          ? `Plan a bounded doctor recovery task that restores the recorded task anchor ${activeTask}.`
-          : 'Plan a bounded doctor recovery task that preserves the current recovery evidence and re-entry target.',
+          ? `Work out the root cause with a human, starting from the recorded task anchor ${activeTask}.`
+          : 'Work out the root cause with a human, starting from the current recovery evidence and re-entry target.',
         target_paths: uniqueStrings([
           ...targetPaths.filter((item): item is string => typeof item === 'string' && item.length > 0),
           relativePath(this.repositoryRoot, feature.statePath),
           relativePath(this.repositoryRoot, this.projectStatePath),
-          'src/contracts/task/doctor-recovery-task.md',
         ]),
       },
       systemic_blocker: null,
@@ -4187,11 +3895,13 @@ export class CompassRoseOrchestrator {
   private normalizeDiagnosticAutocorrectionDecision(
     decision: DiagnosticAutocorrectionDecision,
   ): DiagnosticAutocorrectionDecision {
-    const nextStep = (decision.next_step as string) === 'plan_unblock_task'
-      ? 'plan_doctor_recovery'
+    const legacyNextSteps = new Set(['plan_unblock_task', 'plan_doctor_recovery']);
+    const nextStep = legacyNextSteps.has(decision.next_step as string)
+      ? 'block_for_conversation'
       : decision.next_step;
-    const interfaceMode = (decision.interface_response.mode as string) === 'apply_in_unblock_task'
-      ? 'apply_in_doctor_recovery'
+    const legacyModes = new Set(['apply_in_unblock_task', 'apply_in_doctor_recovery']);
+    const interfaceMode = legacyModes.has(decision.interface_response.mode as string)
+      ? 'recovery_conversation'
       : decision.interface_response.mode;
 
     return {
@@ -4230,7 +3940,6 @@ export class CompassRoseOrchestrator {
         target_paths: [
           'src/contracts/runtime/diagnostic-autocorrection.md',
           'src/contracts/runtime/operation-loop.md',
-          'src/contracts/task/doctor-recovery-task.md',
         ],
       },
       systemic_blocker: null,
@@ -4296,17 +4005,6 @@ export class CompassRoseOrchestrator {
         };
   }
 
-  private runDoctorRecoveryTask(taskId: string): StepExecutionResult {
-    const task = this.loadTask(taskId);
-    const artifact = this.loadTaskArtifact(taskId);
-    const doctorRecovery = artifact?.doctor_recovery ?? artifact?.unblock ?? task.doctorRecovery ?? task.unblock;
-    if (!doctorRecovery) {
-      throw new Error(`Doctor recovery task ${taskId} is missing recovery metadata.`);
-    }
-
-    return this.executeDoctorRecoveryTask(task, doctorRecovery);
-  }
-
   /**
    * By the time reviewTask() calls the reviewer, runQualityGates() has already run
    * deterministically and every result is guaranteed not 'failed' (see executeImplementation's
@@ -4363,7 +4061,6 @@ export class CompassRoseOrchestrator {
     const task = this.loadTask(taskId);
     const artifact = this.loadTaskArtifact(taskId);
     const stateCorrection = artifact?.state_correction ?? null;
-    const doctorRecovery = artifact?.doctor_recovery ?? artifact?.unblock ?? null;
     const owner = this.resolveWorkItemContext(task.featureId);
     const qualityResults = this.ensureQualityGateResults(task);
     const implementation = this.ensureImplementationAttempt(task);
@@ -4416,7 +4113,6 @@ export class CompassRoseOrchestrator {
       'src/contracts/reviewer/input.md',
       'src/contracts/reviewer/output.md',
       ...(stateCorrection ? ['src/contracts/task/state-correction-task.md'] : ['src/contracts/task/correction-task.md']),
-      ...(doctorRecovery ? ['src/contracts/task/doctor-recovery-task.md'] : []),
       ...reviewContextPaths,
       ...implementationContextPaths,
       relativePath(this.repositoryRoot, task.path),
@@ -4439,7 +4135,6 @@ export class CompassRoseOrchestrator {
       '- `src/contracts/reviewer/input.md`',
       '- `src/contracts/reviewer/output.md`',
       stateCorrection ? '- `src/contracts/task/state-correction-task.md`' : '- `src/contracts/task/correction-task.md`',
-      doctorRecovery ? '- `src/contracts/task/doctor-recovery-task.md`' : null,
       task.reviewableDiffHandoff.requiredChangedFiles.length > 0
         ? `- Reviewable diff handoff expects these changed files: ${task.reviewableDiffHandoff.requiredChangedFiles.map((item) => `\`${item}\``).join(', ')}.`
         : '- Reviewable diff handoff does not require a specific changed file list.',
@@ -4480,7 +4175,6 @@ export class CompassRoseOrchestrator {
       reviewDiff.source === 'fallback'
         ? '- Do not approve the attempt while the live reviewable diff is missing; treat the lost handoff as an execution defect even if the fallback diff looks correct.'
         : null,
-      doctorRecovery ? '- If this is a doctor recovery task, verify that the blocker signature is resolved and the feature can resume from the captured lifecycle state without entering a reviewer loop for the recovery itself.' : null,
       '- Return JSON only.',
       '- `summary` and every `findings[].message` are read directly by a human at the console when the task ends up blocked, not only by the next AI call -- keep each to one short, plain sentence; put any longer diagnostic detail in the correction task instead.',
       '- If status is `changes_required`, include a correction task narrower than the original subtask.',
@@ -4513,7 +4207,7 @@ export class CompassRoseOrchestrator {
     const review = this.verifyReviewerQualityGateRelay(rawReview, qualityResults);
     this.artifacts.writeJson(join('reviews', `${taskId}.json`), review);
     const taskInterfaceAnalysis = this.shouldAnalyzeTaskInterface(review)
-      ? this.analyzeTaskInterface(task, owner, review, implementation, qualityResults, tempDir, stateCorrection, doctorRecovery)
+      ? this.analyzeTaskInterface(task, owner, review, implementation, qualityResults, tempDir, stateCorrection)
       : null;
 
     if (taskInterfaceAnalysis && review.status !== 'approved') {
@@ -4523,18 +4217,14 @@ export class CompassRoseOrchestrator {
     if (review.status === 'approved') {
     const updatedFeatureState = stateCorrection
         ? this.updateFeatureStateAfterStateCorrection(owner.statePath, task.taskId, stateCorrection)
-        : doctorRecovery
-          ? this.updateFeatureStateAfterDoctorRecovery(owner.statePath, task, doctorRecovery)
-          : this.updateFeatureStateAfterApprovedReview(owner.statePath, task);
+        : this.updateFeatureStateAfterApprovedReview(owner.statePath, task);
       const updatedProjectState = stateCorrection
         ? this.updateProjectStateAfterStateCorrection(task.featureId, stateCorrection)
-        : doctorRecovery
-          ? this.updateProjectStateAfterDoctorRecovery(task.featureId, task.taskId, doctorRecovery.restoration_target)
-          : this.updateProjectStateAfterApprovedReview(task.featureId, task.taskId);
+        : this.updateProjectStateAfterApprovedReview(task.featureId, task.taskId);
       writeText(owner.statePath, updatedFeatureState);
       writeText(this.projectStatePath, updatedProjectState);
 
-      if (!stateCorrection && !doctorRecovery) {
+      if (!stateCorrection) {
         this.completedPrimaryTaskAnchors.add(this.primaryTaskAnchor(task.taskId));
       }
 
@@ -4763,172 +4453,6 @@ export class CompassRoseOrchestrator {
     };
   }
 
-  private executeDoctorRecoveryTask(
-    task: ParsedTaskDocument,
-    doctorRecovery: DoctorRecoveryTaskMetadata,
-  ): StepExecutionResult {
-    const owner = this.resolveWorkItemContext(task.featureId);
-    const recoveryLessonLines = this.buildRecoveryLessonPromptLines(task.featureId, task.taskId);
-    const prompt = buildDoctorRecoveryPrompt(task, doctorRecovery, recoveryLessonLines);
-    const sourcePaths = [
-      'src/contracts/runtime/doctor-recovery-execution-prompt.md',
-      'src/contracts/task/doctor-recovery-task.md',
-      task.path,
-      ...task.likelyAffectedFiles,
-    ];
-    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
-      role: 'doctor',
-      kind: 'doctor_recovery_task',
-      label: `doctor:recover:${task.taskId}`,
-      feature_id: task.featureId,
-      task_id: task.taskId,
-      source_paths: sourcePaths,
-      prompt,
-      tool: {
-        name: 'codex',
-        command: this.codexCommand,
-        model: resolveCodexImplementerModel(),
-        output_schema_id: null,
-      },
-    }));
-    const headBefore = this.git.headCommit();
-    const commandResult = this.codex.run(prompt, `doctor:recover:${task.taskId}`);
-    this.throwIfControlledStopRequested();
-    const headAfter = this.git.headCommit();
-    const attempt = this.captureImplementationAttempt(task, commandResult, [], headBefore, headAfter);
-    this.persistImplementationAttemptArtifacts(task.taskId, 1, attempt);
-    this.artifacts.writeJson(join('implementations', `${task.taskId}.json`), attempt);
-    this.artifacts.writeJson(join('implementation-attempts', `${task.taskId}.json`), {
-      task_id: task.taskId,
-      retried_after_partial_changes: false,
-      attempts: [attempt],
-      final_attempt: attempt,
-    } satisfies ImplementationAttemptHistory);
-    this.artifacts.writeText(join('raw-output', `${task.taskId}.log`), ensureTrailingNewline(attempt.raw_output || 'No output.\n'));
-
-    if (attempt.git_diff.trim().length > 0) {
-      this.artifacts.writeText(join('diffs', `${task.taskId}.patch`), attempt.git_diff);
-    } else if (attempt.fallback_git_diff) {
-      this.artifacts.writeText(join('diffs', `${task.taskId}.fallback.patch`), attempt.fallback_git_diff);
-    }
-
-    if (attempt.status !== 'success') {
-      return this.stopAfterDoctorRecoveryFailure(
-        owner,
-        task,
-        doctorRecovery,
-        attempt.error ?? `Doctor recovery ${task.taskId} failed (${attempt.diagnostics.classification}).`,
-      );
-    }
-
-    // A doctor recovery agent is allowed to tighten the task interface (scope, quality
-    // gates, acceptance criteria, ...) by editing task.path directly. Re-persist the stored
-    // JSON snapshot from the post-edit markdown before re-entry so loadTask() picks up those
-    // edits on this and every future run, instead of silently re-running against the
-    // pre-edit interface captured when the task was originally planned.
-    this.artifacts.writeJson(join('tasks', `${task.taskId}.json`), storedTaskArtifactFromDocument(task.path, readUtf8(task.path)));
-    task = this.loadTask(task.taskId);
-
-    const qualityResults = this.runQualityGates(task);
-    this.throwIfControlledStopRequested();
-    this.artifacts.writeJson(join('quality-gates', `${task.taskId}.json`), qualityResults);
-    if (qualityResults.some((result) => result.status === 'waived')) {
-      return this.blockOnUnrelatedFixFailure(owner, task, qualityResults);
-    }
-
-    const passed = qualityResults.every((result) => result.status !== 'failed');
-    if (!passed) {
-      const failures = qualityResults
-        .filter((result) => result.status === 'failed')
-        .map((result) => `${result.name}: ${result.output_summary}`);
-      return this.stopAfterDoctorRecoveryFailure(
-        owner,
-        task,
-        doctorRecovery,
-        `Doctor recovery ${task.taskId} failed its re-entry quality gates.\n${failures.join('\n')}`,
-      );
-    }
-
-    const updatedFeatureState = this.updateFeatureStateAfterDoctorRecovery(owner.statePath, task, doctorRecovery);
-    const updatedProjectState = this.updateProjectStateAfterDoctorRecovery(task.featureId, task.taskId, doctorRecovery.restoration_target);
-    writeText(owner.statePath, updatedFeatureState);
-    writeText(this.projectStatePath, updatedProjectState);
-
-    if (this.options.commit) {
-      const changedFiles = this.git.diffNameOnly();
-      this.git.commit(changedFiles, `proto: apply doctor recovery ${task.taskId}`);
-    }
-
-    return {
-      kind: 'advanced',
-      exitCode: 0,
-      continueLoop: true,
-      summary: `Doctor recovery ${task.taskId} passed its re-entry quality gates and restored ${doctorRecovery.restoration_target.lifecycle_state}.`,
-    };
-  }
-
-  private stopAfterDoctorRecoveryFailure(
-    owner: WorkItemContext,
-    task: ParsedTaskDocument,
-    doctorRecovery: DoctorRecoveryTaskMetadata,
-    reason: string,
-  ): StepExecutionResult {
-    // Build the blocker once from the original blocker's own known kind/recoverability instead
-    // of letting `recordBlockedFeature`'s default path re-derive one from this failure's reason
-    // text: `reason` describes the recovery task's own re-entry gates failing, not the nature of
-    // the original blocker, so regex-matching it (for kind *or* recoverability) would classify
-    // the wrong thing and could route a terminal/human-only blocker back into another automatic
-    // doctor-recovery attempt. The same blocker is persisted and used in the diagnostic artifact
-    // below, so both stay consistent by construction. See ADR-0031/ADR-0034.
-    const blocker: BlockerProfile = {
-      kind: doctorRecovery.blocker.kind,
-      signature: doctorRecovery.blocker.signature,
-      recoverability: doctorRecovery.blocker.recoverability === 'terminal' ? 'terminal' : 'human',
-      evidence: uniqueStrings([
-        reason,
-        ...doctorRecovery.blocker.evidence,
-        `restoration_target=${doctorRecovery.restoration_target.lifecycle_state}:${doctorRecovery.restoration_target.active_task}`,
-      ]),
-      observed_state: doctorRecovery.blocker.observed_state,
-    };
-    this.persistBlockedFeatureWithKnownBlocker(owner, task.featureId, task.taskId, reason, blocker);
-    const decision: DiagnosticAutocorrectionDecision = {
-      feature_id: task.featureId,
-      diagnosis_summary: 'Doctor recovery stopped because the bounded recovery itself failed or could not prove deterministic re-entry readiness.',
-      blocker,
-      next_step: 'stop_with_diagnostic',
-      next_step_reason: reason,
-      interface_response: {
-        mode: 'manual_review',
-        summary: 'Doctor recovery did not satisfy its own re-entry gates; inspect the recovery artifact before another attempt.',
-        target_paths: uniqueStrings([
-          task.path,
-          'src/contracts/runtime/doctor-recovery-execution-prompt.md',
-          'src/contracts/task/doctor-recovery-task.md',
-        ]),
-      },
-      systemic_blocker: null,
-    };
-    this.writeDiagnosticArtifact(decision);
-
-    if (this.options.commit) {
-      this.git.commit(
-        [
-          relativePath(this.repositoryRoot, owner.statePath),
-          relativePath(this.repositoryRoot, this.projectStatePath),
-        ],
-        `proto: stop doctor recovery ${task.taskId}`,
-      );
-    }
-
-    return {
-      kind: 'blocked',
-      exitCode: 2,
-      continueLoop: false,
-      summary: reason,
-    };
-  }
-
   private shouldAnalyzeTaskInterface(review: ReviewerOutput): boolean {
     return review.status === 'changes_required';
   }
@@ -4941,15 +4465,12 @@ export class CompassRoseOrchestrator {
     qualityResults: readonly QualityGateResult[],
     tempDir: string,
     stateCorrection: StateCorrectionTask | null,
-    doctorRecovery: DoctorRecoveryTaskMetadata | null,
   ): TaskInterfaceAnalysis {
     const reviewPath = join(tempDir, 'review.json');
     writeFileSync(reviewPath, `${JSON.stringify(review, null, 2)}\n`, 'utf8');
     const sourcePaths = [
       'src/contracts/task/task.md',
       ...(stateCorrection ? ['src/contracts/task/state-correction-task.md'] : []),
-      ...(doctorRecovery ? ['src/contracts/task/doctor-recovery-task.md'] : []),
-      ...(doctorRecovery ? ['src/contracts/planner/doctor-recovery-planning-prompt.md'] : []),
       'src/contracts/implementer/task-execution-prompt.md',
       'src/contracts/adapters/implementer-adapter.md',
       'src/contracts/reviewer/review-prompt.md',
@@ -4973,8 +4494,6 @@ export class CompassRoseOrchestrator {
       'Read only:',
       '- `src/contracts/task/task.md`',
       ...(stateCorrection ? ['- `src/contracts/task/state-correction-task.md`'] : []),
-      ...(doctorRecovery ? ['- `src/contracts/task/doctor-recovery-task.md`'] : []),
-      ...(doctorRecovery ? ['- `src/contracts/planner/doctor-recovery-planning-prompt.md`'] : []),
       '- `src/contracts/implementer/task-execution-prompt.md`',
       '- `src/contracts/adapters/implementer-adapter.md`',
       '- `src/contracts/reviewer/review-prompt.md`',
@@ -4996,8 +4515,6 @@ export class CompassRoseOrchestrator {
       '- If not fully perfectible, document implementer limitations that should be recognized by future task design.',
       stateCorrection
         ? '- If this is a state repair task, focus on `state_target`, restored lifecycle fields, and scope around canonicalizing state.'
-        : doctorRecovery
-          ? '- If this is a doctor recovery task, focus on the blocker signature, restoration target, and whether the blocker should become a tighter task interface or a documented limitation.'
         : '- If this is a code task, focus on the minimal fields that improve code implementation behavior.',
       '',
       'Rules:',
@@ -5124,7 +4641,7 @@ export class CompassRoseOrchestrator {
   /**
    * Returns `null` on ordinary success (caller builds its own success StepExecutionResult).
    * Returns a `StepExecutionResult` directly for every terminal outcome that needs its own
-   * distinct handling: implementation failure (doctor recovery continues), or a confirmed
+   * distinct handling: implementation failure (diagnosis continues), or a confirmed
    * unrelated/pre-existing quality-gate failure (blocked on a newly filed or reused fix instead).
    */
   private executeImplementation(task: ParsedTaskDocument, correction: boolean, stateCorrection: StateCorrectionTask | null): StepExecutionResult | null {
@@ -5226,14 +4743,14 @@ export class CompassRoseOrchestrator {
         correction_task_id: correction ? task.taskId : null,
         reason: failureReason,
       });
-      console.error(`Implementation for ${task.taskId} failed; recovery will continue through doctor recovery planning.`);
+      console.error(`Implementation for ${task.taskId} failed; the next step will diagnose it.`);
       return {
         kind: 'advanced',
         exitCode: 0,
         continueLoop: true,
         summary: correction
-          ? `Correction implementation for ${task.taskId} failed; doctor recovery planning will continue.`
-          : `Implementation for ${task.taskId} failed; doctor recovery planning will continue.`,
+          ? `Correction implementation for ${task.taskId} failed; diagnosis will continue.`
+          : `Implementation for ${task.taskId} failed; diagnosis will continue.`,
       };
     }
 
@@ -5273,14 +4790,14 @@ export class CompassRoseOrchestrator {
         correction_task_id: correction ? task.taskId : null,
         reason: failureReason,
       });
-      console.error(`Quality gates failed after implementing ${task.taskId}; recovery will continue through doctor recovery planning.`);
+      console.error(`Quality gates failed after implementing ${task.taskId}; the next step will diagnose it.`);
       return {
         kind: 'advanced',
         exitCode: 0,
         continueLoop: true,
         summary: correction
-          ? `Correction implementation for ${task.taskId} failed; doctor recovery planning will continue.`
-          : `Implementation for ${task.taskId} failed; doctor recovery planning will continue.`,
+          ? `Correction implementation for ${task.taskId} failed; diagnosis will continue.`
+          : `Implementation for ${task.taskId} failed; diagnosis will continue.`,
       };
     }
 
@@ -5463,7 +4980,7 @@ export class CompassRoseOrchestrator {
    * unrelated to this task: none of the paths its output references fall within this task's own
    * `allowedPaths` or its actual changed files, AND the same command still fails against a clean
    * checkout of `HEAD` (i.e. it already failed before this task's diff existed). This is what
-   * stops a narrowly-scoped correction/doctor-recovery task from being rejected by an unrelated,
+   * stops a narrowly-scoped correction task from being rejected by an unrelated,
    * pre-existing failure elsewhere in a broad gate like `npm test` -- see the "gate/scope
    * mismatch" finding (cause F) in the fragility diagnosis at
    * C:\Users\Eric\.claude\plans\atomic-strolling-rivest.md: two real multi-round recovery chains
@@ -5571,7 +5088,7 @@ export class CompassRoseOrchestrator {
 
     this.recordBlockedFeature(task.featureId, reason, task.taskId);
     this.setBlockedOnFix(owner, fixId);
-    // This task's own attempt is abandoned for good (unlike doctor recovery, nothing will ever
+    // This task's own attempt is abandoned for good (nothing will ever
     // plan a follow-up task scoped to its allowed_paths), so its dirty diff -- already archived
     // under .git/proto-compassrose/diffs/ by the quality-gate run that led here -- must be
     // discarded now. Left in the tree, it would permanently fail every future run's
@@ -5729,13 +5246,11 @@ export class CompassRoseOrchestrator {
       '- formalization: complete',
       '- active_task: none',
       '- active_correction_task: none',
-      '- active_unblock_task: none',
       `- severity: ${scaffold.severity}`,
       '- owning_feature: none',
       '- last_implementation_result: not_run',
       '- last_quality_gate_result: unknown',
       '- last_review_result: not_run',
-      '- last_unblock_result: not_run',
       '',
       '## Current Reality',
       '',
@@ -5762,7 +5277,6 @@ export class CompassRoseOrchestrator {
       '- lifecycle_state: none',
       '- active_task: none',
       '- active_correction_task: none',
-      '- active_unblock_task: none',
       '',
       '## Last Approved Change',
       '',
@@ -5862,49 +5376,6 @@ export class CompassRoseOrchestrator {
   }
 
   /**
-   * Counts how many doctor-recovery attempts have already been made for whatever is currently
-   * blocked/failed, entirely independent of how the LLM planner names each recovery task (real
-   * chains observed this session, e.g. "F002-T05-C1-CORRECTION-HANDOFF-DOCTOR-RECOVERY-R7", nest
-   * unpredictably and can't be parsed back into a stable anchor). The runtime owns this counter
-   * completely: planDoctorRecoveryTask() increments it before every attempt, and it resets to 0
-   * only once quality gates genuinely pass (updateFeatureStateAfterImplementation's
-   * review_pending branch) -- not when a recovery task's own narrow re-entry gates pass, which
-   * proves nothing about whether the underlying blocker is actually resolved (see ADR-0032).
-   */
-  private readDoctorRecoveryAttempts(statePath: string): number {
-    return this.readOperationalStatusCounter(statePath, 'doctor_recovery_attempts');
-  }
-
-  /**
-   * Counts every doctor-recovery cycle a feature has ever accumulated across its entire life --
-   * unlike readDoctorRecoveryAttempts() above, this never resets, not even when quality gates
-   * genuinely pass. A feature that keeps hitting new, different blockers over its life could
-   * otherwise accumulate unlimited total recovery cycles, since the per-signature counter resets
-   * on every genuine forward-progress point. See ADR-0040.
-   */
-  private readDoctorRecoveryLifetimeCount(statePath: string): number {
-    return this.readOperationalStatusCounter(statePath, 'doctor_recovery_lifetime_count');
-  }
-
-  /**
-   * Shared reader behind readDoctorRecoveryAttempts()/readDoctorRecoveryLifetimeCount(): both
-   * counters live as plain non-negative integers under the same `## Operational Status` section,
-   * differing only in which key they read. Fails safe to 0 on any parse error or missing
-   * section, exactly like the two callers did before this was extracted.
-   */
-  private readOperationalStatusCounter(statePath: string, key: string): number {
-    try {
-      const markdown = readUtf8(statePath);
-      const operationalStatus = requireSection(markdown, 'Operational Status');
-      const raw = stripTicks(parsePreferredStatusValue(operationalStatus, key) ?? '0');
-      const parsed = Number.parseInt(raw, 10);
-      return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
-    } catch {
-      return 0;
-    }
-  }
-
-  /**
    * Fails safe (treats the fix as unresolved) when the fix can't be found or read, so a
    * transient error never silently resumes a feature whose blocking defect might still be real.
    */
@@ -5949,7 +5420,6 @@ export class CompassRoseOrchestrator {
     markdown = replaceOperationalStatus(markdown, {
       active_task: restorationTarget.active_task,
       active_correction_task: restorationTarget.active_correction_task,
-      active_unblock_task: restorationTarget.active_unblock_task,
       blocked_on_fix: 'none',
     });
     markdown = replaceSection(markdown, 'Blocked By', '- None');
@@ -5957,19 +5427,18 @@ export class CompassRoseOrchestrator {
       '- lifecycle_state: none',
       '- active_task: none',
       '- active_correction_task: none',
-      '- active_unblock_task: none',
     ].join('\n'));
     markdown = replaceSection(markdown, 'Last Approved Change', `Fix \`${fixId}\` reached completed; resumed automatically.`);
-    markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(restorationTarget, restorationTarget.active_task, 'doctor'));
+    markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(restorationTarget, restorationTarget.active_task));
     return markdown;
   }
 
   private updateProjectStateAfterFixResolved(ownerId: string, fixId: string, restorationTarget: RestorationTarget): string {
     let markdown = readUtf8(this.projectStatePath);
     markdown = setOrInsertSection(markdown, 'Active Feature', `\`${ownerId}\``);
-    markdown = replaceSection(markdown, 'Pending', bulletList(restorationTargetProjectPendingLines(restorationTarget, restorationTarget.active_task, 'doctor')));
+    markdown = replaceSection(markdown, 'Pending', bulletList(restorationTargetProjectPendingLines(restorationTarget, restorationTarget.active_task)));
     markdown = replaceSection(markdown, 'Last Approved Change', `Fix \`${fixId}\` reached completed; \`${ownerId}\` resumed automatically.`);
-    markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(restorationTarget, restorationTarget.active_task, 'doctor'));
+    markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(restorationTarget, restorationTarget.active_task));
     markdown = upsertBulletInSection(
       markdown,
       'Current Reality',
@@ -6163,7 +5632,6 @@ export class CompassRoseOrchestrator {
     markdown = replaceOperationalStatus(markdown, {
       active_task: 'none',
       active_correction_task: 'none',
-      active_unblock_task: 'none',
       validation: 'not_started',
       human_ack_required: 'none',
     });
@@ -6172,7 +5640,6 @@ export class CompassRoseOrchestrator {
       '- lifecycle_state: none',
       '- active_task: none',
       '- active_correction_task: none',
-      '- active_unblock_task: none',
     ].join('\n'));
     markdown = upsertParagraphInSection(
       markdown,
@@ -6237,7 +5704,6 @@ export class CompassRoseOrchestrator {
     markdown = replaceOperationalStatus(markdown, {
       active_task: restorationTarget.active_task,
       active_correction_task: restorationTarget.active_correction_task,
-      active_unblock_task: restorationTarget.active_unblock_task,
       human_ack_required: 'none',
     });
     markdown = replaceSection(markdown, 'Blocked By', '- None');
@@ -6245,7 +5711,6 @@ export class CompassRoseOrchestrator {
       '- lifecycle_state: none',
       '- active_task: none',
       '- active_correction_task: none',
-      '- active_unblock_task: none',
     ].join('\n'));
     markdown = replaceSection(markdown, 'Last Approved Change', 'Blocker acknowledged by a human; resumed automatically.');
     markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(restorationTarget, restorationTarget.active_task));
@@ -6538,7 +6003,6 @@ export class CompassRoseOrchestrator {
           lifecycle_state: stripTicks(parsePreferredStatusValue(blockedFromSection, 'lifecycle_state') ?? 'none'),
           active_task: stripTicks(parsePreferredStatusValue(blockedFromSection, 'active_task') ?? 'none'),
           active_correction_task: stripTicks(parsePreferredStatusValue(blockedFromSection, 'active_correction_task') ?? 'none'),
-          active_unblock_task: stripTicks(parsePreferredStatusValue(blockedFromSection, 'active_unblock_task') ?? 'none'),
         }
       : null;
 
@@ -6546,7 +6010,6 @@ export class CompassRoseOrchestrator {
       lifecycleState: stripTicks(requireSection(markdown, 'Lifecycle State').trim()),
       activeTask: stripTicks(parsePreferredStatusValue(operationalStatus, 'active_task') ?? 'none'),
       activeCorrectionTask: stripTicks(parsePreferredStatusValue(operationalStatus, 'active_correction_task') ?? 'none'),
-      activeUnblockTask: stripTicks(parsePreferredStatusValue(operationalStatus, 'active_unblock_task') ?? 'none'),
       blockedBy: parseBulletSection(blockedBySection) ?? [],
       blockedFrom,
       // 'confirmed' when absent (NOT 'not_started'): this field is only genuinely absent from a
@@ -6586,7 +6049,7 @@ export class CompassRoseOrchestrator {
       signature: blockerKind.signature,
       evidence: blockerKind.evidence,
       recoverability: blockerKind.recoverability,
-      observed_state: `lifecycle=${snapshot.lifecycleState}; active_task=${snapshot.activeTask}; active_correction_task=${snapshot.activeCorrectionTask}; active_unblock_task=${snapshot.activeUnblockTask}`,
+      observed_state: `lifecycle=${snapshot.lifecycleState}; active_task=${snapshot.activeTask}; active_correction_task=${snapshot.activeCorrectionTask}`,
     };
   }
 
@@ -6711,7 +6174,7 @@ export class CompassRoseOrchestrator {
   ): void {
     const blockedByLines = this.buildBlockedByLines(blocker, reason);
     // blockedNextPlanningHint() only branches on recoverability, never on kind, and always
-    // returns a generic "plan a doctor recovery task" hint for the non-terminal/human case -- so
+    // returns a generic "a person needs to look at this" hint for the non-terminal/human case -- so
     // a caller whose blocker has an explicit, known correct next action (see recordBlockedFeature)
     // must be able to override it, or fixing `kind` alone changes nothing a human/planner reads.
     const nextPlanningHint = explicitNextPlanningHint ?? this.blockedNextPlanningHint(blocker, restorationTarget);
@@ -6915,7 +6378,7 @@ export class CompassRoseOrchestrator {
       return `The active feature is blocked by a blocker that requires human intervention (${blocker.signature}); stop and document the limitation.`;
     }
 
-    return `Plan a doctor recovery task for blocker \`${blocker.signature}\` and then restore \`${restorationTarget.lifecycle_state}\`.`;
+    return `Run \`/desbloquear\` to work out blocker \`${blocker.signature}\` with a person, then restore \`${restorationTarget.lifecycle_state}\`.`;
   }
 
   private blockedProjectPendingLines(
@@ -6932,7 +6395,7 @@ export class CompassRoseOrchestrator {
     }
 
     return [
-      'Plan a doctor recovery task for the active feature.',
+      'Run `/desbloquear` on the active feature to work out its blocker with a person.',
       `Restore the captured \`${restorationTarget.lifecycle_state}\` state after the blocker is resolved.`,
       'Continue updating this file with approved repository facts as feature work lands.',
     ];
@@ -6951,9 +6414,7 @@ export class CompassRoseOrchestrator {
     markdown = replaceOperationalStatus(markdown, {
       active_task: restorationTarget.active_task,
       active_correction_task: restorationTarget.active_correction_task,
-      active_unblock_task: 'none',
       last_review_result: lifecycleState === 'review_failed' ? 'failed' : 'blocked',
-      last_unblock_result: 'not_run',
     });
     // blockedByLines is already a list of "- key: value" bullet lines (buildBlockedByLines);
     // wrapping it in bulletList() here double-bulleted every "Blocked By" entry ("- - kind: ...")
@@ -6965,7 +6426,6 @@ export class CompassRoseOrchestrator {
       `- lifecycle_state: \`${restorationTarget.lifecycle_state}\``,
       `- active_task: \`${restorationTarget.active_task}\``,
       `- active_correction_task: \`${restorationTarget.active_correction_task}\``,
-      `- active_unblock_task: \`${restorationTarget.active_unblock_task}\``,
       `- recoverability: ${blocker.recoverability}`,
     ].join('\n'));
     markdown = replaceSection(markdown, 'Next Planning Hint', nextPlanningHint);
@@ -7009,10 +6469,7 @@ export class CompassRoseOrchestrator {
 
   private primaryTaskAnchor(taskId: string): string {
     const artifact = this.loadTaskArtifact(taskId);
-    const restoredTask = artifact?.doctor_recovery?.restoration_target.active_task
-      ?? artifact?.unblock?.restoration_target.active_task
-      ?? artifact?.state_correction?.state_target.restored_active_task
-      ?? 'none';
+    const restoredTask = artifact?.state_correction?.state_target.restored_active_task ?? 'none';
     if (restoredTask !== 'none') {
       return primaryTaskAnchorFromId(restoredTask);
     }
@@ -7168,8 +6625,6 @@ export class CompassRoseOrchestrator {
         context: stored.task.context,
         expectedDeliverables: stored.task.expected_deliverables,
         stateCorrection: stored.state_correction ?? parsed.stateCorrection,
-        doctorRecovery: stored.doctor_recovery ?? stored.unblock ?? parsed.doctorRecovery ?? parsed.unblock,
-        unblock: stored.unblock ?? stored.doctor_recovery ?? parsed.unblock ?? parsed.doctorRecovery,
         reviewableDiffHandoff: parsed.reviewableDiffHandoff,
         path: taskPath,
       };
@@ -7299,7 +6754,7 @@ export class CompassRoseOrchestrator {
     markdown = replaceSection(
       markdown,
       'Next Planning Hint',
-      `The active feature is \`${featureId}\`, but implementation of \`${taskId}\` failed; plan a bounded doctor recovery task before continuing.`,
+      `The active feature is \`${featureId}\`, but implementation of \`${taskId}\` failed; diagnose it before continuing.`,
     );
     markdown = upsertBulletInSection(
       markdown,
@@ -7344,13 +6799,11 @@ export class CompassRoseOrchestrator {
     markdown = replaceOperationalStatus(markdown, {
       active_task: taskId,
       active_correction_task: 'none',
-      active_unblock_task: 'none',
     });
     markdown = replaceSection(markdown, 'Blocked From', [
       '- lifecycle_state: none',
       '- active_task: none',
       '- active_correction_task: none',
-      '- active_unblock_task: none',
     ].join('\n'));
     markdown = upsertParagraphInSection(
       markdown,
@@ -7416,11 +6869,8 @@ export class CompassRoseOrchestrator {
       last_quality_gate_result: qualityResult,
       last_review_result: 'not_run',
       active_correction_task: 'none',
-      active_unblock_task: 'none',
-      // Quality gates actually passing is the only point that proves a prior doctor recovery
+      // Quality gates actually passing is the only point that proves a prior recovery attempt
       // (if any) produced real forward progress rather than just re-entering the same failing
-      // attempt; see updateFeatureStateAfterDoctorRecovery for why it must NOT reset this itself.
-      ...(lifecycleState === 'review_pending' ? { doctor_recovery_attempts: '0' } : {}),
     });
 
     if (lifecycleState === 'quality_failed') {
@@ -7441,7 +6891,6 @@ export class CompassRoseOrchestrator {
         lifecycle_state: 'implementation_running',
         active_task: taskId,
         active_correction_task: 'none',
-        active_unblock_task: 'none',
       };
       // Same double-bulleting fix as updateFeatureStateForBlocked below -- buildBlockedByLines()
       // already returns "- key: value" lines.
@@ -7450,7 +6899,6 @@ export class CompassRoseOrchestrator {
         `- lifecycle_state: \`${restorationTarget.lifecycle_state}\``,
         `- active_task: \`${restorationTarget.active_task}\``,
         `- active_correction_task: \`${restorationTarget.active_correction_task}\``,
-        `- active_unblock_task: \`${restorationTarget.active_unblock_task}\``,
         `- recoverability: ${blocker.recoverability}`,
       ].join('\n'));
       markdown = replaceSection(markdown, 'Next Planning Hint', this.blockedNextPlanningHint(blocker, restorationTarget));
@@ -7461,7 +6909,6 @@ export class CompassRoseOrchestrator {
       '- lifecycle_state: none',
       '- active_task: none',
       '- active_correction_task: none',
-      '- active_unblock_task: none',
     ].join('\n'));
     markdown = replaceSection(markdown, 'Next Planning Hint', `Review subtask \`${taskId}\` next.`);
     return markdown;
@@ -7485,13 +6932,11 @@ export class CompassRoseOrchestrator {
       last_quality_gate_result: 'unknown',
       last_review_result: 'not_run',
       active_correction_task: 'none',
-      active_unblock_task: 'none',
     });
     markdown = replaceSection(markdown, 'Blocked From', [
       '- lifecycle_state: none',
       '- active_task: none',
       '- active_correction_task: none',
-      '- active_unblock_task: none',
     ].join('\n'));
     markdown = replaceSection(markdown, 'Next Planning Hint', `Recover or finish subtask implementation of \`${taskId}\` before allowing review or new planning.`);
     return markdown;
@@ -7506,26 +6951,24 @@ export class CompassRoseOrchestrator {
       last_quality_gate_result: 'unknown',
       last_review_result: 'not_run',
       active_correction_task: 'none',
-      active_unblock_task: 'none',
     });
     markdown = replaceSection(markdown, 'Blocked By', [
       '- kind: implementation_failure',
       `- signature: implementation-failure-${taskId}`,
       '- recoverability: agent',
-      `- observed_state: lifecycle=implementation_failed; active_task=${taskId}; active_correction_task=none; active_unblock_task=none`,
+      `- observed_state: lifecycle=implementation_failed; active_task=${taskId}; active_correction_task=none`,
       `- evidence: ${reason}`,
     ].join('\n'));
     markdown = replaceSection(markdown, 'Blocked From', [
       '- lifecycle_state: `task_ready`',
       `- active_task: \`${taskId}\``,
       '- active_correction_task: `none`',
-      '- active_unblock_task: `none`',
       '- recoverability: agent',
     ].join('\n'));
     markdown = replaceSection(
       markdown,
       'Next Planning Hint',
-      `Plan a bounded doctor recovery task for the failed implementation of \`${taskId}\` and restore task readiness before continuing.`,
+      `Diagnose the failed implementation of \`${taskId}\` and restore task readiness before continuing.`,
     );
     return markdown;
   }
@@ -7573,7 +7016,6 @@ export class CompassRoseOrchestrator {
     markdown = replaceOperationalStatus(markdown, {
       active_task: 'none',
       active_correction_task: 'none',
-      active_unblock_task: 'none',
       last_implementation_result: 'passed',
       last_quality_gate_result: 'passed',
       last_review_result: 'approved',
@@ -7582,7 +7024,6 @@ export class CompassRoseOrchestrator {
       '- lifecycle_state: none',
       '- active_task: none',
       '- active_correction_task: none',
-      '- active_unblock_task: none',
     ].join('\n'));
     markdown = replaceSection(markdown, 'Last Approved Change', `Subtask \`${task.taskId}\` was approved by the prototype orchestrator.`);
     markdown = replaceSection(markdown, 'Next Planning Hint', 'Plan the next task that advances this feature from the remaining gap.');
@@ -7605,14 +7046,12 @@ export class CompassRoseOrchestrator {
     markdown = replaceOperationalStatus(markdown, {
       active_task: taskId,
       active_correction_task: correctionTaskId,
-      active_unblock_task: 'none',
       last_review_result: 'changes_required',
     });
     markdown = replaceSection(markdown, 'Blocked From', [
       '- lifecycle_state: none',
       '- active_task: none',
       '- active_correction_task: none',
-      '- active_unblock_task: none',
     ].join('\n'));
     markdown = replaceSection(markdown, 'Next Planning Hint', `Execute correction subtask \`${correctionTaskId}\` next.`);
     return markdown;
@@ -7628,46 +7067,13 @@ export class CompassRoseOrchestrator {
     markdown = replaceOperationalStatus(markdown, {
       active_task: taskId,
       active_correction_task: correctionTaskId,
-      active_unblock_task: 'none',
     });
     markdown = replaceSection(markdown, 'Blocked From', [
       '- lifecycle_state: none',
       '- active_task: none',
       '- active_correction_task: none',
-      '- active_unblock_task: none',
     ].join('\n'));
     markdown = replaceSection(markdown, 'Next Planning Hint', `Execute correction task \`${correctionTaskId}\` next.`);
-    return markdown;
-  }
-
-  private updateFeatureStateForDoctorRecovery(
-    featureStatePath: string,
-    taskId: string,
-    restorationTarget: RestorationTarget,
-    doctorRecoveryAttempts: number,
-    doctorRecoveryLifetimeCount: number,
-  ): string {
-    let markdown = readUtf8(featureStatePath);
-    markdown = replaceSection(markdown, 'Lifecycle State', 'unblock_pending');
-    markdown = replaceOperationalStatus(markdown, {
-      active_correction_task: 'none',
-      active_unblock_task: taskId,
-      last_review_result: 'blocked',
-      last_unblock_result: 'not_run',
-      doctor_recovery_attempts: String(doctorRecoveryAttempts),
-      // Never reset elsewhere -- see readDoctorRecoveryLifetimeCount()/ADR-0040. Every other
-      // Operational Status write in this file omits this key entirely, so
-      // replaceOperationalStatus()'s carry-forward preserves it unless this is the one place
-      // that increments it.
-      doctor_recovery_lifetime_count: String(doctorRecoveryLifetimeCount),
-    });
-    markdown = replaceSection(markdown, 'Blocked From', [
-      `- lifecycle_state: \`${restorationTarget.lifecycle_state}\``,
-      `- active_task: \`${restorationTarget.active_task}\``,
-      `- active_correction_task: \`${restorationTarget.active_correction_task}\``,
-      `- active_unblock_task: \`${restorationTarget.active_unblock_task}\``,
-    ].join('\n'));
-    markdown = replaceSection(markdown, 'Next Planning Hint', `Execute doctor recovery task \`${taskId}\` next.`);
     return markdown;
   }
 
@@ -7681,7 +7087,6 @@ export class CompassRoseOrchestrator {
     markdown = replaceOperationalStatus(markdown, {
       active_task: stateCorrection.state_target.restored_active_task,
       active_correction_task: stateCorrection.state_target.restored_active_correction_task,
-      active_unblock_task: 'none',
       last_implementation_result: 'passed',
       last_quality_gate_result: 'passed',
       last_review_result: 'approved',
@@ -7690,56 +7095,10 @@ export class CompassRoseOrchestrator {
       '- lifecycle_state: none',
       '- active_task: none',
       '- active_correction_task: none',
-      '- active_unblock_task: none',
     ].join('\n'));
     markdown = replaceSection(markdown, 'Last Approved Change', `State correction artifact \`${taskId}\` was applied by the prototype orchestrator.`);
     markdown = replaceSection(markdown, 'Next Planning Hint', stateCorrectionNextPlanningHint(stateCorrection));
     return markdown;
-  }
-
-  private updateFeatureStateAfterDoctorRecovery(
-    featureStatePath: string,
-    task: ParsedTaskDocument,
-    doctorRecovery: DoctorRecoveryTaskMetadata,
-  ): string {
-    let markdown = readUtf8(featureStatePath);
-    markdown = replaceSection(markdown, 'Lifecycle State', doctorRecovery.restoration_target.lifecycle_state);
-    markdown = replaceOperationalStatus(markdown, {
-      active_task: doctorRecovery.restoration_target.active_task,
-      active_correction_task: doctorRecovery.restoration_target.active_correction_task,
-      active_unblock_task: doctorRecovery.restoration_target.active_unblock_task,
-      last_implementation_result: 'passed',
-      last_quality_gate_result: 'passed',
-      last_review_result: 'skipped',
-      last_unblock_result: 'passed',
-      // Deliberately NOT reset here. Passing this recovery task's own narrow re-entry gates only
-      // proves the state-document rewrite is internally consistent -- it says nothing about
-      // whether the underlying blocker that triggered diagnose_autocorrect is actually resolved.
-      // Resetting unconditionally on every recovery application let a recurring same-root-cause
-      // quality-gate failure cycle quality_failed -> doctor recovery -> implementation_running ->
-      // quality_failed forever: priorAttempts in planDoctorRecoveryTask always read back 0, so
-      // max_recovery_iterations could never trip. The counter now only resets once quality gates
-      // genuinely pass (see updateFeatureStateAfterImplementation's review_pending branch), which
-      // is the first point that proves real forward progress happened.
-    });
-    markdown = replaceSection(markdown, 'Blocked By', '- None');
-    markdown = replaceSection(markdown, 'Blocked From', [
-      '- lifecycle_state: none',
-      '- active_task: none',
-      '- active_correction_task: none',
-      '- active_unblock_task: none',
-    ].join('\n'));
-    markdown = replaceSection(markdown, 'Last Approved Change', `Doctor recovery task \`${task.taskId}\` passed re-entry quality gates and was applied by the prototype orchestrator.`);
-    markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(doctorRecovery.restoration_target, doctorRecovery.restoration_target.active_task, 'doctor'));
-    return markdown;
-  }
-
-  private updateFeatureStateAfterUnblock(
-    featureStatePath: string,
-    task: ParsedTaskDocument,
-    unblock: UnblockTaskMetadata,
-  ): string {
-    return this.updateFeatureStateAfterDoctorRecovery(featureStatePath, task, unblock);
   }
 
   private updateProjectStateAfterStateCorrection(featureId: string, stateCorrection: StateCorrectionTask): string {
@@ -7755,46 +7114,6 @@ export class CompassRoseOrchestrator {
       `- Feature \`${featureId}\` state was canonicalized; the active task pointer remains \`${stateCorrection.state_target.restored_active_task}\`.`,
     );
     return markdown;
-  }
-
-  private updateProjectStateForDoctorRecovery(featureId: string, taskId: string, lifecycleState: string): string {
-    let markdown = readUtf8(this.projectStatePath);
-    markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
-    markdown = replaceSection(markdown, 'Pending', bulletList([
-      `Execute doctor recovery task \`${taskId}\` for the active feature.`,
-      'Continue updating this file with approved repository facts as feature work lands.',
-    ]));
-    markdown = replaceSection(markdown, 'Next Planning Hint', `The active feature is \`${featureId}\`, and its next valid action is to execute doctor recovery task \`${taskId}\` from the captured \`${lifecycleState}\` state.`);
-    markdown = upsertBulletInSection(
-      markdown,
-      'Current Reality',
-      `- Feature \`${featureId}\` now has a planned doctor recovery task`,
-      `- Feature \`${featureId}\` now has a planned doctor recovery task, \`${taskId}\`, to resolve a recoverable blocker and restore \`${lifecycleState}\`.`,
-    );
-    return markdown;
-  }
-
-  private updateProjectStateForUnblock(featureId: string, taskId: string, lifecycleState: string): string {
-    return this.updateProjectStateForDoctorRecovery(featureId, taskId, lifecycleState);
-  }
-
-  private updateProjectStateAfterDoctorRecovery(featureId: string, taskId: string, restorationTarget: RestorationTarget): string {
-    let markdown = readUtf8(this.projectStatePath);
-    markdown = setOrInsertSection(markdown, 'Active Feature', `\`${featureId}\``);
-    markdown = replaceSection(markdown, 'Pending', bulletList(restorationTargetProjectPendingLines(restorationTarget, taskId, 'doctor')));
-    markdown = replaceSection(markdown, 'Last Approved Change', `Doctor recovery task \`${taskId}\` passed re-entry quality gates and was applied by the prototype orchestrator.`);
-    markdown = replaceSection(markdown, 'Next Planning Hint', restorationTargetNextPlanningHint(restorationTarget, restorationTarget.active_task, 'doctor'));
-    markdown = upsertBulletInSection(
-      markdown,
-      'Current Reality',
-      `- Feature \`${featureId}\` now has a planned doctor recovery task`,
-      `- Feature \`${featureId}\` recovered from a blocker through doctor recovery task \`${taskId}\`; the active task pointer was restored to \`${restorationTarget.active_task}\`.`,
-    );
-    return markdown;
-  }
-
-  private updateProjectStateAfterUnblock(featureId: string, taskId: string, restorationTarget: RestorationTarget): string {
-    return this.updateProjectStateAfterDoctorRecovery(featureId, taskId, restorationTarget);
   }
 
   private recordRecoveryLesson(
@@ -7871,7 +7190,7 @@ export class CompassRoseOrchestrator {
    * the old single-overwritten-file design could only ever surface whichever one was most recent.
    *
    * When `activeTaskId` is given, lessons about that SAME anchor (see primaryTaskAnchorFromId)
-   * are sorted first -- still the most directly relevant lesson for a doctor-recovery task fixing
+   * are sorted first -- still the most directly relevant lesson for a correction task fixing
    * one specific active task -- but unlike the old design, a same-anchor match is a sort
    * preference now, not an exclusive filter that discards every other lesson.
    */

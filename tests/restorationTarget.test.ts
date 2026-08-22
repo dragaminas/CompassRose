@@ -44,7 +44,6 @@ describe('preferredRestorationTarget', () => {
         lifecycle_state: 'implementation_running',
         active_task: 'F1-T1',
         active_correction_task: 'none',
-        active_unblock_task: 'none',
       },
     });
 
@@ -58,14 +57,13 @@ describe('preferredRestorationTarget', () => {
       lifecycle_state: 'implementation_running',
       active_task: 'F1-T1',
       active_correction_task: 'none',
-      active_unblock_task: 'none',
     });
   });
 
   test('ignores a Blocked From anchor whose lifecycle_state is "none"', () => {
     const snapshot = buildSnapshot({
       lifecycleState: 'quality_failed',
-      blockedFrom: { lifecycle_state: 'none', active_task: 'none', active_correction_task: 'none', active_unblock_task: 'none' },
+      blockedFrom: { lifecycle_state: 'none', active_task: 'none', active_correction_task: 'none' },
     });
 
     expect(preferredRestorationTarget(snapshot).lifecycle_state).toBe('implementation_running');
@@ -80,7 +78,7 @@ describe('resolveImplementationFailureActiveTask', () => {
 
   test('falls back to the Blocked From active task', () => {
     const snapshot = buildSnapshot({
-      blockedFrom: { lifecycle_state: 'implementation_running', active_task: 'F1-T2', active_correction_task: 'none', active_unblock_task: 'none' },
+      blockedFrom: { lifecycle_state: 'implementation_running', active_task: 'F1-T2', active_correction_task: 'none' },
     });
     expect(resolveImplementationFailureActiveTask(snapshot, () => null)).toBe('F1-T2');
   });
@@ -108,25 +106,23 @@ describe('restorationTargetNextPlanningHint / restorationTargetProjectPendingLin
     ['review_pending', /Review `F1-T1`/],
     ['implementation_running', /Resume `F1-T1`/],
     ['formalized', /Plan the next task/],
-    ['unblock_pending', /Execute doctor recovery task `F1-T1`/],
   ] as const)('produces a hint for lifecycle_state %s', (lifecycleState, pattern) => {
-    const target = { lifecycle_state: lifecycleState, active_task: 'F1-T1', active_correction_task: 'none', active_unblock_task: 'none' };
+    const target = { lifecycle_state: lifecycleState, active_task: 'F1-T1', active_correction_task: 'none' };
     expect(restorationTargetNextPlanningHint(target, 'F1-T1')).toMatch(pattern);
   });
 
-  test('distinguishes doctor/unblock correction_pending from a plain task correction_pending', () => {
-    const target = { lifecycle_state: 'correction_pending', active_task: 'F1-T1', active_correction_task: 'none', active_unblock_task: 'none' };
-    expect(restorationTargetNextPlanningHint(target, 'F1-T1', 'doctor')).toContain('doctor recovery task');
-    expect(restorationTargetNextPlanningHint(target, 'F1-T1', 'task')).toContain('correction task');
+  test('names the correction task for a correction_pending restoration', () => {
+    const target = { lifecycle_state: 'correction_pending', active_task: 'F1-T1', active_correction_task: 'none' };
+    expect(restorationTargetNextPlanningHint(target, 'F1-T1')).toContain('correction task');
   });
 
   test('falls back to a generic "continue from" hint for an unrecognized lifecycle state', () => {
-    const target = { lifecycle_state: 'some_custom_state', active_task: 'F1-T1', active_correction_task: 'none', active_unblock_task: 'none' };
+    const target = { lifecycle_state: 'some_custom_state', active_task: 'F1-T1', active_correction_task: 'none' };
     expect(restorationTargetNextPlanningHint(target, 'F1-T1')).toContain('some_custom_state');
   });
 
   test('restorationTargetProjectPendingLines always includes the bookkeeping reminder line', () => {
-    const target = { lifecycle_state: 'task_ready', active_task: 'F1-T1', active_correction_task: 'none', active_unblock_task: 'none' };
+    const target = { lifecycle_state: 'task_ready', active_task: 'F1-T1', active_correction_task: 'none' };
     const lines = restorationTargetProjectPendingLines(target, 'F1-T1');
     expect(lines[1]).toBe('Continue updating this file with approved repository facts as feature work lands.');
   });

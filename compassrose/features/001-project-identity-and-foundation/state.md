@@ -13,11 +13,9 @@ completed
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 - last_implementation_result: passed
 - last_quality_gate_result: passed
 - last_review_result: approved
-- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -54,7 +52,6 @@ The repository now presents CompassRose consistently as a CLI-first TypeScript p
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

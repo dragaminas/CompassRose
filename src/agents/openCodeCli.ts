@@ -26,7 +26,7 @@ export class OpenCodeCli {
     // The wrong flag name means yargs silently ignores it, so opencode never actually gets
     // permission to write/edit files non-interactively -- it just talks about what it would do
     // and exits with no diff, which is indistinguishable from a "did nothing" implementation
-    // failure. Found live: two consecutive doctor-recovery/implementer runs against this same
+    // failure. Found live: two consecutive implementer runs against this same
     // task produced zero file changes despite reporting success.
     //
     // `--pure` disables the user's globally-installed opencode plugins for this invocation. One

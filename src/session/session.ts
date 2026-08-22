@@ -72,7 +72,6 @@ const STEP_LABEL: Readonly<Record<string, string>> = {
   plan_fix_task: 'plan',
   plan_subtask: 'plan',
   correct_state: 'repair',
-  doctor_recovery_task: 'recover',
   unblock_task: 'unblock',
   diagnose_autocorrect: 'diagnose',
   implement_task: 'implement',

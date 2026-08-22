@@ -249,11 +249,9 @@ task_planning_pending
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 - last_implementation_result: not_run
 - last_quality_gate_result: unknown
 - last_review_result: not_run
-- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -280,7 +278,6 @@ The feature is formalized and ready for its first task request to be elaborated.
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

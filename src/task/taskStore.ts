@@ -45,7 +45,7 @@ export function tryFindTaskDocumentPath(taskId: string, searchRoots: readonly st
   }
 }
 
-// Task/correction/doctor-recovery/state-correction ids are proposed by an LLM call and never
+// Task/correction/state-correction ids are proposed by an LLM call and never
 // otherwise checked for uniqueness before being written. A planner that echoes a stale id
 // (e.g. re-deriving already-completed correction work from state-doc history) silently
 // overwrites that id's stored JSON artifact and leaves two task documents claiming the same

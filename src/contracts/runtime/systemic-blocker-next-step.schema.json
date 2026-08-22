@@ -5,7 +5,7 @@
   "properties": {
     "next_step": {
       "type": "string",
-      "enum": ["plan_doctor_recovery", "file_blocking_fix"]
+      "enum": ["block_for_conversation", "file_blocking_fix"]
     },
     "rationale": { "type": "string" }
   }

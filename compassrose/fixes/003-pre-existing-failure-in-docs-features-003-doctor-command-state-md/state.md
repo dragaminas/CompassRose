@@ -13,13 +13,11 @@ completed
 - formalization: complete
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 - severity: high
 - owning_feature: none
 - last_implementation_result: not_applicable
 - last_quality_gate_result: passed
 - last_review_result: not_applicable
-- last_unblock_result: not_run
 
 ## Current Reality
 
@@ -60,7 +58,6 @@ scope.
 - lifecycle_state: none
 - active_task: none
 - active_correction_task: none
-- active_unblock_task: none
 
 ## Last Approved Change
 

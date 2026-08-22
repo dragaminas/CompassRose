@@ -3,12 +3,10 @@ import {
   bulletList,
   correctionTaskToTask,
   renderCorrectionTaskMarkdown,
-  renderDoctorRecoveryTaskMarkdown,
   renderImplementationOutlineMarkdown,
   renderOutlineProgressMarkdown,
   renderStateCorrectionTaskMarkdown,
   renderTaskMarkdown,
-  renderUnblockTaskMarkdown,
   stateCorrectionTaskToTask,
 } from '../src/orchestrator/taskRendering.js';
 import type { PlannedTask, TaskRequest } from '../src/contracts/planner/plannerContracts.js';
@@ -201,42 +199,5 @@ describe('correctionTaskToTask', () => {
     expect(task.development_policy.mode).toBe('test_guided');
     expect(task.expected_deliverables).toEqual(['code', 'tests']);
     expect(task.trace.feature_goal).toBe('Correction for F001-T01');
-  });
-});
-
-describe('renderDoctorRecoveryTaskMarkdown / renderUnblockTaskMarkdown', () => {
-  function buildDoctorRecovery(): DoctorRecoveryTaskMetadata {
-    return {
-      executor_role: 'doctor',
-      review_policy: 'no_review_loop',
-      blocker: {
-        kind: 'implementation_failure',
-        signature: 'implementation-failure-F001-T01',
-        recoverability: 'agent',
-        observed_state: 'lifecycle=implementation_failed',
-        evidence: ['no git diff was produced'],
-      },
-      restoration_target: {
-        lifecycle_state: 'implementation_running',
-        active_task: 'F001-T01',
-        active_correction_task: 'none',
-        active_unblock_task: 'none',
-      },
-    };
-  }
-
-  test('appends Doctor Recovery and Blocker Context sections', () => {
-    const markdown = renderDoctorRecoveryTaskMarkdown(buildTask(), buildDoctorRecovery());
-    expect(markdown).toContain('## Doctor Recovery');
-    expect(markdown).toContain('- executor_role: doctor');
-    expect(markdown).toContain('## Blocker Context');
-    expect(markdown).toContain('- evidence: no git diff was produced');
-  });
-
-  test('renderUnblockTaskMarkdown delegates to renderDoctorRecoveryTaskMarkdown', () => {
-    const doctorRecovery = buildDoctorRecovery();
-    expect(renderUnblockTaskMarkdown(buildTask(), doctorRecovery)).toBe(
-      renderDoctorRecoveryTaskMarkdown(buildTask(), doctorRecovery),
-    );
   });
 });
