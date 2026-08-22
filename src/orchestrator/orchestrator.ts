@@ -1825,7 +1825,7 @@ export class CompassRoseOrchestrator {
     }
 
     this.git.ensureCleanWorktree([
-      relativePath(this.repositoryRoot, this.projectStatePath),
+      this.projectStateRelativePath(),
       // No trailing slash: isPathAllowedByPrefix (gitClient.ts) appends its own '/' when
       // checking a directory prefix, so a prefix that already ends in '/' never matches
       // anything inside it (a latent bug found and fixed alongside findDisallowedDirtyPaths()
@@ -1865,7 +1865,7 @@ export class CompassRoseOrchestrator {
       return dirtyPaths;
     }
 
-    const allowedPrefixes: string[] = [relativePath(this.repositoryRoot, this.projectStatePath)];
+    const allowedPrefixes: string[] = [this.projectStateRelativePath()];
     if (decision.feature_id) {
       allowedPrefixes.push(this.featureRelativePath(decision.feature_id), this.fixRelativePath(decision.feature_id));
     }
@@ -1923,7 +1923,7 @@ export class CompassRoseOrchestrator {
     }
 
     const newAllowedPrefixes = [
-      relativePath(this.repositoryRoot, this.projectStatePath),
+      this.projectStateRelativePath(),
       this.featureRelativePath(featureId),
       this.fixRelativePath(featureId),
       ...newAllowedPaths,
@@ -6159,6 +6159,15 @@ export class CompassRoseOrchestrator {
   private fixRelativePath(fixId: string, ...segments: readonly string[]): string {
     const base = relativePath(this.repositoryRoot, this.fixesRoot).split('\\').join('/');
     return [base, fixId, ...segments].filter((segment) => segment.length > 0).join('/');
+  }
+
+  // Same backslash-vs-forward-slash hazard as featureRelativePath/fixRelativePath above, for the
+  // one other path that's compared against git status output via isPathAllowedByPrefix (the
+  // dirty-worktree allowlist checks). Found live: on Windows, path.relative()'s raw backslash
+  // result never matched git's always-forward-slash dirty-path list, so PROJECT_STATE.md was
+  // reported as a disallowed dirty path even though it's always meant to be allowed.
+  private projectStateRelativePath(): string {
+    return relativePath(this.repositoryRoot, this.projectStatePath).split('\\').join('/');
   }
 
   private listFeatures(): FeatureRecord[] {
