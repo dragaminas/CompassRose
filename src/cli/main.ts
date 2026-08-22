@@ -13,6 +13,7 @@ import { runFeatureValidationCli } from './featureValidation.js';
 import { runBrainstormCli } from './brainstorm.js';
 import { runAcknowledgeBlockerCli } from './acknowledgeBlocker.js';
 import { runSessionCli } from '../session/session.js';
+import { appendRunEvent } from '../runtime/runChannel.js';
 
 export interface CliEnvironment {
   readonly cwd?: string;
@@ -150,6 +151,34 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
       stderr(error instanceof Error ? error.message : String(error));
       return 1;
     }
+  }
+
+  // A supervised run (023-terminal-session): the interactive session launches this exact command
+  // as a child process and watches the log, because a synchronous run cannot report itself over
+  // IPC. Nothing about what the run *does* changes -- see RunObserver's contract -- so this stays
+  // an ordinary `compassrose run` that happens to narrate itself.
+  const eventLogPath = process.env.PROTO_COMPASSROSE_RUN_EVENT_LOG;
+  if (eventLogPath) {
+    orchestrator.setRunObserver({
+      onStepStart(decision) {
+        appendRunEvent(eventLogPath, {
+          type: 'step-start',
+          kind: decision.kind,
+          itemId: decision.feature_id,
+          taskId: decision.correction_task_id ?? decision.task_id,
+        });
+      },
+      onStepEnd(decision, outcome) {
+        appendRunEvent(eventLogPath, {
+          type: 'step-end',
+          kind: decision.kind,
+          itemId: decision.feature_id,
+          taskId: decision.correction_task_id ?? decision.task_id,
+          outcome: outcome.kind,
+          summary: outcome.summary,
+        });
+      },
+    });
   }
 
   return orchestrator.run();

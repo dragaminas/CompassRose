@@ -5,22 +5,19 @@
  * `parseCommandLine` is a state transition, and it is the only thing that can be. The model is
  * never asked what the user meant.
  *
- * ## A known, deliberate limitation of the live view
+ * ## The live view
  *
  * `CompassRoseOrchestrator.run()` is fully synchronous -- every adapter call goes through
- * `spawnSync` -- so while it runs, Node's event loop does not turn. That has two consequences worth
- * stating plainly rather than papering over:
+ * `spawnSync` -- so a process executing it can neither animate anything nor read a keypress until
+ * it finishes. `/run` therefore executes the loop in a child process and watches it from here,
+ * where the event loop is free: see `src/session/runSupervisor.ts` for the supervision, and
+ * `src/runtime/runChannel.ts` for why the two halves talk through files rather than IPC.
  *
- * - There is no animated spinner *within* a step. Progress is drawn at step boundaries, which is
- *   the granularity that carries information anyway: a step is a plan, an implementation, or a
- *   review, and lasts minutes.
- * - `esc` cannot interrupt a step in flight, because the keypress cannot be read until the event
- *   loop turns again. `Ctrl-C` does work: it reaches the process group, the spawned child exits,
- *   `spawnSync` returns, and the runtime's existing signal handler takes effect at the next step
- *   boundary. So `Ctrl-C` is what the session tells the user to press.
- *
- * Closing that gap means moving the run into a child process and streaming step events back over
- * IPC. That is a real change with its own design, not a detail of this one.
+ * What `esc` does is worth stating precisely, because half of it is still bounded by the
+ * synchronous loop: one press requests a controlled stop, which the run notices at its next
+ * checkpoint, so a long implementer call finishes first. A second press terminates the process
+ * tree immediately, agent CLI included, which can leave the worktree mid-write -- which is exactly
+ * why it takes a second, deliberate press.
  */
 import { createInterface } from 'node:readline';
 import { spawnSync } from 'node:child_process';
@@ -43,10 +40,15 @@ import type {
   CompetencyOwner,
   SessionCompetencyProfile,
 } from '../contracts/brainstormer/competency.js';
-import { renderCompletedStep, renderRunHeader, renderRunSummary, type ProgressStep } from './render/progress.js';
+import {
+  renderCompletedStep,
+  renderRunHeader,
+  renderRunningStep,
+  renderRunSummary,
+  type ProgressStep,
+} from './render/progress.js';
+import { superviseRun } from './runSupervisor.js';
 import { parseCommandLine, type SessionContext, type SessionState } from './commands.js';
-import type { StepDecision } from '../contracts/runtime/stepDecision.js';
-import type { StepOutcomeRecord } from '../contracts/runtime/runObserver.js';
 import type { BrainstormTurnRecord } from '../contracts/brainstormer/brainstormerContracts.js';
 
 /**
@@ -72,7 +74,6 @@ const STEP_LABEL: Readonly<Record<string, string>> = {
   plan_fix_task: 'plan',
   plan_subtask: 'plan',
   correct_state: 'repair',
-  unblock_task: 'unblock',
   diagnose_autocorrect: 'diagnose',
   implement_task: 'implement',
   implement_subtask: 'implement',
@@ -83,15 +84,14 @@ const STEP_LABEL: Readonly<Record<string, string>> = {
   blocked: 'blocked',
 };
 
-function labelFor(decision: StepDecision): string {
-  return STEP_LABEL[decision.kind] ?? decision.kind;
+function labelFor(kind: string): string {
+  return STEP_LABEL[kind] ?? kind;
 }
 
-function detailFor(decision: StepDecision, outcome: StepOutcomeRecord): string {
-  const id = decision.correction_task_id ?? decision.task_id;
-  const summary = outcome.summary.split('\n')[0]?.trim() ?? '';
-  const clipped = summary.length > 58 ? `${summary.slice(0, 58)}...` : summary;
-  return [id, clipped].filter((part) => part && part.length > 0).join(' · ');
+function detailFor(taskId: string | null, summary: string): string {
+  const firstLine = summary.split('\n')[0]?.trim() ?? '';
+  const clipped = firstLine.length > 58 ? `${firstLine.slice(0, 58)}...` : firstLine;
+  return [taskId, clipped].filter((part) => part && part.length > 0).join(' · ');
 }
 
 export async function runSessionCli(options: SessionOptions = {}): Promise<number> {
@@ -180,7 +180,7 @@ export async function runSessionCli(options: SessionOptions = {}): Promise<numbe
       writer,
       ask,
       state,
-      runLoop: (target) => runLoop(orchestrator, writer, target),
+      runLoop: (target) => runLoop(orchestrator, writer, gitRoot, target),
     };
 
     // 024-specification-flow: what is already pending comes before any new idea, in a fixed order --
@@ -326,65 +326,102 @@ function converse(
 /**
  * The automated loop, drawn as it happens.
  *
- * The observer writes synchronously from inside `run()`, which is the only way anything reaches the
- * terminal while a synchronous run is in progress -- see this module's header comment.
+ * The loop itself runs in a child process (`superviseRun`), which is what lets this one animate the
+ * frame and read keys while a step is in flight. Everything here is display: what the run *does* is
+ * decided entirely by the child, exactly as it would be from a non-interactive `compassrose run`.
  */
 async function runLoop(
   orchestrator: CompassRoseOrchestrator,
   writer: TerminalWriter,
+  repositoryRoot: string,
   target: string | null,
 ): Promise<void> {
+  // Validated here rather than in the child so a bad id is a sentence at the prompt instead of a
+  // spawned process that exits 1.
   try {
     orchestrator.setRunTarget(target);
   } catch (error) {
     writer.append(['', `  ${error instanceof Error ? error.message : String(error)}`, '']);
     return;
-  }
-
-  const completedSteps: ProgressStep[] = [];
-  const stepsByItem = new Map<string, number>();
-  let currentItemId: string | null = null;
-  let stepStartedAt = Date.now();
-
-  orchestrator.setRunObserver({
-    onStepStart(decision) {
-      stepStartedAt = Date.now();
-      if (decision.feature_id && decision.feature_id !== currentItemId) {
-        currentItemId = decision.feature_id;
-        writer.append(['', ...renderRunHeader(currentItemId)]);
-      }
-    },
-
-    onStepEnd(decision, outcome) {
-      const step: ProgressStep = {
-        label: labelFor(decision),
-        detail: detailFor(decision, outcome),
-        status: outcome.kind === 'advanced' ? 'ok' : outcome.kind === 'blocked' ? 'blocked' : 'failed',
-        elapsedMs: Date.now() - stepStartedAt,
-      };
-      completedSteps.push(step);
-      if (decision.feature_id) {
-        stepsByItem.set(decision.feature_id, (stepsByItem.get(decision.feature_id) ?? 0) + 1);
-      }
-      writer.append([renderCompletedStep(step)]);
-    },
-  });
-
-  writer.append(['', '  Ctrl-C stops at the next step boundary.', '']);
-
-  const completedBefore = new Set(orchestrator.describeWorkItems().completed);
-  let failure: string | null = null;
-  let exitCode = 0;
-  try {
-    exitCode = orchestrator.run();
-  } catch (error) {
-    failure = error instanceof Error ? error.message : String(error);
   } finally {
-    orchestrator.setRunObserver(null);
     orchestrator.setRunTarget(null);
   }
 
-  const blockedThisRun = orchestrator.blockedDuringRun();
+  const stepsByItem = new Map<string, number>();
+  const blockedThisRun = new Map<string, string>();
+  let completedStepCount = 0;
+  let currentItemId: string | null = null;
+  let running: { label: string; taskId: string | null; startedAt: number } | null = null;
+  let stopNotice: string | null = null;
+
+  const completedBefore = new Set(orchestrator.describeWorkItems().completed);
+
+  writer.append(['', '  esc to stop at the next checkpoint; esc again to stop now.', '']);
+
+  const result = await superviseRun({
+    repositoryRoot,
+    target,
+    events: {
+      onStepStart(event) {
+        if (event.itemId && event.itemId !== currentItemId) {
+          currentItemId = event.itemId;
+          writer.append(['', ...renderRunHeader(currentItemId)]);
+        }
+        running = { label: labelFor(event.kind), taskId: event.taskId, startedAt: Date.now() };
+      },
+
+      onStepEnd(event) {
+        const step: ProgressStep = {
+          label: labelFor(event.kind),
+          detail: detailFor(event.taskId, event.summary),
+          status: event.outcome === 'advanced' ? 'ok' : event.outcome === 'blocked' ? 'blocked' : 'failed',
+          elapsedMs: Date.now() - (running?.startedAt ?? Date.now()),
+        };
+        completedStepCount += 1;
+        if (event.itemId) {
+          stepsByItem.set(event.itemId, (stepsByItem.get(event.itemId) ?? 0) + 1);
+          if (event.outcome === 'blocked') {
+            blockedThisRun.set(event.itemId, event.summary);
+          }
+        }
+        running = null;
+        writer.append([renderCompletedStep(step)]);
+      },
+
+      onTick(tick) {
+        if (!running) {
+          writer.setFrame(stopNotice ? ['', `  ${stopNotice}`] : []);
+          return;
+        }
+
+        const frame = renderRunningStep(
+          {
+            label: running.label,
+            detail: running.taskId ?? '',
+            status: 'running',
+            elapsedMs: Date.now() - running.startedAt,
+          },
+          tick,
+        );
+        writer.setFrame(stopNotice ? [...frame.slice(0, -1), `  ${stopNotice}`] : frame);
+      },
+
+      onOutput(outputLines) {
+        // Routed through the writer rather than inherited: raw output landing straight on stdout
+        // would print into the middle of the frame this loop is redrawing.
+        writer.append(outputLines.map((line) => `    ${line}`));
+      },
+
+      onStopRequested(hard) {
+        stopNotice = hard
+          ? 'stopping now; the process tree is being terminated'
+          : 'stop requested; finishing the step in flight';
+      },
+    },
+  });
+
+  writer.clearFrame();
+
   const items = orchestrator.describeWorkItems();
 
   writer.append(
@@ -398,12 +435,12 @@ async function runLoop(
         itemId,
         reason: reason.split('\n')[0]?.trim() ?? 'blocked',
       })),
-      stoppedByHuman: exitCode === 130,
-      failure,
+      stoppedByHuman: result.exitCode === 130 || result.stopRequested,
+      failure: result.exitCode === 1 ? 'the run could not continue; the output above says why' : null,
     }),
   );
 
-  if (currentItemId === null && completedSteps.length === 0 && failure === null) {
+  if (currentItemId === null && completedStepCount === 0 && result.exitCode === 0) {
     writer.append(['  Nothing was selectable. /status shows what each item is waiting on.', '']);
   }
 }

@@ -12,7 +12,7 @@ In progress
 
 - The specification round of 2026-08-22 re-cut the original twenty-two component requests into seven product features, `023` through `029`. See `features/README.md` for the full mapping and the round's coverage report.
 - Features `001-project-identity-and-foundation`, `002-configuration-model`, and `003-doctor-command` are complete.
-- Feature `023-terminal-session` is implemented and usable: `compassrose` with no arguments opens the interactive session, and the old no-argument behavior moved to `compassrose run`. Its live view has a documented limitation — no in-step interruption or animated progress, because `run()` is synchronous.
+- Feature `023-terminal-session` is implemented and usable: `compassrose` with no arguments opens the interactive session, and the old no-argument behavior moved to `compassrose run`. `/run` executes the loop in a child process, so the progress frame animates while a step is in flight and `esc` is read: once asks the run to stop at its next checkpoint, twice terminates the process tree.
 - Feature `024-specification-flow`: the loop can no longer author a specification. Unspecified items are reported by name, the session surfaces them before anything else, and `compassrose/DIMENSIONS.md` holds the project's coverage. Structured decisions and specification provenance remain.
 - Feature `025-automated-development-loop`: a blocked work item is set aside instead of ending the run, runs can be targeted at one item, the runtime can close a feature whose acceptance criteria it has verified, and one unit of work is now one commit with the intermediate bookkeeping as its body. The structured run summary remains.
 - Feature `026-conversational-doctor-recovery`: automatic repair is no longer attempted at all; a blocker is diagnosed and handed to a human through `/desbloquear`. The pipeline that used to attempt it is deleted, not merely unreachable — with the `unblock_pending` lifecycle state, four Operational Status fields, two config limits, and five contract documents that existed only to serve it. Recorded as ADR-0047, which supersedes ADR-0040. The `open_fix` exit and two turn bounds remain.
@@ -57,6 +57,7 @@ documented success shape `CompassRose Doctor` / `Status: OK` — was satisfied.
 ## Next Planning Hint
 
 Every feature from the specification round has working implementation; what remains is listed under
-each one's Remaining Deliverables. The next item is `023`'s in-step interruption: moving the run
-into a child process so `esc` and a live spinner work while a step is in flight. Commit batching
-gave it the transaction boundary it needed — aborting a run is only safe where a commit boundary is.
+each one's Remaining Deliverables. The three items called out after the specification round —
+deleting the doctor-recovery pipeline, commit batching, and in-step interruption — are all done. What
+is left is smaller and independent: `026`'s `open_fix` exit and turn bounds, `027`'s planner and
+reviewer manifests, `024`'s structured decisions, and `028`'s gap inference.

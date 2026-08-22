@@ -188,6 +188,25 @@ Responsibilities:
 
 The CLI must be usable without an IDE.
 
+**The interactive session is the primary interface** (`023-terminal-session`): `compassrose` with no
+arguments opens it, and every subcommand survives for non-interactive callers. `src/session/` holds
+it, split so that only one module may emit an escape sequence (`terminalWriter.ts`) and everything
+above it renders to `string[]`, testable by plain array comparison. `commands.ts` is the determinism
+boundary: a slash line is looked up in a fixed registry and nowhere else, and everything else is
+conversation that changes nothing.
+
+**The session does not run the loop in its own process.** `run()` is synchronous end to end, so a
+process executing it can neither animate anything nor read a keypress until it finishes. `/run`
+launches `compassrose run --loop` as a child and supervises it (`runSupervisor.ts`), which is what
+makes a live progress frame and a readable `esc` possible at all.
+
+The two processes talk through files rather than IPC, which is forced rather than chosen: a step
+event sent with `process.send()` from inside a synchronous run would not flush until the run ended,
+and `process.on('message')` would not fire mid-run to receive a stop request. The child appends
+newline-delimited JSON to an event log; the parent polls it and writes a stop-request file the run
+notices at its own checkpoints (`src/runtime/runChannel.ts`). 5.13's start gate solves the mirror
+image of this — a blocked *parent* reading a child's exit code from a file — for the same reason.
+
 ---
 
 ## 5.2 Orchestrator

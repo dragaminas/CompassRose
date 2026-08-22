@@ -139,6 +139,7 @@ import {
 import { resolveUnanimousVote, uniqueStrings } from '../shared/arrays.js';
 import { isPathAllowedByPrefix, pathsExceedingPrefixes } from '../shared/pathPrefix.js';
 import { ControlledStopError, stopExitCodeForSignal } from '../runtime/controlledStop.js';
+import { readRunStopRequest } from '../runtime/runChannel.js';
 import { GitClient } from '../git/gitClient.js';
 import { ArtifactStore } from '../artifacts/artifactStore.js';
 import { DEFAULT_AGENT_HEARTBEAT_MS, runCommandWithHeartbeat } from '../agents/heartbeatRunner.js';
@@ -287,6 +288,8 @@ export class CompassRoseOrchestrator {
   private readonly opencode: OpenCodeCli;
   private readonly implementer: TaskImplementer;
   private readonly skipCleanWorktreeCheck: boolean;
+  // Set only when this run is supervised by another process; see throwIfControlledStopRequested.
+  private readonly externalStopFile: string | null;
   private readonly projectConfiguration: ProjectConfiguration;
   private readonly configurationPath: string;
   private readonly projectStatePath: string;
@@ -346,6 +349,7 @@ export class CompassRoseOrchestrator {
     this.opencode = new OpenCodeCli(repositoryRoot, this.opencodeCommand);
     this.implementer = options.implementer === 'codex' ? this.codex : this.opencode;
     this.skipCleanWorktreeCheck = process.env.PROTO_COMPASSROSE_SKIP_CLEAN_CHECK === '1';
+    this.externalStopFile = process.env.PROTO_COMPASSROSE_STOP_FILE ?? null;
 
     const configurationPath = getBootstrapConfigPath(repositoryRoot);
     const configuration = readProjectConfiguration(configurationPath);
@@ -470,15 +474,6 @@ export class CompassRoseOrchestrator {
   /** What this run blocked, and why -- the material for an end-of-run summary. */
   blockedDuringRun(): ReadonlyMap<string, string> {
     return this.blockedThisRun;
-  }
-
-  /**
-   * Cooperative stop requested from outside the signal handlers -- the interactive session's `esc`
-   * key. Delegates to the same path SIGINT takes, so it lands at the next step boundary and a step
-   * in flight is always allowed to finish rather than leaving the worktree mid-write.
-   */
-  requestStop(reason: string): void {
-    this.requestControlledStop(reason, 130, null);
   }
 
   run(): number {
@@ -1152,6 +1147,17 @@ export class CompassRoseOrchestrator {
   }
 
   private throwIfControlledStopRequested(): void {
+    // A run supervised by another process (023-terminal-session) cannot be told to stop over IPC:
+    // this loop is synchronous, so the message would not be delivered until the run had already
+    // ended. The supervisor writes a file instead, and this is where the run notices it -- at the
+    // same checkpoints a SIGINT would have landed on, so a step in flight still finishes.
+    if (!this.stopRequested && this.externalStopFile) {
+      const reason = readRunStopRequest(this.externalStopFile);
+      if (reason) {
+        this.requestControlledStop(reason, 130, null);
+      }
+    }
+
     if (!this.stopRequested) {
       return;
     }
