@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-implementation_running
+blocked
 
 ## Source Request
 
@@ -15,13 +15,14 @@ implementation_running
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
-- last_quality_gate_result: passed
-- last_review_result: skipped
-- last_unblock_result: passed
+- last_quality_gate_result: failed
+- last_review_result: blocked
+- last_unblock_result: not_run
 - doctor_recovery_attempts: 4
 - blocked_on_fix: none
 - doctor_recovery_lifetime_count: 4
 - validation: confirmed
+- human_ack_required: true
 
 ## Current Reality
 
@@ -92,14 +93,26 @@ npm test: - 0
 
 ## Blocked By
 
-- None
+- - kind: review_failure
+- - signature: review-failure-implementation-running-quality-gates-failed-after-implementing-f003-t01-c02-npm-t
+- - recoverability: human
+- - observed_state: lifecycle=implementation_running
+- - evidence: Quality gates failed after implementing F003-T01-C02.
+- - evidence: npm run typecheck: passed: > compassrose@1.0.0 typecheck
+- - evidence: npx vitest run tests/doctor/doctorDiagnostics.test.ts: passed: [1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90mC:/Users/Eric/Documents/Repos/CompassRose[39m
+- - evidence: npm test: failed: [41m[1m FAIL [22m[49m tests/taskRequestScopeEnforcement.test.ts[2m > [22mtask-request scope enforcement[2m > [22mrefuses a task whose scope exceeds its task request boundary without a deviation_reason
+- - evidence: lifecycle=implementation_running
+- - evidence: observed_state: lifecycle=implementation_running
+- - evidence: Doctor recovery iteration limit reached for feature 003-doctor-command after 3 attempt(s) recovering the same blocked state; refusing to plan another doctor recovery task.
+- - reason: Doctor recovery iteration limit reached for feature 003-doctor-command after 3 attempt(s) recovering the same blocked state; refusing to plan another doctor recovery task.
 
 ## Blocked From
 
-- lifecycle_state: none
-- active_task: none
-- active_correction_task: none
-- active_unblock_task: none
+- lifecycle_state: `implementation_running`
+- active_task: `F003-T01-C02`
+- active_correction_task: `none`
+- active_unblock_task: `none`
+- recoverability: human
 
 ## Last Approved Change
 
@@ -124,4 +137,4 @@ Doctor recovery task `F003-DR09` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Resume `F003-T01-C02` implementation recovery before continuing.
+The active feature is blocked by a blocker that requires human intervention (review-failure-implementation-running-quality-gates-failed-after-implementing-f003-t01-c02-npm-t); stop and document the limitation.

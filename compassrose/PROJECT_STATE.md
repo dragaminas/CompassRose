@@ -10,25 +10,10 @@ In progress
 
 ## Current Reality
 
-- Feature `003-doctor-command` is `implementation_running` for `F003-T01-C02`, restored by the
-  bounded F003-DR09 doctor recovery after preserving the failed F003-T01-C02 quality-gate
-  evidence and deleting fix
-  `004-orchestration-quality-failure-attribution-and-recovery-state-transition-defect` (never a
-  real defect) and repairing the actual root cause -- see Known Gaps.
-- Feature `003-doctor-command` state was canonicalized; the active task pointer remains `F003-T01`.
-- F003-DR04 is the successor to F003-DR03; its literal doctor re-entry gates passed and its
-  restoration target is applied. The F003-T01 implementation remains incomplete.
-- Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR04`; the active task pointer was restored to `F003-T01`.
-- Feature `003-doctor-command` completed doctor recovery task `F003-DR05`; the active task pointer remains `F003-T01` in `implementation_running`.
-- Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR05`; the active task pointer was restored to `F003-T01`.
-- Feature `003-doctor-command` completed doctor recovery task `F003-DR06`; its fixed restoration
-  target is applied with `implementation_running`, `F003-T01` active, and no correction or unblock
-  task.
-- Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR06`; the active task pointer was restored to `F003-T01`.
-- Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR07`; the active task pointer was restored to `F003-T01-C02`.
-- Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR08`; the active task pointer was restored to `F003-T01-C02`.
-- Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR09`; the active task pointer was restored to `F003-T01-C02` with no correction or unblock task.
-- Feature `003-doctor-command` recovered from a blocker through doctor recovery task `F003-DR09`; the active task pointer was restored to `F003-T01-C02`.
+- Feature `003-doctor-command` is blocked by `review-failure-implementation-running-quality-gates-failed-after-implementing-f003-t01-c02-npm-t`.
+- Blocker recoverability: human.
+- Feature `003-doctor-command` was suspended from `implementation_running`; the active task pointer remains `F003-T01-C02`.
+- Blocking task context: `F003-T01-C02`
 
 ## Implemented
 
@@ -47,7 +32,8 @@ In progress
 
 ## Pending
 
-- Recover the implementation of `F003-DR09` before continuing.
+- The active feature is blocked by `review-failure-implementation-running-quality-gates-failed-after-implementing-f003-t01-c02-npm-t`.
+- Stop and document the limitation before resuming work.
 - Continue updating this file with approved repository facts as feature work lands.
 
 ## Blocked
@@ -75,4 +61,4 @@ Doctor recovery task `F003-DR09` passed re-entry quality gates and was applied b
 
 ## Next Planning Hint
 
-Resume `F003-T01-C02` implementation recovery before continuing.
+The active feature is blocked by a blocker that requires human intervention (review-failure-implementation-running-quality-gates-failed-after-implementing-f003-t01-c02-npm-t); stop and document the limitation.
