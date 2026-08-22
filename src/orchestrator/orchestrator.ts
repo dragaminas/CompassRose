@@ -48,6 +48,8 @@ import type { RunObserver } from '../contracts/runtime/runObserver.js';
 import { allCriteriaMet, unmetCriteria } from '../contracts/runtime/acceptanceCriteria.js';
 import type { RecoveryDiagnosis, StoredRecoveryDiagnosis } from '../contracts/runtime/recoveryDiagnosis.js';
 import { runSmokeGate } from './smokeGate.js';
+import { buildManifest, manifestEntry, manifestFitsBudget, mergeExploration } from './contextManifest.js';
+import type { ContextManifest, ExplorationRecord, ManifestEntry } from './contextManifest.js';
 import {
   buildCoverageReport,
   decideDimension,
@@ -334,6 +336,7 @@ export class CompassRoseOrchestrator {
   private readonly maxRecoveryIterations: number;
   private readonly maxLifetimeRecoveryCycles: number;
   private readonly maxAiCallsPerRun: number;
+  private readonly contextBudgetCharacters: number;
   private readonly runId: string;
   private readonly codexCommand: string;
   private readonly opencodeCommand: string;
@@ -424,6 +427,8 @@ export class CompassRoseOrchestrator {
     // Opt-in only, same reasoning: unbounded by default so no existing project config is
     // retroactively affected. See ADR-0041.
     this.maxAiCallsPerRun = readNonNegativeInteger(limits, 'max_ai_calls_per_run') ?? Number.POSITIVE_INFINITY;
+    // 0 means unbounded, matching how every other optional limit here treats absence (ADR-0040).
+    this.contextBudgetCharacters = readNonNegativeInteger(limits, 'context_budget_characters') ?? 0;
     this.runId = createRunId();
     this.startedAt = new Date().toISOString();
   }
@@ -2830,6 +2835,14 @@ export class CompassRoseOrchestrator {
     const taskPath = join(feature.tasksDirectory, buildTaskFileName(task.task_id, task.title));
     const taskMarkdown = renderTaskMarkdown(task);
 
+    // 027-bounded-work-item-context: check the budget before writing anything. If a task's declared
+    // context does not fit, the problem is the size of the task, not the context -- and catching it
+    // here costs one planning call rather than an implementation call that half-writes something.
+    const overflow = this.checkPlannedTaskContextBudget(featureId, task.task_id, taskPath, task.context.relevant_paths, feature);
+    if (overflow) {
+      return overflow;
+    }
+
     this.writeTaskDocument(taskPath, taskMarkdown);
     this.artifacts.writeJson(join('tasks', `${task.task_id}.json`), sanitizedPlanned);
 
@@ -4978,6 +4991,88 @@ export class CompassRoseOrchestrator {
   }
 
   /**
+   * The planning-time budget check (027-bounded-work-item-context).
+   *
+   * Inverts the shape of the old failure. `context_overflow` was discovered by an implementer call
+   * that had already been paid for and had already half-written something; moving the check here
+   * means an oversized task costs one planning call and is caught before any file is written.
+   *
+   * Returns `null` when the task fits, or a `blocked` outcome naming the overflow when it does not.
+   * A feature whose smallest sensible task still does not fit is a specification problem, and
+   * 026-conversational-doctor-recovery's specification-correction exit is where that belongs.
+   */
+  private checkPlannedTaskContextBudget(
+    featureId: string,
+    taskId: string,
+    taskPath: string,
+    likelyAffectedFiles: readonly string[],
+    owner: { readonly featurePath: string; readonly statePath: string },
+  ): StepExecutionResult | null {
+    if (this.contextBudgetCharacters <= 0) {
+      return null;
+    }
+
+    const manifest = buildManifest({
+      repositoryRoot: this.repositoryRoot,
+      taskId,
+      role: 'implementer',
+      entries: [
+        manifestEntry('contract', 'src/contracts/implementer/task-execution-prompt.md', 'the implementer contract'),
+        manifestEntry('task', relativePath(this.repositoryRoot, taskPath), 'the task under execution'),
+        manifestEntry('specification', relativePath(this.repositoryRoot, owner.featurePath), 'what this work item is for'),
+        manifestEntry('state', relativePath(this.repositoryRoot, owner.statePath), 'what previous tasks recorded'),
+        ...likelyAffectedFiles.map((path) => manifestEntry('code', path, 'declared by the task as likely affected')),
+      ],
+      budget: this.contextBudgetCharacters,
+    });
+
+    if (manifestFitsBudget(manifest)) {
+      return null;
+    }
+
+    const reason = `Planned task \`${taskId}\` declares a context of ${manifest.measuredSize} characters, over the configured budget of ${manifest.budget}. The task covers too much; plan a smaller one.`;
+    this.recordBlockedFeature(featureId, reason, null, {
+      kind: 'task_interface_gap',
+      nextPlanningHint: `Plan \`${featureId}\`'s next task in smaller units: the last attempt needed ${manifest.measuredSize} characters of context against a budget of ${manifest.budget}.`,
+    });
+    this.commitDirtyWorktreeIfConfigured(`proto: record context budget overflow for feature ${featureId}`);
+    return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
+  }
+
+  /**
+   * The declared context for one implementation attempt (027-bounded-work-item-context).
+   *
+   * Built from what the task already decided -- the planner knows what a task touches; declaring it
+   * makes an existing decision explicit rather than adding a new one. Files an earlier attempt at
+   * this same task read beyond its manifest are folded in, so a retry does not repeat the first
+   * attempt's discovery. Never files another task's exploration: that would let one task's reading
+   * silently inflate every later one.
+   */
+  private buildImplementerManifest(task: ParsedTaskDocument, stateCorrection: StateCorrectionTask | null): ContextManifest {
+    const owner = this.resolveWorkItemContext(task.featureId);
+    const baseEntries: ManifestEntry[] = [
+      manifestEntry('contract', 'src/contracts/implementer/task-execution-prompt.md', 'the implementer contract'),
+      ...(stateCorrection
+        ? [manifestEntry('contract', 'src/contracts/task/state-correction-task.md', 'this is a state repair task')]
+        : []),
+      manifestEntry('task', relativePath(this.repositoryRoot, task.path), 'the task under execution'),
+      manifestEntry('specification', relativePath(this.repositoryRoot, owner.definitionPath), 'what this work item is for'),
+      manifestEntry('state', relativePath(this.repositoryRoot, owner.statePath), 'what previous tasks recorded for this one'),
+      ...task.likelyAffectedFiles.map((path) => manifestEntry('code', path, 'declared by the task as likely affected')),
+    ];
+
+    const exploration = this.artifacts.readJson<ExplorationRecord>(join('exploration', `${task.taskId}.json`));
+
+    return buildManifest({
+      repositoryRoot: this.repositoryRoot,
+      taskId: task.taskId,
+      role: 'implementer',
+      entries: mergeExploration(baseEntries, exploration),
+      budget: this.contextBudgetCharacters,
+    });
+  }
+
+  /**
    * Returns `null` on ordinary success (caller builds its own success StepExecutionResult).
    * Returns a `StepExecutionResult` directly for every terminal outcome that needs its own
    * distinct handling: implementation failure (doctor recovery continues), or a confirmed
@@ -4985,7 +5080,8 @@ export class CompassRoseOrchestrator {
    */
   private executeImplementation(task: ParsedTaskDocument, correction: boolean, stateCorrection: StateCorrectionTask | null): StepExecutionResult | null {
     const recoveryLessonLines = this.buildRecoveryLessonPromptLines(task.featureId, task.taskId);
-    const prompt = buildImplementerPrompt(task, correction, stateCorrection, recoveryLessonLines);
+    const manifest = this.buildImplementerManifest(task, stateCorrection);
+    const prompt = buildImplementerPrompt(task, correction, stateCorrection, recoveryLessonLines, manifest);
     const owner = this.resolveWorkItemContext(task.featureId);
     const implementationStatePaths = [
       relativePath(this.repositoryRoot, owner.statePath),

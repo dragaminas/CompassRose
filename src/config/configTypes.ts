@@ -104,6 +104,15 @@ export interface LimitsSection {
    * ADR-0041.
    */
   readonly max_ai_calls_per_run?: number;
+  /**
+   * Characters an agent call may be given, checked against the task's declared context manifest
+   * at planning time (027-bounded-work-item-context). Optional, and absence means unbounded --
+   * an existing config that predates the field is completely unaffected, matching ADR-0040.
+   *
+   * Characters rather than tokens: token counts differ per provider and would need a tokenizer
+   * dependency this project does not have. Calibrate the value against character counts.
+   */
+  readonly context_budget_characters?: number;
 }
 
 export interface GitPolicySection {

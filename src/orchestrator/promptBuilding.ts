@@ -1,10 +1,18 @@
 import type { DoctorRecoveryTaskMetadata, ParsedTaskDocument, StateCorrectionTask } from '../contracts/task/taskContracts.js';
+import { renderManifestForPrompt } from './contextManifest.js';
+import type { ContextManifest } from './contextManifest.js';
 
 export function buildImplementerPrompt(
   task: ParsedTaskDocument,
   correction: boolean,
   stateCorrection: StateCorrectionTask | null,
   recoveryLessonLines: readonly string[] = [],
+  /**
+   * 027-bounded-work-item-context: when present, the prompt's `Read only:` block is rendered from
+   * the manifest and from nothing else. This function has no authority to include anything the
+   * manifest does not name -- which is the property that makes a run reproducible from it.
+   */
+  manifest: ContextManifest | null = null,
 ): string {
   const role = stateCorrection ? 'state repair task' : 'subtask';
   const requiredDiffLine = task.reviewableDiffHandoff.requireLiveDiff
@@ -18,10 +26,14 @@ export function buildImplementerPrompt(
       `Execute ${role} \`${task.taskId}\` for feature \`${task.featureId}\`.`,
       '',
     'Read only:',
-    '- `src/contracts/implementer/task-execution-prompt.md`',
-    ...(stateCorrection ? ['- `src/contracts/task/state-correction-task.md`'] : []),
-    `- \`${task.path}\``,
-    ...task.likelyAffectedFiles.map((item) => `- \`${item}\``),
+    ...(manifest
+      ? renderManifestForPrompt(manifest)
+      : [
+          '- `src/contracts/implementer/task-execution-prompt.md`',
+          ...(stateCorrection ? ['- `src/contracts/task/state-correction-task.md`'] : []),
+          `- \`${task.path}\``,
+          ...task.likelyAffectedFiles.map((item) => `- \`${item}\``),
+        ]),
     '',
     'Instructions:',
     `- Start with: ${task.firstExecutableStep}`,

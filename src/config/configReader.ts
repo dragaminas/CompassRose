@@ -1217,6 +1217,7 @@ function validateLimitsSection(section: Record<string, unknown>, issues: Configu
   // existing config that predates these fields must validate exactly as it did before.
   const maxLifetimeRecoveryCycles = optionalNonNegativeInteger(section, 'max_lifetime_recovery_cycles', 'limits.max_lifetime_recovery_cycles', issues);
   const maxAiCallsPerRun = optionalNonNegativeInteger(section, 'max_ai_calls_per_run', 'limits.max_ai_calls_per_run', issues);
+  const contextBudgetCharacters = optionalNonNegativeInteger(section, 'context_budget_characters', 'limits.context_budget_characters', issues);
 
   if (issues.length > 0) {
     return {
@@ -1238,6 +1239,7 @@ function validateLimitsSection(section: Record<string, unknown>, issues: Configu
     stop_on_review_failure: stopOnReviewFailure,
     ...(maxLifetimeRecoveryCycles !== undefined ? { max_lifetime_recovery_cycles: maxLifetimeRecoveryCycles } : {}),
     ...(maxAiCallsPerRun !== undefined ? { max_ai_calls_per_run: maxAiCallsPerRun } : {}),
+    ...(contextBudgetCharacters !== undefined ? { context_budget_characters: contextBudgetCharacters } : {}),
   };
 }
 
