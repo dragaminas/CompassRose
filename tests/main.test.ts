@@ -22,7 +22,7 @@ function createTempWorkspace(files: Record<string, string> = {}): { root: string
   };
 }
 
-describe('main([]) — configuration-backed runtime preflight', () => {
+describe('main run — configuration-backed runtime preflight', () => {
   test('returns non-zero when roles.planner.enabled is false', () => {
     const config = readFixtureConfigMarkdown().replace(
       /planner:\r?\n    enabled: true/,
@@ -35,7 +35,7 @@ describe('main([]) — configuration-backed runtime preflight', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -61,7 +61,7 @@ describe('main([]) — configuration-backed runtime preflight', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -91,7 +91,7 @@ describe('main([]) — configuration-backed runtime preflight', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -113,7 +113,7 @@ describe('main([]) — configuration-backed runtime preflight', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -129,7 +129,7 @@ describe('main([]) — configuration-backed runtime preflight', () => {
   });
 });
 
-describe('main([]) — missing project configuration', () => {
+describe('main run — missing project configuration', () => {
   test('returns non-zero and emits runtime-preflight diagnostic when CONFIG.md is absent', () => {
     const workspace = createTempWorkspace({
       '.git/dummy': '',
@@ -137,7 +137,7 @@ describe('main([]) — missing project configuration', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -154,7 +154,7 @@ describe('main([]) — missing project configuration', () => {
   });
 });
 
-describe('main([]) — runtime preconditions', () => {
+describe('main run — runtime preconditions', () => {
   test('returns non-zero when invoked outside a Git repository', () => {
     const root = mkdtempSync(join(tmpdir(), 'compassrose-main-test-nogit-'));
     mkdirSync(join(root, 'compassrose'), { recursive: true });
@@ -162,7 +162,7 @@ describe('main([]) — runtime preconditions', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -186,7 +186,7 @@ describe('main([]) — runtime preconditions', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -202,7 +202,7 @@ describe('main([]) — runtime preconditions', () => {
   });
 });
 
-describe('main([]) — nested directory from repo root', () => {
+describe('main run — nested directory from repo root', () => {
   test('resolves CONFIG.md from repo root when invoked from a nested subdirectory with passing preflight', () => {
     // Needs a real, clean git repo -- see the comment on the identically-shaped test above.
     const workspace = createTempGitWorkspace();
@@ -213,7 +213,7 @@ describe('main([]) — nested directory from repo root', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: nestedDir,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -244,7 +244,7 @@ describe('main([]) — nested directory from repo root', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: nestedDir,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -259,7 +259,7 @@ describe('main([]) — nested directory from repo root', () => {
   });
 });
 
-describe('main([]) — role-to-adapter wiring validation', () => {
+describe('main run — role-to-adapter wiring validation', () => {
   test('returns non-zero when an enabled role references a missing adapter', () => {
     const config = readFixtureConfigMarkdown().replace(
       /implementer:\r?\n    enabled: true\r?\n    adapter: external_cli/,
@@ -272,7 +272,7 @@ describe('main([]) — role-to-adapter wiring validation', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -303,7 +303,7 @@ describe('main([]) — role-to-adapter wiring validation', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -334,7 +334,7 @@ describe('main([]) — role-to-adapter wiring validation', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -355,7 +355,7 @@ describe('main([]) — role-to-adapter wiring validation', () => {
     try {
       const stdoutMessages: string[] = [];
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: (msg) => { stdoutMessages.push(msg); },
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -408,7 +408,7 @@ function createTempGitWorkspace(
   };
 }
 
-describe('main([]) — dirty worktree enforcement', () => {
+describe('main run — dirty worktree enforcement', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
   });
@@ -420,7 +420,7 @@ describe('main([]) — dirty worktree enforcement', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -446,7 +446,7 @@ describe('main([]) — dirty worktree enforcement', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -473,7 +473,7 @@ describe('main([]) — dirty worktree enforcement', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -504,7 +504,7 @@ describe('main([]) — dirty worktree enforcement', () => {
 
     try {
       const stderrMessages: string[] = [];
-      const exitCode = main([], {
+      const exitCode = main(['run'], {
         cwd: workspace.root,
         stdout: () => {},
         stderr: (msg) => { stderrMessages.push(msg); },
@@ -541,6 +541,30 @@ describe('main([\'doctor\']) — regression', () => {
       expect(allMessages).toContain('Status: FAILED');
     } finally {
       workspace.dispose();
+    }
+  });
+});
+
+describe('main([]) — the interactive session is the primary entry point', () => {
+  // 023-terminal-session changed what no arguments means: it opens the session instead of running
+  // the orchestrator once, and the old behavior moved to `run`. Asserted from outside a git
+  // repository, which is the one path through runSessionCli that returns before it touches stdin --
+  // a test that reached the prompt loop would hang waiting for input that never comes.
+  test('dispatches to the session, which refuses outside a git repository', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'compassrose-session-nogit-'));
+
+    try {
+      const stderrMessages: string[] = [];
+      const exitCode = await main([], {
+        cwd: root,
+        stdout: () => {},
+        stderr: (msg) => { stderrMessages.push(msg); },
+      });
+
+      expect(exitCode).toBe(1);
+      expect(stderrMessages.some((message) => message.includes('git repository'))).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });

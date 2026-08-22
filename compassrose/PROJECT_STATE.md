@@ -12,7 +12,8 @@ In progress
 
 - The specification round of 2026-08-22 re-cut the original twenty-two component requests into seven product features, `023` through `029`. See `features/README.md` for the full mapping and the round's coverage report.
 - Features `001-project-identity-and-foundation`, `002-configuration-model`, and `003-doctor-command` are complete.
-- Features `023` through `029` are formalized and validated by that round; none are implemented yet.
+- Feature `023-terminal-session` is implemented and usable: `compassrose` with no arguments opens the interactive session, and the old no-argument behavior moved to `compassrose run`. Its live view has a documented limitation — no in-step interruption or animated progress, because `run()` is synchronous.
+- Features `024` through `029` are formalized and validated by that round; none are implemented yet.
 - Requests `021-vscode-integration` and `022-ecosystem-and-metrics` remain pending specification, deliberately.
 - Two dimensions are recorded as uncovered, not out of scope: distribution/installation, and execution trust.
 - Nothing is blocked.

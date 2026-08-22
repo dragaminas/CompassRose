@@ -12,6 +12,7 @@ import { runSetupCli } from './setup.js';
 import { runFeatureValidationCli } from './featureValidation.js';
 import { runBrainstormCli } from './brainstorm.js';
 import { runAcknowledgeBlockerCli } from './acknowledgeBlocker.js';
+import { runSessionCli } from '../session/session.js';
 
 export interface CliEnvironment {
   readonly cwd?: string;
@@ -52,12 +53,23 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     return runAcknowledgeBlockerCli(argv.slice(1), { cwd, stdout, stderr });
   }
 
+  // The primary entry point (023-terminal-session): no arguments opens the interactive session.
+  // The previous no-argument behavior -- run the orchestrator once and exit -- moved to
+  // `compassrose run`, which every non-interactive caller (CI, scripts, this repository's own
+  // package scripts) uses instead.
+  if (argv.length === 0) {
+    return runSessionCli({ cwd, stderr });
+  }
+
+  const runArgv = argv[0] === 'run' ? argv.slice(1) : argv;
+
   let options;
   try {
-    options = parseRunArguments(argv, cwd);
+    options = parseRunArguments(runArgv, cwd);
   } catch (error) {
     stderr(error instanceof Error ? error.message : String(error));
-    stderr('Usage: compassrose [--loop] [--implementer codex|opencode] [--no-commit] [--cwd <path>]');
+    stderr('Usage: compassrose                    open the interactive session');
+    stderr('Usage: compassrose run [--loop] [--implementer codex|opencode] [--no-commit] [--cwd <path>]');
     stderr('Usage: compassrose doctor');
     stderr('Usage: compassrose setup');
     stderr('Usage: compassrose feature-validation [--no-commit] [--cwd <path>]');

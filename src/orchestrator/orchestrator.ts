@@ -44,6 +44,7 @@ import type {
 } from '../contracts/types.js';
 import { selectImplementationContextArtifactNames } from '../contracts/runtime/agentContext.js';
 import type { AgentInvocationContext, AgentInvocationKind, AgentToolName } from '../contracts/runtime/agentContext.js';
+import type { RunObserver } from '../contracts/runtime/runObserver.js';
 import type {
   ContractRefreshResult,
   FeatureInspection,
@@ -330,6 +331,9 @@ export class CompassRoseOrchestrator {
   // process itself is known to have written, never a blanket directory exclusion.
   private readonly runtimeAuthoredTaskPaths = new Set<string>();
   private agentInvocationCount = 0;
+  // Display-only, per src/contracts/runtime/runObserver.ts: an observed run must take exactly the
+  // same steps as an unobserved one.
+  private runObserver: RunObserver | null = null;
   private stopRequested = false;
   private stopReason: string | null = null;
   private stopExitCode = 130;
@@ -454,6 +458,20 @@ export class CompassRoseOrchestrator {
     );
   }
 
+  /** Attach (or detach, with `null`) a display-only watcher for the next run. */
+  setRunObserver(observer: RunObserver | null): void {
+    this.runObserver = observer;
+  }
+
+  /**
+   * Cooperative stop requested from outside the signal handlers -- the interactive session's `esc`
+   * key. Delegates to the same path SIGINT takes, so it lands at the next step boundary and a step
+   * in flight is always allowed to finish rather than leaving the worktree mid-write.
+   */
+  requestStop(reason: string): void {
+    this.requestControlledStop(reason, 130, null);
+  }
+
   run(): number {
     const cleanupStopHandlers = this.installControlledStopHandlers();
     let keepRunning = true;
@@ -472,7 +490,9 @@ export class CompassRoseOrchestrator {
         console.log(`Next step: ${decision.kind}${decision.feature_id ? ` (${decision.feature_id})` : ''}`);
         console.log(decision.reason);
 
+        this.runObserver?.onStepStart(decision);
         const result = this.executeStep(decision);
+        this.runObserver?.onStepEnd(decision, result);
         this.stepRecords.push({
           decided_at: new Date().toISOString(),
           decision,
@@ -532,6 +552,56 @@ export class CompassRoseOrchestrator {
       .map((fix) => fix.id);
 
     return [...featureIds, ...fixIds].map((id) => this.resolveWorkItemContext(id));
+  }
+
+  /**
+   * Every work item bucketed by what it is waiting on, for the interactive session's header
+   * (`023-terminal-session`). Read-only: it runs the same inspections the scheduler runs and
+   * writes nothing.
+   *
+   * Deliberately built from `inspectFeature`/`inspectFix` rather than from lifecycle strings, so a
+   * bucket here can never disagree with what the scheduler would actually do with the item.
+   */
+  describeWorkItems(): {
+    readonly completed: readonly string[];
+    readonly inProgress: readonly string[];
+    readonly blocked: readonly string[];
+    readonly awaitingValidation: readonly string[];
+    readonly pendingSpecification: readonly string[];
+  } {
+    const completed: string[] = [];
+    const inProgress: string[] = [];
+    const blocked: string[] = [];
+    const awaitingValidation: string[] = [];
+    const pendingSpecification: string[] = [];
+
+    const bucket = (id: string, kind: WorkItemInspectionKind): void => {
+      if (kind === 'completed') {
+        completed.push(id);
+      } else if (kind === 'blocked' || kind === 'blocked_on_human' || kind === 'blocked_on_fix') {
+        blocked.push(id);
+      } else if (kind === 'awaiting_validation') {
+        awaitingValidation.push(id);
+      } else if (kind === 'request_pending' || kind === 'formalization_pending') {
+        pendingSpecification.push(id);
+      } else {
+        inProgress.push(id);
+      }
+    };
+
+    for (const feature of this.listFeatures()) {
+      bucket(feature.id, this.inspectFeature(feature).kind);
+    }
+    for (const fix of this.listFixes()) {
+      bucket(fix.id, this.inspectFix(fix).kind);
+    }
+
+    return { completed, inProgress, blocked, awaitingValidation, pendingSpecification };
+  }
+
+  /** The configured project name, for the session header. */
+  projectName(): string {
+    return this.projectConfiguration.project?.name ?? 'this project';
   }
 
   /**
