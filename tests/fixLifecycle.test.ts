@@ -21,14 +21,18 @@ describe('fix lifecycle end-to-end', () => {
     const workspace = prepareFixLifecycleWorkspace();
 
     try {
-      // Pass 1: the loop formalizes the fix, then stops -- ADR-0046's Flow 1 gate means a freshly
-      // formalized fix starts `validation: not_started`, which is invisible to both scheduler
-      // passes (see inspectFix()'s `awaiting_validation` case), so task planning cannot proceed
-      // yet even though nothing failed.
-      const formalizeResult = runFixLifecycleScenario(workspace.root);
+      // Pass 0: the loop will not touch an unspecified request at all since
+      // 024-specification-flow, and says so by name rather than skipping it silently.
+      const untouchedResult = runFixLifecycleScenario(workspace.root);
+      expect(untouchedResult.stdout).toContain('pending specification');
+      expect(untouchedResult.stdout).toContain(FIX_ID);
+
+      // Pass 1: specification happens because a human, in a session, said so. Stands in for
+      // `/crear` -- the same orchestrator method that command reaches. A freshly specified fix
+      // starts `validation: not_started`, which is invisible to both scheduler passes, so task
+      // planning still cannot proceed yet even though nothing failed.
+      const formalizeResult = runSpecifyScenario(workspace.root);
       expect(formalizeResult.exitCode).toBe(0);
-      expect(formalizeResult.stdout).toContain(`Next step: plan_fix (${FIX_ID})`);
-      expect(formalizeResult.stdout).toContain('awaiting human validation');
 
       const fixRoot = join(workspace.root, 'compassrose', 'fixes', FIX_ID);
 
@@ -138,6 +142,48 @@ function runFixLifecycleScenario(root: string): { exitCode: number | null; stdou
     stdout: result.stdout || '',
     stderr: result.stderr || '',
   };
+}
+
+/**
+ * Drives `specifyExistingRequest`, the orchestrator method the session's `/crear` reaches for a
+ * request that already exists on disk. Since 024-specification-flow this is the only way a
+ * `request.md` becomes a specification, and it runs because a human asked -- never because the loop
+ * decided to.
+ */
+function runSpecifyScenario(root: string): { exitCode: number | null; stdout: string; stderr: string } {
+  writeFileSync(
+    join(root, 'specify-runner.ts'),
+    [
+      "import { CompassRoseOrchestrator } from './src/orchestrator/orchestrator.js';",
+      'const orchestrator = new CompassRoseOrchestrator({',
+      "  cwd: process.cwd(), commit: false, implementer: 'opencode', loop: false,",
+      '});',
+      `orchestrator.specifyExistingRequest(${JSON.stringify(FIX_ID)});`,
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const result = spawnSync(tsxBinary, ['specify-runner.ts'], {
+    cwd: root,
+    env: {
+      ...process.env,
+      PROTO_COMPASSROSE_CODEX_COMMAND: join(root, 'codex-mock.cjs'),
+      PROTO_COMPASSROSE_OPENCODE_COMMAND: join(root, 'opencode-mock.cjs'),
+      PROTO_COMPASSROSE_SKIP_CLEAN_CHECK: '1',
+    },
+    encoding: 'utf8',
+    maxBuffer: 20 * 1024 * 1024,
+    shell: process.platform === 'win32',
+  });
+
+  // Removed immediately. Anything left uncommitted in the workspace sits in every later `git diff`
+  // the runtime takes, including its own review-time scope check -- which would see this runner as
+  // an out-of-scope change and file a correction task against the fix under test. The fixture's own
+  // setup warns about exactly this for the mock scripts.
+  rmSync(join(root, 'specify-runner.ts'), { force: true });
+
+  return { exitCode: result.status, stdout: result.stdout || '', stderr: result.stderr || '' };
 }
 
 function confirmFixValidation(fixRoot: string): void {

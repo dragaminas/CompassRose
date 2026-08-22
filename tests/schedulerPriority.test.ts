@@ -287,7 +287,11 @@ describe('scheduler priority: features vs fixes', () => {
     }
   });
 
-  test('a fresh, unformalized fix request defaults to critical and preempts an existing medium fix', () => {
+  test('a fresh, unformalized fix request is not selected at all; specified work proceeds instead', () => {
+    // Until 024-specification-flow this asserted the opposite: an unformalized fix request was
+    // startable and, defaulting to `critical`, preempted everything. That was the loop authoring a
+    // specification on its own -- the capability that produced generic, component-shaped documents
+    // nobody had agreed to. A bug is now specified with a human, exactly like a feature.
     const workspace = createWorkspace({ 'compassrose/CONFIG.md': readFixtureConfigMarkdown() });
     copyContractsIntoWorkspace(workspace.root);
 
@@ -297,8 +301,25 @@ describe('scheduler priority: features vs fixes', () => {
 
       const decision = buildOrchestrator(workspace.root).determineNextStep();
 
-      expect(decision.kind).toBe('plan_fix');
-      expect(decision.feature_id).toBe('002-fresh-fix-request');
+      expect(decision.kind).toBe('plan_fix_task');
+      expect(decision.feature_id).toBe('001-medium-fix');
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('an unspecified item is reported by name when nothing else is selectable, never silently skipped', () => {
+    const workspace = createWorkspace({ 'compassrose/CONFIG.md': readFixtureConfigMarkdown() });
+    copyContractsIntoWorkspace(workspace.root);
+
+    try {
+      seedRawFixRequest(workspace.root, '002-fresh-fix-request');
+
+      const decision = buildOrchestrator(workspace.root).determineNextStep();
+
+      expect(decision.kind).toBe('stop');
+      expect(decision.reason).toContain('pending specification');
+      expect(decision.reason).toContain('002-fresh-fix-request');
     } finally {
       workspace.dispose();
     }

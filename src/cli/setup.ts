@@ -4,15 +4,15 @@ import { fileURLToPath } from 'node:url';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
 import { DEFAULT_COMPASSROSE_ROOT, getBootstrapConfigPath } from '../config/compassRosePaths.js';
+import { renderDimensionsDocument, STARTER_DIMENSIONS } from '../state/dimensions.js';
 import type { CliEnvironment } from './main.js';
 
 /**
  * Flow 0 ("npm run setup"): bootstrap-only. Creates CompassRose's own isolated compassrose/
  * root (see ADR-0046) when absent -- deterministic file generation, no AI call, no
  * interpretation of an existing project's languages/frameworks/docs (that deeper analysis is
- * SAD.md 5.3's still-unbuilt Project Analyzer, tracked separately at
- * docs/features/004-project-understanding/request.md). If the root already exists, this only
- * reports readiness via the existing Doctor checks.
+ * feature 028-project-understanding). If the root already exists, this only reports readiness via
+ * the existing Doctor checks.
  */
 export function runSetupCli(environment: CliEnvironment = {}): number {
   const stdout = environment.stdout ?? ((message: string) => process.stdout.write(`${message}\n`));
@@ -44,8 +44,8 @@ export function runSetupCli(environment: CliEnvironment = {}): number {
     stdout(`  - ${path}`);
   }
   stdout('');
-  stdout('Next: write a feature request under compassrose/features/<id>/request.md, then run');
-  stdout('"npm run feature-validation" before "npm run app".');
+  stdout('Next: run `compassrose` and talk your first feature through. Specification is a');
+  stdout('conversation now, so the automated loop will not touch anything you have not settled.');
   return 0;
 }
 
@@ -62,6 +62,15 @@ function createCompassRoseSkeleton(gitRoot: string): string[] {
 
   write('CONFIG.md', STARTER_CONFIG_MD);
   write('PROJECT_STATE.md', STARTER_PROJECT_STATE_MD);
+  // The coverage floor a specification session walks from day one (024-specification-flow).
+  // Deliberately generic: the agent's proposals are how it becomes specific to this project, and
+  // every one of those needs a human decision before it lands here.
+  write(
+    'DIMENSIONS.md',
+    renderDimensionsDocument(
+      STARTER_DIMENSIONS.map((name) => ({ name, state: 'uncovered' as const, coveredBy: [], decisions: [] })),
+    ),
+  );
   write('ADR.md', STARTER_ADR_MD);
   write('SAD.md', STARTER_SAD_MD);
   write('ROADMAP.md', STARTER_ROADMAP_MD);
@@ -163,6 +172,17 @@ development_policy:
 review_policy:
   mode: required
   record_skipped_review: true
+
+# smoke declares what "the application runs" means here, checked before a feature can close.
+# Either a start command with the condition proving it started:
+#   smoke:
+#     command: "npm start"
+#     expect:
+#       http_ok: "http://localhost:3000/health"
+#     timeout_seconds: 60
+# or an explicit opt-out, which requires a reason:
+#   smoke:
+#     none: "Library with no entry point; correctness is covered by its test suite."
 
 quality_gates:
   enabled: true

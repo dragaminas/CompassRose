@@ -134,6 +134,10 @@ function createWorkspace(featureIds: readonly string[]): Workspace {
     mkdirSync(join(directory, 'tasks'), { recursive: true });
     writeFileSync(join(directory, 'request.md'), `# Request: ${id}\n`, 'utf8');
     writeFileSync(join(directory, 'feature.md'), `# Feature: ${id}\n`, 'utf8');
+    // Without architecture.md an item inspects as `request_pending`, and since
+    // 024-specification-flow that is no longer selectable at all -- the loop may not author a
+    // specification. These fixtures used to pass only because `request_pending` was startable.
+    writeFileSync(join(directory, 'architecture.md'), `# Architecture: ${id}\n`, 'utf8');
     writeFileSync(join(directory, 'state.md'), featureState('formalized'), 'utf8');
   }
 

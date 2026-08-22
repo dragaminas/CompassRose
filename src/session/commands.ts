@@ -14,10 +14,12 @@ import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
 import { runValidationLoopForItem } from '../cli/validationLoop.js';
 import { renderFailureView } from './render/failure.js';
 import { renderDiagnosis, renderExitMenu, renderInvalidationWarning } from './render/diagnosis.js';
+import { renderCoverageReport } from './render/coverage.js';
 import { orderedExitsFor, type RecoveryExit } from '../contracts/runtime/recoveryDiagnosis.js';
 import type { CompassRoseOrchestrator } from '../orchestrator/orchestrator.js';
 import type { TerminalWriter } from './terminalWriter.js';
 import type { BrainstormTurnRecord } from '../contracts/brainstormer/brainstormerContracts.js';
+import type { SessionCompetencyProfile } from '../contracts/brainstormer/competency.js';
 
 export interface SessionState {
   /** The whole session's conversation, carried into drafting. */
@@ -27,6 +29,10 @@ export interface SessionState {
   proposedTitle: string | null;
   /** The work item the conversation is currently about, if any. */
   focusItemId: string | null;
+  /** Who is in this session, for attributing coverage decisions. Never a competency claim. */
+  author: string;
+  /** Who decides what, for this session only. Never written to the repository. */
+  competency: SessionCompetencyProfile;
   exit: boolean;
 }
 
@@ -246,11 +252,35 @@ async function offerExits(
 const createCommand: SessionCommand = {
   name: 'crear',
   aliases: ['create'],
-  usage: '/crear',
-  summary: 'turn the idea under discussion into a feature',
-  async run(context) {
+  usage: '/crear [id]',
+  summary: 'settle the idea under discussion, or an existing request, into a specification',
+  async run(context, args) {
+    // Two shapes, because a specification session has two starting points: a request folder that
+    // already exists and has never been specified with anyone, or an idea that exists only in the
+    // conversation. Both end the same way -- a drafted specification entering validation.
+    const pending = context.orchestrator.listWorkItemsPendingSpecification();
+    const namedExisting = args[0] && pending.some((item) => item.id === args[0]) ? args[0] : null;
+    const impliedExisting = args.length === 0 && pending.length === 1 && context.state.segment.length === 0
+      ? pending[0]!.id
+      : null;
+    const existingId = namedExisting ?? impliedExisting;
+
+    if (existingId) {
+      context.orchestrator.specifyExistingRequest(existingId);
+      context.state.focusItemId = existingId;
+      print(context, ['', `  ${existingId} is specified. Let's validate it.`, '']);
+      await validateItem(context, existingId);
+      return;
+    }
+
     if (context.state.segment.length === 0) {
-      print(context, ['', '  Tell me the idea first, then /crear.', '']);
+      print(context, [
+        '',
+        pending.length > 0
+          ? `  Tell me the idea first, or name one of the pending requests: ${pending.map((item) => item.id).join(', ')}`
+          : '  Tell me the idea first, then /crear.',
+        '',
+      ]);
       return;
     }
 
@@ -296,6 +326,70 @@ const readyCommand: SessionCommand = {
   },
 };
 
+const coverageCommand: SessionCommand = {
+  name: 'cobertura',
+  aliases: ['coverage'],
+  usage: '/cobertura',
+  summary: 'which dimensions of the application nothing covers yet',
+  run(context) {
+    print(context, renderCoverageReport(context.orchestrator.buildCoverageReport()));
+  },
+};
+
+const discardDimensionCommand: SessionCommand = {
+  name: 'descartar',
+  aliases: ['discard'],
+  usage: '/descartar <dimension>',
+  summary: 'put a dimension out of scope, with a reason',
+  async run(context, args) {
+    const name = args.join(' ').trim();
+    if (name.length === 0) {
+      const uncovered = context.orchestrator.buildCoverageReport().uncovered;
+      print(context, [
+        '',
+        '  Name the dimension:',
+        ...uncovered.map((entry) => `    /descartar ${entry}`),
+        '',
+      ]);
+      return;
+    }
+
+    // The reason is not optional, and refusing without one is the point: six months from now, an
+    // unexplained discard is indistinguishable from an oversight.
+    const reason = (await context.ask(`  Why is "${name}" out of scope for this project? `)).trim();
+    if (reason.length === 0) {
+      print(context, ['', '  Without a reason this would be indistinguishable from forgetting. Cancelled.', '']);
+      return;
+    }
+
+    try {
+      context.orchestrator.decideDimension(name, 'out_of_scope', reason, context.state.author);
+      print(context, ['', `  "${name}" is out of scope, with your reason recorded. It will not be raised again.`, '']);
+    } catch (error) {
+      print(context, ['', `  ${error instanceof Error ? error.message : String(error)}`, '']);
+    }
+  },
+};
+
+const reopenDimensionCommand: SessionCommand = {
+  name: 'reabrir',
+  aliases: ['reopen'],
+  usage: '/reabrir <dimension>',
+  summary: 'reopen a dimension somebody else put out of scope',
+  run(context, args) {
+    const name = args.join(' ').trim();
+    if (name.length === 0) {
+      print(context, ['', '  Name the dimension to reopen.', '']);
+      return;
+    }
+
+    // Reopening appends; the prior decision stays visible with its original author and date. That
+    // is what makes it safe for a second person to disagree with the first.
+    context.orchestrator.decideDimension(name, 'uncovered', `reopened by ${context.state.author}`, context.state.author);
+    print(context, ['', `  "${name}" is open again. The earlier decision is kept in the record.`, '']);
+  },
+};
+
 const exitCommand: SessionCommand = {
   name: 'salir',
   aliases: ['terminado', 'exit', 'quit'],
@@ -303,6 +397,9 @@ const exitCommand: SessionCommand = {
   summary: 'end the session',
   run(context) {
     context.state.exit = true;
+    // A session that ends without saying what is still uncovered is a session that quietly loses
+    // the one thing the checklist exists to surface.
+    print(context, renderCoverageReport(context.orchestrator.buildCoverageReport()));
   },
 };
 
@@ -330,6 +427,9 @@ export const SESSION_COMMANDS: readonly SessionCommand[] = [
   unblockCommand,
   createCommand,
   readyCommand,
+  coverageCommand,
+  discardDimensionCommand,
+  reopenDimensionCommand,
   exitCommand,
 ];
 

@@ -48,6 +48,14 @@ import type { RunObserver } from '../contracts/runtime/runObserver.js';
 import { allCriteriaMet, unmetCriteria } from '../contracts/runtime/acceptanceCriteria.js';
 import type { RecoveryDiagnosis, StoredRecoveryDiagnosis } from '../contracts/runtime/recoveryDiagnosis.js';
 import { runSmokeGate } from './smokeGate.js';
+import {
+  buildCoverageReport,
+  decideDimension,
+  markCovered,
+  readDimensions,
+  renderDimensionsDocument,
+} from '../state/dimensions.js';
+import type { CoverageReport, Dimension, DimensionState } from '../state/dimensions.js';
 import type { SmokeResult } from './smokeGate.js';
 import type {
   AcceptanceCriteriaVerification,
@@ -83,6 +91,7 @@ import {
   buildTemplatePath,
   getBootstrapConfigPath,
   resolveCompassRoseRoot,
+  buildDimensionsPath,
 } from '../config/compassRosePaths.js';
 import { resolveRepositoryRelativePath } from '../filesystem/pathResolver.js';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
@@ -698,6 +707,90 @@ export class CompassRoseOrchestrator {
   }
 
   /**
+   * Formalizes a request that already exists on disk, as the product of a specification
+   * conversation (024-specification-flow).
+   *
+   * The loop can no longer do this -- that was the whole point of the narrowing -- but a repository
+   * full of `request.md`-only folders still needs a way through, and it is exactly the eighteen this
+   * repository accumulated. The difference from the old behavior is not the mechanism but the
+   * authority: this runs because a human, in a session, said so, and the result lands
+   * `validation: not_started` for the same human to confirm.
+   *
+   * Throws when the item is not actually pending specification, so it can never be used to
+   * regenerate a specification somebody has already agreed to.
+   */
+  specifyExistingRequest(id: string): void {
+    const feature = this.tryLoadFeature(id);
+    const inspection = feature ? this.inspectFeature(feature) : this.inspectFix(this.loadFix(id));
+
+    if (!this.isPendingSpecificationKind(inspection.kind)) {
+      throw new Error(`Cannot specify ${id}: it is not pending specification (inspected kind: ${inspection.kind}).`);
+    }
+
+    if (feature) {
+      this.planFeature(id);
+    } else {
+      this.planFixRequest(id);
+    }
+  }
+
+  /** The project's declared coverage checklist (024-specification-flow). */
+  readDimensions(): readonly Dimension[] {
+    return readDimensions(join(this.repositoryRoot, buildDimensionsPath(this.compassRoseRoot)));
+  }
+
+  /**
+   * Records a human's decision about one dimension.
+   *
+   * The only way a dimension's state changes. An agent proposal is a proposal until it comes through
+   * here, and a discard without a reason is refused by `decideDimension` -- six months later, an
+   * unexplained discard is indistinguishable from an oversight.
+   */
+  decideDimension(name: string, state: DimensionState, reason: string | null, by: string): void {
+    const path = join(this.repositoryRoot, buildDimensionsPath(this.compassRoseRoot));
+    const updated = decideDimension(this.readDimensions(), name, {
+      state,
+      reason,
+      by,
+      at: new Date().toISOString().slice(0, 10),
+    });
+
+    writeText(path, renderDimensionsDocument(updated));
+    this.commitDirtyWorktreeIfConfigured(`proto: record a coverage decision for "${name}"`);
+  }
+
+  /** Marks a dimension covered by a feature. Additive: a dimension can be covered by several. */
+  markDimensionCovered(name: string, featureId: string, by: string): void {
+    const path = join(this.repositoryRoot, buildDimensionsPath(this.compassRoseRoot));
+    writeText(path, renderDimensionsDocument(markCovered(this.readDimensions(), name, featureId, by)));
+    this.commitDirtyWorktreeIfConfigured(`proto: record ${featureId} covering "${name}"`);
+  }
+
+  /** What a specification session closes with. */
+  buildCoverageReport(): CoverageReport {
+    return buildCoverageReport(this.readDimensions());
+  }
+
+  /**
+   * Flow 1's first stage (024-specification-flow): every work item that exists as a request but has
+   * never been specified with a human.
+   *
+   * This is the set the old `brainstorm` command could not see. It looked only for items awaiting
+   * *validation*, so a folder holding just `request.md` was invisible to it -- and this repository
+   * had eighteen of them, built in code while their documents still said nothing.
+   */
+  listWorkItemsPendingSpecification(): readonly WorkItemContext[] {
+    const featureIds = this.listFeatures()
+      .filter((feature) => this.isPendingSpecificationKind(this.inspectFeature(feature).kind))
+      .map((feature) => feature.id);
+    const fixIds = this.listFixes()
+      .filter((fix) => this.isPendingSpecificationKind(this.inspectFix(fix).kind))
+      .map((fix) => fix.id);
+
+    return [...featureIds, ...fixIds].map((id) => this.resolveWorkItemContext(id));
+  }
+
+  /**
    * "npm run acknowledge-blocker": every feature/fix inspectFeature()/inspectFix() currently
    * reports as `blocked_on_human` -- i.e. exactly the set both scheduler passes are silently
    * skipping until a human explicitly clears it via acknowledgeBlocker(). Mirrors
@@ -1109,8 +1202,22 @@ export class CompassRoseOrchestrator {
     return result.status ?? 1;
   }
 
+  /**
+   * 024-specification-flow deliberately narrows this: `request_pending` and
+   * `formalization_pending` used to be startable, which is how the loop came to author
+   * specifications on its own -- an AI writing the document a human would then rubber-stamp. That
+   * produced generic specifications describing components rather than the application, and left
+   * whole dimensions of the product unspecified without anyone noticing.
+   *
+   * Specification is now exclusively a conversation (Flow 1). The loop consumes specifications and
+   * can no longer create them.
+   */
   private isStartableInspectionKind(kind: WorkItemInspectionKind): boolean {
-    return kind === 'request_pending' || kind === 'formalization_pending' || kind === 'formalized' || kind === 'task_planning_pending';
+    return kind === 'formalized' || kind === 'task_planning_pending';
+  }
+
+  private isPendingSpecificationKind(kind: WorkItemInspectionKind): boolean {
+    return kind === 'request_pending' || kind === 'formalization_pending';
   }
 
   private isContinuingInspectionKind(kind: WorkItemInspectionKind): boolean {
@@ -1120,7 +1227,12 @@ export class CompassRoseOrchestrator {
     // ADR-0046/Flow 1; a human hasn't acknowledged an exhausted/terminal blocker, see
     // acknowledgeBlocker()), so other features/fixes keep making progress instead of this one
     // being retried (and re-diagnosed) every run.
-    return kind !== 'completed' && kind !== 'blocked_on_fix' && kind !== 'awaiting_validation' && kind !== 'blocked_on_human' && !this.isStartableInspectionKind(kind);
+    return kind !== 'completed'
+      && kind !== 'blocked_on_fix'
+      && kind !== 'awaiting_validation'
+      && kind !== 'blocked_on_human'
+      && !this.isPendingSpecificationKind(kind)
+      && !this.isStartableInspectionKind(kind);
   }
 
   private static readonly FIX_SEVERITY_RANK: Record<FixSeverity, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -1229,7 +1341,17 @@ export class CompassRoseOrchestrator {
       ...fixInspections.filter(({ inspection }) => inspection.kind === 'blocked_on_human').map(({ fix }) => fix.id),
     ];
 
+    const pendingSpecificationIds = [
+      ...featureInspections.filter(({ inspection }) => this.isPendingSpecificationKind(inspection.kind)).map(({ feature }) => feature.id),
+      ...fixInspections.filter(({ inspection }) => this.isPendingSpecificationKind(inspection.kind)).map(({ fix }) => fix.id),
+    ];
+
     const stopReasonSuffixes = [
+      // Reported, never processed: an unspecified request is work for a human conversation, not
+      // something the loop may write on its own (024-specification-flow).
+      pendingSpecificationIds.length > 0
+        ? `${pendingSpecificationIds.length} pending specification with you (${pendingSpecificationIds.join(', ')}) -- open a session and talk them through`
+        : null,
       awaitingValidationIds.length > 0
         ? `${awaitingValidationIds.length} awaiting human validation (${awaitingValidationIds.join(', ')}) -- run "npm run feature-validation"`
         : null,
@@ -1257,13 +1379,11 @@ export class CompassRoseOrchestrator {
         return null;
       case 'request_pending':
       case 'formalization_pending':
-        return {
-          kind: 'plan_feature',
-          feature_id: feature.id,
-          task_id: null,
-          correction_task_id: null,
-          reason: inspection.reason,
-        };
+        // Unreachable: 024-specification-flow removed these from both scheduler passes, because the
+        // loop may no longer author a specification. A safety net, matching the guards below.
+        throw new Error(
+          `Feature ${feature.id} reached selectStepForFeature with kind '${inspection.kind}', which is pending specification and should never have been selected.`,
+        );
       case 'formalized':
       case 'task_planning_pending':
         if (this.primaryTaskLimitReached()) {
@@ -1745,13 +1865,11 @@ export class CompassRoseOrchestrator {
         return null;
       case 'request_pending':
       case 'formalization_pending':
-        return {
-          kind: 'plan_fix',
-          feature_id: fix.id,
-          task_id: null,
-          correction_task_id: null,
-          reason: inspection.reason,
-        };
+        // Unreachable: 024-specification-flow removed these from both scheduler passes. A bug or a
+        // bug report is specified with a human, exactly like a feature.
+        throw new Error(
+          `Fix ${fix.id} reached selectStepForFix with kind '${inspection.kind}', which is pending specification and should never have been selected.`,
+        );
       case 'formalized':
       case 'task_planning_pending':
         if (this.primaryTaskLimitReached()) {

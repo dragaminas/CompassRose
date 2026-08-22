@@ -98,6 +98,14 @@ export function buildConfigPath(root: string): string {
 }
 
 /**
+ * Specification coverage (024-specification-flow). A separate document from CONFIG.md on purpose:
+ * this holds per-dimension state that changes every session, and CONFIG.md is policy.
+ */
+export function buildDimensionsPath(root: string): string {
+  return joinRelative(root, 'DIMENSIONS.md');
+}
+
+/**
  * Replaces the old `path.startsWith('docs/')` heuristic (src/task/taskDocument.ts) for
  * recognizing a documentation-only task scope, now that CompassRose's own docs live under
  * `root` instead of the target repository's `docs/`.

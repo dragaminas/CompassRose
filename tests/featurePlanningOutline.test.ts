@@ -110,15 +110,35 @@ function prepareWorkspace(): { cloneRoot: string; dispose: () => void } {
   };
 }
 
+/**
+ * Since 024-specification-flow the loop no longer formalizes anything -- specification is a
+ * conversation, and a `request.md`-only folder is reported rather than processed. This scenario
+ * therefore drives `specifyExistingRequest`, which is what the session's `/crear` reaches, instead
+ * of running the loop and waiting for it to pick the request up.
+ *
+ * Still a subprocess against a real clone, so the orchestrator's file writing, adapter wiring, and
+ * mock CLIs are exercised exactly as before.
+ */
+const SPECIFY_RUNNER = [
+  "import { CompassRoseOrchestrator } from './src/orchestrator/orchestrator.js';",
+  'const orchestrator = new CompassRoseOrchestrator({',
+  "  cwd: process.cwd(), commit: false, implementer: 'opencode', loop: false,",
+  '});',
+  'orchestrator.specifyExistingRequest(process.argv[2]);',
+  '',
+].join('\n');
+
 function runFormalizationScenario(cloneRoot: string): {
   exitCode: number | null;
   stdout: string;
   stderr: string;
 } {
   const tempRoot = dirname(cloneRoot);
+  writeFileSync(join(cloneRoot, 'specify-runner.ts'), SPECIFY_RUNNER, 'utf8');
+
   const runResult = spawnSync(
     tsxBinary,
-    ['src/cli/main.ts', '--no-commit', '--implementer', 'opencode'],
+    ['specify-runner.ts', TARGET_FEATURE_ID],
     {
       cwd: cloneRoot,
       env: {
@@ -132,6 +152,10 @@ function runFormalizationScenario(cloneRoot: string): {
       shell: process.platform === 'win32',
     },
   );
+
+  // Removed immediately: an uncommitted file in the workspace shows up in every later `git diff`
+  // the runtime takes, including its review-time scope check.
+  rmSync(join(cloneRoot, 'specify-runner.ts'), { force: true });
 
   return {
     exitCode: runResult.status,

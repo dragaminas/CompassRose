@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+implementation_running
 
 ## Source Request
 
@@ -38,19 +38,41 @@ specifications at all.
 
 ## Implemented Deliverables
 
-- None
+- the structural narrowing: `request_pending` and `formalization_pending` are no longer startable, so the loop can no longer author a specification. It reports unspecified items by name and continues with what is validated.
+- `listWorkItemsPendingSpecification()` and the session surfacing them before anything else -- the stage the old `brainstorm` command could not see at all, which is how eighteen requests accumulated here unnoticed.
+- `specifyExistingRequest(id)`: the path a `request.md` takes to becoming a specification, reached from `/crear`. Same mechanism as before, different authority -- it runs because a human said so, and lands `validation: not_started` for that human to confirm.
+- `/crear [id]`, handling both starting points a session has: an existing request folder, or an idea that exists only in the conversation.
+- the per-session competency profile over three axes, asked once, held in memory, never written to any repository file. A second person opening a session declares their own and inherits nothing.
+- `compassrose/DIMENSIONS.md`, its starter list written by `compassrose setup`, and the operations over it: a discard requires a reason and is refused without one; decisions append rather than overwrite, so reopening keeps the earlier one visible with its original author.
+- `/cobertura`, `/descartar`, `/reabrir`, and the coverage report a session closes with -- uncovered and out-of-scope reported separately, because collapsing them is how a gap becomes invisible.
+- `tests/specificationCoverage.test.ts`: 12 tests over the checklist and the profile.
+
+### What the tests caught
+
+Removing formalization from the loop broke four other tests, and each break was informative rather
+than incidental. Three fixtures had been passing only because `request_pending` was startable --
+they were missing `architecture.md` and had never actually been formalized. And two end-to-end
+tests were driving formalization *through the loop*, which is precisely the capability this
+feature removes; they now drive `specifyExistingRequest`, the same method `/crear` reaches.
+
+Restructuring those two also surfaced a hazard the fixtures already warned about: the runner file
+they write into the workspace, left uncommitted, appears in every later `git diff` -- including the
+runtime's own review-time scope check, which filed a correction task against the item under test.
 
 ## Remaining Deliverables
 
-- Every deliverable listed in `feature.md`.
+- the structured-decision contract: presenting a real decision as concrete options with a recommendation, on an axis the human owns. The profile is threaded through the session but does not yet change how the agent converses.
+- provenance in generated specifications: recording per section whether a human decided it or the agent filled it.
+- agent-proposed dimensions during the conversation. The accept/discard machinery exists; what is missing is the agent proposing.
+- marking a dimension covered when a feature that addresses it is drafted.
 
 ## Outline Progress
 
-- 1. Detect and surface pending-specification items; remove formalization from the automated loop: not started
-- 2. Add the per-session competency profile and thread it through the agent contracts: not started
+- 1. Detect and surface pending-specification items; remove formalization from the automated loop: complete
+- 2. Add the per-session competency profile and thread it through the agent contracts: in progress
 - 3. Add the structured-decision contract and its rendering in the session: not started
-- 4. Add `DIMENSIONS.md`, its operations, and the session-close coverage report: not started
-- 5. Record provenance in generated specifications and connect the cycle to the existing validation loop: not started
+- 4. Add `DIMENSIONS.md`, its operations, and the session-close coverage report: complete
+- 5. Record provenance in generated specifications and connect the cycle to the existing validation loop: in progress
 
 ## Blocked By
 
