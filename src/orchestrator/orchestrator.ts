@@ -3504,25 +3504,25 @@ export class CompassRoseOrchestrator {
     }
 
     if (decision.next_step === 'plan_doctor_recovery') {
-      if (!this.tryReadFeatureStateSnapshot(owner)) {
-        return {
-          kind: 'blocked',
-          exitCode: 2,
-          continueLoop: false,
-          summary: `${decision.next_step_reason} The current runtime cannot plan doctor recovery because feature state is unreadable and no restoration target can be trusted.`,
-        };
-      }
-
-      return this.runBoundedOperation(
-        featureId,
-        () => this.planDoctorRecoveryTask(featureId, decision.next_step_reason),
-        () => ({
-          kind: 'advanced',
-          exitCode: 0,
-          continueLoop: true,
-          summary: `Diagnostic/autocorrection planned a doctor recovery task for feature ${featureId}.`,
-        }),
-      );
+      // 026-conversational-doctor-recovery: this used to plan and execute a repair task, and chain
+      // into another when that failed. Feature 003-doctor-command accumulated nine of them without
+      // ever unblocking, and not one asked a human anything -- while the information that would
+      // have resolved it existed only in a human's head.
+      //
+      // The item is blocked instead, and the way out is `/desbloquear`: a diagnosis with two or
+      // three ordered hypotheses, each with the evidence supporting it and the one question the
+      // human can answer that the repository cannot. The blocked outcome means the run sets this
+      // item aside and carries on rather than grinding here.
+      const reason = `${decision.next_step_reason} Automatic repair is no longer attempted for this; run \`/desbloquear ${featureId}\` and we will work out the root cause together.`;
+      this.recordBlockedFeature(featureId, reason, null, {
+        kind: decision.blocker.kind,
+        nextPlanningHint: `Feature \`${featureId}\` needs a human: open a session and run \`/desbloquear ${featureId}\`.`,
+      });
+      // Marks it `blocked_on_human`, so both scheduler passes skip it until the conversation
+      // resolves it -- rather than re-diagnosing and re-blocking it on every subsequent run.
+      this.setRequiresHumanAcknowledgment(owner.statePath, true);
+      this.commitDirtyWorktreeIfConfigured(`proto: block ${featureId} for a recovery conversation`);
+      return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
     }
 
     if (decision.next_step === 'file_blocking_fix' && decision.systemic_blocker) {

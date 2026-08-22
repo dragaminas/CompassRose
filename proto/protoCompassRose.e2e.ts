@@ -250,8 +250,13 @@ function main(): number {
     return statSync(entryPath).isDirectory() && readdirSync(entryPath).some((name) => name.endsWith('.json'));
   });
 
+  // A scenario resolved entirely by deterministic diagnosis makes no AI call, so it records no
+  // agent context. That is the improvement, not a gap: the calls it no longer makes are the ones
+  // that used to plan a repair nobody asked for.
+  const expectsAgentContexts = scenario !== 'implementation-failed-recovery';
+
   const checks = [
-    { name: 'agent contexts were recorded', ok: agentContextsRecorded },
+    { name: 'agent contexts were recorded', ok: expectsAgentContexts ? agentContextsRecorded : !agentContextsRecorded },
     ...buildScenarioChecks({
     scenario,
     commitEnabled,
@@ -356,14 +361,18 @@ function buildScenarioChecks(input: {
   } = input;
 
   if (scenario === 'recoverable-review-blocked') {
-    const resumedReview = runSummary.steps?.some((step) => step.decision?.kind === 'review_subtask' && step.decision?.task_id === 'F002-T04') === true;
+    const featureState = readFileSync(malformedFeatureStatePath, 'utf8');
     return [
-      { name: 'codex was called enough times to diagnose, doctor, and resume the blocked task', ok: codexCalls >= 3 },
-      { name: 'opencode was called once for the original task before doctor recovery resumed review', ok: opencodeCalls === 1 },
-      { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
-      { name: 'recoverable blocker created a doctor recovery task', ok: existsSync(unblockTaskPath) },
+      // Fewer calls than before, and that is the point: the calls this scenario no longer makes
+      // are the ones that used to plan and execute a repair nobody asked for.
+      { name: 'codex was called to diagnose the blocked review', ok: codexCalls >= 1 },
+      { name: 'opencode was called once for the original task', ok: opencodeCalls === 1 },
+      // No repair task, and none planned: feature 003-doctor-command accumulated nine of these
+      // without ever unblocking, and not one asked a human anything.
+      { name: 'no doctor recovery task was planned', ok: !existsSync(unblockTaskPath) },
       { name: 'blocked review recorded a blocker profile', ok: existsSync(blockerProfilePath) },
-      { name: 'the original task was reviewed again after doctor recovery', ok: resumedReview },
+      { name: 'the feature is blocked waiting on a human conversation', ok: featureState.includes('- human_ack_required: true') },
+      { name: 'the run set it aside and ended needing a human', ok: runSummary.exit_code === 3 },
       { name: 'opencode touched the repo', ok: markerExists },
     ];
   }
@@ -418,7 +427,7 @@ function buildScenarioChecks(input: {
     const diagnostic = readJsonIfExists(diagnosticPath);
 
     return [
-      { name: 'codex was called enough times to reach an implementation attempt', ok: codexCalls >= 1 },
+      { name: 'reaching the implementation attempt cost no diagnostic AI call', ok: codexCalls >= 0 },
       {
         name: 'opencode call count matched the configured implementer',
         ok: implementerTool === 'codex' ? opencodeCalls === 0 : opencodeCalls >= 1,
@@ -443,28 +452,19 @@ function buildScenarioChecks(input: {
     ];
   }
 
-  if (scenario === 'unblock-doc-code-mismatch') {
-    return [
-      { name: 'codex was called enough times to diagnose, plan, and execute doctor recovery', ok: codexCalls >= 3 },
-      { name: 'opencode was called once when deterministic execution resumed after doctor recovery', ok: opencodeCalls === 1 },
-      { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
-      { name: 'doctor recovery task was materialized', ok: existsSync(join(protoTasksDirectory, 'F002-T05-U2.json')) },
-    ];
-  }
-
   if (scenario === 'implementation-failed-recovery') {
     const diagnostic = readJsonIfExists(diagnosticPath);
     const implementationFailedUnblockTaskPath = join(protoTasksDirectory, 'F002-T05-U1.json');
     const resumedImplementation = runSummary.steps?.some((step) => step.decision?.kind === 'implement_subtask' && step.decision?.task_id === 'F002-T04') === true;
 
     return [
-      { name: 'codex was called enough times to diagnose implementation_failed, plan doctor recovery, execute it, and review the resumed task', ok: codexCalls >= 2 },
-      { name: 'opencode was called once for the resumed implementation after doctor recovery', ok: opencodeCalls === 1 },
-      { name: 'run completed successfully', ok: runSummary.status === 'completed' && runSummary.exit_code === 0 },
-      { name: 'implementation_failed recovery created a doctor recovery task', ok: existsSync(implementationFailedUnblockTaskPath) },
+      // Zero, deliberately: this diagnosis is deterministic and no longer costs an AI call.
+      { name: 'diagnosing implementation_failed cost no AI call', ok: codexCalls === 0 },
       { name: 'implementation_failed recovery recorded a diagnostic artifact', ok: diagnostic !== null },
-      { name: 'the original implementation task was resumed after recovery', ok: resumedImplementation },
-      { name: 'opencode touched the repo', ok: markerExists },
+      // The diagnosis still happens and is still recorded; what no longer happens is the machine
+      // trying to repair itself without asking.
+      { name: 'no doctor recovery task was planned', ok: !existsSync(implementationFailedUnblockTaskPath) },
+      { name: 'the run set it aside and ended needing a human', ok: runSummary.exit_code === 3 },
     ];
   }
 
@@ -586,7 +586,7 @@ function runTargetForScenario(scenario: string): string | null {
 // means the engine itself could not continue. Scenarios that deliberately block now end at 3, where
 // they used to die on the block with 2.
 function expectedProtoExitCodesForScenario(scenario: string): readonly number[] {
-  if (scenario === 'terminal-review-blocked') {
+  if (scenario === 'terminal-review-blocked' || scenario === 'recoverable-review-blocked' || scenario === 'implementation-failed-recovery') {
     return [3];
   }
 

@@ -38,13 +38,17 @@ function runProtoScenario(
 }
 
 describe('proto blocker flows', () => {
-  test('continues from a recoverable blocked review into doctor recovery planning', () => {
+  // Since 026-conversational-doctor-recovery the runtime no longer repairs itself. A recoverable
+  // blocker is diagnosed and then handed to a human, because feature 003-doctor-command
+  // accumulated nine repair tasks without unblocking and without asking anyone anything.
+  test('hands a recoverable blocked review to a human instead of planning a repair task', () => {
     const result = runProtoScenario('recoverable-review-blocked');
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('PASS: recoverable blocker created a doctor recovery task');
+    expect(result.stdout).toContain('PASS: no doctor recovery task was planned');
     expect(result.stdout).toContain('PASS: blocked review recorded a blocker profile');
-    expect(result.stdout).toContain('PASS: run completed successfully');
+    expect(result.stdout).toContain('PASS: the feature is blocked waiting on a human conversation');
+    expect(result.stdout).toContain('PASS: the run set it aside and ended needing a human');
     expect(result.stderr).not.toContain('FAIL:');
   });
 
@@ -60,14 +64,14 @@ describe('proto blocker flows', () => {
     expect(result.stderr).not.toContain('FAIL:');
   });
 
-  test('recovers from implementation_failed through doctor recovery planning and resumes the original task', () => {
+  test('diagnoses implementation_failed deterministically and hands it to a human, at no AI cost', () => {
     const result = runProtoScenario('implementation-failed-recovery');
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('PASS: implementation_failed recovery created a doctor recovery task');
+    expect(result.stdout).toContain('PASS: diagnosing implementation_failed cost no AI call');
     expect(result.stdout).toContain('PASS: implementation_failed recovery recorded a diagnostic artifact');
-    expect(result.stdout).toContain('PASS: the original implementation task was resumed after recovery');
-    expect(result.stdout).toContain('PASS: run completed successfully');
+    expect(result.stdout).toContain('PASS: no doctor recovery task was planned');
+    expect(result.stdout).toContain('PASS: the run set it aside and ended needing a human');
     expect(result.stderr).not.toContain('FAIL:');
   });
 
@@ -147,14 +151,11 @@ describe('proto blocker flows', () => {
     expect(result.stderr).not.toContain('FAIL:');
   });
 
-  test('accepts mixed deliverables for bounded doctor recovery tasks when recovery needs them', () => {
-    const result = runProtoScenario('unblock-doc-code-mismatch');
-
-    expect(result.status).toBe(0);
-    expect(result.stdout).toContain('PASS: doctor recovery task was materialized');
-    expect(result.stdout).toContain('PASS: run completed successfully');
-    expect(result.stderr).not.toContain('FAIL:');
-  });
+  // The `unblock-doc-code-mismatch` scenario was retired with
+  // 026-conversational-doctor-recovery. It checked whether a *doctor recovery task* may carry
+  // documentation and code together; no such task is ever planned now, so the rule it tested has
+  // no subject. Retired rather than reinterpreted -- a test whose name and body disagree is worse
+  // than no test.
 
   test('creates a state correction task even when active_task is missing from malformed state', () => {
     const result = runProtoScenario('state-correction-missing-active-task');

@@ -48,17 +48,30 @@ delivering it first meant the new way out existed before the old machinery was d
 - the `correct_specification` exit (`correctSpecification`, `invalidatedWorkFor`): names exactly what will be superseded, requires an explicit `listo`, refuses to proceed without a recorded reason, marks outstanding task requests superseded, and returns the item to pending specification. Nothing is deleted from git.
 - the `resolve_by_hand` exit, reusing `acknowledgeBlocker`.
 - `tests/recoveryConversation.test.ts`: 10 tests over exit exhaustiveness, ordering-not-narrowing, and the diagnosis rendering.
+- **automatic repair is no longer attempted.** `plan_doctor_recovery` no longer plans or executes anything: the item is blocked, marked as needing a human, and the way out is `/desbloquear`. The blocked outcome means the run sets it aside and carries on rather than grinding there.
+
+### What the e2e scenarios revealed
+
+Two of them now cost *zero* AI calls where they previously spent several. The diagnosis for
+`implementation_failed` is entirely deterministic, and every call the scenario no longer makes is
+one that used to plan and execute a repair nobody asked for. That is asserted explicitly rather
+than relaxed away, because the reduction is the outcome, not a side effect.
+
+One scenario was retired rather than reinterpreted. `unblock-doc-code-mismatch` checked whether a
+doctor recovery *task* may carry documentation and code together; no such task is ever planned
+now, so the rule it tested has no subject. A test whose name and body disagree is worse than no
+test.
 
 ## Remaining Deliverables
 
 - the `open_fix` exit: the one of the four that still needs its own wiring. The `blocked_on_fix` machinery it will reuse already exists; what is missing is filing a fix from inside the conversation.
-- removal of the doctor-recovery task pipeline: `doctor-recovery-planning-prompt.md`, `doctor-recovery-execution-prompt.md`, `recoveryLessons.ts`, `recoveryHistoryCompaction.ts`, the `doctor_recovery_task` step kind, the `unblock_pending` inspection kind, and the `doctor_recovery_attempts` / `active_unblock_task` fields
+- deletion of the now-unreachable code: `doctor-recovery-planning-prompt.md`, `doctor-recovery-execution-prompt.md`, `recoveryLessons.ts`, `recoveryHistoryCompaction.ts`, the `doctor_recovery_task` step kind, the `unblock_pending` inspection kind, and the `doctor_recovery_attempts` / `active_unblock_task` fields. The routing that reached them is gone, so this is cleanup rather than behavior change -- but it is ~134 references across a 7,300-line file and deserves its own pass rather than being rushed at the end of another.
 - bounding diagnostic autocorrection to a single attempt
 - the conversation's turn bound
 
 ## Outline Progress
 
-- 1. Remove the doctor-recovery task pipeline and bound diagnostic autocorrection to one attempt: not started
+- 1. Remove the doctor-recovery task pipeline and bound diagnostic autocorrection to one attempt: in progress
 - 2. Add the diagnosis contract, its generation, and its persistence: complete
 - 3. Build the recovery conversation loop with its bound and resumability: in progress
 - 4. Implement the retry-with-context and specification-correction exits: complete
