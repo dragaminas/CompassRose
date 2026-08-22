@@ -10,10 +10,11 @@ In progress
 
 ## Current Reality
 
-- The specification round of 2026-08-22 re-cut the original twenty-two component requests into six product features, `023` through `028`. See `features/README.md` for the full mapping.
+- The specification round of 2026-08-22 re-cut the original twenty-two component requests into seven product features, `023` through `029`. See `features/README.md` for the full mapping and the round's coverage report.
 - Features `001-project-identity-and-foundation`, `002-configuration-model`, and `003-doctor-command` are complete.
-- Features `023` through `028` are formalized and validated by that round; none are implemented yet.
+- Features `023` through `029` are formalized and validated by that round; none are implemented yet.
 - Requests `021-vscode-integration` and `022-ecosystem-and-metrics` remain pending specification, deliberately.
+- Two dimensions are recorded as uncovered, not out of scope: distribution/installation, and execution trust.
 - Nothing is blocked.
 
 ## Implemented
@@ -27,7 +28,7 @@ In progress
 
 ## Pending
 
-- Implement features `023` through `028`, in numeric order.
+- Implement features `023` through `029`, in numeric order.
 - Specify requests `021` and `022` when they become relevant.
 
 ## Blocked
