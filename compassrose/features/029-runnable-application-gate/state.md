@@ -26,12 +26,11 @@ Specified jointly with the user in the specification round of 2026-08-22; every 
 architecture decision in `feature.md` and `architecture.md` was made by the user, with contracts,
 schemas, and implementation detail filled in by the agent.
 
-Nothing exists. The configured quality gates run typecheck, tests, lint, and build; all four pass
-happily on an application that does not start.
+A feature cannot close unless the application starts. The gate attaches to the completion transition
+`025-automated-development-loop` introduced, runs last, and blocks that one feature -- not the run --
+when the application does not come up.
 
-This feature depends on the completion transition that `025-automated-development-loop` introduces --
-there is currently no point in the runtime where a feature is marked completed, so there is nowhere
-for this gate to attach.
+This repository declares its own: `npm run doctor`, expecting exit 0 and `Status: OK`.
 
 ## Implemented Deliverables
 
@@ -86,8 +85,8 @@ Formalized and validated in the specification round of 2026-08-22.
 
 ## Known Gaps
 
-- None recorded yet; this feature has not been implemented.
+- Everything listed under Remaining Deliverables above is a known gap; nothing else has surfaced.
 
 ## Next Planning Hint
 
-Implement the configuration block and the evaluators first, and attach the gate once `025-automated-development-loop`'s completion transition exists.
+Wire start-command proposal, using the candidates `028-project-understanding` already derives from declared scripts.

@@ -26,13 +26,13 @@ Specified jointly with the user in the specification round of 2026-08-22; every 
 architecture decision in `feature.md` and `architecture.md` was made by the user, with contracts,
 schemas, and implementation detail filled in by the agent.
 
-The pipeline exists and works step by step across `src/orchestrator/`, `src/agents/`, `src/planner/`,
-`src/task/`, and `src/git/`. Four things do not match the specification.
+Three of the four gaps this feature named are closed. A blocked work item is set aside and the run
+carries on -- the failure that parked nineteen features behind one for weeks. A run can be targeted
+at a single item. And the runtime can close a feature whose acceptance criteria it has verified,
+which no code path could do before: both `002` and `003` were closed by hand.
 
-`run()` returns on any non-zero step exit code, so a blocked item ends the whole run -- the concrete
-cause of nineteen features sitting behind one blocked feature for weeks. There is no run target.
-There is no path from an exhausted outline to `completed`; both `002` and `003` were closed by hand.
-Every internal step commits separately, so the history reads as telemetry rather than work.
+The fourth remains: every internal step still commits separately, so the history still reads as
+telemetry rather than work.
 
 ## Implemented Deliverables
 
@@ -80,8 +80,8 @@ Formalized and validated in the specification round of 2026-08-22.
 
 ## Known Gaps
 
-- None recorded yet; this feature has not been implemented.
+- Everything listed under Remaining Deliverables above is a known gap; nothing else has surfaced.
 
 ## Next Planning Hint
 
-Start with the step-outcome distinction: separating `blocked` from `failed` in `executeStep`/`run()` is what unblocks every other behavior this feature specifies.
+Rework committing to one commit per approved task, absorbing the intermediate bookkeeping into it.

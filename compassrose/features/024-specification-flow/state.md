@@ -91,8 +91,8 @@ Formalized and validated in the specification round of 2026-08-22.
 
 ## Known Gaps
 
-- None recorded yet; this feature has not been implemented.
+- Everything listed under Remaining Deliverables above is a known gap; nothing else has surfaced.
 
 ## Next Planning Hint
 
-Start by removing formalization from the automated loop and surfacing pending-specification items, since every other part of this feature assumes specification is a conversation.
+Add the structured-decision contract, so the competency profile changes how the agent converses rather than only being declared.

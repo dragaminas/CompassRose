@@ -26,11 +26,15 @@ Specified jointly with the user in the specification round of 2026-08-22; every 
 architecture decision in `feature.md` and `architecture.md` was made by the user, with contracts,
 schemas, and implementation detail filled in by the agent.
 
-The agentic recovery pipeline this feature removes is fully present:
-`doctor-recovery-planning-prompt.md`, `doctor-recovery-execution-prompt.md`, `recoveryLessons.ts`,
-`recoveryHistoryCompaction.ts`, the `doctor_recovery_task` step kind, and the `unblock_pending`
-inspection kind. Feature `003-doctor-command` accumulated nine recovery tasks under it without ever
-unblocking.
+The agentic recovery pipeline is no longer reachable. Nothing plans or executes a repair task any
+more; a blocker that used to route there now blocks for a conversation instead. The code itself is
+still present and now unreachable -- `doctor-recovery-planning-prompt.md`,
+`doctor-recovery-execution-prompt.md`, `recoveryLessons.ts`, `recoveryHistoryCompaction.ts`, the
+`doctor_recovery_task` step kind, and the `unblock_pending` inspection kind -- and its removal is
+tracked below as cleanup.
+
+Feature `003-doctor-command` accumulated nine recovery tasks under the old model without ever
+unblocking, which is the evidence this feature was shaped by.
 
 Two of the four specified exits already exist and are reused verbatim: `blocked_on_fix` with its
 deterministic resume, and `acknowledgeBlocker`. The `003` migration named in the outline was
@@ -95,8 +99,9 @@ Formalized and validated in the specification round of 2026-08-22.
 
 ## Known Gaps
 
-- None recorded yet; this feature has not been implemented.
+- The recovery conversation has no declared turn bound yet. Every other loop in this codebase declares its own ceiling; this one does not, and should.
+- Diagnostic autocorrection is not yet bounded to a single attempt, though the chain it used to feed no longer exists.
 
 ## Next Planning Hint
 
-Start with the deletion. Removing the recovery-task pipeline before reworking the loop avoids porting code that is about to disappear.
+Delete the unreachable recovery-task code, then wire the `open_fix` exit and the conversation's turn bound.

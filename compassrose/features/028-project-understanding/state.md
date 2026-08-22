@@ -26,9 +26,12 @@ Specified jointly with the user in the specification round of 2026-08-22; every 
 architecture decision in `feature.md` and `architecture.md` was made by the user, with contracts,
 schemas, and implementation detail filled in by the agent.
 
-Nothing exists. This is the only one of the original twenty-two requests with no implementation at
-all, and the absence shows: everything CompassRose knows about a project comes from what a human
-typed into `compassrose/CONFIG.md` at setup, which works for this repository and for no other.
+CompassRose can now be pointed at a repository it has never seen and state correctly what that
+project is, without anyone typing it in. `compassrose setup` writes `PROJECT_FACTS.md` from what the
+repository says about itself, and `/proyecto` refreshes it and shows the code inventory.
+
+What remains is the inference half: nothing yet fills what no file states -- what the project is
+*for*, and which of several plausible commands is the real gate.
 
 ## Implemented Deliverables
 
@@ -83,8 +86,8 @@ Formalized and validated in the specification round of 2026-08-22.
 
 ## Known Gaps
 
-- None recorded yet; this feature has not been implemented.
+- Everything listed under Remaining Deliverables above is a known gap; nothing else has surfaced.
 
 ## Next Planning Hint
 
-Build the deterministic detector first. It is pure, testable with fixtures, and requires no AI call -- and it establishes most of the facts, leaving inference a narrow role.
+Add gap inference for purpose and gate selection, marked inferred until a human confirms it, and surface the confirmation operation in the session.

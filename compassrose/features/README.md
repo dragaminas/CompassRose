@@ -18,13 +18,13 @@ The numeric prefix defines the recommended implementation order.
 | `001-project-identity-and-foundation` | completed | repository identity, structure, foundation documents |
 | `002-configuration-model` | completed | project-local configuration loading and validation |
 | `003-doctor-command` | completed | read-only repository readiness diagnostics |
-| `023-terminal-session` | formalized | one interactive terminal session as the primary interface |
-| `024-specification-flow` | formalized | the conversation that produces validated specifications |
-| `025-automated-development-loop` | formalized | plan → implement → gate → review, over validated work |
-| `026-conversational-doctor-recovery` | formalized | unblocking through questions instead of repair tasks |
-| `027-bounded-work-item-context` | formalized | declared, budgeted context manifests per task |
-| `028-project-understanding` | formalized | knowing what repository CompassRose is pointed at |
-| `029-runnable-application-gate` | formalized | checking the application actually starts before closing a feature |
+| `023-terminal-session` | implemented | one interactive terminal session as the primary interface |
+| `024-specification-flow` | in progress | the conversation that produces validated specifications |
+| `025-automated-development-loop` | in progress | plan → implement → gate → review, over validated work |
+| `026-conversational-doctor-recovery` | in progress | unblocking through questions instead of repair tasks |
+| `027-bounded-work-item-context` | in progress | declared, budgeted context manifests per task |
+| `028-project-understanding` | in progress | knowing what repository CompassRose is pointed at |
+| `029-runnable-application-gate` | in progress | checking the application actually starts before closing a feature |
 | `021-vscode-integration` | request only | a future visualization layer over the documents |
 | `022-ecosystem-and-metrics` | request only | future CI, metrics, cost tracking, team workflows |
 
@@ -55,6 +55,12 @@ They were re-cut into six features describing the product as its author states i
 specification conversation and an automated development loop — plus the bounded context that makes
 them work, the conversation that recovers them when they fail, the terminal that hosts them, and the
 understanding of whatever repository they are pointed at.
+
+Each of the seven has working implementation; what is left in each is recorded under its own
+Remaining Deliverables, not glossed as done. `compassrose/` gained three documents alongside
+`CONFIG.md` and `PROJECT_STATE.md`, one per distinct concern: `DIMENSIONS.md` (what the
+specification must cover), `PROJECT_FACTS.md` (what CompassRose knows about this repository, and how
+it knows it), and the per-feature documents that were already there.
 
 The absorbed requests are preserved verbatim under `../absorbed-requests/`. Each remains readable and
 referenced from the feature that took over its scope; none were deleted.
