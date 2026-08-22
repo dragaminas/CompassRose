@@ -3,8 +3,14 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import type { TaskRequest } from '../src/contracts/planner/plannerContracts.js';
+
+// Spawns a real tsx -> node subprocess over a full repository clone; ~30s alone, and the
+// suite-wide 30000ms default (vitest.config.ts) leaves no headroom once the rest of the suite
+// runs alongside it. Same reasoning as tests/protoBlockerFlows.test.ts.
+vi.setConfig({ testTimeout: 90000 });
+
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tsxBinary = join(repoRoot, 'node_modules', '.bin', 'tsx');
@@ -31,7 +37,10 @@ describe('task-request scope enforcement', () => {
     try {
       const result = runScenario(workspace.cloneRoot);
 
-      expect(result.exitCode).toBe(2);
+      // 3, not 2: since 025-automated-development-loop a blocked item is set aside and the run
+      // continues, ending 3 ("finished, but something needs a human") rather than dying on the
+      // block.
+      expect(result.exitCode).toBe(3);
       expect(`${result.stdout}${result.stderr}`).toContain('exceeding its pre-declared boundary');
       expect(`${result.stdout}${result.stderr}`).toContain('src/orchestrator/orchestrator.ts');
 

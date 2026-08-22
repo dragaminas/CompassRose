@@ -139,9 +139,23 @@ function main(): number {
   writeExecutableScript(codexMock, CODEX_MOCK_SCRIPT);
   writeExecutableScript(opencodeMock, OPENCODE_MOCK_SCRIPT);
 
+  // Since 025-automated-development-loop a blocked item no longer ends the run: the loop sets it
+  // aside and keeps going. Scenarios that exist to observe one item's blocking behavior therefore
+  // have to say so, or they run on past their scripted mock responses into unrelated work. `--target`
+  // scopes the run to the item under test, which is what these scenarios always meant.
+  const runTarget = runTargetForScenario(scenario);
+
   const runResult = spawnSync(
     tsxBinary,
-    ['src/cli/main.ts', '--loop', '--implementer', implementerTool, ...(commitEnabled ? [] : ['--no-commit'])],
+    [
+      'src/cli/main.ts',
+      'run',
+      '--loop',
+      ...(runTarget ? ['--target', runTarget] : []),
+      '--implementer',
+      implementerTool,
+      ...(commitEnabled ? [] : ['--no-commit']),
+    ],
     {
       cwd: cloneRoot,
       env: {
@@ -361,7 +375,10 @@ function buildScenarioChecks(input: {
     return [
       { name: 'codex was called enough times to analyze the blocked review and classify the blocker as systemic', ok: codexCalls >= 2 },
       { name: 'opencode was called exactly once', ok: opencodeCalls === 1 },
-      { name: 'run stopped after filing a blocking fix', ok: runSummary.status === 'stopped' && runSummary.exit_code === 2 },
+      // The run no longer stops on the block (025-automated-development-loop): it sets the item
+      // aside and looks for other work. With the run scoped to this feature there is none, so it
+      // reaches its natural end and reports 3 -- "finished, but something needs a human".
+      { name: 'run set the item aside and finished needing a human', ok: runSummary.status === 'completed' && runSummary.exit_code === 3 },
       { name: 'terminal blocker recorded a blocker profile', ok: existsSync(blockerProfilePath) },
       { name: 'no doctor recovery task was created', ok: !existsSync(unblockTaskPath) },
       { name: 'a systemic blocking fix was filed', ok: fixedFixDirectories.length === 1 },
@@ -558,9 +575,19 @@ function readJsonIfExists(path: string): any | null {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
+function runTargetForScenario(scenario: string): string | null {
+  // Only the scenario that deliberately drives a work item into a terminal block needs scoping: it
+  // is the one whose mock responses stop being meaningful the moment the loop moves on.
+  return scenario === 'terminal-review-blocked' ? '002-configuration-model' : null;
+}
+
+// Since 025-automated-development-loop the process exit code distinguishes three endings: 0 means
+// nothing was left to do, 3 means the run finished cleanly but left work blocked on a human, and 1
+// means the engine itself could not continue. Scenarios that deliberately block now end at 3, where
+// they used to die on the block with 2.
 function expectedProtoExitCodesForScenario(scenario: string): readonly number[] {
   if (scenario === 'terminal-review-blocked') {
-    return [2];
+    return [3];
   }
 
   if (scenario === 'unblock-doc-code-mismatch') {
@@ -568,10 +595,10 @@ function expectedProtoExitCodesForScenario(scenario: string): readonly number[] 
   }
 
   if (scenario === 'implementation-missing-notes') {
-    return [0, 1, 2];
+    return [0, 1, 3];
   }
 
-  return [0];
+  return [0, 3];
 }
 
 function markerFileNameForScenario(scenario: string): string {

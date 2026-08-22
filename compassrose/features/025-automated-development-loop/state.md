@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+implementation_running
 
 ## Source Request
 
@@ -36,19 +36,28 @@ Every internal step commits separately, so the history reads as telemetry rather
 
 ## Implemented Deliverables
 
-- None
+- `StepOutcomeKind` (`advanced` / `blocked` / `failed`) on `StepExecutionResult`, replacing the exit-code-only signal. The codebase already had the convention implicitly — `exitCode: 2` meant blocked, `1` meant failed — so making it a required field let the compiler enumerate all 34 return sites rather than leaving them to be found by hand.
+- `run()` reworked around the outcome kind: `blocked` sets the item aside and continues, `failed` stops the run.
+- a per-run set-aside (`setAsideItemIds`), so an item this run blocked is not immediately re-selected. Cleared at the start of every run, since the interactive session reuses one orchestrator.
+- process exit codes that distinguish the three endings: `0` nothing left to do, `3` finished but something needs a human, `1` the engine could not continue.
+- an unhandled exception escaping a step now reports and returns `1` instead of rethrowing, which used to kill the process with a raw stack trace and no run summary.
+- run targeting: `setRunTarget`, the `--target <id>` flag, and `/run <id>` in the session. Narrows selection and never widens it; refuses an id that does not exist.
+- `blockedDuringRun()`, and the session's end-of-run summary built from it.
+- `tests/loopOutcome.test.ts`: 8 tests over blocked-continues, failed-stops, exit codes, set-aside, and targeting.
 
 ## Remaining Deliverables
 
-- Every deliverable listed in `feature.md`.
+- acceptance-criteria verification and the automatic completion transition
+- commit batching: one commit per approved task, absorbing intermediate bookkeeping
+- the structured `RunSummary` model for non-interactive callers (the session renders its own today)
 
 ## Outline Progress
 
-- 1. Introduce the step-outcome distinction and rework `run()` around it: not started
-- 2. Add run targeting: not started
+- 1. Introduce the step-outcome distinction and rework `run()` around it: complete
+- 2. Add run targeting: complete
 - 3. Add acceptance-criteria verification and automatic completion: not started
 - 4. Rework committing to one commit per approved task: not started
-- 5. Add the end-of-run summary: not started
+- 5. Add the end-of-run summary: in progress
 
 ## Blocked By
 

@@ -1,6 +1,8 @@
 import type { StepDecision } from './stepDecision.js';
+import type { StepOutcomeKind } from './protoRuntime.js';
 
 export interface StepOutcomeRecord {
+  readonly kind: StepOutcomeKind;
   readonly exitCode: number;
   readonly continueLoop: boolean;
   readonly summary: string;

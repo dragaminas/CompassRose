@@ -69,7 +69,7 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
   } catch (error) {
     stderr(error instanceof Error ? error.message : String(error));
     stderr('Usage: compassrose                    open the interactive session');
-    stderr('Usage: compassrose run [--loop] [--implementer codex|opencode] [--no-commit] [--cwd <path>]');
+    stderr('Usage: compassrose run [--loop] [--target <id>] [--implementer codex|opencode] [--no-commit] [--cwd <path>]');
     stderr('Usage: compassrose doctor');
     stderr('Usage: compassrose setup');
     stderr('Usage: compassrose feature-validation [--no-commit] [--cwd <path>]');
@@ -139,6 +139,15 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     if (disallowedPaths.length > 0) {
       stderr('runtime preflight: git_policy: worktree is not clean and require_clean_worktree_before_task is enabled');
       stderr(`runtime preflight: git_policy: disallowed dirty paths: ${disallowedPaths.join(', ')}`);
+      return 1;
+    }
+  }
+
+  if (options.target) {
+    try {
+      orchestrator.setRunTarget(options.target);
+    } catch (error) {
+      stderr(error instanceof Error ? error.message : String(error));
       return 1;
     }
   }

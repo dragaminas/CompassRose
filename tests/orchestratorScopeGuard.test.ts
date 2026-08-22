@@ -3,7 +3,12 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
+
+// Spawns a real tsx -> node subprocess over a full repository clone; the suite-wide 30000ms
+// default (vitest.config.ts) leaves no headroom under full-suite contention. Same reasoning as
+// tests/protoBlockerFlows.test.ts.
+vi.setConfig({ testTimeout: 90000 });
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tsxBinary = join(repoRoot, 'node_modules', '.bin', 'tsx');
@@ -22,7 +27,11 @@ describe('feature scope guard', () => {
     try {
       const result = runScopeGuardScenario(workspace.cloneRoot);
 
-      expect(result.exitCode).toBe(2);
+      // 3, not 2: since 025-automated-development-loop, a blocked work item no longer ends the
+      // run. The run sets it aside, finds nothing else selectable in this fixture, and exits 3 --
+      // "finished cleanly, but something needs a human", which is distinct from both 0 (nothing
+      // left to do) and 1 (the engine broke).
+      expect(result.exitCode).toBe(3);
       expect(result.stdout).toContain(`Next step: plan_task (${TARGET_FEATURE_ID})`);
       // The console now prints a bounded blocker card (renderBlockerCard), not the raw,
       // unbounded reason sentence -- this specific reason is long enough that the sibling
@@ -44,8 +53,9 @@ describe('feature scope guard', () => {
       const runSummary = JSON.parse(
         readFileSync(join(workspace.cloneRoot, '.git', 'proto-compassrose', 'latest-run.json'), 'utf8'),
       ) as { status?: string; exit_code?: number };
-      expect(runSummary.status).toBe('stopped');
-      expect(runSummary.exit_code).toBe(2);
+      // The run reached its natural end rather than being cut short by the block.
+      expect(runSummary.status).toBe('completed');
+      expect(runSummary.exit_code).toBe(3);
     } finally {
       workspace.dispose();
     }

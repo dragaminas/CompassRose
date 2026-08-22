@@ -334,6 +334,13 @@ export class CompassRoseOrchestrator {
   // Display-only, per src/contracts/runtime/runObserver.ts: an observed run must take exactly the
   // same steps as an unobserved one.
   private runObserver: RunObserver | null = null;
+  // Work items this run blocked, with why -- the material for the end-of-run summary.
+  private readonly blockedThisRun = new Map<string, string>();
+  // Work items excluded from selection for the remainder of this run. Per-run only: the durable
+  // exclusion is the item's own recorded blocker, which the scheduler already honors.
+  private readonly setAsideItemIds = new Set<string>();
+  // When set, this run works only on this item. Narrows selection; never widens it.
+  private runTarget: string | null = null;
   private stopRequested = false;
   private stopReason: string | null = null;
   private stopExitCode = 130;
@@ -464,6 +471,27 @@ export class CompassRoseOrchestrator {
   }
 
   /**
+   * Restrict the next run to one work item, or clear the restriction with `null`
+   * (025-automated-development-loop).
+   *
+   * Throws when the named item does not exist, so `/run 024` against a typo says so instead of
+   * quietly running everything. It does not throw when the item exists but is not currently
+   * selectable -- that is reported by the run itself, which knows why.
+   */
+  setRunTarget(itemId: string | null): void {
+    if (itemId !== null && !this.listFeatures().some((feature) => feature.id === itemId) && !this.listFixes().some((fix) => fix.id === itemId)) {
+      throw new Error(`No feature or fix named ${itemId} exists.`);
+    }
+
+    this.runTarget = itemId;
+  }
+
+  /** What this run blocked, and why -- the material for an end-of-run summary. */
+  blockedDuringRun(): ReadonlyMap<string, string> {
+    return this.blockedThisRun;
+  }
+
+  /**
    * Cooperative stop requested from outside the signal handlers -- the interactive session's `esc`
    * key. Delegates to the same path SIGINT takes, so it lands at the next step boundary and a step
    * in flight is always allowed to finish rather than leaving the worktree mid-write.
@@ -476,6 +504,11 @@ export class CompassRoseOrchestrator {
     const cleanupStopHandlers = this.installControlledStopHandlers();
     let keepRunning = true;
     let lastDecision: StepDecision | null = null;
+
+    // Both are per-run, and the interactive session reuses one orchestrator across several `/run`
+    // invocations: without this, a second run would still be avoiding what the first set aside.
+    this.blockedThisRun.clear();
+    this.setAsideItemIds.clear();
 
     try {
       while (keepRunning) {
@@ -505,10 +538,34 @@ export class CompassRoseOrchestrator {
           this.throwIfControlledStopRequested();
         }
 
-        if (result.exitCode !== 0) {
+        // 025-automated-development-loop: react to what the step meant, not to what number it
+        // returned. `failed` is the engine being in no state to continue; `blocked` is one work
+        // item that cannot proceed, which is a normal outcome and must not end the run.
+        if (result.kind === 'failed') {
           this.writeRefinementFeedback(result.summary, lastDecision);
           this.writeRunSummary('stopped', result.exitCode, null);
           return result.exitCode;
+        }
+
+        if (result.kind === 'blocked') {
+          const blockedId = decision.feature_id;
+          if (blockedId) {
+            this.blockedThisRun.set(blockedId, result.summary);
+            // Set aside for the remainder of this run. The durable exclusion lives in the item's
+            // own recorded blocker (inspectFeature reports `blocked_on_human`, which both
+            // scheduler passes already skip), but a blocker whose recoverability is `agent` stays
+            // selectable across runs by design -- and would be re-selected immediately, in this
+            // same run, without this.
+            this.setAsideItemIds.add(blockedId);
+          }
+
+          this.writeRefinementFeedback(result.summary, lastDecision);
+          console.error(`Set aside ${blockedId ?? 'the current item'}; continuing with the next selectable work.`);
+
+          if (!this.options.loop) {
+            keepRunning = false;
+          }
+          continue;
         }
 
         if (!this.options.loop || !result.continueLoop) {
@@ -517,8 +574,12 @@ export class CompassRoseOrchestrator {
       }
 
       this.throwIfControlledStopRequested();
-      this.writeRunSummary('completed', 0, null);
-      return 0;
+      // A run that ends with items blocked did not fail, but it did not finish the work either.
+      // Non-interactive callers need to tell those apart: 0 means nothing left to do, 3 means
+      // something needs a human.
+      const endedWithBlockedItems = this.blockedThisRun.size > 0;
+      this.writeRunSummary('completed', endedWithBlockedItems ? 3 : 0, null);
+      return endedWithBlockedItems ? 3 : 0;
     } catch (error) {
       if (error instanceof ControlledStopError) {
         if (!this.stopRequested) {
@@ -528,10 +589,19 @@ export class CompassRoseOrchestrator {
         return error.exitCode;
       }
 
+      // An unhandled exception escaping a step is an engine failure (025-automated-development-loop):
+      // the run stops and reports what broke. It used to rethrow, which meant the process died with
+      // a raw stack trace and no run summary reached the caller -- the least legible possible
+      // ending, and the exact opposite of what this system is for. The stack is still printed, for
+      // whoever has to debug it.
       const message = error instanceof Error ? error.message : String(error);
       this.writeRefinementFeedback(message, lastDecision);
       this.writeRunSummary('failed', 1, message);
-      throw error;
+      console.error(`Run failed: ${message}`);
+      if (error instanceof Error && error.stack) {
+        console.error(error.stack);
+      }
+      return 1;
     } finally {
       cleanupStopHandlers();
     }
@@ -1080,8 +1150,19 @@ export class CompassRoseOrchestrator {
       };
     }
 
-    const featureInspections = this.listFeatures().map((feature) => ({ feature, inspection: this.inspectFeature(feature) }));
-    const fixInspections = this.listFixes().map((fix) => ({ fix, inspection: this.inspectFix(fix) }));
+    // 025-automated-development-loop: both filters narrow the candidate set and never widen it.
+    // `setAsideItemIds` holds what this run already blocked; `runTarget`, when set, restricts the
+    // run to one named item. Neither can make the scheduler select something the gates below would
+    // otherwise refuse -- notably neither bypasses the validation gate or resumes a blocked item.
+    const selectable = (id: string): boolean =>
+      !this.setAsideItemIds.has(id) && (this.runTarget === null || this.runTarget === id);
+
+    const featureInspections = this.listFeatures()
+      .filter((feature) => selectable(feature.id))
+      .map((feature) => ({ feature, inspection: this.inspectFeature(feature) }));
+    const fixInspections = this.listFixes()
+      .filter((fix) => selectable(fix.id))
+      .map((fix) => ({ fix, inspection: this.inspectFix(fix) }));
 
     for (const { feature, inspection } of featureInspections) {
       if (this.isContinuingInspectionKind(inspection.kind)) {
@@ -1786,7 +1867,7 @@ export class CompassRoseOrchestrator {
         || error instanceof DoctorRecoveryPlanningRejectedError
       ) {
         this.recordExhaustedRecoveryAsBlocked(featureId, error.message);
-        return { exitCode: 2, continueLoop: false, summary: error.message };
+        return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: error.message };
       }
       throw error;
     }
@@ -1843,23 +1924,23 @@ export class CompassRoseOrchestrator {
     switch (decision.kind) {
       case 'plan_feature':
         this.planFeature(requireString(decision.feature_id, 'feature_id'));
-        return { exitCode: 0, continueLoop: true, summary: `Feature ${requireString(decision.feature_id, 'feature_id')} formalized.` };
+        return { kind: 'advanced', exitCode: 0, continueLoop: true, summary: `Feature ${requireString(decision.feature_id, 'feature_id')} formalized.` };
       case 'plan_task':
         return this.planTask(requireString(decision.feature_id, 'feature_id'));
       case 'plan_fix':
         this.planFixRequest(requireString(decision.feature_id, 'feature_id'));
-        return { exitCode: 0, continueLoop: true, summary: `Fix ${requireString(decision.feature_id, 'feature_id')} formalized.` };
+        return { kind: 'advanced', exitCode: 0, continueLoop: true, summary: `Fix ${requireString(decision.feature_id, 'feature_id')} formalized.` };
       case 'plan_fix_task':
         return this.planFixTask(requireString(decision.feature_id, 'feature_id'));
       case 'plan_subtask':
         this.planSubtask(requireString(decision.task_id, 'task_id'));
-        return { exitCode: 0, continueLoop: true, summary: `Subtask prepared for ${requireString(decision.task_id, 'task_id')}.` };
+        return { kind: 'advanced', exitCode: 0, continueLoop: true, summary: `Subtask prepared for ${requireString(decision.task_id, 'task_id')}.` };
       case 'correct_state': {
         const correctionFeatureId = requireString(decision.feature_id, 'feature_id');
         return this.runBoundedOperation(
           correctionFeatureId,
           () => this.correctState(correctionFeatureId, decision.reason),
-          () => ({ exitCode: 0, continueLoop: true, summary: `State correction task created for feature ${correctionFeatureId}.` }),
+          () => ({ kind: 'advanced', exitCode: 0, continueLoop: true, summary: `State correction task created for feature ${correctionFeatureId}.` }),
         );
       }
       case 'doctor_recovery_task':
@@ -1869,7 +1950,7 @@ export class CompassRoseOrchestrator {
         return this.runBoundedOperation(
           unblockFeatureId,
           () => this.planDoctorRecoveryTask(unblockFeatureId, decision.reason),
-          () => ({ exitCode: 0, continueLoop: true, summary: `Doctor recovery task planned for feature ${unblockFeatureId}.` }),
+          () => ({ kind: 'advanced', exitCode: 0, continueLoop: true, summary: `Doctor recovery task planned for feature ${unblockFeatureId}.` }),
         );
       }
       case 'diagnose_autocorrect':
@@ -1884,14 +1965,14 @@ export class CompassRoseOrchestrator {
         return this.reviewTask(requireString(decision.task_id, 'task_id'));
       case 'blocked':
         this.recordBlockedFeature(requireString(decision.feature_id, 'feature_id'), decision.reason);
-        return { exitCode: 2, continueLoop: false, summary: decision.reason };
+        return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: decision.reason };
       case 'stop':
         // Was previously a hardcoded generic message regardless of why determineNextStep()
         // decided to stop -- silently swallowing the specific reason (e.g. "Primary task limit
         // reached...", or the new AI-call-budget message above) even though StepDecision already
         // carried it. Surface it instead of guessing at a one-size-fits-all string.
         console.log(decision.reason);
-        return { exitCode: 0, continueLoop: false, summary: decision.reason };
+        return { kind: 'advanced', exitCode: 0, continueLoop: false, summary: decision.reason };
       default:
         return assertNever(decision.kind);
     }
@@ -2247,7 +2328,7 @@ export class CompassRoseOrchestrator {
         nextPlanningHint: `Formalize additional task requests for feature \`${featureId}\`; every pre-declared task request is already complete or superseded.`,
       });
       this.commitDirtyWorktreeIfConfigured(`proto: record exhausted task requests block for feature ${featureId}`);
-      return { exitCode: 2, continueLoop: false, summary: reason };
+      return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
     }
 
     return this.planTaskFromRequest(featureId, feature, nextRequest, taskRequests);
@@ -2319,7 +2400,7 @@ export class CompassRoseOrchestrator {
       const reason = `Backfilling task requests for feature \`${featureId}\` couldn't reconcile them against existing tasks: ${reconciliation.reason}.`;
       this.recordBlockedFeature(featureId, reason);
       this.commitDirtyWorktreeIfConfigured(`proto: record task-request backfill block for feature ${featureId}`);
-      return { exitCode: 2, continueLoop: false, summary: reason };
+      return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
     }
 
     const taskRequests = stripBackfillMetadata(backfilled.task_requests);
@@ -2344,7 +2425,7 @@ export class CompassRoseOrchestrator {
       nextPlanningHint: `Formalize or advance feature \`${belongsToOtherFeature}\`; the previously proposed task for \`${featureId}\` belongs to that feature's own scope, not this one's.`,
     });
     this.commitDirtyWorktreeIfConfigured(`proto: record scope-guard block for feature ${featureId}`);
-    return { exitCode: 2, continueLoop: false, summary: reason };
+    return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
   }
 
   /**
@@ -2403,7 +2484,7 @@ export class CompassRoseOrchestrator {
       );
     }
 
-    return { exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${featureId}.` };
+    return { kind: 'advanced', exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${featureId}.` };
   }
 
   /**
@@ -2607,7 +2688,7 @@ export class CompassRoseOrchestrator {
         const reason = `Task planning for feature \`${featureId}\` elaborated task request ${taskRequest.id} ("${taskRequest.title}") with scope exceeding its pre-declared boundary: \`${containment.exceedingPaths.join('`, `')}\` ${containment.exceedingPaths.length === 1 ? 'is' : 'are'} not covered by \`${taskRequest.scope.allowed_paths.join('`, `')}\`. Refusing to write the task; either stay within the pre-declared boundary or set scope_justification.deviation_reason.`;
         this.recordBlockedFeature(featureId, reason);
         this.commitDirtyWorktreeIfConfigured(`proto: record scope-boundary block for feature ${featureId}`);
-        return { exitCode: 2, continueLoop: false, summary: reason };
+        return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
       }
 
       console.log(
@@ -2743,7 +2824,7 @@ export class CompassRoseOrchestrator {
       );
     }
 
-    return { exitCode: 0, continueLoop: true, summary: `Next task planned for fix ${fixId}.` };
+    return { kind: 'advanced', exitCode: 0, continueLoop: true, summary: `Next task planned for fix ${fixId}.` };
   }
 
   private planSubtask(taskId: string): void {
@@ -2975,6 +3056,7 @@ export class CompassRoseOrchestrator {
     if (decision.next_step === 'correct_state') {
       if (!statSafeIsFile(owner.statePath)) {
         return {
+          kind: 'blocked',
           exitCode: 2,
           continueLoop: false,
           summary: `${decision.next_step_reason} The current runtime cannot generate a deterministic state-correction artifact because ${relativePath(this.repositoryRoot, owner.statePath)} is missing.`,
@@ -2985,6 +3067,7 @@ export class CompassRoseOrchestrator {
         featureId,
         () => this.correctState(featureId, decision.next_step_reason),
         () => ({
+          kind: 'advanced',
           exitCode: 0,
           continueLoop: true,
           summary: `Diagnostic/autocorrection applied a state correction for feature ${featureId}.`,
@@ -2995,6 +3078,7 @@ export class CompassRoseOrchestrator {
     if (decision.next_step === 'plan_doctor_recovery') {
       if (!this.tryReadFeatureStateSnapshot(owner)) {
         return {
+          kind: 'blocked',
           exitCode: 2,
           continueLoop: false,
           summary: `${decision.next_step_reason} The current runtime cannot plan doctor recovery because feature state is unreadable and no restoration target can be trusted.`,
@@ -3005,6 +3089,7 @@ export class CompassRoseOrchestrator {
         featureId,
         () => this.planDoctorRecoveryTask(featureId, decision.next_step_reason),
         () => ({
+          kind: 'advanced',
           exitCode: 0,
           continueLoop: true,
           summary: `Diagnostic/autocorrection planned a doctor recovery task for feature ${featureId}.`,
@@ -3057,6 +3142,7 @@ export class CompassRoseOrchestrator {
         console.error(reason);
       }
       return {
+        kind: 'blocked',
         exitCode: 2,
         continueLoop: false,
         summary: reason,
@@ -3077,6 +3163,7 @@ export class CompassRoseOrchestrator {
       console.error(decision.diagnosis_summary);
     }
     return {
+      kind: 'blocked',
       exitCode: 2,
       continueLoop: false,
       summary: decision.next_step_reason,
@@ -3761,6 +3848,7 @@ export class CompassRoseOrchestrator {
     const result = this.executeImplementation(task, false, null);
     return result
       ?? {
+          kind: 'advanced',
           exitCode: 0,
           continueLoop: true,
           summary: `Implementation completed for ${taskId}.`,
@@ -3773,6 +3861,7 @@ export class CompassRoseOrchestrator {
     const result = this.executeImplementation(task, true, artifact?.state_correction ?? null);
     return result
       ?? {
+          kind: 'advanced',
           exitCode: 0,
           continueLoop: true,
           summary: `Correction implementation completed for ${correctionTaskId}.`,
@@ -4027,6 +4116,7 @@ export class CompassRoseOrchestrator {
       }
 
       return {
+        kind: 'advanced',
         exitCode: 0,
         continueLoop: true,
         summary: taskInterfaceAnalysis
@@ -4071,6 +4161,7 @@ export class CompassRoseOrchestrator {
       }
       console.log(`Review requested correction task ${correction.correction_task_id} at ${relativePath(this.repositoryRoot, correctionPath)}.`);
       return {
+        kind: 'advanced',
         exitCode: 0,
         continueLoop: true,
         summary: taskInterfaceAnalysis
@@ -4105,6 +4196,7 @@ export class CompassRoseOrchestrator {
         }
 
         return {
+          kind: 'advanced',
           exitCode: 0,
           continueLoop: true,
           summary: `${review.summary} ${blockedSummary}${analysisSuffix}`,
@@ -4117,6 +4209,7 @@ export class CompassRoseOrchestrator {
       const diagnosticResult = this.diagnoseAndAutocorrect(task.featureId, blockedSummary);
 
       return {
+        kind: diagnosticResult.kind,
         exitCode: diagnosticResult.exitCode,
         continueLoop: diagnosticResult.continueLoop,
         summary: `${review.summary} ${blockedSummary} ${diagnosticResult.summary}${analysisSuffix}`,
@@ -4141,6 +4234,7 @@ export class CompassRoseOrchestrator {
       if (this.options.loop) {
         console.error(failedSummary);
         return {
+          kind: 'advanced',
           exitCode: 0,
           continueLoop: true,
           summary: `${review.summary} ${failedSummary}${analysisSuffix}`,
@@ -4149,6 +4243,7 @@ export class CompassRoseOrchestrator {
 
       const diagnosticResult = this.diagnoseAndAutocorrect(task.featureId, failedSummary);
       return {
+        kind: diagnosticResult.kind,
         exitCode: diagnosticResult.exitCode,
         continueLoop: diagnosticResult.continueLoop,
         summary: `${review.summary} ${failedSummary} ${diagnosticResult.summary}${analysisSuffix}`,
@@ -4157,6 +4252,7 @@ export class CompassRoseOrchestrator {
 
     console.error(review.summary);
     return {
+      kind: 'failed',
       exitCode: 1,
       continueLoop: false,
       summary: taskInterfaceAnalysis ? `${review.summary} Task-interface analysis was recorded.` : review.summary,
@@ -4179,6 +4275,7 @@ export class CompassRoseOrchestrator {
     const correctionTaskId = this.buildStateCorrectionTaskId(owner.tasksDirectory, task.taskId);
     if (correctionTaskId === null) {
       return {
+        kind: 'blocked',
         exitCode: 2,
         continueLoop: false,
         summary: `Correction iteration limit reached for feature ${task.featureId} after ${this.maxReviewIterations} correction(s) for anchor ${task.taskId}; refusing to create another scope-violation correction task for out-of-scope paths ${outOfScopePaths.join(', ')}.`,
@@ -4231,6 +4328,7 @@ export class CompassRoseOrchestrator {
 
     console.log(`Deterministic scope check requested correction task ${correction.correction_task_id} at ${relativePath(this.repositoryRoot, correctionPath)}.`);
     return {
+      kind: 'advanced',
       exitCode: 0,
       continueLoop: true,
       summary: `Deterministic scope check found out-of-scope paths (${outOfScopeList}) in the diff for ${task.taskId}; requested correction task ${correction.correction_task_id} without invoking the reviewer.`,
@@ -4334,6 +4432,7 @@ export class CompassRoseOrchestrator {
     }
 
     return {
+      kind: 'advanced',
       exitCode: 0,
       continueLoop: true,
       summary: `Doctor recovery ${task.taskId} passed its re-entry quality gates and restored ${doctorRecovery.restoration_target.lifecycle_state}.`,
@@ -4395,6 +4494,7 @@ export class CompassRoseOrchestrator {
     }
 
     return {
+      kind: 'blocked',
       exitCode: 2,
       continueLoop: false,
       summary: reason,
@@ -4617,6 +4717,7 @@ export class CompassRoseOrchestrator {
       });
       console.error(`Implementation for ${task.taskId} failed; recovery will continue through doctor recovery planning.`);
       return {
+        kind: 'advanced',
         exitCode: 0,
         continueLoop: true,
         summary: correction
@@ -4663,6 +4764,7 @@ export class CompassRoseOrchestrator {
       });
       console.error(`Quality gates failed after implementing ${task.taskId}; recovery will continue through doctor recovery planning.`);
       return {
+        kind: 'advanced',
         exitCode: 0,
         continueLoop: true,
         summary: correction
@@ -4979,6 +5081,7 @@ export class CompassRoseOrchestrator {
     }
 
     return {
+      kind: 'blocked',
       exitCode: 2,
       continueLoop: false,
       summary: reason,

@@ -3,8 +3,14 @@ import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import type { TaskRequest } from '../src/contracts/planner/plannerContracts.js';
+
+// Spawns a real tsx -> node subprocess over a full repository clone; ~30s alone, and the
+// suite-wide 30000ms default (vitest.config.ts) leaves no headroom once the rest of the suite
+// runs alongside it. Same reasoning as tests/protoBlockerFlows.test.ts.
+vi.setConfig({ testTimeout: 90000 });
+
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tsxBinary = join(repoRoot, 'node_modules', '.bin', 'tsx');

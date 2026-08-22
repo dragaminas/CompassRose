@@ -7,6 +7,7 @@ export function parseRunArguments(argv: readonly string[], defaultCwd: string): 
   let commit = true;
   let cwd = defaultCwd;
   let implementer: AgentToolName = 'opencode';
+  let target: string | null = null;
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
@@ -41,8 +42,19 @@ export function parseRunArguments(argv: readonly string[], defaultCwd: string): 
       continue;
     }
 
+    if (argument === '--target') {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error('--target requires a feature or fix id.');
+      }
+
+      target = value;
+      index += 1;
+      continue;
+    }
+
     throw new Error(`Unknown argument: ${argument}`);
   }
 
-  return { loop, commit, cwd, implementer };
+  return { loop, commit, cwd, implementer, target };
 }

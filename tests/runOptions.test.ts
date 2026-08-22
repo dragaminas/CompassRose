@@ -9,6 +9,7 @@ describe('parseRunArguments', () => {
       commit: true,
       cwd: '/repo',
       implementer: 'opencode',
+      target: null,
     });
   });
 
@@ -47,7 +48,16 @@ describe('parseRunArguments', () => {
       commit: false,
       cwd: '/repo',
       implementer: 'codex',
+      target: null,
     });
+  });
+
+  test('--target restricts the run to one work item', () => {
+    expect(parseRunArguments(['--target', '024-specification-flow'], '/repo').target).toBe('024-specification-flow');
+  });
+
+  test('--target without a value is refused rather than silently ignored', () => {
+    expect(() => parseRunArguments(['--target'], '/repo')).toThrow(/--target requires a feature or fix id/);
   });
 
   test('throws on an unrecognized argument', () => {

@@ -56,7 +56,7 @@ describe('proto blocker flows', () => {
     expect(result.stdout).toContain('PASS: no doctor recovery task was created');
     expect(result.stdout).toContain('PASS: a systemic blocking fix was filed');
     expect(result.stdout).toContain('PASS: the feature was blocked on the filed fix');
-    expect(result.stdout).toContain('PASS: run stopped after filing a blocking fix');
+    expect(result.stdout).toContain('PASS: run set the item aside and finished needing a human');
     expect(result.stderr).not.toContain('FAIL:');
   });
 

@@ -14,6 +14,11 @@ export interface ProtoOptions {
   readonly commit: boolean;
   readonly cwd: string;
   readonly implementer: AgentToolName;
+  /**
+   * Restrict the run to one work item (025-automated-development-loop). Narrows selection and never
+   * widens it: a target cannot make the loop work on something the gates would otherwise refuse.
+   */
+  readonly target?: string | null;
 }
 
 /**
@@ -119,7 +124,26 @@ export interface FixInspection {
 /**
  * Result of executing a single selected runtime step.
  */
+/**
+ * What a step actually meant, as opposed to what number it returned (025-automated-development-loop).
+ *
+ * `run()` used to treat any non-zero exit code as fatal, which conflated two completely different
+ * things: "this work item cannot proceed" and "the engine is broken". That conflation is why a
+ * single blocked feature parked the nineteen behind it for weeks.
+ *
+ * - `advanced` -- the step did its work; carry on
+ * - `blocked`  -- this work item cannot proceed and needs a human; set it aside and carry on
+ * - `failed`   -- the runtime itself is in no state to continue; stop the run
+ *
+ * `failed` is deliberately narrow: an unhandled exception, a contract or schema validation failure
+ * in the runtime's own artifacts, a dirty worktree where policy requires a clean one, a failing git
+ * operation, a declared run limit reached, or an adapter that cannot be invoked at all. Everything
+ * else that ends with a work item unable to proceed is `blocked`.
+ */
+export type StepOutcomeKind = 'advanced' | 'blocked' | 'failed';
+
 export interface StepExecutionResult {
+  readonly kind: StepOutcomeKind;
   readonly exitCode: number;
   readonly continueLoop: boolean;
   readonly summary: string;
