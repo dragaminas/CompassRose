@@ -53,6 +53,35 @@ export interface QualityGatesSection {
   readonly optional: readonly string[];
 }
 
+/**
+ * What "the application runs" means for this project (029-runnable-application-gate).
+ *
+ * The configured quality gates -- typecheck, tests, lint, build -- all pass happily on an
+ * application that does not start. This is the declaration that makes starting checkable, and it is
+ * declared rather than inferred so the definition of "done" never becomes model judgment.
+ *
+ * `expect` may carry any combination of its fields; all present conditions must hold. Whether the
+ * command is expected to exit is decided by the presence of `http_ok`, not by guessing at the kind
+ * of project.
+ */
+export interface SmokeExpectSection {
+  readonly exit_code?: number;
+  readonly stdout_contains?: string;
+  readonly http_ok?: string;
+}
+
+export interface SmokeSection {
+  readonly command?: string;
+  readonly expect?: SmokeExpectSection;
+  readonly timeout_seconds?: number;
+  /**
+   * Opting out, with a mandatory reason. The reason requirement matches the discipline applied to
+   * discarded dimensions in 024-specification-flow: six months later, the document has to
+   * distinguish "genuinely has no entry point" from "nobody got round to it".
+   */
+  readonly none?: string;
+}
+
 export interface LimitsSection {
   readonly max_tasks_per_run: number;
   readonly max_retries_per_task: number;
@@ -143,6 +172,7 @@ export interface ProjectConfiguration {
   readonly development_policy?: DevelopmentPolicySection;
   readonly review_policy?: ReviewPolicySection;
   readonly quality_gates?: QualityGatesSection;
+  readonly smoke?: SmokeSection;
   readonly limits?: LimitsSection;
   readonly [key: string]: unknown;
 }

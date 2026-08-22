@@ -158,18 +158,33 @@ function projectState(): string {
   ].join('\n');
 }
 
+/**
+ * This repository's own CONFIG.md declares a real smoke command (`npm run doctor`), which cannot
+ * run inside a bare fixture workspace. Tests that are not about the start gate replace it with an
+ * explicit opt-out; the two that are about it declare their own.
+ */
+function configWithSmoke(smokeBlock: string): string {
+  return readFixtureConfigMarkdown().replace(
+    /smoke:\n(?:  .*\n)*/,
+    smokeBlock.endsWith('\n') ? smokeBlock : `${smokeBlock}\n`,
+  );
+}
+
+const OPT_OUT_SMOKE = 'smoke:\n  none: "Fixture workspace; nothing to start."\n';
+
 function createWorkspace(options: {
   criteria?: readonly string[];
   activeTask?: string;
   gateResult?: string;
   reviewResult?: string;
+  smokeBlock?: string;
 } = {}): Workspace {
   const root = mkdtempSync(join(tmpdir(), 'compassrose-completion-'));
   const featureDirectory = join(root, 'compassrose', 'features', FEATURE_ID);
 
   mkdirSync(join(root, '.git', 'proto-compassrose', 'task-requests'), { recursive: true });
   mkdirSync(join(featureDirectory, 'tasks'), { recursive: true });
-  writeFileSync(join(root, 'compassrose', 'CONFIG.md'), readFixtureConfigMarkdown(), 'utf8');
+  writeFileSync(join(root, 'compassrose', 'CONFIG.md'), configWithSmoke(options.smokeBlock ?? OPT_OUT_SMOKE), 'utf8');
   writeFileSync(join(root, 'compassrose', 'PROJECT_STATE.md'), projectState(), 'utf8');
   writeFileSync(join(featureDirectory, 'request.md'), '# Request\n', 'utf8');
   writeFileSync(
@@ -289,6 +304,9 @@ describe('an exhausted outline can now close a feature', () => {
       // never says.
       expect(state).toContain('the thing is done — met (src/thing.ts)');
       expect(state).toContain('the thing is tested — met (tests/thing.test.ts)');
+      // A skipped start check is recorded rather than left silent: "we did not check" and "we
+      // checked and it started" must not read the same way six months from now.
+      expect(state).toContain('start check: skipped');
     } finally {
       workspace.dispose();
     }
@@ -313,6 +331,70 @@ describe('an exhausted outline can now close a feature', () => {
       const state = readFileSync(workspace.statePath, 'utf8');
       expect(state).toContain('## Lifecycle State\n\nblocked');
       expect(state).not.toContain('## Lifecycle State\n\ncompleted');
+    } finally {
+      workspace.dispose();
+    }
+  });
+});
+
+describe('the start gate is the last condition before closing', () => {
+  const allMet = {
+    feature_id: FEATURE_ID,
+    summary: 'Both criteria are satisfied.',
+    verdicts: [
+      { criterion: 'the thing is done', status: 'met' as const, evidence: 'src/thing.ts' },
+      { criterion: 'the thing is tested', status: 'met' as const, evidence: 'tests/thing.test.ts' },
+    ],
+  };
+
+  test('closes the feature and records that the application started', () => {
+    const workspace = createWorkspace({
+      smokeBlock: [
+        'smoke:',
+        `  command: ${JSON.stringify(`${process.execPath} -e "console.log('Status: OK')"`)}`,
+        '  expect:',
+        '    exit_code: 0',
+        '    stdout_contains: "Status: OK"',
+        '  timeout_seconds: 30',
+        '',
+      ].join('\n'),
+    });
+
+    try {
+      const { result } = planTask(workspace, allMet);
+
+      expect(result.kind).toBe('advanced');
+      const state = readFileSync(workspace.statePath, 'utf8');
+      expect(state).toContain('## Lifecycle State\n\ncompleted');
+      expect(state).toContain('start check: passed');
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('refuses to close a feature whose acceptance criteria are met but which does not start', () => {
+    const workspace = createWorkspace({
+      smokeBlock: [
+        'smoke:',
+        `  command: ${JSON.stringify(`${process.execPath} -e "console.error('cannot bind port'); process.exit(1)"`)}`,
+        '  expect:',
+        '    exit_code: 0',
+        '  timeout_seconds: 30',
+        '',
+      ].join('\n'),
+    });
+
+    try {
+      const { result } = planTask(workspace, allMet);
+
+      expect(result.kind).toBe('blocked');
+      expect(result.summary).toContain('does not start');
+
+      const state = readFileSync(workspace.statePath, 'utf8');
+      expect(state).toContain('## Lifecycle State\n\nblocked');
+      expect(state).toContain('smoke_failure');
+      // The captured output is the evidence a human acts on.
+      expect(state).toContain('cannot bind port');
     } finally {
       workspace.dispose();
     }

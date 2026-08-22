@@ -8,6 +8,7 @@ export function isBlockerKind(value: string): value is BlockerKind {
     || value === 'cli_mismatch'
     || value === 'environment'
     || value === 'implementation_failure'
+    || value === 'smoke_failure'
     || value === 'review_failure'
     || value === 'unknown';
 }

@@ -106,6 +106,13 @@ commands:
   lint: "npm run lint"
   build: "npm run build"
 
+smoke:
+  command: "npm run doctor"
+  expect:
+    exit_code: 0
+    stdout_contains: "Status: OK"
+  timeout_seconds: 60
+
 git_policy:
   require_clean_worktree_before_task: true
   review_target: git_diff

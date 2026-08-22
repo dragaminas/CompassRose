@@ -47,6 +47,8 @@ import type { AgentInvocationContext, AgentInvocationKind, AgentToolName } from 
 import type { RunObserver } from '../contracts/runtime/runObserver.js';
 import { allCriteriaMet, unmetCriteria } from '../contracts/runtime/acceptanceCriteria.js';
 import type { RecoveryDiagnosis, StoredRecoveryDiagnosis } from '../contracts/runtime/recoveryDiagnosis.js';
+import { runSmokeGate } from './smokeGate.js';
+import type { SmokeResult } from './smokeGate.js';
 import type {
   AcceptanceCriteriaVerification,
   AcceptanceCriterionVerdict,
@@ -2425,11 +2427,31 @@ export class CompassRoseOrchestrator {
       return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
     }
 
-    writeText(owner.statePath, this.updateFeatureStateAfterCompletion(owner.statePath, verification));
+    // 029-runnable-application-gate: the last condition before closing, and the only one that
+    // observes the application rather than reading about it. Typecheck, tests, lint and build all
+    // pass happily on something that does not start.
+    const smoke = runSmokeGate({ smoke: this.projectConfiguration.smoke, cwd: this.repositoryRoot });
+    if (smoke.outcome === 'failed') {
+      // The captured output goes into the reason rather than a separate evidence channel: the
+      // blocker card and `## Blocked By` both read from it, and this is what a human needs to see.
+      const reason = [
+        `Feature \`${featureId}\` meets its acceptance criteria but the application does not start.`,
+        `\`${smoke.command}\`: ${smoke.unmet.join('; ')}`,
+        ...(smoke.output.length > 0 ? ['', smoke.output] : []),
+      ].join('\n');
+      this.recordBlockedFeature(featureId, reason, null, {
+        kind: 'smoke_failure',
+        nextPlanningHint: `Make the application start again before \`${featureId}\` can be closed: \`${smoke.command}\` -- ${smoke.unmet.join('; ')}`,
+      });
+      this.commitDirtyWorktreeIfConfigured(`proto: record smoke failure for feature ${featureId}`);
+      return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
+    }
+
+    writeText(owner.statePath, this.updateFeatureStateAfterCompletion(owner.statePath, verification, smoke));
     writeText(this.projectStatePath, this.updateProjectStateAfterCompletion(featureId, verification));
     this.commitDirtyWorktreeIfConfigured(`proto: complete feature ${featureId}`);
 
-    const summary = `Feature ${featureId} is complete: every task request is done and all ${verification.verdicts.length} acceptance criteria are met.`;
+    const summary = `Feature ${featureId} is complete: every task request is done, all ${verification.verdicts.length} acceptance criteria are met, and the application ${smoke.outcome === 'skipped' ? 'declares no start check' : 'starts'}.`;
     console.log(summary);
     return { kind: 'advanced', exitCode: 0, continueLoop: true, summary };
   }
@@ -2500,6 +2522,7 @@ export class CompassRoseOrchestrator {
   private updateFeatureStateAfterCompletion(
     featureStatePath: string,
     verification: AcceptanceCriteriaVerification,
+    smoke: SmokeResult,
   ): string {
     let markdown = readUtf8(featureStatePath);
     markdown = replaceSection(markdown, 'Lifecycle State', 'completed');
@@ -2519,6 +2542,12 @@ export class CompassRoseOrchestrator {
         verification.summary,
         '',
         ...verification.verdicts.map((verdict: AcceptanceCriterionVerdict) => `- ${verdict.criterion} — ${verdict.status} (${verdict.evidence})`),
+        '',
+        // A skip is recorded rather than left silent: "we did not check" and "we checked and it
+        // started" must not read the same way six months from now.
+        smoke.outcome === 'skipped'
+          ? `- start check: skipped (${smoke.command})`
+          : `- start check: passed (\`${smoke.command}\`)`,
       ].join('\n'),
     );
     markdown = replaceSection(

@@ -16,6 +16,7 @@ import type {
   ReviewPolicyMode,
   ReviewPolicySection,
   RolesSection,
+  SmokeSection,
 } from './configTypes.js';
 import { isSupportedPlatformName, type SupportedPlatform } from '../platform/platformInfo.js';
 
@@ -677,6 +678,25 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
     optionalPolicySections['quality_gates'] = qualityGates;
   }
 
+  if ('smoke' in parsedConfiguration) {
+    const smokeValue = parsedConfiguration['smoke'];
+    if (!isRecord(smokeValue)) {
+      return err([{
+        field: 'smoke',
+        message: 'Optional section smoke must be an object when present.',
+      }]);
+    }
+
+    const smokeIssues: ConfigurationIssue[] = [];
+    const smoke = validateSmokeSection(smokeValue, smokeIssues);
+
+    if (smokeIssues.length > 0) {
+      return err(smokeIssues);
+    }
+
+    optionalPolicySections['smoke'] = smoke;
+  }
+
   if ('limits' in parsedConfiguration) {
     const limitsValue = parsedConfiguration['limits'];
     if (!isRecord(limitsValue)) {
@@ -1085,6 +1105,105 @@ function validateQualityGatesSection(section: Record<string, unknown>, issues: C
   }
 
   return { enabled, required: [...required], optional: [...optional] };
+}
+
+/**
+ * `smoke` declares what "the application runs" means for this project
+ * (029-runnable-application-gate). Two shapes are valid and they are mutually exclusive: a start
+ * command with the condition that proves it started, or an explicit opt-out with a reason.
+ *
+ * The reason on an opt-out is mandatory by design, matching the discipline applied to discarded
+ * dimensions in 024-specification-flow: six months later the document has to distinguish "genuinely
+ * has no entry point" from "nobody got round to it".
+ */
+function validateSmokeSection(section: Record<string, unknown>, issues: ConfigurationIssue[]): SmokeSection {
+  const optionalString = (key: string): string | undefined => {
+    const value = section[key];
+    if (value === undefined || value === null) {
+      return undefined;
+    }
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      issues.push({ field: `smoke.${key}`, message: `smoke.${key} must be a non-empty string when present.` });
+      return undefined;
+    }
+    return value;
+  };
+
+  const none = optionalString('none');
+  const command = optionalString('command');
+
+  if (none !== undefined && command !== undefined) {
+    issues.push({
+      field: 'smoke',
+      message: 'smoke declares both a command and an opt-out (none). Declare one or the other, not both.',
+    });
+    return {};
+  }
+
+  if (none !== undefined) {
+    return { none };
+  }
+
+  if (command === undefined) {
+    issues.push({
+      field: 'smoke.command',
+      message: 'smoke must declare either a command, or none with the reason it is being skipped.',
+    });
+    return {};
+  }
+
+  const expectValue = section['expect'];
+  if (!isRecord(expectValue)) {
+    issues.push({
+      field: 'smoke.expect',
+      message: 'smoke.expect must declare at least one condition proving the application started.',
+    });
+    return {};
+  }
+
+  const expect: Record<string, unknown> = {};
+  const exitCode = expectValue['exit_code'];
+  if (exitCode !== undefined && exitCode !== null) {
+    if (typeof exitCode !== 'number' || !Number.isInteger(exitCode)) {
+      issues.push({ field: 'smoke.expect.exit_code', message: 'smoke.expect.exit_code must be an integer when present.' });
+    } else {
+      expect['exit_code'] = exitCode;
+    }
+  }
+
+  for (const key of ['stdout_contains', 'http_ok'] as const) {
+    const value = expectValue[key];
+    if (value !== undefined && value !== null) {
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        issues.push({ field: `smoke.expect.${key}`, message: `smoke.expect.${key} must be a non-empty string when present.` });
+      } else {
+        expect[key] = value;
+      }
+    }
+  }
+
+  if (Object.keys(expect).length === 0 && issues.length === 0) {
+    issues.push({
+      field: 'smoke.expect',
+      message: 'smoke.expect must declare at least one of exit_code, stdout_contains, or http_ok.',
+    });
+  }
+
+  const timeoutValue = section['timeout_seconds'];
+  let timeoutSeconds: number | undefined;
+  if (timeoutValue !== undefined && timeoutValue !== null) {
+    if (typeof timeoutValue !== 'number' || !Number.isInteger(timeoutValue) || timeoutValue <= 0) {
+      issues.push({ field: 'smoke.timeout_seconds', message: 'smoke.timeout_seconds must be a positive integer when present.' });
+    } else {
+      timeoutSeconds = timeoutValue;
+    }
+  }
+
+  if (issues.length > 0) {
+    return {};
+  }
+
+  return { command, expect, ...(timeoutSeconds !== undefined ? { timeout_seconds: timeoutSeconds } : {}) };
 }
 
 function validateLimitsSection(section: Record<string, unknown>, issues: ConfigurationIssue[]): LimitsSection {

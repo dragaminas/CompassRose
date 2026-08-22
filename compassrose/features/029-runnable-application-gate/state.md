@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+implementation_running
 
 ## Source Request
 
@@ -35,19 +35,39 @@ for this gate to attach.
 
 ## Implemented Deliverables
 
-- None
+- the `smoke` configuration block (`SmokeSection`) and its validation: command-with-conditions and opt-out-with-reason are mutually exclusive, an opt-out without a reason is refused, and `expect` must declare at least one condition.
+- the three success-condition evaluators (`exit_code`, `stdout_contains`, `http_ok`); all declared conditions must hold, and each unmet one states what was expected and what was observed.
+- the gate runner (`src/orchestrator/smokeGate.ts`), synchronous throughout to match the rest of the orchestrator, with a declared timeout and teardown that runs on success, failure, timeout, and exception alike.
+- the `smoke_failure` blocker kind, so a start failure is not confused with an implementation failure: the change may be exactly what the task asked for and the application still not come up.
+- integration into the completion transition as its last condition, producing a `blocked` outcome — so the run sets that feature aside and carries on.
+- a recorded skip: "we did not check" and "we checked and it started" do not read the same way in the closing record.
+- this repository's own `smoke` block: `npm run doctor`, expecting exit 0 and `Status: OK`.
+- `tests/smokeGate.test.ts`: 11 tests including the teardown one that starts a real server twice on the same port.
+
+### Two real bugs the tests caught
+
+`spawnSync`'s own `timeout` was the obvious way to bound a command expected to exit. It is wrong on
+Windows: with `shell: true` it kills the intermediate `cmd.exe` and leaves the actual process
+running — precisely the leak this feature exists to prevent. The test noticed because the leaked
+process kept holding its working directory after the gate had returned.
+
+Recovering the exit code turned out to be its own problem. The gate is synchronous by necessity, and
+Node cannot observe a child's exit code without turning the event loop; asking the shell to write it
+does not work on Windows, where `%ERRORLEVEL%` is expanded when the line is *parsed*. Both are solved
+by the same small Node wrapper: it runs the command, records the exit code and output to files, and —
+being alive and holding the shell as its child — makes `taskkill /T` reach the whole tree.
 
 ## Remaining Deliverables
 
-- Every deliverable listed in `feature.md`.
+- start-command candidate proposal in project detection, which belongs to `028-project-understanding`
 
 ## Outline Progress
 
-- 1. Add the `smoke` configuration block, its schema, and its validation: not started
-- 2. Implement the three success-condition evaluators: not started
-- 3. Implement the gate runner with timeout and guaranteed teardown: not started
-- 4. Wire the gate into the completion transition and the blocked-on-failure path: not started
-- 5. Add the skip declaration, and start-command candidate proposal in project detection: not started
+- 1. Add the `smoke` configuration block, its schema, and its validation: complete
+- 2. Implement the three success-condition evaluators: complete
+- 3. Implement the gate runner with timeout and guaranteed teardown: complete
+- 4. Wire the gate into the completion transition and the blocked-on-failure path: complete
+- 5. Add the skip declaration, and start-command candidate proposal in project detection: in progress
 
 ## Blocked By
 

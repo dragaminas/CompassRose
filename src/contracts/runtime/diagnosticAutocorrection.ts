@@ -11,6 +11,10 @@ export type BlockerKind =
   | "environment"
   | "implementation_failure"
   | "review_failure"
+  // The application does not start, even though everything else about the work checks out
+  // (029-runnable-application-gate). Distinct from implementation_failure on purpose: the change
+  // may be exactly what the task asked for and the application still not come up.
+  | "smoke_failure"
   | "unknown";
 
 export type BlockerRecoverability = "auto" | "agent" | "human" | "terminal";
