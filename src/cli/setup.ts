@@ -5,6 +5,8 @@ import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
 import { DEFAULT_COMPASSROSE_ROOT, getBootstrapConfigPath } from '../config/compassRosePaths.js';
 import { renderDimensionsDocument, STARTER_DIMENSIONS } from '../state/dimensions.js';
+import { detectProjectFacts } from '../project/detectProject.js';
+import { renderProjectFactsDocument } from '../project/projectFacts.js';
 import type { CliEnvironment } from './main.js';
 
 /**
@@ -49,6 +51,17 @@ export function runSetupCli(environment: CliEnvironment = {}): number {
   return 0;
 }
 
+/**
+ * Reads what the repository says about itself and records it (028-project-understanding).
+ *
+ * Deterministic: no AI call, no network. This is what stops first contact with the tool from
+ * being an exercise in filling out a form about your own repository.
+ */
+function writeProjectFacts(gitRoot: string, write: (relativePath: string, contents: string) => void): void {
+  const { facts } = detectProjectFacts(gitRoot);
+  write('PROJECT_FACTS.md', renderProjectFactsDocument(facts));
+}
+
 function createCompassRoseSkeleton(gitRoot: string): string[] {
   const root = join(gitRoot, DEFAULT_COMPASSROSE_ROOT);
   const created: string[] = [];
@@ -71,6 +84,7 @@ function createCompassRoseSkeleton(gitRoot: string): string[] {
       STARTER_DIMENSIONS.map((name) => ({ name, state: 'uncovered' as const, coveredBy: [], decisions: [] })),
     ),
   );
+  writeProjectFacts(gitRoot, write);
   write('ADR.md', STARTER_ADR_MD);
   write('SAD.md', STARTER_SAD_MD);
   write('ROADMAP.md', STARTER_ROADMAP_MD);

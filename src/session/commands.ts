@@ -326,6 +326,63 @@ const readyCommand: SessionCommand = {
   },
 };
 
+const projectCommand: SessionCommand = {
+  name: 'proyecto',
+  aliases: ['project'],
+  usage: '/proyecto',
+  summary: 'what CompassRose knows about this repository, and how it knows it',
+  run(context) {
+    const { facts, contradictions, changedSignals } = context.orchestrator.refreshProjectFacts();
+    const lines: string[] = [''];
+
+    const describe = (label: string, fact: { value: unknown; provenance: { kind: string } } | null): void => {
+      if (!fact) {
+        return;
+      }
+      const value = Array.isArray(fact.value) ? fact.value.join(', ') : String(fact.value);
+      // The marker distinguishes what was read from what was guessed. Confusing the two is the
+      // whole failure this document exists to prevent.
+      const marker = fact.provenance.kind === 'confirmed' ? '✓' : fact.provenance.kind === 'detected' ? '·' : '?';
+      lines.push(`    ${marker} ${label.padEnd(14)} ${value}`);
+    };
+
+    lines.push('  What I can read from this repository:');
+    describe('languages', facts.languages);
+    describe('packages', facts.packageManager);
+    describe('build', facts.buildSystem);
+    describe('tests', facts.testSystem);
+    describe('sources', facts.sourceRoots);
+    describe('docs', facts.documentationRoots);
+    describe('purpose', facts.purpose);
+
+    lines.push('', '  ✓ confirmed by a human · read from the repository ? inferred, wants your confirmation', '');
+
+    const inventory = context.orchestrator.codeInventory();
+    if (inventory.length > 0) {
+      lines.push('  Code, grouped by directory:');
+      for (const group of inventory.slice(0, 8)) {
+        const entries = group.entryPoints.length > 0 ? `  (entry: ${group.entryPoints.join(', ')})` : '';
+        lines.push(`    ${group.directory.padEnd(28)} ${group.moduleCount} modules${entries}`);
+      }
+      lines.push('', '  This is material for a conversation, not a specification. Nothing here becomes a', '  feature without you deciding it does.', '');
+    }
+
+    if (changedSignals.length > 0) {
+      lines.push(`  Changed since last time: ${changedSignals.join(', ')}`, '');
+    }
+
+    for (const contradiction of contradictions) {
+      lines.push(
+        `  ⚠ ${contradiction.field}: you confirmed ${contradiction.confirmedValue}, but the repository now says ${contradiction.detectedValue}.`,
+        '    Your confirmation stands until you change it.',
+        '',
+      );
+    }
+
+    print(context, lines);
+  },
+};
+
 const coverageCommand: SessionCommand = {
   name: 'cobertura',
   aliases: ['coverage'],
@@ -427,6 +484,7 @@ export const SESSION_COMMANDS: readonly SessionCommand[] = [
   unblockCommand,
   createCommand,
   readyCommand,
+  projectCommand,
   coverageCommand,
   discardDimensionCommand,
   reopenDimensionCommand,

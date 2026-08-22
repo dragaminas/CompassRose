@@ -49,6 +49,10 @@ import { allCriteriaMet, unmetCriteria } from '../contracts/runtime/acceptanceCr
 import type { RecoveryDiagnosis, StoredRecoveryDiagnosis } from '../contracts/runtime/recoveryDiagnosis.js';
 import { runSmokeGate } from './smokeGate.js';
 import { buildManifest, manifestEntry, manifestFitsBudget, mergeExploration } from './contextManifest.js';
+import { buildCodeInventory, deriveGateCandidates, detectProjectFacts, signalsChanged } from '../project/detectProject.js';
+import type { InventoryGroup, SignalFingerprint } from '../project/detectProject.js';
+import { EMPTY_PROJECT_FACTS, mergeDetectedFacts, parseProjectFactsDocument, renderProjectFactsDocument } from '../project/projectFacts.js';
+import type { FactContradiction, ProjectFacts } from '../project/projectFacts.js';
 import type { ContextManifest, ExplorationRecord, ManifestEntry } from './contextManifest.js';
 import {
   buildCoverageReport,
@@ -94,6 +98,7 @@ import {
   getBootstrapConfigPath,
   resolveCompassRoseRoot,
   buildDimensionsPath,
+  buildProjectFactsPath,
 } from '../config/compassRosePaths.js';
 import { resolveRepositoryRelativePath } from '../filesystem/pathResolver.js';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
@@ -737,6 +742,50 @@ export class CompassRoseOrchestrator {
     } else {
       this.planFixRequest(id);
     }
+  }
+
+  /**
+   * Re-reads the repository's own signals and records what changed (028-project-understanding).
+   *
+   * Deterministic and read-only in substance: no AI call, no network, and the only file it writes
+   * is CompassRose's own `PROJECT_FACTS.md`. A detected value that disagrees with something a human
+   * confirmed is reported as a contradiction and never applied -- a machine quietly replacing a
+   * human decision with its own guess is the failure mode this whole feature is shaped to avoid.
+   */
+  refreshProjectFacts(): {
+    readonly facts: ProjectFacts;
+    readonly contradictions: readonly FactContradiction[];
+    readonly changedSignals: readonly string[];
+  } {
+    const artifactPath = join('project-facts', 'signals.json');
+    const previousFingerprints = this.artifacts.readJson<SignalFingerprint[]>(artifactPath) ?? [];
+    const { facts: detected, fingerprints } = detectProjectFacts(this.repositoryRoot);
+
+    const factsPath = join(this.repositoryRoot, buildProjectFactsPath(this.compassRoseRoot));
+    const recorded = existsSync(factsPath) ? parseProjectFactsDocument(readUtf8(factsPath)) : EMPTY_PROJECT_FACTS;
+    const { facts, contradictions } = mergeDetectedFacts(recorded, detected);
+
+    writeText(factsPath, renderProjectFactsDocument(facts));
+    this.artifacts.writeJson(artifactPath, fingerprints);
+
+    return { facts, contradictions, changedSignals: signalsChanged(previousFingerprints, fingerprints) };
+  }
+
+  /** Quality-gate and start-command candidates derived from what the project declares. */
+  projectGateCandidates(): Readonly<Record<string, readonly string[]>> {
+    return deriveGateCandidates(detectProjectFacts(this.repositoryRoot).facts);
+  }
+
+  /**
+   * What exists in the codebase, grouped by directory.
+   *
+   * Computed on demand, never stored: an inventory of a moving codebase is stale by definition. It
+   * is material for a specification conversation and nothing else -- there is deliberately no code
+   * path from here to a `feature.md`.
+   */
+  codeInventory(): readonly InventoryGroup[] {
+    const facts = detectProjectFacts(this.repositoryRoot).facts;
+    return buildCodeInventory(this.repositoryRoot, facts.sourceRoots?.value ?? ['src']);
   }
 
   /** The project's declared coverage checklist (024-specification-flow). */

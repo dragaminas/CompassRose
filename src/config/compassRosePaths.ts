@@ -106,6 +106,15 @@ export function buildDimensionsPath(root: string): string {
 }
 
 /**
+ * What CompassRose knows about this repository, and how it knows it
+ * (028-project-understanding). Four documents, four distinct concerns: CONFIG.md is policy,
+ * PROJECT_STATE.md is progress, DIMENSIONS.md is specification coverage, and this is knowledge.
+ */
+export function buildProjectFactsPath(root: string): string {
+  return joinRelative(root, 'PROJECT_FACTS.md');
+}
+
+/**
  * Replaces the old `path.startsWith('docs/')` heuristic (src/task/taskDocument.ts) for
  * recognizing a documentation-only task scope, now that CompassRose's own docs live under
  * `root` instead of the target repository's `docs/`.
