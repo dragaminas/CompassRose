@@ -462,7 +462,7 @@ Correction recovery rules:
 - `correction_pending`: inspect the recorded review-driven correction task before selecting new work
 - if a review requested changes and a correction task was produced, continue into that correction task instead of forcing a manual restart
 - preserve the corresponding recovery lesson so future task planning can reuse the tighter interface or limitation note
-- planning-style recovery steps that only update repository state or task documents should checkpoint those changes when commit policy is active, so the next pass resumes from a clean transition point
+- planning-style steps that only update repository state or task documents must NOT commit for themselves: they are bookkeeping inside a task, not a unit of work, and the next pass resumes from the state documents on disk rather than from a commit. One task produces one commit, at the point its review approves it, carrying that bookkeeping in the commit body. A terminal outcome (correction requested, review blocked, review failed, blocking fix filed) still commits, because the unapproved diff left in the worktree would otherwise fall outside the next task declared scope
 - implementation and correction execution may resume from a dirty worktree when that dirty diff is the active task's own partial progress; do not reject the recovery path solely because the worktree is not clean
 
 ---

@@ -518,6 +518,23 @@ Responsibilities:
 
 CompassRose should avoid allowing AI tools to directly manage irreversible Git operations unless explicitly configured.
 
+**One task, one commit.** A task's arc spans several steps -- planned, prepared, implemented,
+gated, reviewed -- and each of them used to commit for itself, so a single unit of work landed as
+three or four commits and the history read as telemetry rather than work. The steps still happen
+and are still recorded; they just stop being commit boundaries. What each would have said becomes a
+line in the body of the one commit the task produces, drawn from a trail persisted in the Artifact
+Store (5.14) so an arc spanning several runs keeps its earlier half.
+
+The exception is deliberate: a terminal outcome -- correction requested, review blocked, review
+failed, blocking fix filed -- still commits. The rejected implementer diff is live in the worktree
+at those points, and carrying it forward would put paths outside the *next* task's declared scope in
+front of that task's review-time scope check.
+
+The clean-worktree precondition is what makes this safe, and it is not "the tree is clean": it is
+"the tree holds nothing outside the active work item's own footprint" -- its documentation
+directory, the project state document, and the active task's declared `allowed_paths`. That
+prefix-based reading already existed for interrupted runs; batching depends on it.
+
 ---
 
 ## 5.11 Command Runner

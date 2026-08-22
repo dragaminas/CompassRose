@@ -168,6 +168,7 @@ import {
 } from './blockerRendering.js';
 import { buildImplementerPrompt } from './promptBuilding.js';
 import { compactRecoveryHistorySection } from './recoveryHistoryCompaction.js';
+import { renderTaskCommitMessage, type TaskCommitTrailEntry } from './taskCommitTrail.js';
 import {
   buildImplementationDiagnostics,
   buildImplementationErrorMessage,
@@ -2076,6 +2077,9 @@ export class CompassRoseOrchestrator {
       // anything inside it (a latent bug found and fixed alongside findDisallowedDirtyPaths()
       // below, which had the same mistake).
       this.featureRelativePath(featureId),
+      // Both, because this precondition is shared by features and fixes and the caller's id is
+      // only one of the two. Exactly one of these directories exists for any given id.
+      this.fixRelativePath(featureId),
     ]);
   }
 
@@ -2769,6 +2773,57 @@ export class CompassRoseOrchestrator {
     }
   }
 
+  private taskTrailArtifactPath(taskId: string): string {
+    return join('task-trails', `${taskId}.json`);
+  }
+
+  /**
+   * Records what a step did, for the body of the one commit this task will eventually produce.
+   *
+   * Recorded unconditionally, including under `--no-commit`: the trail is the runtime's own record
+   * of the task's arc, and a run that isn't committing is exactly the run whose steps would
+   * otherwise leave no trace at all. Writing it is cheap and never fails a step -- an unwritable
+   * artifact store is not a reason to abandon work that already happened.
+   */
+  private recordTaskTrail(taskId: string, step: string, detail: string): void {
+    try {
+      const existing = this.artifacts.readJson<TaskCommitTrailEntry[]>(this.taskTrailArtifactPath(taskId)) ?? [];
+      this.artifacts.writeJson(this.taskTrailArtifactPath(taskId), [
+        ...existing,
+        { step, detail, at: new Date().toISOString() },
+      ]);
+    } catch {
+      // The commit body degrades to its subject line; see renderTaskCommitMessage.
+    }
+  }
+
+  /**
+   * Commits everything the task touched as one commit, with the accumulated bookkeeping as its
+   * body, and clears the trail so a later task never inherits it.
+   *
+   * `diffNameOnly()` sweeps the whole worktree deliberately: by this point the tree holds the task
+   * document, both state documents, and the implementer's own diff, all written across several
+   * steps that no longer commit for themselves. Sweeping is also what the terminal outcomes
+   * already did before this existed.
+   */
+  private commitTaskArc(taskId: string, subject: string): void {
+    const trail = this.artifacts.readJson<TaskCommitTrailEntry[]>(this.taskTrailArtifactPath(taskId)) ?? [];
+    // Cleared before the commit, not after: the trail belongs to the arc that is ending, and a
+    // commit that throws must not leave the next attempt inheriting this one's history.
+    this.artifacts.writeJson(this.taskTrailArtifactPath(taskId), []);
+
+    if (!this.options.commit) {
+      return;
+    }
+
+    const changedFiles = this.git.diffNameOnly();
+    if (changedFiles.length === 0) {
+      return;
+    }
+
+    this.git.commit(changedFiles, renderTaskCommitMessage(subject, trail));
+  }
+
   private finalizeTaskPlan(
     featureId: string,
     feature: FeatureRecord,
@@ -2805,16 +2860,13 @@ export class CompassRoseOrchestrator {
     writeText(feature.statePath, updatedFeatureState);
     writeText(this.projectStatePath, updatedProjectState);
 
-    if (this.options.commit) {
-      this.git.commit(
-        [
-          relativePath(this.repositoryRoot, taskPath),
-          relativePath(this.repositoryRoot, feature.statePath),
-          relativePath(this.repositoryRoot, this.projectStatePath),
-        ],
-        `proto: plan task ${task.task_id}`,
-      );
-    }
+    this.recordTaskTrail(
+      task.task_id,
+      'planned',
+      taskRequestLink
+        ? `${task.title} (task request ${taskRequestLink.taskRequestId})`
+        : task.title,
+    );
 
     return { kind: 'advanced', exitCode: 0, continueLoop: true, summary: `Next task planned for feature ${featureId}.` };
   }
@@ -3145,16 +3197,7 @@ export class CompassRoseOrchestrator {
     writeText(fix.statePath, updatedFixState);
     writeText(this.projectStatePath, updatedProjectState);
 
-    if (this.options.commit) {
-      this.git.commit(
-        [
-          relativePath(this.repositoryRoot, taskPath),
-          relativePath(this.repositoryRoot, fix.statePath),
-          relativePath(this.repositoryRoot, this.projectStatePath),
-        ],
-        `proto: plan task ${task.task_id}`,
-      );
-    }
+    this.recordTaskTrail(task.task_id, 'planned', `${task.title} (fix ${fixId})`);
 
     return { kind: 'advanced', exitCode: 0, continueLoop: true, summary: `Next task planned for fix ${fixId}.` };
   }
@@ -3167,15 +3210,7 @@ export class CompassRoseOrchestrator {
     writeText(owner.statePath, this.updateFeatureStateDuringImplementation(owner.statePath, task.taskId));
     writeText(this.projectStatePath, this.updateProjectStateDuringImplementation(task.featureId, task.taskId));
 
-    if (this.options.commit) {
-      this.git.commit(
-        [
-          relativePath(this.repositoryRoot, owner.statePath),
-          relativePath(this.repositoryRoot, this.projectStatePath),
-        ],
-        `proto: prepare subtask ${task.taskId}`,
-      );
-    }
+    this.recordTaskTrail(task.taskId, 'prepared', 'task_ready -> implementation_running');
   }
 
   private buildImplementationFailureRestorationTarget(feature: Pick<WorkItemContext, 'id'>, snapshot: FeatureStateSnapshot): RestorationTarget {
@@ -4228,10 +4263,8 @@ export class CompassRoseOrchestrator {
         this.completedPrimaryTaskAnchors.add(this.primaryTaskAnchor(task.taskId));
       }
 
-      if (this.options.commit) {
-        const changedFiles = this.git.diffNameOnly();
-        this.git.commit(changedFiles, `proto: approve task ${task.taskId}`);
-      }
+      this.recordTaskTrail(task.taskId, 'review', 'approved');
+      this.commitTaskArc(task.taskId, `proto: complete task ${task.taskId}`);
 
       return {
         kind: 'advanced',
@@ -4270,13 +4303,11 @@ export class CompassRoseOrchestrator {
       writeText(owner.statePath, updatedFeatureState);
       writeText(this.projectStatePath, updatedProjectState);
 
-      if (this.options.commit) {
-        // Sweep every changed file, not just the correction artifact and state docs: the rejected
-        // implementer diff (e.g. src/cli/main.ts) is still live in the worktree at this point, and
-        // leaving it uncommitted trips ensureCleanWorktreeIfRequired() on the very next step.
-        const changedFiles = this.git.diffNameOnly();
-        this.git.commit(changedFiles, `proto: request correction ${correction.correction_task_id}`);
-      }
+      // Still a commit boundary, unlike the bookkeeping steps: the rejected implementer diff is
+      // live in the worktree here, and carrying it into the correction task would put paths
+      // outside that task's own declared scope in front of its review-time scope check.
+      this.recordTaskTrail(task.taskId, 'review', `correction requested (${correction.correction_task_id})`);
+      this.commitTaskArc(task.taskId, `proto: request correction ${correction.correction_task_id}`);
       console.log(`Review requested correction task ${correction.correction_task_id} at ${relativePath(this.repositoryRoot, correctionPath)}.`);
       return {
         kind: 'advanced',
@@ -4295,16 +4326,13 @@ export class CompassRoseOrchestrator {
         ? ' Task-interface analysis and a recovery lesson were recorded.'
         : '';
 
-      if (this.options.commit) {
-        // Same reasoning as the changes_required branch above: commit everything dirty so a
-        // rejected implementer diff never blocks the next step's clean-worktree precondition.
-        const changedFiles = this.git.diffNameOnly();
-        this.git.commit(changedFiles, `proto: record blocked review for ${task.taskId}`);
-      }
+      // Same reasoning as the changes_required branch above.
+      this.recordTaskTrail(task.taskId, 'review', `blocked (${blocker.signature})`);
+      this.commitTaskArc(task.taskId, `proto: record blocked review for ${task.taskId}`);
 
       if (this.options.loop) {
         const blockedSummary = recoverable
-          ? `Recoverable blocker ${blocker.signature} recorded; diagnostic/autocorrection will continue through bounded recovery planning.`
+          ? `Recoverable blocker ${blocker.signature} recorded; diagnostic/autocorrection will continue.`
           : `Terminal blocker ${blocker.signature} recorded; diagnostic/autocorrection will stop the run with a bounded diagnostic.`;
 
         if (recoverable) {
@@ -4340,12 +4368,9 @@ export class CompassRoseOrchestrator {
         ? ' Task-interface analysis and a recovery lesson were recorded.'
         : '';
 
-      if (this.options.commit) {
-        // Same reasoning as the changes_required/blocked branches above: commit everything dirty
-        // so an invalid implementer diff never blocks the next step's clean-worktree precondition.
-        const changedFiles = this.git.diffNameOnly();
-        this.git.commit(changedFiles, `proto: record failed review for ${task.taskId}`);
-      }
+      // Same reasoning as the changes_required/blocked branches above.
+      this.recordTaskTrail(task.taskId, 'review', `failed (${blocker.signature})`);
+      this.commitTaskArc(task.taskId, `proto: record failed review for ${task.taskId}`);
 
       const failedSummary = `Review found the attempt invalid or unusable (blocker ${blocker.signature}); recorded review_failed instead of a silent stop.`;
 
@@ -4439,10 +4464,8 @@ export class CompassRoseOrchestrator {
     writeText(owner.statePath, updatedFeatureState);
     writeText(this.projectStatePath, updatedProjectState);
 
-    if (this.options.commit) {
-      const changedFiles = this.git.diffNameOnly();
-      this.git.commit(changedFiles, `proto: request correction ${correction.correction_task_id}`);
-    }
+    this.recordTaskTrail(task.taskId, 'scope check', `out of scope; correction requested (${correction.correction_task_id})`);
+    this.commitTaskArc(task.taskId, `proto: request correction ${correction.correction_task_id}`);
 
     console.log(`Deterministic scope check requested correction task ${correction.correction_task_id} at ${relativePath(this.repositoryRoot, correctionPath)}.`);
     return {
@@ -4734,6 +4757,11 @@ export class CompassRoseOrchestrator {
 
     if (finalAttempt.status !== 'success') {
       const failureReason = finalAttempt.error ?? `Implementation for ${task.taskId} failed (${finalAttempt.diagnostics.classification}).`;
+      this.recordTaskTrail(
+        task.taskId,
+        correction ? 'corrected' : 'implemented',
+        `${this.options.implementer} failed (${finalAttempt.diagnostics.classification})`,
+      );
       writeText(owner.statePath, this.updateFeatureStateAfterImplementationFailure(owner.statePath, task.taskId, failureReason));
       writeText(this.projectStatePath, this.updateProjectStateAfterImplementationFailure(task.featureId, task.taskId, failureReason));
       this.writeRefinementFeedback(failureReason, {
@@ -4754,9 +4782,22 @@ export class CompassRoseOrchestrator {
       };
     }
 
+    this.recordTaskTrail(
+      task.taskId,
+      correction ? 'corrected' : 'implemented',
+      `${this.options.implementer}, ${finalAttempt.changed_files.length} file(s) changed${retriedAfterPartialChanges ? ', after one retry' : ''}`,
+    );
+
     const qualityResults = this.runQualityGates(task);
     this.throwIfControlledStopRequested();
     this.artifacts.writeJson(join('quality-gates', `${task.taskId}.json`), qualityResults);
+    this.recordTaskTrail(
+      task.taskId,
+      'quality gates',
+      qualityResults.length === 0
+        ? 'none configured'
+        : qualityResults.map((result) => `${result.name} ${result.status}`).join(', '),
+    );
 
     if (qualityResults.some((result) => result.status === 'waived')) {
       return this.blockOnUnrelatedFixFailure(owner, task, qualityResults);
@@ -5097,16 +5138,13 @@ export class CompassRoseOrchestrator {
     // fix, which requires a fully clean tree. See reconcileDirtyPathsForNewScope's own docs.
     this.reconcileDirtyPathsForNewScope(task.featureId, task.taskId, []);
 
-    if (this.options.commit) {
-      this.git.commit(
-        [
-          relativePath(this.repositoryRoot, owner.statePath),
-          relativePath(this.repositoryRoot, this.projectStatePath),
-          relativePath(this.repositoryRoot, join(this.fixesRoot, fixId)),
-        ],
-        `proto: file blocking fix ${fixId} for ${task.taskId}`,
-      );
-    }
+    // The explicit path list this used was correct while planning committed for itself: the only
+    // uncommitted things left here were the two state documents and the new fix. The task document
+    // is now uncommitted too, and it is under neither -- left behind it would be a dangling dirty
+    // path failing the clean-worktree precondition of the fix task planned next. Sweeping is safe
+    // precisely because reconcileDirtyPathsForNewScope just discarded the abandoned diff.
+    this.recordTaskTrail(task.taskId, 'quality gates', `pre-existing failure outside this task; filed/reused fix ${fixId}`);
+    this.commitTaskArc(task.taskId, `proto: file blocking fix ${fixId} for ${task.taskId}`);
 
     return {
       kind: 'blocked',

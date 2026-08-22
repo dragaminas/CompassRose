@@ -14,7 +14,7 @@ In progress
 - Features `001-project-identity-and-foundation`, `002-configuration-model`, and `003-doctor-command` are complete.
 - Feature `023-terminal-session` is implemented and usable: `compassrose` with no arguments opens the interactive session, and the old no-argument behavior moved to `compassrose run`. Its live view has a documented limitation — no in-step interruption or animated progress, because `run()` is synchronous.
 - Feature `024-specification-flow`: the loop can no longer author a specification. Unspecified items are reported by name, the session surfaces them before anything else, and `compassrose/DIMENSIONS.md` holds the project's coverage. Structured decisions and specification provenance remain.
-- Feature `025-automated-development-loop`: a blocked work item is set aside instead of ending the run, runs can be targeted at one item, and the runtime can close a feature whose acceptance criteria it has verified. Commit batching and the structured run summary remain.
+- Feature `025-automated-development-loop`: a blocked work item is set aside instead of ending the run, runs can be targeted at one item, the runtime can close a feature whose acceptance criteria it has verified, and one unit of work is now one commit with the intermediate bookkeeping as its body. The structured run summary remains.
 - Feature `026-conversational-doctor-recovery`: automatic repair is no longer attempted at all; a blocker is diagnosed and handed to a human through `/desbloquear`. The pipeline that used to attempt it is deleted, not merely unreachable — with the `unblock_pending` lifecycle state, four Operational Status fields, two config limits, and five contract documents that existed only to serve it. Recorded as ADR-0047, which supersedes ADR-0040. The `open_fix` exit and two turn bounds remain.
 - Feature `027-bounded-work-item-context`: context is a declared, measured manifest with a planning-time budget check. Planner and reviewer manifests, and the implementer recording what it read, remain.
 - Feature `028-project-understanding`: CompassRose reads a repository it has never seen, records every fact with its provenance, and a confirmed fact is never overwritten by a later detection. Gap inference remains.
@@ -48,6 +48,7 @@ documented success shape `CompassRose Doctor` / `Status: OK` — was satisfied.
 
 ## Known Gaps
 
+- `git_policy.commit_after_task` is validated by the config reader and read by nothing, which now matters because `025` implements exactly what it names. Recorded under that feature's Remaining Deliverables.
 - Nothing asserts that planner-output sanitization (`sanitizeAllowedPaths`, `validateQualityGateRefs`) is actually wired into the planners that call it. The only wiring test proved it through `planDoctorRecoveryTask` and went with that function; the helpers themselves stay covered. Recorded under `026`'s Remaining Deliverables.
 - `tests/smokeGate.test.ts` fails intermittently under full-suite parallel load — always in teardown (`ENOTEMPTY`/timeout on removing the scratch directory), never in isolation, and on a different test each time. A killed process tree on Windows does not always release its working directory before `rmSync` runs, even with `maxRetries`.
 - The provider-specific adapters in `src/agents/` (`codexCli.ts`, `openCodeCli.ts`) contradict absorbed request `010-generic-external-cli-adapter`, which explicitly excluded them. Feature `025-automated-development-loop` owns the reconciliation.
@@ -56,6 +57,6 @@ documented success shape `CompassRose Doctor` / `Status: OK` — was satisfied.
 ## Next Planning Hint
 
 Every feature from the specification round has working implementation; what remains is listed under
-each one's Remaining Deliverables. The next item is commit batching (`025`): one commit per approved
-task. It is also the transaction boundary `023`'s in-step interruption needs, since aborting a run
-is only safe where a commit boundary is.
+each one's Remaining Deliverables. The next item is `023`'s in-step interruption: moving the run
+into a child process so `esc` and a live spinner work while a step is in flight. Commit batching
+gave it the transaction boundary it needed — aborting a run is only safe where a commit boundary is.
