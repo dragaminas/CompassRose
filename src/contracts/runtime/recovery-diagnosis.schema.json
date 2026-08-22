@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "recovery_diagnosis",
+  "title": "Recovery Diagnosis",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["item_id", "hypotheses"],
+  "properties": {
+    "item_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "hypotheses": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 3,
+      "description": "Ordered by likelihood, most likely first. At least two, so the conversation never anchors the human on a single explanation.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["summary", "evidence", "discriminating_question", "suggested_exit"],
+        "properties": {
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "description": "What might be the root cause, in one or two plain sentences."
+          },
+          "evidence": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 4,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 240
+            },
+            "description": "Facts readable from the repository that support this hypothesis. Never speculation, and never something only the human could know."
+          },
+          "discriminating_question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240,
+            "description": "The question that would confirm or rule this out -- something the human knows and the repository does not say. The division of labor is the whole point: never ask what you could have read."
+          },
+          "suggested_exit": {
+            "type": "string",
+            "enum": ["retry", "correct_specification", "open_fix", "resolve_by_hand"],
+            "description": "Which exit this hypothesis points at. A suggestion about ordering only; it can never select an exit. Only a literal human choice does that."
+          }
+        }
+      }
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-formalized
+implementation_running
 
 ## Source Request
 
@@ -36,22 +36,34 @@ Two of the four specified exits already exist and are reused verbatim: `blocked_
 deterministic resume, and `acknowledgeBlocker`. The `003` migration named in the outline was
 completed early: that feature was closed during the specification round itself.
 
+The conversation was built before the deletion, deliberately: it is the part the user asked for, and
+delivering it first meant the new way out existed before the old machinery was dismantled.
+
 ## Implemented Deliverables
 
-- None
+- the diagnosis contract (`recovery-diagnosis.schema.json`, `recoveryDiagnosis.ts`): two or three ordered hypotheses, each with repository-readable evidence and the one discriminating question the human can answer that the repository cannot. The schema enforces the minimum of two, so the conversation never anchors the human on a single explanation.
+- diagnosis generation and persistence. A resumed conversation reloads the stored diagnosis rather than re-deriving it: a second call would produce a *different* set of hypotheses and the human would find themselves answering a different question than the one they left. A new diagnosis is generated only when the blocker signature changes.
+- the recovery conversation in `/desbloquear`: card, diagnosis, then the four exits.
+- the `retry` exit (`retryWithContext`): what the human said is written into `Current Reality` as a fact, which is how it reaches the next attempt — nothing is carried in memory.
+- the `correct_specification` exit (`correctSpecification`, `invalidatedWorkFor`): names exactly what will be superseded, requires an explicit `listo`, refuses to proceed without a recorded reason, marks outstanding task requests superseded, and returns the item to pending specification. Nothing is deleted from git.
+- the `resolve_by_hand` exit, reusing `acknowledgeBlocker`.
+- `tests/recoveryConversation.test.ts`: 10 tests over exit exhaustiveness, ordering-not-narrowing, and the diagnosis rendering.
 
 ## Remaining Deliverables
 
-- Every deliverable listed in `feature.md`.
+- the `open_fix` exit: the one of the four that still needs its own wiring. The `blocked_on_fix` machinery it will reuse already exists; what is missing is filing a fix from inside the conversation.
+- removal of the doctor-recovery task pipeline: `doctor-recovery-planning-prompt.md`, `doctor-recovery-execution-prompt.md`, `recoveryLessons.ts`, `recoveryHistoryCompaction.ts`, the `doctor_recovery_task` step kind, the `unblock_pending` inspection kind, and the `doctor_recovery_attempts` / `active_unblock_task` fields
+- bounding diagnostic autocorrection to a single attempt
+- the conversation's turn bound
 
 ## Outline Progress
 
 - 1. Remove the doctor-recovery task pipeline and bound diagnostic autocorrection to one attempt: not started
-- 2. Add the diagnosis contract, its generation, and its persistence: not started
-- 3. Build the recovery conversation loop with its bound and resumability: not started
-- 4. Implement the retry-with-context and specification-correction exits: not started
-- 5. Wire the existing fix and acknowledgment machinery as the third and fourth exits: not started
-- 6. Migrate feature `003-doctor-command` off the removed recovery model: not started
+- 2. Add the diagnosis contract, its generation, and its persistence: complete
+- 3. Build the recovery conversation loop with its bound and resumability: in progress
+- 4. Implement the retry-with-context and specification-correction exits: complete
+- 5. Wire the existing fix and acknowledgment machinery as the third and fourth exits: in progress
+- 6. Migrate feature `003-doctor-command` off the removed recovery model: complete (that feature was closed during the specification round itself)
 
 ## Blocked By
 

@@ -27,7 +27,8 @@ export type AgentInvocationKind =
   | "feature_validation_weight"
   | "feature_validation_decision_points"
   | "brainstorm_turn"
-  | "acceptance_criteria_verification";
+  | "acceptance_criteria_verification"
+  | "recovery_diagnosis";
 
 export interface AgentToolContext {
   readonly name: AgentToolName;

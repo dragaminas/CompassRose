@@ -46,6 +46,7 @@ import { selectImplementationContextArtifactNames } from '../contracts/runtime/a
 import type { AgentInvocationContext, AgentInvocationKind, AgentToolName } from '../contracts/runtime/agentContext.js';
 import type { RunObserver } from '../contracts/runtime/runObserver.js';
 import { allCriteriaMet, unmetCriteria } from '../contracts/runtime/acceptanceCriteria.js';
+import type { RecoveryDiagnosis, StoredRecoveryDiagnosis } from '../contracts/runtime/recoveryDiagnosis.js';
 import type {
   AcceptanceCriteriaVerification,
   AcceptanceCriterionVerdict,
@@ -5695,6 +5696,224 @@ export class CompassRoseOrchestrator {
    * Mirrors resumeWorkItemBlockedOnFix()'s restoration shape (same RestorationTarget-driven
    * write), minus the `blocked_on_fix` field, which is irrelevant to this path.
    */
+  /**
+   * The diagnosis that opens a recovery conversation (026-conversational-doctor-recovery).
+   *
+   * Generated once, when a human first sits down with a blocked item, and stored. Resuming reloads
+   * it rather than re-deriving it: a second call would spend another AI call to produce a
+   * *different* set of hypotheses, and the human would find themselves answering a different
+   * question than the one they left.
+   *
+   * A new diagnosis is generated only when the item's blocker signature has changed -- i.e. it is
+   * blocked on something else now, so the old hypotheses are about a problem that no longer exists.
+   */
+  diagnoseBlockage(id: string): RecoveryDiagnosis {
+    const owner = this.resolveWorkItemContext(id);
+    const snapshot = this.tryReadFeatureStateSnapshot(owner);
+    if (!snapshot) {
+      throw new Error(`Cannot diagnose ${id}: its state document is missing or unreadable.`);
+    }
+
+    const blocker = this.readRecordedBlockerProfile(snapshot);
+    if (!blocker) {
+      throw new Error(`Cannot diagnose ${id}: no blocker is recorded in its Blocked By section.`);
+    }
+
+    const artifactPath = join('recovery-diagnoses', `${id}.json`);
+    const stored = this.artifacts.readJson<StoredRecoveryDiagnosis>(artifactPath);
+    if (stored && stored.blocker_signature === blocker.signature) {
+      return stored.diagnosis;
+    }
+
+    const diagnosis = this.generateRecoveryDiagnosis(id, owner, blocker);
+    this.artifacts.writeJson(artifactPath, {
+      diagnosis,
+      generated_at: new Date().toISOString(),
+      blocker_signature: blocker.signature,
+    } satisfies StoredRecoveryDiagnosis);
+
+    return diagnosis;
+  }
+
+  private generateRecoveryDiagnosis(
+    id: string,
+    owner: WorkItemContext,
+    blocker: BlockerProfile,
+  ): RecoveryDiagnosis {
+    const sourcePaths = [
+      relativePath(this.repositoryRoot, owner.statePath).split('\\').join('/'),
+      relativePath(this.repositoryRoot, owner.definitionPath).split('\\').join('/'),
+      relativePath(this.repositoryRoot, this.projectStatePath).split('\\').join('/'),
+    ];
+
+    const label = `recovery-diagnosis:${id}`;
+    const prompt = [
+      'Act as the CompassRose Recovery Diagnostician.',
+      '',
+      `Work item \`${id}\` is blocked and a human is about to sit down with you to unblock it.`,
+      'Your job is to bring them what you can read, and to ask them only for what you cannot.',
+      '',
+      'Read:',
+      ...sourcePaths.map((path) => `- \`${path}\``),
+      '- the source and test files those documents name',
+      '',
+      'Recorded blocker:',
+      `- kind: ${blocker.kind}`,
+      `- recoverability: ${blocker.recoverability}`,
+      `- signature: ${blocker.signature}`,
+      ...blocker.evidence.map((item) => `- evidence: ${item}`),
+      '',
+      'Rules:',
+      '- Give two or three possible root causes, ordered by likelihood, most likely first.',
+      '- `evidence` must be facts you actually read in the repository. Never speculation, and never something only the human could know.',
+      '- `discriminating_question` must be something the human knows and the repository does not say. Never ask what you could have read -- that is the whole point of the division of labor.',
+      '- `suggested_exit` orders how the exits are offered. It never selects one; only the human does.',
+      '- Do not modify files.',
+      '',
+      'Return JSON only, matching the recovery-diagnosis schema.',
+    ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'reviewer',
+      kind: 'recovery_diagnosis',
+      label,
+      feature_id: id,
+      task_id: null,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'recovery_diagnosis',
+      },
+    }));
+
+    return this.codex.runStructured<RecoveryDiagnosis>(
+      prompt,
+      this.contracts.schema('recovery_diagnosis'),
+      sourcePaths,
+      label,
+    );
+  }
+
+  /**
+   * The `retry` exit: what the human said in the conversation becomes bounded context for a fresh
+   * attempt at the failed step.
+   *
+   * The item is restored to its recorded pre-block state and the human's account is written into
+   * `Current Reality` as a fact -- which is how it reaches the next attempt, since that document is
+   * part of every subsequent prompt. Nothing is carried in memory: if it is not written, it does not
+   * exist.
+   */
+  retryWithContext(id: string, humanContext: string): void {
+    const owner = this.resolveWorkItemContext(id);
+    const snapshot = this.tryReadFeatureStateSnapshot(owner);
+    if (!snapshot) {
+      throw new Error(`Cannot retry ${id}: its state document is missing or unreadable.`);
+    }
+
+    const restorationTarget = this.preferredRestorationTarget(snapshot);
+    let markdown = this.updateFeatureStateAfterHumanAcknowledged(owner.statePath, restorationTarget);
+    markdown = upsertParagraphInSection(
+      markdown,
+      'Current Reality',
+      'Recovery conversation',
+      `Recovery conversation (${new Date().toISOString().slice(0, 10)}): ${humanContext}`,
+    );
+    writeText(owner.statePath, markdown);
+    writeText(this.projectStatePath, this.updateProjectStateAfterHumanAcknowledged(id, restorationTarget));
+    this.artifacts.writeJson(join('recovery-diagnoses', `${id}.json`), null);
+
+    if (this.options.commit) {
+      this.git.commit(
+        [
+          relativePath(this.repositoryRoot, owner.statePath),
+          relativePath(this.repositoryRoot, this.projectStatePath),
+        ],
+        `proto: retry ${id} with context from a recovery conversation`,
+      );
+    }
+  }
+
+  /**
+   * The `correct_specification` exit: the blockage revealed a wrong or incomplete specification.
+   *
+   * The only exit that destroys planned work, and therefore the only one the CLI gates behind an
+   * explicit confirmation. Nothing is deleted from git -- the history of what was tried is the one
+   * artifact worth keeping -- and what was invalidated is recorded with the human's reason, never
+   * silently dropped.
+   *
+   * Also the exit that closes the circuit between the two flows. Without it, specification feeds
+   * execution one way and a wrong specification is a permanent dead end, which is exactly what
+   * happened to 003-doctor-command.
+   */
+  invalidatedWorkFor(id: string): readonly string[] {
+    const owner = this.resolveWorkItemContext(id);
+    const taskRequests = this.artifacts.readJson<TaskRequest[]>(join('task-requests', `${id}.json`)) ?? [];
+    const snapshot = this.tryReadFeatureStateSnapshot(owner);
+
+    return [
+      ...taskRequests
+        .filter((request) => request.status !== 'complete')
+        .map((request) => `task request ${request.id}: ${request.title}`),
+      ...(snapshot && snapshot.activeTask !== 'none' ? [`active task ${snapshot.activeTask}`] : []),
+      ...(snapshot && snapshot.activeCorrectionTask !== 'none' ? [`correction task ${snapshot.activeCorrectionTask}`] : []),
+    ];
+  }
+
+  correctSpecification(id: string, reason: string): void {
+    const owner = this.resolveWorkItemContext(id);
+    const invalidated = this.invalidatedWorkFor(id);
+
+    let markdown = readUtf8(owner.statePath);
+    markdown = replaceSection(markdown, 'Lifecycle State', 'formalization_pending');
+    markdown = replaceOperationalStatus(markdown, {
+      active_task: 'none',
+      active_correction_task: 'none',
+      active_unblock_task: 'none',
+      validation: 'not_started',
+      human_ack_required: 'none',
+    });
+    markdown = replaceSection(markdown, 'Blocked By', '- None');
+    markdown = replaceSection(markdown, 'Blocked From', [
+      '- lifecycle_state: none',
+      '- active_task: none',
+      '- active_correction_task: none',
+      '- active_unblock_task: none',
+    ].join('\n'));
+    markdown = upsertParagraphInSection(
+      markdown,
+      'Current Reality',
+      'Specification invalidated',
+      [
+        `Specification invalidated (${new Date().toISOString().slice(0, 10)}): ${reason}`,
+        '',
+        ...(invalidated.length > 0
+          ? ['Superseded by that correction:', ...invalidated.map((item) => `- ${item}`)]
+          : ['No planned work was outstanding at the time.']),
+      ].join('\n'),
+    );
+    markdown = replaceSection(
+      markdown,
+      'Next Planning Hint',
+      `Specify \`${id}\` again with a human; its previous specification was invalidated and it cannot be planned until the corrected one is validated.`,
+    );
+    writeText(owner.statePath, markdown);
+
+    // Every remaining task request goes with the specification that declared it.
+    const taskRequests = this.artifacts.readJson<TaskRequest[]>(join('task-requests', `${id}.json`));
+    if (taskRequests) {
+      this.artifacts.writeJson(
+        join('task-requests', `${id}.json`),
+        taskRequests.map((request) => (request.status === 'complete' ? request : { ...request, status: 'superseded' })),
+      );
+    }
+
+    this.artifacts.writeJson(join('recovery-diagnoses', `${id}.json`), null);
+    this.commitDirtyWorktreeIfConfigured(`proto: invalidate the specification for ${id} after a recovery conversation`);
+  }
+
   acknowledgeBlocker(id: string): void {
     const owner = this.resolveWorkItemContext(id);
     const feature = this.tryLoadFeature(id);

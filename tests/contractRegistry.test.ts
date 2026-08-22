@@ -26,6 +26,7 @@ function seedSchemas(root: string): void {
     'src/contracts/validator/decision-points-output.schema.json': '{"type":"object","title":"feature_validation_decision_points"}',
     'src/contracts/brainstormer/brainstorm-turn-output.schema.json': '{"type":"object","title":"brainstorm_turn"}',
     'src/contracts/runtime/acceptance-criteria-verification.schema.json': '{"type":"object","title":"acceptance_criteria_verification"}',
+    'src/contracts/runtime/recovery-diagnosis.schema.json': '{"type":"object","title":"recovery_diagnosis"}',
   };
 
   for (const [relativePath, contents] of Object.entries(schemaFiles)) {
@@ -54,6 +55,7 @@ describe('ContractRegistry', () => {
     expect(registry.schema<{ title: string }>('feature_validation_decision_points').title).toBe('feature_validation_decision_points');
     expect(registry.schema<{ title: string }>('brainstorm_turn').title).toBe('brainstorm_turn');
     expect(registry.schema<{ title: string }>('acceptance_criteria_verification').title).toBe('acceptance_criteria_verification');
+    expect(registry.schema<{ title: string }>('recovery_diagnosis').title).toBe('recovery_diagnosis');
   });
 
   test('refresh reports no reload and no restart when nothing changed', () => {

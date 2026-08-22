@@ -13,6 +13,8 @@
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
 import { runValidationLoopForItem } from '../cli/validationLoop.js';
 import { renderFailureView } from './render/failure.js';
+import { renderDiagnosis, renderExitMenu, renderInvalidationWarning } from './render/diagnosis.js';
+import { orderedExitsFor, type RecoveryExit } from '../contracts/runtime/recoveryDiagnosis.js';
 import type { CompassRoseOrchestrator } from '../orchestrator/orchestrator.js';
 import type { TerminalWriter } from './terminalWriter.js';
 import type { BrainstormTurnRecord } from '../contracts/brainstormer/brainstormerContracts.js';
@@ -117,7 +119,7 @@ const unblockCommand: SessionCommand = {
   name: 'desbloquear',
   aliases: ['unblock'],
   usage: '/desbloquear [id]',
-  summary: 'work through a blocked item',
+  summary: 'work through a blocked item together',
   async run(context, args) {
     const blocked = context.orchestrator.listHumanBlockedWorkItems();
     if (blocked.length === 0) {
@@ -142,22 +144,104 @@ const unblockCommand: SessionCommand = {
       return;
     }
 
-    // The diagnosis-led conversation belongs to 026-conversational-doctor-recovery. Until it
-    // lands, the session offers what already exists and is honest about the difference: the card,
-    // and the one deterministic exit a human can take today.
-    print(context, renderFailureView({ card, explanation: null }));
     context.state.focusItemId = targetId;
+    print(context, renderFailureView({ card, explanation: null }));
 
-    const answer = (await context.ask(`Have you resolved this yourself? Type "listo" to resume ${targetId}: `)).trim();
-    if (answer.toLowerCase() !== 'listo') {
-      print(context, ['', `  ${targetId} stays blocked.`, '']);
+    let diagnosis;
+    try {
+      diagnosis = context.orchestrator.diagnoseBlockage(targetId);
+    } catch (error) {
+      // A diagnosis that cannot be produced must not cost the human their way out: the four exits
+      // are still reachable, they just arrive without hypotheses to order them.
+      print(context, ['', `  I could not work up a diagnosis: ${error instanceof Error ? error.message : String(error)}`, '']);
+      await offerExits(context, targetId, ['retry', 'correct_specification', 'open_fix', 'resolve_by_hand']);
       return;
     }
 
-    context.orchestrator.acknowledgeBlocker(targetId);
-    print(context, ['', `  ${targetId} is unblocked and back in the queue.`, '']);
+    print(context, renderDiagnosis(diagnosis));
+    await offerExits(context, targetId, orderedExitsFor(diagnosis));
   },
 };
+
+/**
+ * The four exits are the four places a root cause can be, and they are offered as a closed set:
+ * the ordering comes from the agent's leading hypothesis, but every exit stays reachable no matter
+ * what it believes. Only a literal human choice selects one.
+ */
+async function offerExits(
+  context: SessionContext,
+  itemId: string,
+  exits: readonly RecoveryExit[],
+): Promise<void> {
+  print(context, renderExitMenu(exits));
+
+  const answer = (await context.ask('  Number, or anything else to leave it blocked: ')).trim();
+  const index = Number.parseInt(answer, 10) - 1;
+  const chosen = Number.isInteger(index) && index >= 0 && index < exits.length ? exits[index] : null;
+
+  if (!chosen) {
+    print(context, ['', `  ${itemId} stays blocked. /desbloquear ${itemId} picks this up where we left off.`, '']);
+    return;
+  }
+
+  if (chosen === 'retry') {
+    const humanContext = (await context.ask('  What should the next attempt know that it did not? ')).trim();
+    if (humanContext.length === 0) {
+      print(context, ['', `  Nothing recorded, so nothing would reach the retry. ${itemId} stays blocked.`, '']);
+      return;
+    }
+
+    context.orchestrator.retryWithContext(itemId, humanContext);
+    print(context, ['', `  Recorded, and ${itemId} is back in the queue. /run picks it up.`, '']);
+    return;
+  }
+
+  if (chosen === 'correct_specification') {
+    print(context, renderInvalidationWarning(itemId, context.orchestrator.invalidatedWorkFor(itemId)));
+
+    // The only exit that destroys planned work, and the only one behind an explicit confirmation.
+    const confirmation = (await context.ask('  Type "listo" to confirm, anything else to cancel: ')).trim();
+    if (confirmation.toLowerCase() !== 'listo') {
+      print(context, ['', `  Cancelled. ${itemId} stays blocked.`, '']);
+      return;
+    }
+
+    const reason = (await context.ask('  What was wrong with the specification? ')).trim();
+    if (reason.length === 0) {
+      print(context, ['', '  Invalidating work without recording why is not something I will do. Cancelled.', '']);
+      return;
+    }
+
+    context.orchestrator.correctSpecification(itemId, reason);
+    print(context, [
+      '',
+      `  ${itemId} is back to pending specification, with what was superseded recorded and why.`,
+      `  Talk it through with me and /crear when it is settled.`,
+      '',
+    ]);
+    return;
+  }
+
+  if (chosen === 'open_fix') {
+    print(context, [
+      '',
+      '  Filing a fix from a recovery conversation is not built yet; it is the one exit of the four',
+      `  that still needs its own wiring. For now: describe the fix to me and /crear it, then`,
+      `  /desbloquear ${itemId} again and take "resolve by hand" once the fix lands.`,
+      '',
+    ]);
+    return;
+  }
+
+  const confirmation = (await context.ask(`  Type "listo" once you have resolved it, to resume ${itemId}: `)).trim();
+  if (confirmation.toLowerCase() !== 'listo') {
+    print(context, ['', `  ${itemId} stays blocked.`, '']);
+    return;
+  }
+
+  context.orchestrator.acknowledgeBlocker(itemId);
+  print(context, ['', `  ${itemId} is unblocked and back in the queue.`, '']);
+}
 
 const createCommand: SessionCommand = {
   name: 'crear',
