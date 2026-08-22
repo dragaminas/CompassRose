@@ -8,8 +8,18 @@ import type { ParsedTaskDocument } from '../contracts/task/taskContracts.js';
 import type { PlannedTask } from '../contracts/planner/plannerContracts.js';
 import { implementationNotesIndicatesAlreadyComplete } from '../implementer/implementationNotes.js';
 
+// Matches ANSI/VT100 escape sequences (color codes, cursor movement, etc). Some CLI tools emit
+// these even when piped/non-interactive, regardless of NO_COLOR/FORCE_COLOR; left unstripped they
+// turn command output captured as evidence into unreadable garbage once written into a plain-text
+// state.md.
+const ANSI_ESCAPE_PATTERN = /\x1b\[[0-9;]*[a-zA-Z]/g;
+
+export function stripAnsiCodes(text: string): string {
+  return text.replace(ANSI_ESCAPE_PATTERN, '');
+}
+
 export function joinOutput(stdout: string, stderr: string): string {
-  return [stdout.trim(), stderr.trim()].filter((value) => value.length > 0).join('\n\n');
+  return [stripAnsiCodes(stdout).trim(), stripAnsiCodes(stderr).trim()].filter((value) => value.length > 0).join('\n\n');
 }
 
 export function summarizeCommandOutput(stdout: string, stderr: string): string {

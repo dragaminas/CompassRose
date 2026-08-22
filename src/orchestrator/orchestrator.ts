@@ -154,6 +154,7 @@ import {
   joinOutput,
   outputShowsCommittedReviewableDiff,
   selectReviewableDiffForReview,
+  stripAnsiCodes,
   summarizeCommandOutput,
   summarizeText,
   validateTaskDeliverables,
@@ -1750,7 +1751,14 @@ export class CompassRoseOrchestrator {
           observed_state: `lifecycle=${snapshot?.lifecycleState ?? 'unknown'}`,
         };
 
-    this.persistBlockedFeatureWithKnownBlocker(owner, featureId, null, reason, blocker);
+    this.persistBlockedFeatureWithKnownBlocker(
+      owner,
+      featureId,
+      null,
+      reason,
+      blocker,
+      `Automatic recovery is exhausted for this blocker; a human must resolve it (see the printed card and this file's Blocked By evidence), then run \`npm run acknowledge-blocker\` to resume.`,
+    );
     // The explicit, authoritative "diagnose_autocorrect already ran this to exhaustion" marker
     // inspectFeature()/inspectFix() check -- see requiresHumanAcknowledgment()'s own doc comment
     // for why this must NOT be inferred from `recoverability` alone.
@@ -4702,6 +4710,7 @@ export class CompassRoseOrchestrator {
       shell: true,
       encoding: 'utf8',
       maxBuffer: 10 * 1024 * 1024,
+      env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' },
     });
 
     if (result.signal === 'SIGINT' || result.signal === 'SIGTERM') {
@@ -4712,7 +4721,12 @@ export class CompassRoseOrchestrator {
       );
     }
 
-    return { status: result.status, stdout: result.stdout, stderr: result.stderr };
+    // Some tools (observed: vitest's default reporter on this platform) ignore NO_COLOR/
+    // FORCE_COLOR and still emit ANSI escape codes when their own TTY-detection heuristic decides
+    // to. Left unstripped, those raw control codes get captured verbatim by summarizeCommandOutput
+    // and persisted into a feature's state.md as "evidence" -- unreadable garbage in a plain-text
+    // markdown file, found live while trying to read a real blocked feature's full detail.
+    return { status: result.status, stdout: stripAnsiCodes(result.stdout), stderr: stripAnsiCodes(result.stderr) };
   }
 
   private runQualityGates(task: ParsedTaskDocument): QualityGateResult[] {
@@ -5728,6 +5742,7 @@ export class CompassRoseOrchestrator {
     taskId: string | null,
     reason: string,
     blocker: BlockerProfile,
+    explicitNextPlanningHint?: string,
   ): void {
     const snapshot = this.readFeatureStateSnapshot(owner);
     const restorationTarget = this.preferredRestorationTarget(snapshot);
@@ -5738,6 +5753,8 @@ export class CompassRoseOrchestrator {
       blocker,
       restorationTarget,
       owner,
+      'blocked',
+      explicitNextPlanningHint,
     );
   }
 
@@ -6036,7 +6053,12 @@ export class CompassRoseOrchestrator {
       last_review_result: lifecycleState === 'review_failed' ? 'failed' : 'blocked',
       last_unblock_result: 'not_run',
     });
-    markdown = replaceSection(markdown, 'Blocked By', bulletList(blockedByLines));
+    // blockedByLines is already a list of "- key: value" bullet lines (buildBlockedByLines);
+    // wrapping it in bulletList() here double-bulleted every "Blocked By" entry ("- - kind: ...")
+    // for every feature/fix this codebase has ever blocked. readRecordedBlockerProfile() already
+    // works around it with a defensive `(?:-\s*)+` strip, but blockerCard.ts's parseBlockedByBullets
+    // did not, so npm run doctor's blocked-work card misread every one of these as kind: unknown.
+    markdown = replaceSection(markdown, 'Blocked By', blockedByLines.join('\n'));
     markdown = replaceSection(markdown, 'Blocked From', [
       `- lifecycle_state: \`${restorationTarget.lifecycle_state}\``,
       `- active_task: \`${restorationTarget.active_task}\``,
@@ -6519,7 +6541,9 @@ export class CompassRoseOrchestrator {
         active_correction_task: 'none',
         active_unblock_task: 'none',
       };
-      markdown = replaceSection(markdown, 'Blocked By', bulletList(this.buildBlockedByLines(blocker, reason)));
+      // Same double-bulleting fix as updateFeatureStateForBlocked below -- buildBlockedByLines()
+      // already returns "- key: value" lines.
+      markdown = replaceSection(markdown, 'Blocked By', this.buildBlockedByLines(blocker, reason).join('\n'));
       markdown = replaceSection(markdown, 'Blocked From', [
         `- lifecycle_state: \`${restorationTarget.lifecycle_state}\``,
         `- active_task: \`${restorationTarget.active_task}\``,
@@ -6582,13 +6606,13 @@ export class CompassRoseOrchestrator {
       active_correction_task: 'none',
       active_unblock_task: 'none',
     });
-    markdown = replaceSection(markdown, 'Blocked By', bulletList([
+    markdown = replaceSection(markdown, 'Blocked By', [
       '- kind: implementation_failure',
       `- signature: implementation-failure-${taskId}`,
       '- recoverability: agent',
       `- observed_state: lifecycle=implementation_failed; active_task=${taskId}; active_correction_task=none; active_unblock_task=none`,
       `- evidence: ${reason}`,
-    ]));
+    ].join('\n'));
     markdown = replaceSection(markdown, 'Blocked From', [
       '- lifecycle_state: `task_ready`',
       `- active_task: \`${taskId}\``,

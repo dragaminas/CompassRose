@@ -279,7 +279,10 @@ describe('updateFeatureStateAfterImplementation() quality_failed evidence', () =
     const updated = access.updateFeatureStateAfterImplementation(owner.statePath, 'F001-T01', 'quality_failed', 'failed', results);
 
     expect(updated).toContain('real assertion failure');
-    expect(updated).toMatch(/## Blocked By\n\n- - kind: \S/);
+    // Was previously asserting the double-bulleted "- - kind: ..." this write path produced --
+    // a real bug (see updateFeatureStateAfterImplementation's quality_failed branch), not the
+    // intended format. buildBlockedByLines() already returns "- key: value" bullets.
+    expect(updated).toMatch(/## Blocked By\n\n- kind: \S/);
     expect(updated).not.toMatch(/## Blocked By\n\n- None/);
   });
 

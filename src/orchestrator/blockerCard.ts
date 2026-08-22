@@ -68,8 +68,27 @@ export function renderBlockerCard(input: BlockerCardInput): string[] {
     lines.push(`... and ${remainingEvidence} more (see full detail)`);
   }
 
+  const nextAction = nextActionFor(input.recoverability);
+  if (nextAction) {
+    lines.push(`next action: ${nextAction}`);
+  }
+
   lines.push(`full detail: ${input.itemPathRelative}`);
   return lines;
+}
+
+// The card's "what happened"/evidence lines describe the past; without this, a reader is left to
+// infer for themselves whether they need to do anything at all. `agent`/`auto` blockers are
+// omitted deliberately -- the runtime is still retrying those on its own, and saying so would
+// read as a call to action when there isn't one yet.
+function nextActionFor(recoverability: string): string | null {
+  if (recoverability === 'human') {
+    return 'a human needs to resolve this, then run `npm run acknowledge-blocker` to resume.';
+  }
+  if (recoverability === 'terminal') {
+    return 'no automatic recovery is possible for this; a human must resolve it directly, then run `npm run acknowledge-blocker` to resume.';
+  }
+  return null;
 }
 
 /**
@@ -87,7 +106,13 @@ export function parseBlockedByBullets(
   const evidence: string[] = [];
   const fields: Record<string, string> = {};
 
-  for (const line of bulletLines) {
+  for (const rawLine of bulletLines) {
+    // Mirrors readRecordedBlockerProfile's (orchestrator.ts) defensive strip: a handful of write
+    // paths historically double-bulleted this section ("- - kind: ..." instead of "- kind: ..."),
+    // and parseBulletSection only ever strips one leading "- ". Without this, a line's residual
+    // "- " prefix gets folded into its key ("- kind" instead of "kind"), so it never matches any
+    // known field and silently falls through to the unknown/no-reason defaults below.
+    const line = rawLine.replace(/^(?:-\s*)+/, '').trim();
     const separatorIndex = line.indexOf(':');
     if (separatorIndex === -1) {
       continue;
