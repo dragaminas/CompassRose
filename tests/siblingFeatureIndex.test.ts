@@ -128,8 +128,11 @@ describe('buildSiblingFeatureIndex', () => {
   });
 
   test('reads the real repository roadmap features without throwing', () => {
+    // A floor, not a census: this asserts the real directory parses, so it must not encode how many
+    // features the repository happens to have. The previous `>= 20` broke the moment the 2026-08-22
+    // specification round re-cut twenty-two requests into six features.
     const index = buildSiblingFeatureIndex(join(process.cwd(), 'compassrose/features'));
-    expect(index.length).toBeGreaterThanOrEqual(20);
+    expect(index.length).toBeGreaterThan(0);
     expect(index.every((entry) => entry.featureId.length > 0 && entry.title.length > 0)).toBe(true);
   });
 });

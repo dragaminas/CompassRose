@@ -1,9 +1,177 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, test } from 'vitest';
 import { CompassRoseOrchestrator } from '../src/orchestrator/orchestrator.js';
 import { limitStateCorrectionTaskId } from '../src/orchestrator/runtimeHelpers.js';
+import { copyContractsIntoWorkspace, readFixtureConfigMarkdown } from './testUtils.js';
+
+// These tests used to construct a real CompassRoseOrchestrator against `process.cwd()` -- this
+// repository itself -- mutating its live `compassrose/` documents and restoring them in `finally`.
+// One of them (the diagnoseAndAutocorrect case) never snapshotted `PROJECT_STATE.md`, which
+// `recordExhaustedRecoveryAsBlocked` writes, so every `npm test` left the working tree dirty with a
+// spurious "002-configuration-model is blocked by F002-T7-C1" mutation -- a task id that never
+// existed. That dirty state then fed this repository's own e2e suite, which clones the current
+// HEAD, producing the "intermittent unrelated test failures" that kept 003-doctor-command blocked
+// for weeks. Isolated fixture workspaces below; nothing here touches the real repository.
+
+const FIXTURE_FEATURE_ID = '002-configuration-model';
+
+interface FixtureWorkspace {
+  readonly root: string;
+  readonly featureStatePath: string;
+  readonly projectStatePath: string;
+  readonly tasksDirectory: string;
+  readonly artifactTasksDirectory: string;
+  readonly dispose: () => void;
+}
+
+function projectStateFixture(): string {
+  return [
+    '# CompassRose Project State',
+    '',
+    '## Status',
+    '',
+    'active',
+    '',
+    '## Active Feature',
+    '',
+    `\`${FIXTURE_FEATURE_ID}\``,
+    '',
+    '## Current Reality',
+    '',
+    '- Fixture workspace for state-correction-limit tests.',
+    '',
+    '## Pending',
+    '',
+    '- Nothing pending.',
+    '',
+    '## Blocked',
+    '',
+    '- Nothing blocked.',
+    '',
+    '## Last Approved Change',
+    '',
+    'None yet.',
+    '',
+    '## Known Gaps',
+    '',
+    'None.',
+    '',
+    '## Next Planning Hint',
+    '',
+    'None.',
+    '',
+  ].join('\n');
+}
+
+function featureStateFixture(input: {
+  lifecycleState: string;
+  activeTask: string;
+  blockedBy?: readonly string[];
+}): string {
+  return [
+    '# State: Configuration Model',
+    '',
+    '## Lifecycle State',
+    '',
+    input.lifecycleState,
+    '',
+    '## Source Request',
+    '',
+    '`request.md`',
+    '',
+    '## Operational Status',
+    '',
+    '- formalization: complete',
+    `- active_task: ${input.activeTask}`,
+    '- active_correction_task: none',
+    '- active_unblock_task: none',
+    '- last_implementation_result: passed',
+    '- last_quality_gate_result: failed',
+    '- last_review_result: not_run',
+    '- last_unblock_result: not_run',
+    '- validation: confirmed',
+    '',
+    '## Current Reality',
+    '',
+    'Fixture state.',
+    '',
+    '## Implemented Deliverables',
+    '',
+    '- none',
+    '',
+    '## Remaining Deliverables',
+    '',
+    '- none',
+    '',
+    '## Outline Progress',
+    '',
+    '- none',
+    '',
+    '## Blocked By',
+    '',
+    ...(input.blockedBy ?? ['- None']),
+    '',
+    '## Blocked From',
+    '',
+    '- lifecycle_state: none',
+    '- active_task: none',
+    '- active_correction_task: none',
+    '- active_unblock_task: none',
+    '',
+    '## Last Approved Change',
+    '',
+    'None yet.',
+    '',
+    '## Known Gaps',
+    '',
+    '- None',
+    '',
+    '## Next Planning Hint',
+    '',
+    'Fixture next step.',
+    '',
+  ].join('\n');
+}
+
+function createFixtureWorkspace(featureStateMarkdown: string): FixtureWorkspace {
+  const root = mkdtempSync(join(tmpdir(), 'correction-limit-repo-'));
+  const featureDirectory = join(root, 'compassrose', 'features', FIXTURE_FEATURE_ID);
+  const tasksDirectory = join(featureDirectory, 'tasks');
+
+  mkdirSync(join(root, '.git'), { recursive: true });
+  mkdirSync(tasksDirectory, { recursive: true });
+  writeFileSync(join(root, 'compassrose', 'CONFIG.md'), readFixtureConfigMarkdown(), 'utf8');
+  writeFileSync(join(root, 'compassrose', 'PROJECT_STATE.md'), projectStateFixture(), 'utf8');
+  writeFileSync(join(featureDirectory, 'state.md'), featureStateMarkdown, 'utf8');
+  copyContractsIntoWorkspace(root);
+
+  return {
+    root,
+    featureStatePath: join(featureDirectory, 'state.md'),
+    projectStatePath: join(root, 'compassrose', 'PROJECT_STATE.md'),
+    tasksDirectory,
+    artifactTasksDirectory: join(root, '.git', 'proto-compassrose', 'tasks'),
+    dispose: () => rmSync(root, { recursive: true, force: true }),
+  };
+}
+
+function createOrchestratorFor(workspace: FixtureWorkspace): CompassRoseOrchestrator {
+  const orchestrator = new CompassRoseOrchestrator({
+    cwd: workspace.root,
+    commit: false,
+    implementer: 'codex',
+    loop: false,
+  } as unknown as ConstructorParameters<typeof CompassRoseOrchestrator>[0]);
+
+  // The fixture workspace has a `.git` directory but is not a real repository; the correction-limit
+  // paths under test never depend on real git state, only on the clean-worktree precondition.
+  const git = Reflect.get(orchestrator, 'git') as { dirtyPaths: () => readonly string[] };
+  git.dirtyPaths = () => [];
+
+  return orchestrator;
+}
 
 type ArtifactDirectorySnapshot = {
   directoryExists: boolean;
@@ -117,77 +285,38 @@ describe('limitStateCorrectionTaskId', () => {
   });
 
   test('correct_state refuses before writing correction-task artifacts, and persists the exhaustion as a blocked state', () => {
-    const repositoryRoot = process.cwd();
-    const featureStatePath = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
-    const projectStatePath = join(repositoryRoot, 'compassrose', 'PROJECT_STATE.md');
-    const tasksDirectory = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'tasks');
-    const artifactTasksDirectory = join(repositoryRoot, '.git', 'proto-compassrose', 'tasks');
-    const featureStateBefore = readFileSync(featureStatePath, 'utf8');
-    const projectStateBefore = readFileSync(projectStatePath, 'utf8');
-    const nestedFeatureState = featureStateBefore.replace(
-      /(active_task\s*:\s*)[^\r\n]*/,
-      '$1F002-T7-C1',
+    const workspace = createFixtureWorkspace(
+      featureStateFixture({ lifecycleState: 'completed', activeTask: 'F002-T7-C1' }),
     );
-    expect(nestedFeatureState).not.toBe(featureStateBefore);
-    const taskFilesBefore = readdirSync(tasksDirectory).sort();
-    const artifactFilesBefore = existsSync(artifactTasksDirectory) ? readdirSync(artifactTasksDirectory).sort() : [];
-    const correctionTasksBefore = snapshotArtifactDirectory(tasksDirectory);
-    const correctionArtifactsBefore = snapshotArtifactDirectory(artifactTasksDirectory);
 
     try {
-      writeFileSync(featureStatePath, nestedFeatureState, 'utf8');
+      const stateBefore = readFileSync(workspace.featureStatePath, 'utf8');
+      const correctionTasksBefore = snapshotArtifactDirectory(workspace.tasksDirectory);
+      const correctionArtifactsBefore = snapshotArtifactDirectory(workspace.artifactTasksDirectory);
 
-      const orchestrator = new CompassRoseOrchestrator({
-        cwd: repositoryRoot,
-        commit: false,
-        implementer: 'codex',
-        loop: false,
-      } as unknown as ConstructorParameters<typeof CompassRoseOrchestrator>[0]);
-      const git = Reflect.get(orchestrator, 'git') as { dirtyPaths: () => readonly string[] };
-      const originalDirtyPaths = git.dirtyPaths;
-      git.dirtyPaths = () => [];
+      const orchestrator = createOrchestratorFor(workspace);
+      const executeStep = Reflect.get(orchestrator, 'executeStep') as (decision: unknown) => unknown;
+      const result = executeStep.call(orchestrator, {
+        kind: 'correct_state',
+        feature_id: FIXTURE_FEATURE_ID,
+        reason: 'recovery test: nested correction anchor is already at the configured limit',
+      }) as { exitCode: number; continueLoop: boolean; summary?: string };
 
-      try {
-        const executeStep = Reflect.get(orchestrator, 'executeStep') as (decision: unknown) => unknown;
-        const result = executeStep.call(orchestrator, {
-          kind: 'correct_state',
-          feature_id: '002-configuration-model',
-          reason: 'recovery test: nested correction anchor is already at the configured limit',
-        }) as { exitCode: number; continueLoop: boolean };
-
-        expect(result).toMatchObject({ exitCode: 2, continueLoop: false });
-        expect((result as { summary?: string }).summary).toMatch(/correction iteration limit reached/i);
-        expectArtifactDirectoryUnchanged(correctionTasksBefore, snapshotArtifactDirectory(tasksDirectory));
-        expectArtifactDirectoryUnchanged(correctionArtifactsBefore, snapshotArtifactDirectory(artifactTasksDirectory));
-        // correctState()'s OWN correction-task-writing machinery never ran (asserted above) --
-        // but reaching the limit is itself a real blocker (only a human can resolve it now), so
-        // runBoundedOperation's catch persists that via recordExhaustedRecoveryAsBlocked instead
-        // of leaving state untouched and silent, matching every other blocking path this session.
-        const featureStateAfter = readFileSync(featureStatePath, 'utf8');
-        expect(featureStateAfter).not.toBe(nestedFeatureState);
-        expect(featureStateAfter).toContain('## Lifecycle State\n\nblocked');
-        expect(featureStateAfter).toContain('- recoverability: human');
-        expect(featureStateAfter).toContain('Correction iteration limit reached');
-      } finally {
-        git.dirtyPaths = originalDirtyPaths;
-      }
+      expect(result).toMatchObject({ exitCode: 2, continueLoop: false });
+      expect(result.summary).toMatch(/correction iteration limit reached/i);
+      expectArtifactDirectoryUnchanged(correctionTasksBefore, snapshotArtifactDirectory(workspace.tasksDirectory));
+      expectArtifactDirectoryUnchanged(correctionArtifactsBefore, snapshotArtifactDirectory(workspace.artifactTasksDirectory));
+      // correctState()'s OWN correction-task-writing machinery never ran (asserted above) --
+      // but reaching the limit is itself a real blocker (only a human can resolve it now), so
+      // runBoundedOperation's catch persists that via recordExhaustedRecoveryAsBlocked instead
+      // of leaving state untouched and silent, matching every other blocking path.
+      const featureStateAfter = readFileSync(workspace.featureStatePath, 'utf8');
+      expect(featureStateAfter).not.toBe(stateBefore);
+      expect(featureStateAfter).toContain('## Lifecycle State\n\nblocked');
+      expect(featureStateAfter).toContain('- recoverability: human');
+      expect(featureStateAfter).toContain('Correction iteration limit reached');
     } finally {
-      writeFileSync(featureStatePath, featureStateBefore, 'utf8');
-      writeFileSync(projectStatePath, projectStateBefore, 'utf8');
-
-      for (const fileName of readdirSync(tasksDirectory)) {
-        if (!taskFilesBefore.includes(fileName)) {
-          rmSync(join(tasksDirectory, fileName), { force: true });
-        }
-      }
-
-      if (existsSync(artifactTasksDirectory)) {
-        for (const fileName of readdirSync(artifactTasksDirectory)) {
-          if (!artifactFilesBefore.includes(fileName)) {
-            rmSync(join(artifactTasksDirectory, fileName), { force: true });
-          }
-        }
-      }
+      workspace.dispose();
     }
   });
 
@@ -198,35 +327,16 @@ describe('limitStateCorrectionTaskId', () => {
     // try/catch at all, so StateCorrectionLimitReachedError propagated as an uncaught exception
     // and crashed the whole CLI process instead of returning a bounded stop. Observed live on
     // feature 003-doctor-command's F003-T01 anchor.
-    const repositoryRoot = process.cwd();
-    const featureStatePath = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
-    const tasksDirectory = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'tasks');
-    const artifactTasksDirectory = join(repositoryRoot, '.git', 'proto-compassrose', 'tasks');
-    const featureStateBefore = readFileSync(featureStatePath, 'utf8');
-    const nestedFeatureState = featureStateBefore.replace(
-      /(active_task\s*:\s*)[^\r\n]*/,
-      '$1F002-T7-C1',
+    const workspace = createFixtureWorkspace(
+      featureStateFixture({ lifecycleState: 'completed', activeTask: 'F002-T7-C1' }),
     );
-    expect(nestedFeatureState).not.toBe(featureStateBefore);
-    const taskFilesBefore = readdirSync(tasksDirectory).sort();
-    const artifactFilesBefore = existsSync(artifactTasksDirectory) ? readdirSync(artifactTasksDirectory).sort() : [];
 
     try {
-      writeFileSync(featureStatePath, nestedFeatureState, 'utf8');
-
-      const orchestrator = new CompassRoseOrchestrator({
-        cwd: repositoryRoot,
-        commit: false,
-        implementer: 'codex',
-        loop: false,
-      } as unknown as ConstructorParameters<typeof CompassRoseOrchestrator>[0]);
-      const git = Reflect.get(orchestrator, 'git') as { dirtyPaths: () => readonly string[] };
-      const originalDirtyPaths = git.dirtyPaths;
-      git.dirtyPaths = () => [];
+      const orchestrator = createOrchestratorFor(workspace);
       // Stub out the actual AI diagnostic call so this test exercises only the
       // correct_state-handling logic that follows it.
       (orchestrator as unknown as Record<string, unknown>).runDiagnosticAutocorrection = () => ({
-        feature_id: '002-configuration-model',
+        feature_id: FIXTURE_FEATURE_ID,
         diagnosis_summary: 'fixture diagnosis',
         blocker: { kind: 'unknown', signature: 'fixture-signature', recoverability: 'agent', evidence: ['fixture evidence'] },
         next_step: 'correct_state',
@@ -235,35 +345,17 @@ describe('limitStateCorrectionTaskId', () => {
         systemic_blocker: null,
       });
 
-      try {
-        const diagnoseAndAutocorrect = Reflect.get(orchestrator, 'diagnoseAndAutocorrect') as (featureId: string, reason: string) => unknown;
-        const result = diagnoseAndAutocorrect.call(orchestrator, '002-configuration-model', 'fixture reason') as {
-          exitCode: number;
-          continueLoop: boolean;
-          summary?: string;
-        };
+      const diagnoseAndAutocorrect = Reflect.get(orchestrator, 'diagnoseAndAutocorrect') as (featureId: string, reason: string) => unknown;
+      const result = diagnoseAndAutocorrect.call(orchestrator, FIXTURE_FEATURE_ID, 'fixture reason') as {
+        exitCode: number;
+        continueLoop: boolean;
+        summary?: string;
+      };
 
-        expect(result).toMatchObject({ exitCode: 2, continueLoop: false });
-        expect(result.summary).toMatch(/correction iteration limit reached/i);
-      } finally {
-        git.dirtyPaths = originalDirtyPaths;
-      }
+      expect(result).toMatchObject({ exitCode: 2, continueLoop: false });
+      expect(result.summary).toMatch(/correction iteration limit reached/i);
     } finally {
-      writeFileSync(featureStatePath, featureStateBefore, 'utf8');
-
-      for (const fileName of readdirSync(tasksDirectory)) {
-        if (!taskFilesBefore.includes(fileName)) {
-          rmSync(join(tasksDirectory, fileName), { force: true });
-        }
-      }
-
-      if (existsSync(artifactTasksDirectory)) {
-        for (const fileName of readdirSync(artifactTasksDirectory)) {
-          if (!artifactFilesBefore.includes(fileName)) {
-            rmSync(join(artifactTasksDirectory, fileName), { force: true });
-          }
-        }
-      }
+      workspace.dispose();
     }
   });
 
@@ -275,50 +367,29 @@ describe('limitStateCorrectionTaskId', () => {
     // would re-propose the identical doomed correction and immediately hit
     // StateCorrectionLimitReachedError again -- an unrecoverable loop with no escape but manual
     // intervention. Observed live on feature 003-doctor-command's F003-T01 anchor.
-    const repositoryRoot = process.cwd();
-    const featureStatePath = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'state.md');
-    const tasksDirectory = join(repositoryRoot, 'compassrose', 'features', '002-configuration-model', 'tasks');
-    const featureStateBefore = readFileSync(featureStatePath, 'utf8');
-    const taskFilesBefore = readdirSync(tasksDirectory).sort();
-
-    // Anchor F002-T7 already has its one allowed correction (F002-T7-C1), matching this
-    // repository's own configured max_review_iterations: 1.
-    const exhaustedAnchorTaskFile = join(tasksDirectory, '999.1-fixture-exhausted-anchor.md');
-
-    const stateWithRecordedBlocker = featureStateBefore
-      .replace(/(active_task\s*:\s*)[^\r\n]*/, '$1F002-T7')
-      .replace(
-        /## Lifecycle State\n\n\S+/,
-        '## Lifecycle State\n\nquality_failed',
-      )
-      .replace(
-        /## Blocked By\n\n(?:- .*\n)*/,
-        [
-          '## Blocked By',
-          '',
+    const workspace = createFixtureWorkspace(
+      featureStateFixture({
+        lifecycleState: 'quality_failed',
+        activeTask: 'F002-T7',
+        blockedBy: [
           '- kind: state_corruption',
           '- signature: fixture-state-corruption-signature',
           '- recoverability: agent',
           '- observed_state: lifecycle=quality_failed',
           '- evidence: fixture evidence',
-          '',
-        ].join('\n'),
-      );
-    expect(stateWithRecordedBlocker).not.toBe(featureStateBefore);
+        ],
+      }),
+    );
 
     try {
-      writeFileSync(featureStatePath, stateWithRecordedBlocker, 'utf8');
-      writeFileSync(exhaustedAnchorTaskFile, '`F002-T7-C1`\n', 'utf8');
+      // Anchor F002-T7 already has its one allowed correction (F002-T7-C1), matching this
+      // repository's own configured max_review_iterations: 1.
+      writeFileSync(join(workspace.tasksDirectory, '999.1-fixture-exhausted-anchor.md'), '`F002-T7-C1`\n', 'utf8');
 
-      const orchestrator = new CompassRoseOrchestrator({
-        cwd: repositoryRoot,
-        commit: false,
-        implementer: 'codex',
-        loop: false,
-      } as unknown as ConstructorParameters<typeof CompassRoseOrchestrator>[0]);
+      const orchestrator = createOrchestratorFor(workspace);
 
       const resolveWorkItemContext = Reflect.get(orchestrator, 'resolveWorkItemContext') as (featureId: string) => unknown;
-      const owner = resolveWorkItemContext.call(orchestrator, '002-configuration-model');
+      const owner = resolveWorkItemContext.call(orchestrator, FIXTURE_FEATURE_ID);
       const runDiagnosticAutocorrection = Reflect.get(orchestrator, 'runDiagnosticAutocorrection') as (
         feature: unknown,
         reason: string,
@@ -328,14 +399,7 @@ describe('limitStateCorrectionTaskId', () => {
 
       expect(decision.next_step).toBe('plan_doctor_recovery');
     } finally {
-      writeFileSync(featureStatePath, featureStateBefore, 'utf8');
-      rmSync(exhaustedAnchorTaskFile, { force: true });
-
-      for (const fileName of readdirSync(tasksDirectory)) {
-        if (!taskFilesBefore.includes(fileName)) {
-          rmSync(join(tasksDirectory, fileName), { force: true });
-        }
-      }
+      workspace.dispose();
     }
   });
 });

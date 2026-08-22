@@ -194,11 +194,14 @@ function buildBlockedWorkCheck(repositoryRoot: string, configuration: ProjectCon
 
 export function formatDoctorReport(report: DoctorReport): string {
   const lines: string[] = [];
-  lines.push('CompassRose doctor');
+  // Header and status wording are fixed by feature 003-doctor-command's acceptance criteria
+  // ("CompassRose Doctor" / "Status: OK"), not by preference -- the specification is the authority
+  // on the documented success shape.
+  lines.push('CompassRose Doctor');
   lines.push(`Repository: ${report.repositoryRoot ?? 'not found'}`);
   lines.push(`Platform: ${report.currentPlatform ?? 'unsupported'}`);
   lines.push(`Configuration: ${report.configPath ?? 'not available'}`);
-  lines.push(`Result: ${report.success ? 'PASS' : 'FAIL'}`);
+  lines.push(`Status: ${report.success ? 'OK' : 'FAILED'}`);
   lines.push('Checks:');
 
   for (const check of report.checks) {

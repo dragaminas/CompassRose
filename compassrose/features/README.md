@@ -1,36 +1,66 @@
 # CompassRose Features
 
-This folder contains feature requests ordered by implementation dependency.
-
-Each feature starts with a human-readable `request.md` file.
-CompassRose should later formalize each request into:
+Each feature starts with a human-readable `request.md`. The specification flow turns it, in
+conversation with a human, into:
 
 ```text
-feature.md
-architecture.md
-state.md
+feature.md        purpose, scope, user-facing behavior, acceptance criteria, implementation outline
+architecture.md   feature-level boundaries and architectural constraints
+state.md          repository reality, progress, and the next planning hint
 ```
-
-`feature.md` defines purpose, scope, deliverables, completion criteria, and the high-level implementation outline expressed as visible task requests.
-
-`architecture.md` defines the feature-level boundaries and architectural constraints.
-
-`state.md` records repository reality, progress against deliverables, progress against the visible task requests in the implementation outline, and the next planning hint.
-
-After formalization, CompassRose should plan and execute one task at a time.
-The feature may contain a high-level implementation outline made of task requests, but the active execution contract is always the current task, not the outline itself.
-Feature-local `tasks/` folders may exist for archived or approved task documents, but they are not the canonical source for future planning.
 
 The numeric prefix defines the recommended implementation order.
-Earlier features create the infrastructure required by later features.
 
-For the MVP, focus on features 001 to 010 first, with special priority on:
+## Current features
 
-```text
-001-project-identity-and-foundation
-002-configuration-model
-003-doctor-command
-005-feature-request-intake
-006-feature-formalization
-010-generic-external-cli-adapter
-```
+| Feature | State | What it is |
+|---|---|---|
+| `001-project-identity-and-foundation` | completed | repository identity, structure, foundation documents |
+| `002-configuration-model` | completed | project-local configuration loading and validation |
+| `003-doctor-command` | completed | read-only repository readiness diagnostics |
+| `023-terminal-session` | formalized | one interactive terminal session as the primary interface |
+| `024-specification-flow` | formalized | the conversation that produces validated specifications |
+| `025-automated-development-loop` | formalized | plan → implement → gate → review, over validated work |
+| `026-conversational-doctor-recovery` | formalized | unblocking through questions instead of repair tasks |
+| `027-bounded-work-item-context` | formalized | declared, budgeted context manifests per task |
+| `028-project-understanding` | formalized | knowing what repository CompassRose is pointed at |
+| `021-vscode-integration` | request only | a future visualization layer over the documents |
+| `022-ecosystem-and-metrics` | request only | future CI, metrics, cost tracking, team workflows |
+
+## The specification round of 2026-08-22
+
+The original twenty-two requests decomposed CompassRose by *component* — task model, git
+integration, quality gates, review runner. That decomposition described how the system would be
+built, not what it does for the person using it, and in practice the implementation ran far ahead of
+it: seventeen of those requests were built in the code while their documents still said
+`request.md` only.
+
+They were re-cut into six features describing the product as its author states it: two flows — a
+specification conversation and an automated development loop — plus the bounded context that makes
+them work, the conversation that recovers them when they fail, the terminal that hosts them, and the
+understanding of whatever repository they are pointed at.
+
+The absorbed requests are preserved verbatim under `../absorbed-requests/`. Each remains readable and
+referenced from the feature that took over its scope; none were deleted.
+
+| Absorbed request | Reality when absorbed | Taken over by |
+|---|---|---|
+| `004-project-understanding` | not built | `028-project-understanding` |
+| `005-feature-request-intake` | built | `024-specification-flow` |
+| `006-feature-formalization` | built | `024-specification-flow` |
+| `007-documentation-engine` | partially built | `024`, `027` |
+| `008-feature-centric-planning` | built | `025-automated-development-loop` |
+| `009-task-model` | built | `025`, `027` |
+| `010-generic-external-cli-adapter` | built, drifted to provider-specific | `025-automated-development-loop` |
+| `011-configurable-ai-roles` | built | `025-automated-development-loop` |
+| `012-implementation-runner` | built | `025-automated-development-loop` |
+| `013-quality-gates` | built | `025-automated-development-loop` |
+| `014-git-integration` | built | `025-automated-development-loop` |
+| `015-review-runner` | built | `025-automated-development-loop` |
+| `016-correction-task-flow` | built | `025-automated-development-loop` |
+| `017-workflow-state-machine` | built | `025-automated-development-loop` |
+| `018-deterministic-orchestration-loop` | built | `025-automated-development-loop` |
+| `019-autonomous-execution-modes` | partially built | `023`, `025` |
+| `020-self-application` | in practice, this repository | `023` through `028` |
+
+`021` and `022` were not absorbed. They remain genuine future requests, pending specification.

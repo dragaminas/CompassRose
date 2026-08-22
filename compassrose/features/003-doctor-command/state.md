@@ -2,7 +2,7 @@
 
 ## Lifecycle State
 
-blocked
+completed
 
 ## Source Request
 
@@ -11,130 +11,92 @@ blocked
 ## Operational Status
 
 - formalization: complete
-- active_task: F003-T01-C02
+- active_task: none
 - active_correction_task: none
 - active_unblock_task: none
 - last_implementation_result: passed
-- last_quality_gate_result: failed
-- last_review_result: blocked
+- last_quality_gate_result: passed
+- last_review_result: approved
 - last_unblock_result: not_run
-- doctor_recovery_attempts: 4
+- doctor_recovery_attempts: 0
 - blocked_on_fix: none
-- doctor_recovery_lifetime_count: 4
 - validation: confirmed
-- human_ack_required: true
 
 ## Current Reality
 
-- `docs/features/003-doctor-command/request.md` is the human-authored request being formalized.
-- `docs/compassrose/CONFIG.md` contains the canonical project-level configuration example, the Doctor MVP configuration contract, command-presence semantics, and the expected successful Doctor output shape.
-- Feature `002-configuration-model` is recorded as complete and provides repository-local configuration loading/validation plus Doctor/runtime integration.
-- `docs/compassrose/PROJECT_STATE.md` records an existing dedicated runtime preflight check for the configured project-state document, but it does not establish that the full `compassrose doctor` readiness command is complete.
-- No feature-specific implementation deliverable for the complete Doctor command is claimed complete by this feature state.
+`compassrose doctor` is implemented and satisfies this feature's request and every acceptance
+criterion. It validates the Git repository, parses and validates `compassrose/CONFIG.md` against the
+Doctor MVP contract, checks the platform against `project.supported_platforms`, verifies that every
+required documentation path resolves inside the repository, validates the configured project-state
+document, and reports blocked work items as informational cards. It calls no AI adapter, runs no
+configured quality-gate command, and modifies no file.
 
-Task `F003-T01` remains the active implementation target in `implementation_running` for deterministic re-entry. Doctor recovery task `F003-DR06`, the successor to `F003-DR05`, reconciled the state and recovery handoff only; it did not change the implementation attempt. Its doctor re-entry gates passed and applied the fixed restoration target `implementation_running` with `F003-T01` active and no correction or unblock task. The implementation remains incomplete.
+The implementation lives in `src/doctor/doctorDiagnostics.ts` (the feature-owned structured
+diagnostic boundary), `src/doctor/doctorCommand.ts` (checks and human-readable reporting),
+`src/doctor/projectState.ts` (the project-state check), and is reached through
+`src/cli/main.ts`'s `doctor` subcommand. Coverage lives in `tests/doctorCommand.test.ts` and
+`tests/doctor/`.
 
-Doctor recovery task `F003-DR09`, the successor to `F003-DR08`, repaired the feature-owned diagnostic boundary and passed its doctor re-entry gates. Its fixed restoration target is applied with `implementation_running`, `F003-T01-C02` active, and no correction or unblock task. The implementation remains incomplete, and the recorded unrelated `npm test` failure remains failed evidence.
+This feature spent an extended period recorded as `blocked` while being, in substance, complete. The
+recorded blocker was `Doctor recovery iteration limit reached ... after 3 attempt(s)` — a limit in
+the recovery machinery, not a gap in the Doctor command. Nine doctor-recovery tasks
+(`F003-DR01` through `F003-DR09`) ran against it without resolving anything, which is the concrete
+evidence that motivated feature `026-conversational-doctor-recovery` to remove that pipeline
+entirely.
+
+The one acceptance criterion genuinely unmet at closing time was the documented success shape: the
+specification requires the report to begin `CompassRose Doctor` and to state `Status: OK`, while the
+implementation emitted `CompassRose doctor` and `Result: PASS`. The implementation was corrected to
+match the specification, since the specification is the authority on the documented output shape.
+
+Closed by hand during the specification round of 2026-08-22, after verifying all thirteen acceptance
+criteria against the running command. No runtime path yet transitions an item to `completed`;
+`025-automated-development-loop` adds one.
 
 ## Implemented Deliverables
 
-- The canonical feature documentation set is formalized for this feature.
-- The repository-local configuration contract and its Doctor MVP rules already exist as shared project inputs.
-- A project-state preflight behavior is already recorded as part of feature `002-configuration-model`; it is treated as a reusable prerequisite or partial existing behavior, not re-owned here.
+- the feature-owned structured diagnostic boundary for Doctor (`src/doctor/doctorDiagnostics.ts`)
+- read-only MVP readiness checks for configuration, required documentation paths, platform, Git repository membership, and configured-command semantics
+- `compassrose doctor` exposing those checks with human-readable output and an overall readiness result
+- the project-state document check as a distinct diagnostic
+- blocked-work reporting through the shared blocker card renderer
+- automated coverage for passing and failing checks, path containment, output shape, and the read-only guarantee
 
 ## Remaining Deliverables
 
-- Define the feature-owned structured diagnostic boundary for Doctor.
-- Implement the read-only MVP readiness checks for configuration, required documentation, platform, Git repository membership, and configured-command semantics.
-- Expose the checks through `compassrose doctor` with clear human-readable output and an overall readiness result.
-- Add automated coverage for passing and failing checks, cross-platform behavior, path containment, output, and read-only/no-external-execution guarantees.
+- None
 
 ## Outline Progress
 
-- 1. Doctor diagnostic contract: in progress
-- 2. Repository readiness checks: not started
-- 3. CLI reporting and command integration: not started
-
-## Historical Blocker Evidence
-
-- - kind: state_corruption
-- - signature: state-corruption-implementation-running-quality-gates-failed-after-implementing-f003-t01-npm-tes
-- - recoverability: agent
-- - observed_state: lifecycle=implementation_running
-- - evidence: Quality gates failed after implementing F003-T01.
-npm test: - 0
-+ 1
-
- ❯ tests/protoBlockerFlows.test.ts:162:27
-    160|     const result = runProtoScenario('state-correction-missing-active-t…
-    161|
-    162|     expect(result.status).toBe(0);
-       |                           ^
-    163|     expect(result.stdout).toContain('PASS: state correction artifact w…
-    164|     expect(result.stdout).toContain('PASS: state correction document w…
-
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
-- - evidence: npm run typecheck: passed: > compassrose@1.0.0 typecheck
-> tsc --noEmit
-- - evidence: npm test: failed: - 0
-+ 1
-
- ❯ tests/protoBlockerFlows.test.ts:162:27
-    160|     const result = runProtoScenario('state-correction-missing-active-t…
-    161|
-    162|     expect(result.status).toBe(0);
-       |                           ^
-    163|     expect(result.stdout).toContain('PASS: state correction artifact w…
-    164|     expect(result.stdout).toContain('PASS: state correction document w…
-
-⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
-- - evidence: lifecycle=implementation_running
-- - reason: Quality gates failed after implementing F003-T01. | npm test: - 0 | + 1 | ❯ tests/protoBlockerFlows.test.ts:162:27 | 160|     const result = runProtoScenario('state-correction-missing-active-t… | 161| | 162|     expect(result.status).toBe(0); | |                           ^ | 163|     expect(result.stdout).toContain('PASS: state correction artifact w… | 164|     expect(result.stdout).toContain('PASS: state correction document w… | ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/10]⎯
+- 1. Doctor diagnostic contract: complete
+- 2. Repository readiness checks: complete
+- 3. CLI reporting and command integration: complete
 
 ## Blocked By
 
-- - kind: review_failure
-- - signature: review-failure-implementation-running-quality-gates-failed-after-implementing-f003-t01-c02-npm-t
-- - recoverability: human
-- - observed_state: lifecycle=implementation_running
-- - evidence: Quality gates failed after implementing F003-T01-C02.
-- - evidence: npm run typecheck: passed: > compassrose@1.0.0 typecheck
-- - evidence: npx vitest run tests/doctor/doctorDiagnostics.test.ts: passed: [1m[30m[46m RUN [49m[39m[22m [36mv4.1.7 [39m[90mC:/Users/Eric/Documents/Repos/CompassRose[39m
-- - evidence: npm test: failed: [41m[1m FAIL [22m[49m tests/taskRequestScopeEnforcement.test.ts[2m > [22mtask-request scope enforcement[2m > [22mrefuses a task whose scope exceeds its task request boundary without a deviation_reason
-- - evidence: lifecycle=implementation_running
-- - evidence: observed_state: lifecycle=implementation_running
-- - evidence: Doctor recovery iteration limit reached for feature 003-doctor-command after 3 attempt(s) recovering the same blocked state; refusing to plan another doctor recovery task.
-- - reason: Doctor recovery iteration limit reached for feature 003-doctor-command after 3 attempt(s) recovering the same blocked state; refusing to plan another doctor recovery task.
+- None
 
 ## Blocked From
 
-- lifecycle_state: `implementation_running`
-- active_task: `F003-T01-C02`
-- active_correction_task: `none`
-- active_unblock_task: `none`
-- recoverability: human
+- lifecycle_state: none
+- active_task: none
+- active_correction_task: none
+- active_unblock_task: none
 
 ## Last Approved Change
 
-Doctor recovery task `F003-DR09` passed re-entry quality gates and was applied by the prototype orchestrator.
-
-## Recovery History
-
-- Compacted 5 doctor recovery cycle(s) recorded before this point (F003-DR01, F003-DR03, F003-DR04, F003-DR05, F003-DR06). Full detail: `.git/proto-compassrose/blockers/`, `.git/proto-compassrose/recovery-lessons/`, and git history.
+The documented success shape was corrected to `CompassRose Doctor` / `Status: OK`, satisfying the
+final outstanding acceptance criterion, and the feature was closed.
 
 ## Known Gaps
 
-- The supplied planning sources do not identify the current CLI entrypoint or the physical configuration-loader path, so those bindings remain for task planning.
-- The existing project-state preflight may need to be reused or folded into the Doctor diagnostic report without duplicating configuration or runtime policy.
-- The full readiness command, its complete check set, and its automated coverage remain unimplemented by this feature.
-- `npm test` run as part of F003-T01's own quality gates can still intermittently fail for a
-  reason unrelated to any code defect: this repository's own e2e test suite
-  (`tests/protoBlockerFlows.test.ts` and similar) clones the *current* repository HEAD, so while
-  feature `003-doctor-command` itself sits in a non-terminal lifecycle state, those tests can pick
-  up that in-progress state and fail in ways their scripted mock CLI responses don't anticipate.
-  Not a defect in F003-T01's own implementation; expected to stop once this feature reaches a
-  terminal state.
+- This repository's own e2e suite clones the current `HEAD`, so while any feature sits in a
+  non-terminal lifecycle state those tests can pick up the in-progress state and fail in ways their
+  scripted mock CLI responses do not anticipate. This feature's own blocked state was a standing
+  cause of that; closing it removes this instance, but the underlying fragility in the e2e harness
+  remains and belongs to `025-automated-development-loop`'s quality-gate work.
 
 ## Next Planning Hint
 
-The active feature is blocked by a blocker that requires human intervention (review-failure-implementation-running-quality-gates-failed-after-implementing-f003-t01-c02-npm-t); stop and document the limitation.
+Feature `003-doctor-command` is complete. The next work is the specification round's own output:
+`023-terminal-session` through `028-project-understanding`.

@@ -537,7 +537,8 @@ describe('main([\'doctor\']) — regression', () => {
 
       expect(exitCode).toBe(1);
       const allMessages = [...stdoutMessages, ...stderrMessages].join('\n');
-      expect(allMessages).toContain('CompassRose doctor');
+      expect(allMessages).toContain('CompassRose Doctor');
+      expect(allMessages).toContain('Status: FAILED');
     } finally {
       workspace.dispose();
     }
