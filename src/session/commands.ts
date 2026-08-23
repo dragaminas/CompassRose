@@ -298,6 +298,93 @@ async function offerExits(
   print(context, ['', `  ${itemId} is unblocked and back in the queue.`, '']);
 }
 
+/**
+ * The two things about a repository that no file states: what it is for, and which of its declared
+ * scripts are actually gates (028-project-understanding).
+ *
+ * Behind an explicit sub-command rather than run on every `/proyecto`, because inference costs a
+ * call and produces something a human then has to check. Detection is free and automatic; guessing
+ * is neither.
+ */
+async function inferAndOffer(context: SessionContext): Promise<void> {
+  print(context, ['', '  Working out what this repository does not say about itself...', '']);
+
+  const { inference } = context.orchestrator.inferProjectGaps();
+  const lines: string[] = [];
+
+  lines.push(
+    inference.purpose
+      ? `  What I think this project is for: ${inference.purpose}`
+      : '  I could not tell what this project is for from what it says about itself.',
+  );
+
+  if (inference.gate_commands.length > 0) {
+    lines.push(
+      '',
+      '  Scripts that look like gates a change should pass:',
+      ...inference.gate_commands.map((command) => `    ${command}`),
+    );
+  }
+
+  lines.push(
+    '',
+    inference.start_command
+      ? `  And the one that looks like it starts the application: ${inference.start_command}`
+      : '  Nothing here looks like a command that starts an application.',
+    '',
+    '  All of that is a guess, marked as one. It changes nothing on its own: the gate and start',
+    '  commands are for you to put in CONFIG.md if you agree, and /proyecto confirmar promotes a',
+    '  guess to a fact once you have checked it.',
+    '',
+  );
+
+  print(context, lines);
+}
+
+/**
+ * Promotes a guess to a fact, on a human's word.
+ *
+ * The only operation that raises a fact's provenance -- ADR-0007's rule applied to knowledge rather
+ * than to lifecycle. Everything unconfirmed is offered, including facts *detected* from a file:
+ * detection can be wrong about a repository that has two package managers or a vestigial config,
+ * and only a person can say which one is real.
+ */
+async function confirmFacts(context: SessionContext): Promise<void> {
+  const unconfirmed = context.orchestrator.unconfirmedProjectFacts();
+  if (unconfirmed.length === 0) {
+    print(context, ['', '  Everything recorded about this repository has already been confirmed.', '']);
+    return;
+  }
+
+  print(context, [
+    '',
+    '  Nobody has vouched for these yet:',
+    ...unconfirmed.map((entry, index) => `    ${index + 1}. ${entry.field.padEnd(20)} ${entry.value}  (${entry.kind})`),
+    '',
+  ]);
+
+  const answer = (await context.ask('  Numbers to confirm, comma-separated, or anything else to leave them: ')).trim();
+  const chosen = answer
+    .split(',')
+    .map((part) => Number.parseInt(part.trim(), 10) - 1)
+    .filter((index) => Number.isInteger(index) && index >= 0 && index < unconfirmed.length);
+
+  if (chosen.length === 0) {
+    print(context, ['  Left as they were.', '']);
+    return;
+  }
+
+  for (const index of chosen) {
+    context.orchestrator.confirmProjectFact(unconfirmed[index]!.field, context.state.author);
+  }
+
+  print(context, [
+    `  Confirmed: ${chosen.map((index) => unconfirmed[index]!.field).join(', ')}.`,
+    '  A later detection can no longer overwrite them; a contradiction gets reported instead.',
+    '',
+  ]);
+}
+
 const createCommand: SessionCommand = {
   name: 'crear',
   aliases: ['create'],
@@ -426,9 +513,19 @@ const readyCommand: SessionCommand = {
 const projectCommand: SessionCommand = {
   name: 'proyecto',
   aliases: ['project'],
-  usage: '/proyecto',
+  usage: '/proyecto [inferir|confirmar]',
   summary: 'what CompassRose knows about this repository, and how it knows it',
-  run(context) {
+  async run(context, args) {
+    if (args[0] === 'inferir' || args[0] === 'infer') {
+      await inferAndOffer(context);
+      return;
+    }
+
+    if (args[0] === 'confirmar' || args[0] === 'confirm') {
+      await confirmFacts(context);
+      return;
+    }
+
     const { facts, contradictions, changedSignals } = context.orchestrator.refreshProjectFacts();
     const lines: string[] = [''];
 

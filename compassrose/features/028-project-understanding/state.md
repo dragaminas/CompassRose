@@ -28,10 +28,20 @@ CompassRose can now be pointed at a repository it has never seen and state corre
 project is, without anyone typing it in. `compassrose setup` writes `PROJECT_FACTS.md` from what the
 repository says about itself, and `/proyecto` refreshes it and shows the code inventory.
 
-What remains is the inference half: nothing yet fills what no file states -- what the project is
-*for*, and which of several plausible commands is the real gate.
+The inference half is there too. `/proyecto inferir` fills what no file states — what the project
+is for, and which of its declared scripts are gates — and everything it produces enters as
+`inferred`, below both `detected` and `confirmed`. `/proyecto confirmar` is the one operation that
+raises a fact's provenance, and it takes a human's word.
 
 ## Implemented Deliverables
+
+- gap inference (`inferProjectGaps`, `src/contracts/project/projectInference.ts`): one call, filling purpose, gate commands, and a start command. Never automatic — inference costs a call and produces something a human then has to check, so it happens when someone asks. Detection is free and runs on every `/proyecto`; guessing is neither.
+- everything inferred enters as `inferred`. The existing precedence rule then does the rest: an inference cannot overwrite something read from a file or confirmed by a person, so the worst case for a wrong guess is a visibly-marked wrong guess rather than a corrupted fact.
+- the call is shown what is already known *with its provenance*, so it neither restates nor contradicts it — an inference that knows the package manager was read from a file treats it differently from one that knows it was itself guessed last week.
+- only `purpose` reaches `PROJECT_FACTS.md`. The two command lists are proposals for configuration, and writing them there would blur "what this repository is" with "how we have decided to work on it".
+- `confirmProjectFact` and `/proyecto confirmar`: the one operation that raises a fact's provenance, on an explicit human action — ADR-0007's rule applied to knowledge rather than to lifecycle. It refuses a field nothing has recorded, because confirming an absent fact would invent one rather than promote one.
+- everything unconfirmed is offered, *detected facts included*. Detection can be wrong about a repository with two package managers or a vestigial config, and only a person can say which one is real.
+- `tests/projectInference.test.ts`: 8 tests, including that a confirmed purpose survives an inference that contradicts it.
 
 - the signal registry (`src/project/detectProject.ts`): a table of files, each row a pure function from one file's contents to facts, independently testable with a fixture. Fourteen rows covering Node, TypeScript, Python, Go, Rust, Java, Ruby, and PHP. Adding language support means adding a row, and nothing in it calls an AI.
 - `ProjectFacts` with per-fact provenance, and the precedence rule the whole feature turns on: **confirmed outranks detected outranks inferred**. A later detection never overwrites a confirmation; it raises a contradiction and waits.
@@ -55,14 +65,13 @@ runs inventory → conversation → human decision → `024-specification-flow`.
 
 ## Remaining Deliverables
 
-- gap inference itself: the AI call that fills purpose and picks among gate candidates, marked inferred until confirmed. The provenance model, the document, and the precedence rule are all in place for it; what is missing is the call.
-- the confirmation operation surfaced in the session, so a human can turn an inferred fact into a confirmed one.
+- the inferred gate and start commands are shown and go no further. Putting them into `CONFIG.md` is left to the human, deliberately: a guess that rewrites the configuration the loop runs on is a guess with consequences, and the one thing this feature is shaped around is that a guess never acts like a fact. Wiring it would need its own confirmation step, which is `029`'s start-command proposal rather than this feature's.
 
 ## Outline Progress
 
 - 1. Build the signal-based deterministic detector and the `ProjectFacts` model: complete
-- 2. Record facts with provenance in `PROJECT_FACTS.md` and add the confirmation operation: in progress
-- 3. Add gap inference and its inferred-until-confirmed handling: not started
+- 2. Record facts with provenance in `PROJECT_FACTS.md` and add the confirmation operation: complete
+- 3. Add gap inference and its inferred-until-confirmed handling: complete
 - 4. Build the code inventory and its grouping by apparent responsibility: complete
 - 5. Hand the inventory to the specification conversation as candidate material: complete
 - 6. Add signal-change re-detection and contradiction reporting: complete
@@ -87,4 +96,4 @@ Formalized and validated in the specification round of 2026-08-22.
 
 ## Next Planning Hint
 
-Add gap inference for purpose and gate selection, marked inferred until a human confirms it, and surface the confirmation operation in the session.
+Nothing outstanding here. Turning an inferred start command into a configured one belongs to `029`.

@@ -26,6 +26,7 @@ export type AgentInvocationKind =
   | "feature_validation_decision_points"
   | "brainstorm_turn"
   | "acceptance_criteria_verification"
+  | "project_inference"
   | "recovery_diagnosis";
 
 export interface AgentToolContext {

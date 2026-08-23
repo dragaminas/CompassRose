@@ -113,6 +113,25 @@ export function mergeDetectedFacts(
   return { facts: merged as unknown as ProjectFacts, contradictions };
 }
 
+/**
+ * The facts an inference call is shown, so it neither restates them nor contradicts them.
+ *
+ * Provenance travels with each one on purpose: an inference that knows the package manager was
+ * *read from a file* treats it differently from one that knows it was itself guessed last week.
+ */
+export function describeFactsForPrompt(facts: ProjectFacts): string[] {
+  const described = (Object.keys(facts) as (keyof ProjectFacts)[])
+    .map((field) => ({ field, fact: facts[field] }))
+    .filter((entry) => entry.fact !== null)
+    .map((entry) => {
+      const fact = entry.fact as NonNullable<ProjectFacts[keyof ProjectFacts]>;
+      const value = Array.isArray(fact.value) ? fact.value.join(', ') : String(fact.value);
+      return `- ${String(entry.field)}: ${value} (${fact.provenance.kind})`;
+    });
+
+  return described.length > 0 ? described : ['- nothing has been detected yet'];
+}
+
 export function confirmFact<T>(fact: ProjectFact<T> | null, by: string): ProjectFact<T> | null {
   if (!fact) {
     return null;

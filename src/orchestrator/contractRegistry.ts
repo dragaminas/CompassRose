@@ -17,6 +17,7 @@ export type StructuredSchemaId =
   | 'feature_validation_decision_points'
   | 'brainstorm_turn'
   | 'acceptance_criteria_verification'
+  | 'project_inference'
   | 'recovery_diagnosis';
 
 interface FileFingerprint {
@@ -39,6 +40,7 @@ const STRUCTURED_SCHEMA_PATHS: Record<StructuredSchemaId, string> = {
   feature_validation_decision_points: 'src/contracts/validator/decision-points-output.schema.json',
   brainstorm_turn: 'src/contracts/brainstormer/brainstorm-turn-output.schema.json',
   acceptance_criteria_verification: 'src/contracts/runtime/acceptance-criteria-verification.schema.json',
+  project_inference: 'src/contracts/project/project-inference.schema.json',
   recovery_diagnosis: 'src/contracts/runtime/recovery-diagnosis.schema.json',
 };
 

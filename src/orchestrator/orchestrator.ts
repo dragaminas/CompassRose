@@ -56,7 +56,16 @@ import {
 } from './contextManifest.js';
 import { buildCodeInventory, deriveGateCandidates, detectProjectFacts, signalsChanged } from '../project/detectProject.js';
 import type { InventoryGroup, SignalFingerprint } from '../project/detectProject.js';
-import { EMPTY_PROJECT_FACTS, mergeDetectedFacts, parseProjectFactsDocument, renderProjectFactsDocument } from '../project/projectFacts.js';
+import {
+  EMPTY_PROJECT_FACTS,
+  confirmFact,
+  describeFactsForPrompt,
+  mergeDetectedFacts,
+  parseProjectFactsDocument,
+  renderProjectFactsDocument,
+} from '../project/projectFacts.js';
+import type { ProjectFact } from '../project/projectFacts.js';
+import type { ProjectInference } from '../contracts/project/projectInference.js';
 import type { FactContradiction, ProjectFacts } from '../project/projectFacts.js';
 import type { ContextManifest, ExplorationRecord, ManifestEntry } from './contextManifest.js';
 import {
@@ -821,6 +830,143 @@ export class CompassRoseOrchestrator {
     this.artifacts.writeJson(artifactPath, fingerprints);
 
     return { facts, contradictions, changedSignals: signalsChanged(previousFingerprints, fingerprints) };
+  }
+
+  /**
+   * Fills what no file states: what the project is for, and which of its declared scripts are
+   * actually gates (028-project-understanding).
+   *
+   * One call, and everything it returns enters as `inferred` -- which the provenance model ranks
+   * below both `detected` and `confirmed`. That ordering is the whole safety property here: an
+   * inference can never overwrite something read from a file or confirmed by a person, so the worst
+   * case for a wrong guess is a visibly-marked wrong guess, not a corrupted fact.
+   *
+   * Never called automatically. Inference costs a call and produces something a human then has to
+   * check, so it happens when someone asks for it.
+   */
+  inferProjectGaps(): { readonly inference: ProjectInference; readonly facts: ProjectFacts } {
+    const { facts } = this.refreshProjectFacts();
+    const factsRelativePath = buildProjectFactsPath(this.compassRoseRoot);
+    const readmePath = ['README.md', 'readme.md'].find((candidate) =>
+      existsSync(join(this.repositoryRoot, candidate)),
+    ) ?? null;
+
+    const sourcePaths = [factsRelativePath, ...(readmePath ? [readmePath] : [])];
+    const label = `project-inference:${this.runId}`;
+    const prompt = [
+      'Act as the CompassRose Project Analyst.',
+      '',
+      'Two things about this repository are not written down anywhere, and you are being asked to',
+      'infer them from what is. Everything you return is recorded as a guess, marked as such, and',
+      'stays that way until a human confirms it -- so say nothing you cannot support, and return',
+      'null rather than something plausible you invented.',
+      '',
+      'Read only:',
+      ...sourcePaths.map((item) => `- \`${item}\``),
+      '',
+      'Already known from the repository itself (do not restate or contradict these):',
+      ...describeFactsForPrompt(facts),
+      '',
+      'Declared scripts, which are candidates and not yet judgments:',
+      ...(facts.scripts?.value.length
+        ? facts.scripts.value.map((script) => `- ${script}`)
+        : ['- none declared']),
+      '',
+      'Rules:',
+      '- `purpose`: one sentence saying what this project is for, grounded in what you read. Null if the repository does not say enough to know.',
+      '- `gate_commands`: the declared scripts a change should have to pass before review. A subset of the list above, never something you invented. Empty when none of them look like gates.',
+      '- `start_command`: the one script that starts the application, or null. A test runner is not a start command; neither is a build.',
+      '- Do not modify files.',
+      '',
+      'Return JSON only, matching the project-inference schema.',
+    ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'diagnostic',
+      kind: 'project_inference',
+      label,
+      feature_id: null,
+      task_id: null,
+      source_paths: sourcePaths,
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'project_inference',
+      },
+    }));
+
+    const inference = this.codex.runStructured<ProjectInference>(
+      prompt,
+      this.contracts.schema('project_inference'),
+      [],
+      label,
+    );
+
+    // Only `purpose` is a fact about the project; the two command lists are proposals for
+    // configuration, which a human applies to CONFIG.md themselves. Writing them into
+    // PROJECT_FACTS.md would blur "what this repository is" with "how we have decided to work on
+    // it", and only the first belongs in that document.
+    if (inference.purpose) {
+      const factsPath = join(this.repositoryRoot, buildProjectFactsPath(this.compassRoseRoot));
+      const recorded = existsSync(factsPath) ? parseProjectFactsDocument(readUtf8(factsPath)) : EMPTY_PROJECT_FACTS;
+      if (!recorded.purpose || recorded.purpose.provenance.kind === 'inferred') {
+        writeText(factsPath, renderProjectFactsDocument({
+          ...recorded,
+          purpose: { value: inference.purpose, provenance: { kind: 'inferred', at: new Date().toISOString().slice(0, 10) } },
+        }));
+      }
+    }
+
+    this.artifacts.writeJson(join('project-facts', 'inference.json'), inference);
+    this.commitDirtyWorktreeIfConfigured('proto: record what this repository does not state about itself');
+
+    return { inference, facts: this.readProjectFacts() };
+  }
+
+  readProjectFacts(): ProjectFacts {
+    const factsPath = join(this.repositoryRoot, buildProjectFactsPath(this.compassRoseRoot));
+    return existsSync(factsPath) ? parseProjectFactsDocument(readUtf8(factsPath)) : EMPTY_PROJECT_FACTS;
+  }
+
+  /**
+   * Turns a guess into a fact, on a human's word.
+   *
+   * The one operation that can raise a fact's provenance, and it takes an explicit human action --
+   * ADR-0007's rule applied to knowledge rather than to lifecycle. Refuses a field that has nothing
+   * recorded: confirming something the repository never said would invent a fact rather than
+   * promote one.
+   */
+  confirmProjectFact(field: keyof ProjectFacts, by: string): void {
+    const factsPath = join(this.repositoryRoot, buildProjectFactsPath(this.compassRoseRoot));
+    const recorded = this.readProjectFacts();
+    const existing = recorded[field];
+    if (!existing) {
+      throw new Error(`Nothing is recorded for "${String(field)}", so there is nothing to confirm.`);
+    }
+
+    // Cast at the boundary rather than making confirmFact generic over the union: it rewrites
+    // provenance and never touches the value, so the value's own type is genuinely irrelevant here
+    // and threading it through would be ceremony around a fact the function does not use.
+    const confirmed = confirmFact(existing as ProjectFact<unknown>, by);
+    writeText(factsPath, renderProjectFactsDocument({ ...recorded, [field]: confirmed } as ProjectFacts));
+
+    this.commitDirtyWorktreeIfConfigured(`proto: confirm ${String(field)} for this repository`);
+  }
+
+  /** The fields a human could still confirm: anything recorded that nobody has vouched for. */
+  unconfirmedProjectFacts(): readonly { readonly field: keyof ProjectFacts; readonly value: string; readonly kind: string }[] {
+    const recorded = this.readProjectFacts();
+    return (Object.keys(recorded) as (keyof ProjectFacts)[])
+      .map((field) => ({ field, fact: recorded[field] }))
+      .filter((entry): entry is { field: keyof ProjectFacts; fact: NonNullable<ProjectFacts[keyof ProjectFacts]> } =>
+        entry.fact !== null && entry.fact.provenance.kind !== 'confirmed')
+      .map((entry) => ({
+        field: entry.field,
+        value: Array.isArray(entry.fact.value) ? entry.fact.value.join(', ') : String(entry.fact.value),
+        kind: entry.fact.provenance.kind,
+      }));
   }
 
   /** Quality-gate and start-command candidates derived from what the project declares. */
