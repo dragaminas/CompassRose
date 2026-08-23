@@ -25,6 +25,7 @@ import type { CompassRoseOrchestrator } from '../orchestrator/orchestrator.js';
 import type { TerminalWriter } from './terminalWriter.js';
 import type { BrainstormTurnRecord } from '../contracts/brainstormer/brainstormerContracts.js';
 import type { SessionCompetencyProfile } from '../contracts/brainstormer/competency.js';
+import type { RecordedDecision } from '../contracts/brainstormer/brainstormerContracts.js';
 
 export interface SessionState {
   /** The whole session's conversation, carried into drafting. */
@@ -38,6 +39,14 @@ export interface SessionState {
   author: string;
   /** Who decides what, for this session only. Never written to the repository. */
   competency: SessionCompetencyProfile;
+  /**
+   * Decisions taken while specifying the idea under discussion, with who gave each one.
+   *
+   * Unlike the profile, these *are* written -- into the drafted specification's provenance
+   * section. The profile is a fact about a person and must not outlive the session; a decision is
+   * a fact about the document and has to.
+   */
+  decisions: RecordedDecision[];
   exit: boolean;
 }
 
@@ -308,6 +317,7 @@ const createCommand: SessionCommand = {
     if (existingId) {
       context.orchestrator.specifyExistingRequest(existingId);
       context.state.focusItemId = existingId;
+      await recordProvenanceAndCoverage(context, existingId);
       print(context, ['', `  ${existingId} is specified. Let's validate it.`, '']);
       await validateItem(context, existingId);
       return;
@@ -333,11 +343,58 @@ const createCommand: SessionCommand = {
     context.state.segment = [];
     context.state.proposedTitle = null;
     context.state.focusItemId = featureId;
+    await recordProvenanceAndCoverage(context, featureId);
     print(context, ['', `  ${featureId} drafted. Let's validate it.`, '']);
 
     await validateItem(context, featureId);
   },
 };
+
+/**
+ * The two things a freshly drafted specification owes the project (024-specification-flow).
+ *
+ * Provenance is written unconditionally: a specification with no recorded decisions is a real and
+ * legitimate outcome, and saying so is different from saying nothing.
+ *
+ * Coverage is asked rather than inferred. A drafted feature obviously addresses *something*, but
+ * which dimension it closes is a judgment about scope, and the checklist exists precisely because
+ * that judgment was being skipped. Guessing here would put the agent's opinion into a document
+ * whose entire value is that a human decided it.
+ */
+async function recordProvenanceAndCoverage(context: SessionContext, itemId: string): Promise<void> {
+  context.orchestrator.recordSpecificationProvenance(itemId, context.state.competency, context.state.decisions);
+  context.state.decisions = [];
+
+  const uncovered = context.orchestrator.readDimensions().filter((dimension) => dimension.state === 'uncovered');
+  if (uncovered.length === 0) {
+    return;
+  }
+
+  print(context, [
+    '',
+    `  Does ${itemId} cover any of these?`,
+    ...uncovered.map((dimension, index) => `    ${index + 1}. ${dimension.name}`),
+    '',
+  ]);
+
+  const answer = (await context.ask('  Numbers, comma-separated, or anything else for none: ')).trim();
+  const chosen = answer
+    .split(',')
+    .map((part) => Number.parseInt(part.trim(), 10) - 1)
+    .filter((index) => Number.isInteger(index) && index >= 0 && index < uncovered.length)
+    .map((index) => uncovered[index]!.name);
+
+  if (chosen.length === 0) {
+    print(context, ['  Nothing marked covered.', '']);
+    return;
+  }
+
+  for (const name of chosen) {
+    context.orchestrator.markDimensionCovered(name, itemId, context.state.author);
+  }
+
+  print(context, [`  Marked covered by ${itemId}: ${chosen.join(', ')}.`, '']);
+}
 
 const readyCommand: SessionCommand = {
   name: 'listo',

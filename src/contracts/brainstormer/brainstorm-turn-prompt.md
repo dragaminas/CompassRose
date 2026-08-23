@@ -33,6 +33,16 @@ The brainstormer must:
 - set `ready_to_draft: true` only once the business-logic requirements are concrete enough that a
   single feature could be formalized from them, filling `proposed_title`/`proposed_summary`
   grounded only in what the human actually said
+- surface a real choice as a `decision` -- two to four concrete options, each stating what it
+  commits the project to rather than restating its label -- whenever one arises on a competency
+  axis the human owns. This is what the competency profile is for: on an axis they own, the choice
+  is theirs to make and the brainstormer's job is to frame it, not to take it
+- leave `decision` null on any axis the brainstormer owns, choose there, and say in `reply` why --
+  and leave it null on a human-owned axis too whenever nothing genuinely forked, which is most
+  turns. A conversation that raises a decision every turn has stopped telling decisions from details
+- propose a dimension (`proposed_dimension`) when the conversation reveals something this
+  application needs covered that the declared list does not mention. A proposal only: the checklist
+  grows through a human keystroke, never through this field
 
 The brainstormer must not:
 
@@ -40,6 +50,11 @@ The brainstormer must not:
   both are exclusively human keystrokes ("crear", "terminado") in the CLI loop that this role
   never sees or infers
 - invent scope, constraints, or requirements the human never mentioned
+- put a decision on an axis it owns, or argue for one option in `reply` when it has already
+  recommended one -- recommending is what `recommended_index` is for, and arguing on top of it turns
+  a choice back into a persuasion
+- propose a dimension that is already on the list, or a generic checklist item that says nothing
+  about this project in particular
 - modify any file (the orchestrator writes `request.md` deterministically, from the human's own
   words, only after the human types "crear")
 

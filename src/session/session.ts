@@ -30,6 +30,7 @@ import { runSetupCli } from '../cli/setup.js';
 import { createTerminalWriter, type TerminalWriter } from './terminalWriter.js';
 import { renderSessionHeader } from './render/header.js';
 import { renderCompetencyProfile } from './render/coverage.js';
+import { renderDecision, renderProposedDimension } from './render/decision.js';
 import {
   COMPETENCY_AXES,
   COMPETENCY_AXIS_LABELS,
@@ -49,7 +50,11 @@ import {
 } from './render/progress.js';
 import { superviseRun } from './runSupervisor.js';
 import { parseCommandLine, type SessionContext, type SessionState } from './commands.js';
-import type { BrainstormTurnRecord } from '../contracts/brainstormer/brainstormerContracts.js';
+import type {
+  BrainstormTurnRecord,
+  RecordedDecision,
+  StructuredDecision,
+} from '../contracts/brainstormer/brainstormerContracts.js';
 
 /**
  * Returned by `ask` when stdin has reached EOF.
@@ -160,6 +165,7 @@ export async function runSessionCli(options: SessionOptions = {}): Promise<numbe
       focusItemId: null,
       author: resolveAuthor(),
       competency: DEFAULT_COMPETENCY_PROFILE,
+      decisions: [],
       exit: false,
     };
 
@@ -238,7 +244,7 @@ export async function runSessionCli(options: SessionOptions = {}): Promise<numbe
         continue;
       }
 
-      converse(orchestrator, writer, state, line.trim());
+      await converse(orchestrator, writer, ask, state, line.trim());
     }
 
     return 0;
@@ -296,23 +302,32 @@ async function declareCompetencyProfile(
  * model's own `ready_to_draft` signal only changes what is suggested next; `/crear` remains the
  * only thing that can actually draft a feature.
  */
-function converse(
+async function converse(
   orchestrator: CompassRoseOrchestrator,
   writer: TerminalWriter,
+  ask: (question: string) => Promise<string>,
   state: SessionState,
   message: string,
-): void {
+): Promise<void> {
   const humanTurn: BrainstormTurnRecord = { role: 'human', text: message, recorded_at: new Date().toISOString() };
   state.transcript = [...state.transcript, humanTurn];
   state.segment = [...state.segment, humanTurn];
 
-  const turn = orchestrator.runBrainstormTurn(state.transcript, message);
+  const turn = orchestrator.runBrainstormTurn(state.transcript, message, state.competency);
   state.transcript = [
     ...state.transcript,
     { role: 'assistant', text: turn.reply, recorded_at: new Date().toISOString() },
   ];
 
   writer.append(['', ...turn.reply.split('\n').map((replyLine) => `  ${replyLine}`), '']);
+
+  if (turn.decision) {
+    await takeDecision(orchestrator, writer, ask, state, turn.decision);
+  }
+
+  if (turn.proposed_dimension) {
+    await considerDimension(orchestrator, writer, ask, state, turn.proposed_dimension);
+  }
 
   if (turn.ready_to_draft) {
     state.proposedTitle = turn.proposed_title ?? state.proposedTitle;
@@ -321,6 +336,83 @@ function converse(
       '',
     ]);
   }
+}
+
+/**
+ * A decision the agent surfaced instead of taking.
+ *
+ * The answer becomes a human turn in the transcript, which is how it reaches both the next turn and
+ * the drafted specification -- nothing is carried in memory that is not also written down. And it
+ * is recorded separately, with who gave it, for the provenance section: declining to choose is a
+ * legitimate answer, but a specification built on it is a different artifact from one built on a
+ * human's choice, and only one of those is safe to build on without checking.
+ */
+async function takeDecision(
+  orchestrator: CompassRoseOrchestrator,
+  writer: TerminalWriter,
+  ask: (question: string) => Promise<string>,
+  state: SessionState,
+  decision: StructuredDecision,
+): Promise<void> {
+  writer.append(renderDecision(decision));
+
+  const answer = (await ask('  Number, or anything else to let me choose: ')).trim();
+  const index = Number.parseInt(answer, 10) - 1;
+  const picked = Number.isInteger(index) && index >= 0 && index < decision.options.length ? index : null;
+  const fallback = decision.recommended_index ?? 0;
+  const chosenIndex = picked ?? fallback;
+  const chosen = decision.options[chosenIndex];
+  if (!chosen) {
+    return;
+  }
+
+  state.decisions = [
+    ...state.decisions,
+    {
+      question: decision.question,
+      axis: decision.axis,
+      chosen: chosen.label,
+      decided_by: picked === null ? 'agent' : 'human',
+    },
+  ];
+
+  const spoken = picked === null
+    ? `I have no preference here, so take yours: ${chosen.label}.`
+    : `On "${decision.question}" I choose: ${chosen.label}.`;
+  state.transcript = [...state.transcript, { role: 'human', text: spoken, recorded_at: new Date().toISOString() }];
+  state.segment = [...state.segment, { role: 'human', text: spoken, recorded_at: new Date().toISOString() }];
+
+  writer.append([
+    picked === null
+      ? `  Noted as mine, not yours: ${chosen.label}.`
+      : `  Noted: ${chosen.label}.`,
+    '',
+  ]);
+}
+
+/**
+ * A dimension the agent noticed the specification has not covered.
+ *
+ * A proposal, never an addition. The checklist grows only through a keystroke, exactly like every
+ * other state transition in this system.
+ */
+async function considerDimension(
+  orchestrator: CompassRoseOrchestrator,
+  writer: TerminalWriter,
+  ask: (question: string) => Promise<string>,
+  state: SessionState,
+  proposal: { readonly name: string; readonly why: string },
+): Promise<void> {
+  writer.append(renderProposedDimension(proposal));
+
+  const answer = (await ask('  Add it to the list? (y/N): ')).trim().toLowerCase();
+  if (!/^(y|s|si|sí|yes)$/.test(answer)) {
+    writer.append(['  Left off the list.', '']);
+    return;
+  }
+
+  orchestrator.proposeDimension(proposal.name, proposal.why, state.author);
+  writer.append([`  Added. /cobertura shows where it stands.`, '']);
 }
 
 /**

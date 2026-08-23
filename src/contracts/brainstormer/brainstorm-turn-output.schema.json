@@ -1,11 +1,54 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["reply", "ready_to_draft", "proposed_title", "proposed_summary"],
+  "required": ["reply", "ready_to_draft", "proposed_title", "proposed_summary", "decision", "proposed_dimension"],
   "properties": {
     "reply": { "type": "string" },
     "ready_to_draft": { "type": "boolean" },
     "proposed_title": { "type": ["string", "null"] },
-    "proposed_summary": { "type": ["string", "null"] }
+    "proposed_summary": { "type": ["string", "null"] },
+    "decision": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["question", "axis", "options", "recommended_index"],
+          "properties": {
+            "question": { "type": "string", "maxLength": 200 },
+            "axis": { "type": "string", "enum": ["product", "architecture", "implementation"] },
+            "options": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 4,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["label", "implies"],
+                "properties": {
+                  "label": { "type": "string", "maxLength": 80 },
+                  "implies": { "type": "string", "maxLength": 200 }
+                }
+              }
+            },
+            "recommended_index": { "type": ["integer", "null"], "minimum": 0 }
+          }
+        }
+      ]
+    },
+    "proposed_dimension": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "why"],
+          "properties": {
+            "name": { "type": "string", "maxLength": 80 },
+            "why": { "type": "string", "maxLength": 240 }
+          }
+        }
+      ]
+    }
   }
 }
