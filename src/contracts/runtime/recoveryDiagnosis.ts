@@ -50,6 +50,39 @@ export interface StoredRecoveryDiagnosis {
   readonly generated_at: string;
   /** The blocker signature this diagnosis was generated for; a different blocker needs a new one. */
   readonly blocker_signature: string;
+  /**
+   * How many times `retry` has already been taken against *this* signature.
+   *
+   * Counted per signature rather than per item, and therefore reset by a different blocker, which
+   * is the honest reading: a new blocker is a new problem and deserves its own budget. Absent on a
+   * diagnosis stored before this field existed, which reads as zero.
+   */
+  readonly retries_taken?: number;
+}
+
+/**
+ * How many times a human may take the `retry` exit against one blocker signature before it stops
+ * being offered.
+ *
+ * Every other loop in this codebase declares its own ceiling; this one is the conversation's. The
+ * failure it bounds is real and cheap to reach: retry puts the item back in the queue, the run
+ * blocks it again on the same thing, and the same conversation offers the same retry. Three says
+ * "you have told me three different things and none of them was it" -- at which point the root
+ * cause is somewhere the other three exits point, not in what the agent was told.
+ */
+export const MAX_RECOVERY_RETRIES = 3;
+
+/**
+ * The exits still worth offering. Only ever narrows `retry`, and only once its budget is spent:
+ * the other three stay reachable forever, because a specification can always be wrong, a root
+ * cause can always be elsewhere, and a human can always fix something by hand.
+ */
+export function availableExits(exits: readonly RecoveryExit[], retriesTaken: number): readonly RecoveryExit[] {
+  if (retriesTaken < MAX_RECOVERY_RETRIES) {
+    return exits;
+  }
+
+  return exits.filter((exit) => exit !== 'retry');
 }
 
 export const RECOVERY_EXIT_LABELS: Readonly<Record<RecoveryExit, string>> = {

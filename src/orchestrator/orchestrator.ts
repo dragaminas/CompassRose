@@ -3232,10 +3232,60 @@ export class CompassRoseOrchestrator {
     };
   }
 
+  /**
+   * One diagnosis per blocker, and then a person.
+   *
+   * Diagnosis is the most expensive thing the runtime does that produces no work: a classification
+   * ensemble is several independent calls, and the deterministic paths that avoid it still end in
+   * either a state correction or a block. Re-running it against a blocker it has already diagnosed
+   * cannot reach a different answer -- the inputs are the same state document and the same recorded
+   * blocker -- so a second attempt is pure spend on a question already asked.
+   *
+   * Keyed by signature rather than by item, so a feature that genuinely hits a *different* blocker
+   * gets its own diagnosis. Forward progress changes the signature by construction, which is what
+   * makes this bound self-releasing rather than something a human has to clear.
+   */
+  private diagnosticAttemptsFor(featureId: string, signature: string): number {
+    const stored = this.artifacts.readJson<{ signature: string; attempts: number }>(
+      join('diagnostic-attempts', `${featureId}.json`),
+    );
+    return stored && stored.signature === signature ? stored.attempts : 0;
+  }
+
+  private recordDiagnosticAttempt(featureId: string, signature: string, attempts: number): void {
+    this.artifacts.writeJson(join('diagnostic-attempts', `${featureId}.json`), { signature, attempts });
+  }
+
   private diagnoseAndAutocorrect(featureId: string, reason: string): StepExecutionResult {
     const owner = this.resolveWorkItemContext(featureId);
+
+    const snapshot = statSafeIsFile(owner.statePath) ? this.tryReadFeatureStateSnapshot(owner) : null;
+    // A missing or unreadable state document has no signature to key on, and its own deterministic
+    // stop already handles it. Nothing to bound.
+    const signature = snapshot
+      ? (this.readRecordedBlockerProfile(snapshot) ?? this.buildBlockerProfile(snapshot, reason)).signature
+      : null;
+
+    if (signature && this.diagnosticAttemptsFor(featureId, signature) >= 1) {
+      const alreadyDiagnosed =
+        `Diagnostic/autocorrection already ran against this exact blocker (\`${signature}\`) and did not resolve it. `
+        + `Running it again would ask the same question of the same evidence; run \`/desbloquear ${featureId}\` instead.`;
+      this.recordBlockedFeature(featureId, alreadyDiagnosed, null, {
+        // The kind the diagnosis already established, carried forward rather than re-derived from
+        // this refusal text -- which describes the refusal, not the blocker.
+        kind: (snapshot ? this.readRecordedBlockerProfile(snapshot)?.kind : null) ?? 'unknown',
+        nextPlanningHint: `Feature \`${featureId}\` needs a human: open a session and run \`/desbloquear ${featureId}\`.`,
+      });
+      this.setRequiresHumanAcknowledgment(owner.statePath, true);
+      this.commitDirtyWorktreeIfConfigured(`proto: block ${featureId} after one diagnosis`);
+      return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: alreadyDiagnosed };
+    }
+
     const decision = this.runDiagnosticAutocorrection(owner, reason);
     this.writeDiagnosticArtifact(decision);
+    if (signature) {
+      this.recordDiagnosticAttempt(featureId, signature, 1);
+    }
 
     if (decision.next_step === 'correct_state') {
       if (!statSafeIsFile(owner.statePath)) {
@@ -5628,7 +5678,19 @@ export class CompassRoseOrchestrator {
     );
     writeText(owner.statePath, markdown);
     writeText(this.projectStatePath, this.updateProjectStateAfterHumanAcknowledged(id, restorationTarget));
-    this.artifacts.writeJson(join('recovery-diagnoses', `${id}.json`), null);
+
+    // Deliberately kept rather than cleared. This record is also where the retry budget lives, and
+    // clearing it here would reset that budget on every retry -- making the bound unreachable by
+    // construction. The diagnosis it holds is only ever reused for the same blocker signature
+    // (diagnoseBlockage checks), so a genuinely different blocker still gets a fresh one.
+    const artifactPath = join('recovery-diagnoses', `${id}.json`);
+    const stored = this.artifacts.readJson<StoredRecoveryDiagnosis>(artifactPath);
+    if (stored) {
+      this.artifacts.writeJson(artifactPath, {
+        ...stored,
+        retries_taken: (stored.retries_taken ?? 0) + 1,
+      } satisfies StoredRecoveryDiagnosis);
+    }
 
     if (this.options.commit) {
       this.git.commit(
@@ -5639,6 +5701,87 @@ export class CompassRoseOrchestrator {
         `proto: retry ${id} with context from a recovery conversation`,
       );
     }
+  }
+
+  /**
+   * How many times `retry` has been taken against this item's *current* blocker signature.
+   *
+   * Zero for an item blocked on something new, which is the point: the budget belongs to the
+   * problem, not to the item.
+   */
+  recoveryRetriesTaken(id: string): number {
+    const owner = this.resolveWorkItemContext(id);
+    const snapshot = this.tryReadFeatureStateSnapshot(owner);
+    const blocker = snapshot ? this.readRecordedBlockerProfile(snapshot) : null;
+    if (!blocker) {
+      return 0;
+    }
+
+    const stored = this.artifacts.readJson<StoredRecoveryDiagnosis>(join('recovery-diagnoses', `${id}.json`));
+    return stored && stored.blocker_signature === blocker.signature ? stored.retries_taken ?? 0 : 0;
+  }
+
+  /**
+   * The `open_fix` exit: the human recognized the root cause as living somewhere else entirely.
+   *
+   * Reuses the machinery a systemic blocker already files itself through, with one difference that
+   * matters -- the evidence here is what a person said, recorded as theirs. A fix filed from a
+   * conversation is not the runtime's diagnosis and must not read like one.
+   *
+   * The item is then blocked on that fix, which makes it invisible to both scheduler passes until
+   * the fix reaches `completed`, at which point `resumeWorkItemBlockedOnFix` restores it with no
+   * further human action. That resume path is why this exit is worth having over "resolve by hand":
+   * the human describes the problem once and never has to come back to this item.
+   */
+  openFixFromConversation(id: string, title: string, description: string): string {
+    const owner = this.resolveWorkItemContext(id);
+    const snapshot = this.tryReadFeatureStateSnapshot(owner);
+    if (!snapshot) {
+      throw new Error(`Cannot open a fix for ${id}: its state document is missing or unreadable.`);
+    }
+
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
+    if (trimmedTitle.length === 0 || trimmedDescription.length === 0) {
+      throw new Error('A fix needs both a title and a description of what is wrong.');
+    }
+
+    const fixId = this.fileOrReuseBlockingFix({
+      // Signed by the human and the item, not by a blocker profile: two people describing the same
+      // root cause from two different blocked items should not silently collapse into one fix.
+      signature: buildBlockerSignature('unknown', 'recovery-conversation', trimmedTitle, [id]),
+      titleSubject: trimmedTitle,
+      severity: 'critical',
+      whatHappened: trimmedDescription,
+      evidenceLines: [
+        `- Reported by a human during a recovery conversation about \`${id}\`.`,
+        `- ${trimmedDescription}`,
+      ],
+      outlineStep: `Diagnosing and repairing: ${trimmedTitle}.`,
+      scopeExcludes: `This fix repairs the reported defect only. It never continues \`${id}\`'s own work.`,
+      problem: trimmedDescription,
+      acceptanceCriterion: `The defect described in \`${trimmedTitle}\` no longer reproduces.`,
+      completionCriterion: `The defect is repaired, and every feature/fix blocked on this fix id can resume.`,
+      currentReality: trimmedDescription,
+      nextPlanningHint: `diagnose and repair: ${trimmedTitle}.`,
+    });
+
+    this.setBlockedOnFix(owner, fixId);
+    // The item was blocked_on_human; it is now blocked_on_fix, which resolves itself. Clearing the
+    // marker is what lets that happen without the human coming back to acknowledge anything.
+    this.setRequiresHumanAcknowledgment(owner.statePath, false);
+    writeText(
+      owner.statePath,
+      upsertParagraphInSection(
+        readUtf8(owner.statePath),
+        'Current Reality',
+        'Recovery conversation',
+        `Recovery conversation (${new Date().toISOString().slice(0, 10)}): blocked on fix \`${fixId}\` -- ${trimmedDescription}`,
+      ),
+    );
+
+    this.commitDirtyWorktreeIfConfigured(`proto: open fix ${fixId} for ${id} from a recovery conversation`);
+    return fixId;
   }
 
   /**

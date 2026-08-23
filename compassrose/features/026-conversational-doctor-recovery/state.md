@@ -46,6 +46,19 @@ delivering it first meant the new way out existed before the old machinery was d
 - the `correct_specification` exit (`correctSpecification`, `invalidatedWorkFor`): names exactly what will be superseded, requires an explicit `listo`, refuses to proceed without a recorded reason, marks outstanding task requests superseded, and returns the item to pending specification. Nothing is deleted from git.
 - the `resolve_by_hand` exit, reusing `acknowledgeBlocker`.
 - `tests/recoveryConversation.test.ts`: 10 tests over exit exhaustiveness, ordering-not-narrowing, and the diagnosis rendering.
+
+- the `open_fix` exit (`openFixFromConversation`): files a fix from what the human said, records the evidence as *theirs* rather than as the runtime's diagnosis, and blocks the item on it. The item becomes `blocked_on_fix` rather than `blocked_on_human`, which is the whole reason this exit beats "resolve by hand": when the fix completes, `resumeWorkItemBlockedOnFix` restores the item with no further human action, so the person describes the problem once and never comes back to it.
+- **the conversation's ceiling.** `retry` is the only exit that can be taken again and again against the same blocker: it puts the item back in the queue, the run blocks it on the same thing, and the same menu returns. After three it stops being offered — if three different accounts did not resolve it, the root cause is where the other three exits point. Counted per blocker *signature*, so forward progress releases the budget by construction rather than a human having to clear it.
+- **one diagnosis per blocker.** Re-running diagnosis against a blocker it has already diagnosed cannot reach a different answer — same state document, same recorded blocker — so a second attempt is pure spend on a question already asked. A repeat now blocks for the conversation instead, without touching an agent. Keyed by signature for the same self-releasing reason.
+- `tests/recoveryBounds.test.ts`: 9 tests over both budgets and the new exit.
+- `tests/taskPlanValidationWiring.test.ts`: 3 tests restoring the wiring coverage this feature's own deletion removed — that a planner's output actually passes through `sanitizeAllowedPaths`, `validateTaskDeliverables`, and `assertTaskIdIsUnused` before anything is written.
+
+### One thing the retry budget forced
+
+`retryWithContext` cleared the stored diagnosis. That was harmless while nothing else lived in that
+record; the budget lives there now, so clearing it would have reset the count on every retry and
+made the bound unreachable by construction. It bumps the count and keeps the record instead — safe
+because `diagnoseBlockage` only ever reuses a stored diagnosis whose signature still matches.
 - **automatic repair is no longer attempted.** The decision that used to plan a repair task blocks the item instead, marks it as needing a human, and points at `/desbloquear`. The blocked outcome means the run sets it aside and carries on rather than grinding there.
 - **the pipeline is deleted, not merely unreachable** (~830 lines from `orchestrator.ts` alone). Gone: `planDoctorRecoveryTask` with its two bounded-retry guards and three error classes, `runDoctorRecoveryTask`/`executeDoctorRecoveryTask`/`stopAfterDoctorRecoveryFailure`, both restoration writers and their `updateFeatureStateAfterUnblock`/`updateProjectStateAfterUnblock` aliases, the `unblock_task` and `doctor_recovery_task` step kinds, the `unblock_pending` lifecycle state, `DoctorRecoveryTaskMetadata`/`UnblockTaskMetadata` with their parser and renderer, five contract documents, and the `active_unblock_task` / `last_unblock_result` / `doctor_recovery_attempts` / `doctor_recovery_lifetime_count` state fields with the two config limits that bounded them.
 - **an honest name for what is left.** `plan_doctor_recovery` named an action the runtime no longer takes, so the decision value is `block_for_conversation` and its interface mode is `recovery_conversation`. Both older spellings still normalize forward, because diagnostic artifacts on disk still carry them.
@@ -77,18 +90,15 @@ value or a fixture shedding a retired key.
 
 ## Remaining Deliverables
 
-- the `open_fix` exit: the one of the four that still needs its own wiring. The `blocked_on_fix` machinery it will reuse already exists; what is missing is filing a fix from inside the conversation.
-- bounding diagnostic autocorrection to a single attempt
-- the conversation's turn bound
-- wiring coverage for planner-output sanitization. `taskContentValidationWiring.test.ts` proved that `sanitizeAllowedPaths` and `validateQualityGateRefs` were actually *called*, and it proved it through `planDoctorRecoveryTask`. The helpers stay covered by `taskContentValidation.test.ts` and both are still called (by `planTask`/`planFixTask` and the correction path), but nothing asserts that wiring any more. Recorded as a real gap rather than quietly reported as covered.
+- `validateQualityGateRefs` is called on the reviewer-authored correction task inside `reviewTask`, which has no seam smaller than a full review flow. The helper stays covered by `taskContentValidation.test.ts`; that one call site is not covered as wiring. The three validators on the planning path now are.
 
 ## Outline Progress
 
-- 1. Remove the doctor-recovery task pipeline and bound diagnostic autocorrection to one attempt: pipeline removed; the autocorrection bound is not
+- 1. Remove the doctor-recovery task pipeline and bound diagnostic autocorrection to one attempt: complete
 - 2. Add the diagnosis contract, its generation, and its persistence: complete
-- 3. Build the recovery conversation loop with its bound and resumability: in progress
+- 3. Build the recovery conversation loop with its bound and resumability: complete
 - 4. Implement the retry-with-context and specification-correction exits: complete
-- 5. Wire the existing fix and acknowledgment machinery as the third and fourth exits: in progress
+- 5. Wire the existing fix and acknowledgment machinery as the third and fourth exits: complete
 - 6. Migrate feature `003-doctor-command` off the removed recovery model: complete (that feature was closed during the specification round itself)
 
 ## Blocked By
@@ -107,10 +117,9 @@ Formalized and validated in the specification round of 2026-08-22.
 
 ## Known Gaps
 
-- The recovery conversation has no declared turn bound yet. Every other loop in this codebase declares its own ceiling; this one does not, and should.
-- Diagnostic autocorrection is not yet bounded to a single attempt, though the chain it used to feed no longer exists.
+- `validateQualityGateRefs`'s one remaining call site (the reviewer-authored correction task) has no seam smaller than a full review flow, so it is covered as a helper but not as wiring.
 - `recoveryLessons.ts` and `recoveryHistoryCompaction.ts` were listed here as unreachable. They are not: both are still called from the surviving planner, implementer, and reviewer paths. Checked before deleting rather than after.
 
 ## Next Planning Hint
 
-Wire the `open_fix` exit, then bound the conversation's turns and diagnostic autocorrection's attempts.
+Nothing outstanding. All four exits are wired and both loops declare their ceilings.

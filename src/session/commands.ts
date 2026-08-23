@@ -15,7 +15,12 @@ import { runValidationLoopForItem } from '../cli/validationLoop.js';
 import { renderFailureView } from './render/failure.js';
 import { renderDiagnosis, renderExitMenu, renderInvalidationWarning } from './render/diagnosis.js';
 import { renderCoverageReport } from './render/coverage.js';
-import { orderedExitsFor, type RecoveryExit } from '../contracts/runtime/recoveryDiagnosis.js';
+import {
+  MAX_RECOVERY_RETRIES,
+  availableExits,
+  orderedExitsFor,
+  type RecoveryExit,
+} from '../contracts/runtime/recoveryDiagnosis.js';
 import type { CompassRoseOrchestrator } from '../orchestrator/orchestrator.js';
 import type { TerminalWriter } from './terminalWriter.js';
 import type { BrainstormTurnRecord } from '../contracts/brainstormer/brainstormerContracts.js';
@@ -177,8 +182,22 @@ const unblockCommand: SessionCommand = {
 async function offerExits(
   context: SessionContext,
   itemId: string,
-  exits: readonly RecoveryExit[],
+  offered: readonly RecoveryExit[],
 ): Promise<void> {
+  // The conversation's own ceiling. Retry is the only exit that can be taken again and again
+  // against the same blocker -- it puts the item back in the queue, the run blocks it on the same
+  // thing, and the same menu comes back. After three, what the agent was told is not the problem.
+  const retriesTaken = context.orchestrator.recoveryRetriesTaken(itemId);
+  const exits = availableExits(offered, retriesTaken);
+  if (exits.length < offered.length) {
+    print(context, [
+      '',
+      `  Retried ${retriesTaken} times on this blocker already, so I am not offering it a fourth.`,
+      '  If three different accounts did not resolve it, the root cause is somewhere the other',
+      '  exits point.',
+    ]);
+  }
+
   print(context, renderExitMenu(exits));
 
   const answer = (await context.ask('  Number, or anything else to leave it blocked: ')).trim();
@@ -198,7 +217,15 @@ async function offerExits(
     }
 
     context.orchestrator.retryWithContext(itemId, humanContext);
-    print(context, ['', `  Recorded, and ${itemId} is back in the queue. /run picks it up.`, '']);
+    const remaining = MAX_RECOVERY_RETRIES - (retriesTaken + 1);
+    print(context, [
+      '',
+      `  Recorded, and ${itemId} is back in the queue. /run picks it up.`,
+      ...(remaining > 0
+        ? [`  ${remaining} retr${remaining === 1 ? 'y' : 'ies'} left on this blocker before I stop offering it.`]
+        : ['  That was the last retry I will offer on this blocker.']),
+      '',
+    ]);
     return;
   }
 
@@ -229,11 +256,24 @@ async function offerExits(
   }
 
   if (chosen === 'open_fix') {
+    const title = (await context.ask('  In a few words, what is broken? ')).trim();
+    if (title.length === 0) {
+      print(context, ['', `  Nothing to file. ${itemId} stays blocked.`, '']);
+      return;
+    }
+
+    const description = (await context.ask('  And what should whoever picks it up know? ')).trim();
+    if (description.length === 0) {
+      print(context, ['', '  A title alone is not a fix anyone can work from. Cancelled.', '']);
+      return;
+    }
+
+    const fixId = context.orchestrator.openFixFromConversation(itemId, title, description);
     print(context, [
       '',
-      '  Filing a fix from a recovery conversation is not built yet; it is the one exit of the four',
-      `  that still needs its own wiring. For now: describe the fix to me and /crear it, then`,
-      `  /desbloquear ${itemId} again and take "resolve by hand" once the fix lands.`,
+      `  Filed \`${fixId}\`, and ${itemId} now waits on it.`,
+      `  You do not have to come back here: when \`${fixId}\` completes, ${itemId} resumes by itself.`,
+      `  Talk \`${fixId}\` through with me and /crear when it is settled.`,
       '',
     ]);
     return;
