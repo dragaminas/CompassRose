@@ -46,7 +46,14 @@ import type { RunObserver } from '../contracts/runtime/runObserver.js';
 import { allCriteriaMet, unmetCriteria } from '../contracts/runtime/acceptanceCriteria.js';
 import type { RecoveryDiagnosis, StoredRecoveryDiagnosis } from '../contracts/runtime/recoveryDiagnosis.js';
 import { runSmokeGate } from './smokeGate.js';
-import { buildManifest, manifestEntry, manifestFitsBudget, mergeExploration } from './contextManifest.js';
+import {
+  buildManifest,
+  manifestEntry,
+  manifestFitsBudget,
+  mergeExploration,
+  renderManifestForPrompt,
+  type ManifestEntryKind,
+} from './contextManifest.js';
 import { buildCodeInventory, deriveGateCandidates, detectProjectFacts, signalsChanged } from '../project/detectProject.js';
 import type { InventoryGroup, SignalFingerprint } from '../project/detectProject.js';
 import { EMPTY_PROJECT_FACTS, mergeDetectedFacts, parseProjectFactsDocument, renderProjectFactsDocument } from '../project/projectFacts.js';
@@ -170,6 +177,7 @@ import {
 import { buildImplementerPrompt } from './promptBuilding.js';
 import { compactRecoveryHistorySection } from './recoveryHistoryCompaction.js';
 import { renderTaskCommitMessage, type TaskCommitTrailEntry } from './taskCommitTrail.js';
+import { MAX_EXPLORATION_PATHS, parseImplementerReport } from './implementerReport.js';
 import {
   buildImplementationDiagnostics,
   buildImplementationErrorMessage,
@@ -2909,22 +2917,34 @@ export class CompassRoseOrchestrator {
       `Plan the next task for feature \`${featureId}\`.`,
       '',
       'Read only:',
-      '- `src/contracts/planner/task-planning-prompt.md`',
-      '- `src/contracts/planner/input.md`',
-      '- `src/contracts/planner/output.md`',
-      '- `src/contracts/planner/feature-scope-guard.md`',
-      '- `src/contracts/state/feature-state.md`',
-      '- `src/contracts/task/task.md`',
-      `- \`${relativePath(this.repositoryRoot, feature.featurePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, feature.architecturePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, feature.statePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, this.projectStatePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, this.configurationPath)}\``,
-      '- `src/contracts/runtime/operation-loop.md`',
-      '- `src/config/`',
-      '- `src/doctor/`',
-      '- `src/cli/main.ts`',
-      '- `tests/`',
+      ...renderManifestForPrompt(this.buildPlannerManifest(
+        featureId,
+        [
+          { path: relativePath(this.repositoryRoot, feature.featurePath), kind: 'specification', reason: 'what this feature is for' },
+          { path: relativePath(this.repositoryRoot, feature.architecturePath), kind: 'architecture', reason: 'the boundaries this feature declared' },
+          { path: relativePath(this.repositoryRoot, feature.statePath), kind: 'state', reason: 'what previous tasks left for this one' },
+          { path: relativePath(this.repositoryRoot, this.projectStatePath), kind: 'state', reason: 'where the project as a whole stands' },
+          { path: relativePath(this.repositoryRoot, this.configurationPath), kind: 'state', reason: 'the policies this task must satisfy' },
+          // Carried over verbatim from the hand-written block this manifest replaced. Both halves
+          // are wrong and both are preserved deliberately: a directory entry measures as zero
+          // characters, so it is declared without being bounded; and these are CompassRose's own
+          // paths in a prompt any project's planner will receive. Narrowing them changes what a
+          // planner can see, which is not this feature's call to make silently.
+          { path: 'src/config/', kind: 'code', reason: 'where configuration lives (directory; not measurable)' },
+          { path: 'src/doctor/', kind: 'code', reason: 'where diagnostics live (directory; not measurable)' },
+          { path: 'src/cli/main.ts', kind: 'code', reason: 'the CLI entry point' },
+          { path: 'tests/', kind: 'code', reason: 'where tests live (directory; not measurable)' },
+        ],
+        [
+          'src/contracts/planner/task-planning-prompt.md',
+          'src/contracts/planner/input.md',
+          'src/contracts/planner/output.md',
+          'src/contracts/planner/feature-scope-guard.md',
+          'src/contracts/state/feature-state.md',
+          'src/contracts/task/task.md',
+          'src/contracts/runtime/operation-loop.md',
+        ],
+      )),
       ...this.buildRecoveryLessonPromptLines(featureId),
       '',
       'Sibling features (do not duplicate their scope; name one in `scope_justification.belongs_to_other_feature` if the task you would otherwise plan actually belongs to it):',
@@ -4222,25 +4242,32 @@ export class CompassRoseOrchestrator {
       `Review subtask \`${taskId}\` for feature \`${task.featureId}\`.`,
       '',
       'Read only:',
-      '- `src/contracts/reviewer/review-prompt.md`',
-      '- `src/contracts/reviewer/input.md`',
-      '- `src/contracts/reviewer/output.md`',
-      stateCorrection ? '- `src/contracts/task/state-correction-task.md`' : '- `src/contracts/task/correction-task.md`',
+      ...renderManifestForPrompt(this.buildReviewerManifest(
+        task,
+        owner,
+        [
+          {
+            path: stateCorrection ? 'src/contracts/task/state-correction-task.md' : 'src/contracts/task/correction-task.md',
+            reason: stateCorrection ? 'this is a state repair task' : 'the shape of any correction you request',
+          },
+          ...(owner.architecturePath
+            ? [{ path: relativePath(this.repositoryRoot, owner.architecturePath), reason: 'the boundaries this work item declared' }]
+            : []),
+          { path: relativePath(this.repositoryRoot, this.configurationPath), reason: 'the policies the attempt had to satisfy' },
+          ...reviewContextPaths.map((item) => ({ path: item, reason: 'named by the task, and the diff is empty' })),
+        ],
+        implementationContextPaths,
+      )),
+      // Outside the manifest because they are not repository files: three temporary files the
+      // runtime wrote for this call alone, holding the diff, the objective gate results, and the
+      // implementation attempt. A manifest names what a run can be reproduced from; these are the
+      // run's own inputs, and they are already reproducible from the artifact store.
+      `- \`${diffPath}\` — the submitted diff`,
+      `- \`${implementationPath}\` — the implementation attempt as the runtime recorded it`,
       task.reviewableDiffHandoff.requiredChangedFiles.length > 0
         ? `- Reviewable diff handoff expects these changed files: ${task.reviewableDiffHandoff.requiredChangedFiles.map((item) => `\`${item}\``).join(', ')}.`
         : '- Reviewable diff handoff does not require a specific changed file list.',
-      implementationContextPaths.length > 0
-        ? `- Implementation context artifacts for this attempt: ${implementationContextPaths.map((item) => `\`${item}\``).join(', ')}.`
-        : '- No implementation context artifacts were found for this attempt.',
       '- Read the implementer context artifacts before deciding whether the task was already satisfied or the context was too restrictive.',
-      ...reviewContextPaths.map((item) => `- \`${item}\``),
-      `- \`${relativePath(this.repositoryRoot, task.path)}\``,
-      `- \`${relativePath(this.repositoryRoot, owner.definitionPath)}\``,
-      ...(owner.architecturePath ? [`- \`${relativePath(this.repositoryRoot, owner.architecturePath)}\``] : []),
-      `- \`${relativePath(this.repositoryRoot, owner.statePath)}\``,
-      `- \`${relativePath(this.repositoryRoot, this.configurationPath)}\``,
-      `- \`${diffPath}\``,
-      `- \`${implementationPath}\``,
       '- `implementation.implementation_notes` inside the implementation artifact (the field is named `implementation_notes`, not `notes`); if it is null or empty, treat that as an execution defect and report it explicitly.',
       `- \`${qualityPath}\``,
       '- if needed, only the files changed in the diff',
@@ -4693,6 +4720,120 @@ export class CompassRoseOrchestrator {
    * attempt's discovery. Never files another task's exploration: that would let one task's reading
    * silently inflate every later one.
    */
+  /**
+   * Every manifest is recorded, because "two runs of the same task against the same repository
+   * state produce identical manifests" is only checkable if the first run left one behind.
+   */
+  private recordManifest(manifest: ContextManifest): ContextManifest {
+    this.artifacts.writeJson(join('manifests', `${manifest.taskId}.${manifest.role}.json`), manifest);
+    return manifest;
+  }
+
+  /**
+   * What the planner is entitled to read.
+   *
+   * Documents, contracts, and state -- the material a plan is derived from. Notably not the diff of
+   * anything: a planner that reads code plans against what exists rather than against what the
+   * specification asks for, which is how a feature quietly becomes a description of its own
+   * implementation.
+   */
+  private buildPlannerManifest(
+    workItemId: string,
+    documents: readonly { readonly path: string; readonly kind: ManifestEntryKind; readonly reason: string }[],
+    contracts: readonly string[],
+  ): ContextManifest {
+    return this.recordManifest(buildManifest({
+      repositoryRoot: this.repositoryRoot,
+      taskId: workItemId,
+      role: 'planner',
+      entries: [
+        ...contracts.map((path) => manifestEntry('contract', path, 'the contract this call must satisfy')),
+        ...documents.map((document) => manifestEntry(document.kind, document.path, document.reason)),
+      ],
+      budget: this.contextBudgetCharacters,
+    }));
+  }
+
+  /**
+   * What the reviewer is entitled to read.
+   *
+   * The submitted diff, the task it was meant to satisfy, and the objective results the runtime
+   * already computed -- plus, deliberately, the implementer's own recorded context. That last one
+   * looks like the thing a bounded reviewer should not have, and it is here for a stated reason:
+   * without it the reviewer cannot tell "the implementer failed" from "the implementer was given
+   * too little", and those two need different outcomes. See src/contracts/reviewer/input.md.
+   */
+  private buildReviewerManifest(
+    task: ParsedTaskDocument,
+    owner: WorkItemContext,
+    evidence: readonly { readonly path: string; readonly reason: string }[],
+    implementationContextPaths: readonly string[],
+  ): ContextManifest {
+    return this.recordManifest(buildManifest({
+      repositoryRoot: this.repositoryRoot,
+      taskId: task.taskId,
+      role: 'reviewer',
+      entries: [
+        manifestEntry('contract', 'src/contracts/reviewer/review-prompt.md', 'the reviewer contract'),
+        manifestEntry('contract', 'src/contracts/reviewer/output.md', 'the shape this call must return'),
+        manifestEntry('task', relativePath(this.repositoryRoot, task.path), 'the task the diff was meant to satisfy'),
+        manifestEntry('specification', relativePath(this.repositoryRoot, owner.definitionPath), 'the acceptance criteria to judge against'),
+        manifestEntry('state', relativePath(this.repositoryRoot, owner.statePath), 'what this work item recorded before the attempt'),
+        ...evidence.map((item) => manifestEntry('code', item.path, item.reason)),
+        ...implementationContextPaths.map((path) =>
+          manifestEntry('code', path, 'what the implementer was actually given, to tell a failure from a constraint'),
+        ),
+      ],
+      budget: this.contextBudgetCharacters,
+    }));
+  }
+
+  /**
+   * The implementer said what it read past its manifest and what the next task needs to know; this
+   * is where both become durable.
+   *
+   * Exploration goes to the artifact store keyed by task, which is exactly where
+   * buildImplementerManifest reads it back from -- so it reaches the *next attempt at this task*
+   * and no other. Letting it reach a different task would be the implicit cross-task carry-over
+   * this feature exists to remove.
+   *
+   * The hand-off goes into the feature state document, because that is the one place a later task
+   * genuinely reads: every manifest already names it. A hand-off held anywhere else would be a fact
+   * the system depends on that lives outside the repository.
+   */
+  private applyImplementerReport(task: ParsedTaskDocument, owner: WorkItemContext, rawOutput: string): void {
+    const report = parseImplementerReport(rawOutput);
+
+    if (report.readBeyondManifest.length > 0) {
+      this.artifacts.writeJson(join('exploration', `${task.taskId}.json`), {
+        taskId: task.taskId,
+        paths: report.readBeyondManifest,
+        recordedAt: new Date().toISOString(),
+      } satisfies ExplorationRecord);
+    }
+
+    if (report.explorationCapped) {
+      // Worth saying out loud rather than silently truncating: a task that had to read past the
+      // allowance is a task whose declared context was wrong, and that is a planning defect.
+      console.error(
+        `Implementation for ${task.taskId} reported reading more than ${MAX_EXPLORATION_PATHS} files beyond its manifest; `
+        + "only the first were recorded. The task's declared context is too narrow for what it actually needs.",
+      );
+    }
+
+    if (report.handOff && statSafeIsFile(owner.statePath)) {
+      writeText(
+        owner.statePath,
+        upsertParagraphInSection(
+          readUtf8(owner.statePath),
+          'Current Reality',
+          `Hand-off from ${task.taskId}`,
+          `Hand-off from ${task.taskId}: ${report.handOff}`,
+        ),
+      );
+    }
+  }
+
   private buildImplementerManifest(task: ParsedTaskDocument, stateCorrection: StateCorrectionTask | null): ContextManifest {
     const owner = this.resolveWorkItemContext(task.featureId);
     const baseEntries: ManifestEntry[] = [
@@ -4843,6 +4984,8 @@ export class CompassRoseOrchestrator {
       correction ? 'corrected' : 'implemented',
       `${this.options.implementer}, ${finalAttempt.changed_files.length} file(s) changed${retriedAfterPartialChanges ? ', after one retry' : ''}`,
     );
+
+    this.applyImplementerReport(task, owner, finalAttempt.raw_output);
 
     const qualityResults = this.runQualityGates(task);
     this.throwIfControlledStopRequested();
@@ -7388,20 +7531,20 @@ export class CompassRoseOrchestrator {
       .map((entry) => this.artifacts.readJson<RecoveryLesson>(join('recovery-lessons', entry.name)))
       .filter((lesson): lesson is RecoveryLesson => lesson !== null && lesson.feature_id === featureId);
 
+    // 027-bounded-work-item-context: same anchor only, where it used to be the whole feature.
+    // 'no task receives a summary, transcript, or history of prior tasks' is an acceptance
+    // criterion, and up to five lessons drawn from every task the feature ever had is exactly such
+    // a history -- an unbounded one, replayed verbatim into every later prompt. Attempts at the
+    // *same* task are not another task's history; they are this one's own, which is what a lesson
+    // is for. What genuinely needs to cross a task boundary now crosses it explicitly, as the
+    // hand-off the implementer contract requires (see applyImplementerReport).
     const sameAnchor = activeTaskId ? primaryTaskAnchorFromId(activeTaskId) : null;
-    lessons.sort((a, b) => {
-      if (sameAnchor) {
-        const aMatches = primaryTaskAnchorFromId(a.task_id) === sameAnchor;
-        const bMatches = primaryTaskAnchorFromId(b.task_id) === sameAnchor;
-        if (aMatches !== bMatches) {
-          return aMatches ? -1 : 1;
-        }
-      }
+    const scoped = sameAnchor
+      ? lessons.filter((lesson) => primaryTaskAnchorFromId(lesson.task_id) === sameAnchor)
+      : [];
+    scoped.sort((a, b) => b.created_at.localeCompare(a.created_at));
 
-      return b.created_at.localeCompare(a.created_at);
-    });
-
-    return lessons.slice(0, limit);
+    return scoped.slice(0, limit);
   }
 
   private loadLatestDiagnostic(featureId: string): DiagnosticAutocorrectionDecision | null {

@@ -56,6 +56,7 @@ export function buildImplementerPrompt(
     '- Keep the change minimal and provider-independent.',
     '- If the task or any recovery-lesson context above references a mechanism, manifest, validator, or field that is not in the contracts you were told to read, report that as a task-interface defect in your notes; do not fabricate placeholder files or evidence to satisfy it.',
     '- End every attempt with a short `## Implementation Notes` section written in your own final reply text, not only inside an edited file; the runtime reads it from what you say, not from a diff.',
+    '- Inside it, always include `Read beyond manifest: <paths, or none>` and `Next task needs to know: <one sentence, or none>`. The first is how the next attempt at this task inherits what you had to look up; the second is the only thing that reaches a later task, since no task is given a history of prior ones.',
     '- If you changed repository files, justify the change briefly and cite the evidence.',
     '- If you made no repository changes because the task already appears satisfied, start the notes with the line `Status: already_complete` and cite the repository evidence that already satisfies it; the runtime relies on that exact line to tell a satisfied task apart from a stalled one.',
     '- If you made no repository changes because you are blocked, explain why and cite the evidence; do not use the `Status: already_complete` line unless the requested behavior genuinely already exists.',

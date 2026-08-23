@@ -256,43 +256,56 @@ afterEach(() => {
 });
 
 describe('loadRecentRecoveryLessons / buildRecoveryLessonPromptLines', () => {
-  test('surfaces lessons from unrelated task anchors, not just the most recently recorded one', () => {
+  test('does not surface a lesson from another task, however recent', () => {
+    // 027-bounded-work-item-context: this used to return them, and that was the point --
+    // "no task receives a summary, transcript, or history of prior tasks" made it a defect.
     workspace = createWorkspace('fixture-feature', 'F001-T01');
     seedRecoveryLesson(workspace.root, 'F002-T09', { created_at: '2026-01-01T00:00:00.000Z' });
     seedRecoveryLesson(workspace.root, 'F003-T10', { created_at: '2026-02-01T00:00:00.000Z' });
 
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
-    const lessons = asAccess(orchestrator).loadRecentRecoveryLessons('fixture-feature');
 
-    expect(lessons.map((lesson) => lesson.task_id).sort()).toEqual(['F002-T09', 'F003-T10']);
+    expect(asAccess(orchestrator).loadRecentRecoveryLessons('fixture-feature', 'F001-T01')).toEqual([]);
   });
 
-  test('sorts a lesson matching the active task anchor first, without discarding the others', () => {
+  test('keeps every lesson from this task\'s own earlier attempts', () => {
+    // A correction or retry of the same task is not another task's history; it is this one's own,
+    // which is the whole reason a lesson exists.
     workspace = createWorkspace('fixture-feature', 'F001-T01');
     seedRecoveryLesson(workspace.root, 'F002-T09', { created_at: '2026-02-01T00:00:00.000Z' });
     seedRecoveryLesson(workspace.root, 'F001-T01-U1', { created_at: '2026-01-01T00:00:00.000Z' });
+    seedRecoveryLesson(workspace.root, 'F001-T01-C1', { created_at: '2026-03-01T00:00:00.000Z' });
 
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
     const lessons = asAccess(orchestrator).loadRecentRecoveryLessons('fixture-feature', 'F001-T01');
 
-    expect(lessons[0]?.task_id).toBe('F001-T01-U1');
-    expect(lessons).toHaveLength(2);
+    expect(lessons.map((lesson) => lesson.task_id)).toEqual(['F001-T01-C1', 'F001-T01-U1']);
   });
 
-  test('calls out a recurring category across unrelated anchors in the prompt lines', () => {
+  test('surfaces nothing at all when no active task scopes the request', () => {
+    // Without an anchor there is no "this task", so every lesson on file would be another task's.
     workspace = createWorkspace('fixture-feature', 'F001-T01');
-    seedRecoveryLesson(workspace.root, 'F002-T09', { category: 'scope_violation' });
-    seedRecoveryLesson(workspace.root, 'F003-T10', { category: 'scope_violation' });
-    seedRecoveryLesson(workspace.root, 'F004-T11', { category: 'malformed_quality_gate' });
+    seedRecoveryLesson(workspace.root, 'F002-T09', {});
 
     const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
-    const lines = asAccess(orchestrator).buildRecoveryLessonPromptLines('fixture-feature');
+
+    expect(asAccess(orchestrator).loadRecentRecoveryLessons('fixture-feature')).toEqual([]);
+  });
+
+  test('calls out a recurring category across this task\'s own attempts', () => {
+    workspace = createWorkspace('fixture-feature', 'F001-T01');
+    seedRecoveryLesson(workspace.root, 'F001-T01-C1', { category: 'scope_violation' });
+    seedRecoveryLesson(workspace.root, 'F001-T01-C2', { category: 'scope_violation' });
+    seedRecoveryLesson(workspace.root, 'F001-T01-U1', { category: 'malformed_quality_gate' });
+
+    const orchestrator = new CompassRoseOrchestrator({ loop: false, commit: false, cwd: workspace.root, implementer: 'opencode' });
+    const lines = asAccess(orchestrator).buildRecoveryLessonPromptLines('fixture-feature', 'F001-T01');
 
     expect(lines.some((line) => line.includes('recurring_category') && line.includes('scope_violation'))).toBe(true);
     expect(lines.filter((line) => line.includes('lesson for task_id'))).toHaveLength(3);
   });
 
-  test('a recent lesson from an unrelated anchor reaches the reviewer prompt', () => {
+  test('a lesson from an unrelated anchor never reaches the reviewer prompt', () => {
     workspace = createWorkspace('fixture-feature', 'F001-T01');
     seedRecoveryLesson(workspace.root, 'F009-T77', { summary: 'A completely unrelated prior chain leaked scope.' });
 
@@ -304,8 +317,7 @@ describe('loadRecentRecoveryLessons / buildRecoveryLessonPromptLines', () => {
     expect(result.exitCode).toBe(0);
 
     const prompt = findPromptFile(workspace.root, 'reviewer-subtask');
-    expect(prompt).toContain('Recent recovery lessons for this feature');
-    expect(prompt).toContain('A completely unrelated prior chain leaked scope.');
-    expect(prompt).toContain('F009-T77');
+    expect(prompt).not.toContain('A completely unrelated prior chain leaked scope.');
+    expect(prompt).not.toContain('F009-T77');
   });
 });

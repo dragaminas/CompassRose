@@ -33,6 +33,9 @@ The implementer must:
 - start with the task's `first_executable_step`
 - produce at least one item of `minimum_progress_evidence`
 - end every attempt with a short `## Implementation Notes` section that justifies the outcome, written in your own final reply text rather than only inside an edited file — the runtime parses it from what you say, not from a diff
+- inside that section, always include these two lines, even when the answer to either is `none`:
+  - `Read beyond manifest: <comma-separated paths, or none>` — every file you opened that the `Read only:` block did not name. The manifest is a floor, not a cage: reading past it is allowed, and this is how the next attempt at this task inherits what you needed. Unreported, it is lost, and the next attempt starts as blind as you did.
+  - `Next task needs to know: <one sentence, or none>` — the one fact a later task working on this same feature could not derive from the repository. No task is given a summary or history of prior tasks, so this line is the only thing that crosses that boundary. Keep it to a fact, not a narrative.
 - stay within allowed paths
 - respect forbidden paths
 - treat this repository as pure ESM (`"type": "module"`): never use `require()`, `module.exports`, `__dirname`, or `__filename` in `src/`; use `import`/`export` and `import.meta.url` instead — vitest's CJS interop tolerates `require()` in a `.ts` file, but the real CLI run under a real ESM loader does not, and will crash
