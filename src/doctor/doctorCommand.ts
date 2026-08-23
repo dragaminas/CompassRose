@@ -12,6 +12,8 @@ import { buildFeaturesRoot, buildFixesRoot, getBootstrapConfigPath, resolveCompa
 import { renderBlockerCard, scanBlockedWorkItems } from '../orchestrator/blockerCard.js';
 import { readRecordString } from '../orchestrator/runtimeHelpers.js';
 import type { ProjectConfiguration } from '../config/configTypes.js';
+import { describeExecutionTrust, resolveExecutionTrust } from '../config/executionTrust.js';
+import { inspectAgentHomeIsolation } from './agentHomeIsolation.js';
 
 export function runDoctor(options: DoctorOptions = {}): DoctorReport {
   const workingDirectory = options.cwd ?? process.cwd();
@@ -142,8 +144,41 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
   }
 
   checks.push(buildBlockedWorkCheck(repositoryRoot, configurationResult.value));
+  checks.push(buildExecutionTrustCheck(configurationResult.value));
 
   return buildDiagnosticReport(context);
+}
+
+/**
+ * What this repository permits a run to do to it, and whether the isolation rule is holding
+ * (030-execution-trust).
+ *
+ * `info`, never `fail`. A stale trust grant in an external tool's own configuration is not a defect
+ * in *this* repository's setup, and doctor's readiness is about whether this repository is ready.
+ * Reporting it is the point; failing on it would make doctor answer for a file it does not own.
+ */
+function buildExecutionTrustCheck(configuration: ProjectConfiguration): DoctorCheck {
+  const policy = resolveExecutionTrust(configuration);
+  const details = [
+    describeExecutionTrust(policy),
+    configuration.execution_trust
+      ? 'Declared in CONFIG.md.'
+      : 'Not declared in CONFIG.md; the bounded defaults apply.',
+  ];
+
+  const isolation = inspectAgentHomeIsolation();
+  if (isolation.staleTrustEntries.length === 0) {
+    return { name: 'execution-trust', status: 'pass', details };
+  }
+
+  // `info`, never `fail`. A stale grant in an external tool's own configuration is not a defect in
+  // *this* repository's setup, and doctor's readiness is about whether this repository is ready.
+  details.push(
+    `${isolation.staleTrustEntries.length} trust grant(s) in ${isolation.configPath} name directories that no longer exist.`,
+    'CONFIG.md forbids CompassRose from silently modifying global tool configuration; these are residue from runs against throwaway workspaces.',
+  );
+
+  return { name: 'execution-trust', status: 'info', details };
 }
 
 /**

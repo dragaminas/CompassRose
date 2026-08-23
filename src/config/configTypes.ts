@@ -107,6 +107,34 @@ export interface LimitsSection {
   readonly context_budget_characters?: number;
 }
 
+/**
+ * What CompassRose is allowed to set loose inside the repository it is pointed at
+ * (030-execution-trust).
+ *
+ * Every other bound in this system governs what an agent may *read*. This one governs what it may
+ * *do*, which until now was declared nowhere and, in the codex adapter, actively disabled.
+ *
+ * Note the inversion against `limits.max_ai_calls_per_run`, where absence means unbounded so an
+ * older config is unaffected. Here absence means **bounded**: a config that predates this section
+ * is exactly the config that has never thought about execution trust, and defaulting it to
+ * unrestricted would preserve the defect instead of the compatibility. Loosening is available, and
+ * it has to be written down.
+ */
+export type AgentSandbox = 'read-only' | 'workspace-write' | 'danger-full-access';
+export type AgentNetwork = 'denied' | 'allowed';
+
+export interface ExecutionTrustSection {
+  /** The sandbox the implementer runs under. Read-only roles are pinned to `read-only` regardless. */
+  readonly agent_sandbox: AgentSandbox;
+  readonly agent_network: AgentNetwork;
+  /**
+   * Command prefixes a planned quality gate may start with. Quality gates are authored by the
+   * planner and executed as shell strings, which makes them the one place a model's output becomes
+   * a command on the user's machine without anything in between.
+   */
+  readonly gate_command_allowlist: readonly string[];
+}
+
 export interface GitPolicySection {
   readonly require_clean_worktree_before_task: boolean;
   readonly review_target: GitReviewTarget;
@@ -175,6 +203,7 @@ export interface ProjectConfiguration {
   readonly quality_gates?: QualityGatesSection;
   readonly smoke?: SmokeSection;
   readonly limits?: LimitsSection;
+  readonly execution_trust?: ExecutionTrustSection;
   readonly [key: string]: unknown;
 }
 

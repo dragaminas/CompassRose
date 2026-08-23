@@ -96,6 +96,8 @@ import type {
 } from '../contracts/runtime/protoRuntime.js';
 import type { ProjectConfiguration } from '../config/configTypes.js';
 import { readProjectConfiguration } from '../config/configReader.js';
+import { describeExecutionTrust, resolveExecutionTrust, type ExecutionTrustPolicy } from '../config/executionTrust.js';
+import { assertGateCommandsAllowed, findGateCommandRejections } from '../task/gateCommandPolicy.js';
 import type { ValidationDecisionPointsOutput, ValidationRoundRecord, ValidationWeight } from '../contracts/validator/validatorContracts.js';
 import type { BrainstormTurnOutput, BrainstormTurnRecord, RecordedDecision } from '../contracts/brainstormer/brainstormerContracts.js';
 import {
@@ -315,6 +317,8 @@ export class CompassRoseOrchestrator {
   private readonly externalStopFile: string | null;
   private readonly projectConfiguration: ProjectConfiguration;
   private readonly configurationPath: string;
+  /** What this repository permits a run to do to it (030-execution-trust). */
+  private readonly executionTrust: ExecutionTrustPolicy;
   private readonly projectStatePath: string;
   private readonly featuresRoot: string;
   private readonly fixesRoot: string;
@@ -366,14 +370,6 @@ export class CompassRoseOrchestrator {
     this.git = new GitClient(repositoryRoot);
     this.artifacts = new ArtifactStore(repositoryRoot);
     this.contracts = new ContractRegistry(repositoryRoot, ORCHESTRATOR_RUNTIME_CRITICAL_PATHS);
-    this.codexCommand = process.env.PROTO_COMPASSROSE_CODEX_COMMAND ?? 'codex';
-    this.opencodeCommand = process.env.PROTO_COMPASSROSE_OPENCODE_COMMAND ?? 'opencode';
-    this.codex = new CodexCli(repositoryRoot, this.codexCommand);
-    this.opencode = new OpenCodeCli(repositoryRoot, this.opencodeCommand);
-    this.implementer = options.implementer === 'codex' ? this.codex : this.opencode;
-    this.skipCleanWorktreeCheck = process.env.PROTO_COMPASSROSE_SKIP_CLEAN_CHECK === '1';
-    this.externalStopFile = process.env.PROTO_COMPASSROSE_STOP_FILE ?? null;
-
     const configurationPath = getBootstrapConfigPath(repositoryRoot);
     const configuration = readProjectConfiguration(configurationPath);
     if (!configuration.ok) {
@@ -382,6 +378,20 @@ export class CompassRoseOrchestrator {
 
     this.projectConfiguration = configuration.value;
     this.configurationPath = configurationPath;
+
+    // 030-execution-trust: resolved before any adapter exists. An adapter built without a policy
+    // has to default to something, and what it used to default to was no sandbox at all -- so the
+    // ordering here is the guarantee, not a convenience.
+    this.executionTrust = resolveExecutionTrust(this.projectConfiguration);
+
+    this.codexCommand = process.env.PROTO_COMPASSROSE_CODEX_COMMAND ?? 'codex';
+    this.opencodeCommand = process.env.PROTO_COMPASSROSE_OPENCODE_COMMAND ?? 'opencode';
+    this.codex = new CodexCli(repositoryRoot, this.codexCommand, this.executionTrust);
+    this.opencode = new OpenCodeCli(repositoryRoot, this.opencodeCommand);
+    this.implementer = options.implementer === 'codex' ? this.codex : this.opencode;
+    this.skipCleanWorktreeCheck = process.env.PROTO_COMPASSROSE_SKIP_CLEAN_CHECK === '1';
+    this.externalStopFile = process.env.PROTO_COMPASSROSE_STOP_FILE ?? null;
+
     const projectConfiguration = this.projectConfiguration;
     const documentation = projectConfiguration.documentation as Record<string, unknown>;
     const limitsCandidate = projectConfiguration.limits;
@@ -3131,6 +3141,7 @@ export class CompassRoseOrchestrator {
     };
     const sanitizedPlanned: PlannerOutput = { ...planned, task };
     validateTaskDeliverables(task, 'task');
+    assertGateCommandsAllowed(task.quality_gates.before_review, this.executionTrust.gate_command_allowlist, 'task');
     this.assertTaskIdIsUnused(feature.tasksDirectory, task.task_id, 'Task planning');
 
     const taskPath = join(feature.tasksDirectory, buildTaskFileName(task.task_id, task.title));
@@ -3488,6 +3499,7 @@ export class CompassRoseOrchestrator {
     const task = planned.task;
 
     validateTaskDeliverables(task, 'task');
+    assertGateCommandsAllowed(task.quality_gates.before_review, this.executionTrust.gate_command_allowlist, 'fix task');
     this.assertTaskIdIsUnused(fix.tasksDirectory, task.task_id, 'Fix task planning');
 
     const taskPath = join(fix.tasksDirectory, buildTaskFileName(task.task_id, task.title));
@@ -4650,6 +4662,11 @@ export class CompassRoseOrchestrator {
       // unlike that original task's own gates, a bare-HEAD `git diff --exit-code` here can only
       // ever pass by leaving the very thing this correction exists to undo untouched.
       validateQualityGateRefs(rawCorrection.quality_gates.before_review, 'correction task');
+      assertGateCommandsAllowed(
+        rawCorrection.quality_gates.before_review,
+        this.executionTrust.gate_command_allowlist,
+        'correction task',
+      );
       const correction: CorrectionTask = {
         ...rawCorrection,
         scope: { ...rawCorrection.scope, allowed_paths: correctionScopeSanitization.allowedPaths },
@@ -5450,7 +5467,25 @@ export class CompassRoseOrchestrator {
 
   private runQualityGates(task: ParsedTaskDocument): QualityGateResult[] {
     const commands = [...task.qualityGates, ...this.coreRuntimeSmokeGateCommands()];
+    const allowlist = this.executionTrust.gate_command_allowlist;
+
     return commands.map((command) => {
+      // 030-execution-trust: checked again here, not only at planning time. A task document is a
+      // file on disk -- it can be hand-edited, and every task planned before this check existed is
+      // still sitting in the repository. Planning-time refusal is what gives a legible error; this
+      // is what makes the guarantee true.
+      const rejections = findGateCommandRejections([command], allowlist);
+      if (rejections.length > 0) {
+        return {
+          name: command,
+          command,
+          status: 'failed',
+          output_summary: `Refused before running: ${rejections.map((rejection) => `"${rejection.segment}" (${rejection.reason})`).join(', ')}. `
+            + `Quality gates run as shell commands in the repository root; permit it in `
+            + `execution_trust.gate_command_allowlist in CONFIG.md if it is legitimate.`,
+        } satisfies QualityGateResult;
+      }
+
       const result = this.runShellCommand(command);
       if (result.status !== 0) {
         const waived = this.tryWaiveUnrelatedGateFailure(task, command, result.stdout, result.stderr);

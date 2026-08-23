@@ -327,6 +327,11 @@ describe('runDoctor integration with the diagnostic boundary (correction F003-T0
       'paths',
       'project-state',
       'blocked-work',
+      // 030-execution-trust: what this repository permits a run to do to it, reported alongside
+      // everything else doctor establishes. `pass` on a clean agent home, `info` when the isolation
+      // rule has been broken, never `fail` -- an external tool's own config is not this
+      // repository's readiness.
+      'execution-trust',
     ]);
   });
 

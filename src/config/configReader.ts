@@ -16,9 +16,11 @@ import type {
   ReviewPolicyMode,
   ReviewPolicySection,
   RolesSection,
+  ExecutionTrustSection,
   SmokeSection,
 } from './configTypes.js';
 import { isSupportedPlatformName, type SupportedPlatform } from '../platform/platformInfo.js';
+import { AGENT_NETWORKS, AGENT_SANDBOXES, DEFAULT_EXECUTION_TRUST } from './executionTrust.js';
 
 interface YamlLine {
   readonly number: number;
@@ -697,6 +699,25 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
     optionalPolicySections['smoke'] = smoke;
   }
 
+  if ('execution_trust' in parsedConfiguration) {
+    const executionTrustValue = parsedConfiguration['execution_trust'];
+    if (!isRecord(executionTrustValue)) {
+      return err([{
+        field: 'execution_trust',
+        message: 'Optional section execution_trust must be an object when present.',
+      }]);
+    }
+
+    const executionTrustIssues: ConfigurationIssue[] = [];
+    const executionTrust = validateExecutionTrustSection(executionTrustValue, executionTrustIssues);
+
+    if (executionTrustIssues.length > 0) {
+      return err(executionTrustIssues);
+    }
+
+    optionalPolicySections['execution_trust'] = executionTrust;
+  }
+
   if ('limits' in parsedConfiguration) {
     const limitsValue = parsedConfiguration['limits'];
     if (!isRecord(limitsValue)) {
@@ -1105,6 +1126,66 @@ function validateQualityGatesSection(section: Record<string, unknown>, issues: C
   }
 
   return { enabled, required: [...required], optional: [...optional] };
+}
+
+/**
+ * `execution_trust` declares what a run is allowed to do to this repository
+ * (030-execution-trust).
+ *
+ * Every field is optional and every omission resolves to the bounded default, which is the opposite
+ * of how `limits` treats absence. The reasoning differs because the risk differs: an absent limit
+ * means a project has not thought about pacing, and running unpaced is how it already worked. An
+ * absent trust declaration means a project has not thought about what it is letting loose, and
+ * "how it already worked" is the thing being fixed.
+ */
+function validateExecutionTrustSection(
+  section: Record<string, unknown>,
+  issues: ConfigurationIssue[],
+): ExecutionTrustSection {
+  const enumeratedValue = <T extends string>(key: string, allowed: readonly T[], fallback: T): T => {
+    const value = section[key];
+    if (value === undefined || value === null) {
+      return fallback;
+    }
+
+    if (typeof value !== 'string' || !allowed.includes(value as T)) {
+      issues.push({
+        field: `execution_trust.${key}`,
+        message: `execution_trust.${key} must be one of: ${allowed.join(', ')}.`,
+      });
+      return fallback;
+    }
+
+    return value as T;
+  };
+
+  const allowlistValue = section['gate_command_allowlist'];
+  let gateCommandAllowlist = DEFAULT_EXECUTION_TRUST.gate_command_allowlist;
+
+  if (allowlistValue !== undefined && allowlistValue !== null) {
+    if (!Array.isArray(allowlistValue) || allowlistValue.some((entry) => typeof entry !== 'string' || entry.trim().length === 0)) {
+      issues.push({
+        field: 'execution_trust.gate_command_allowlist',
+        message: 'execution_trust.gate_command_allowlist must be a list of non-empty command prefixes.',
+      });
+    } else if (allowlistValue.length === 0) {
+      // An empty list would refuse every gate this project could ever plan, which reads as a
+      // configuration mistake far more often than as a deliberate ban on quality gates.
+      issues.push({
+        field: 'execution_trust.gate_command_allowlist',
+        message: 'execution_trust.gate_command_allowlist is empty, which would refuse every quality gate. '
+          + 'Omit the field to take the defaults, or list the prefixes this project permits.',
+      });
+    } else {
+      gateCommandAllowlist = allowlistValue.map((entry) => (entry as string).trim());
+    }
+  }
+
+  return {
+    agent_sandbox: enumeratedValue('agent_sandbox', AGENT_SANDBOXES, DEFAULT_EXECUTION_TRUST.agent_sandbox),
+    agent_network: enumeratedValue('agent_network', AGENT_NETWORKS, DEFAULT_EXECUTION_TRUST.agent_network),
+    gate_command_allowlist: gateCommandAllowlist,
+  };
 }
 
 /**

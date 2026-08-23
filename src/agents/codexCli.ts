@@ -6,12 +6,15 @@ import { ControlledStopError, stopExitCodeForSignal } from '../runtime/controlle
 import { DEFAULT_AGENT_HEARTBEAT_MS, runCommandWithHeartbeat } from './heartbeatRunner.js';
 import { resolveCodexImplementerModel, resolveCodexPlannerModel } from './modelResolution.js';
 import { logAgentEnd, logAgentStart, logAgentStream } from './agentLogging.js';
+import { codexSandboxArguments } from './sandboxArguments.js';
+import { DEFAULT_EXECUTION_TRUST, type ExecutionTrustPolicy } from '../config/executionTrust.js';
 import type { CommandExecution, TaskImplementer } from './taskImplementer.js';
 
 export class CodexCli implements TaskImplementer {
   constructor(
     private readonly repositoryRoot: string,
     private readonly command: string,
+    private readonly executionTrust: ExecutionTrustPolicy = DEFAULT_EXECUTION_TRUST,
   ) {}
 
   runStructured<T>(
@@ -34,9 +37,7 @@ export class CodexCli implements TaskImplementer {
       '--ephemeral',
       '-C',
       this.repositoryRoot,
-      '-s',
-      'read-only',
-      '--dangerously-bypass-approvals-and-sandbox',
+      ...codexSandboxArguments(this.executionTrust, 'structured'),
       '--output-schema',
       schemaPath,
       '-o',
@@ -102,7 +103,7 @@ export class CodexCli implements TaskImplementer {
       '--ephemeral',
       '--cd',
       this.repositoryRoot,
-      '--dangerously-bypass-approvals-and-sandbox',
+      ...codexSandboxArguments(this.executionTrust, 'implementation'),
     ];
 
     const model = resolveCodexImplementerModel();

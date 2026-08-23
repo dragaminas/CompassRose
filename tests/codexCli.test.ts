@@ -31,7 +31,14 @@ describe('CodexCli.run', () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('saw:do the thing');
     expect(result.commandInvoked).toContain(command);
-    expect(result.commandInvoked).toContain('--dangerously-bypass-approvals-and-sandbox');
+    // 030-execution-trust: this assertion used to require the opposite -- that every implementer
+    // call carried `--dangerously-bypass-approvals-and-sandbox`, whose own help reads "Intended
+    // solely for running in environments that are externally sandboxed". CompassRose runs in the
+    // user's repository on the user's machine; there was no external sandbox, and the flag also
+    // overrode whatever the user had declared in their own codex config. The behavior it pinned is
+    // the defect, so the assertion is inverted rather than dropped.
+    expect(result.commandInvoked).not.toContain('--dangerously-bypass-approvals-and-sandbox');
+    expect(result.commandInvoked).toContain('-s workspace-write');
   });
 
   test('returns ok:false with captured stderr on non-zero exit', () => {

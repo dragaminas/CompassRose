@@ -120,6 +120,31 @@ git_policy:
   branch_per_task: optional
   commit_after_task: manual
 
+# What a run is allowed to do to this repository. Every field is optional, and every omission
+# resolves to the bounded default rather than the permissive one -- the opposite of `limits`,
+# because an absent limit means nobody thought about pacing, while an absent trust declaration
+# means nobody thought about what is being let loose.
+execution_trust:
+  agent_sandbox: workspace-write
+  agent_network: denied
+  # Quality gates are authored by the planner and executed as shell commands in the repository
+  # root. This is the one place a model's output becomes a command on this machine with nothing
+  # in between, so what it may start with is declared rather than assumed.
+  gate_command_allowlist:
+    - npm run
+    - npm test
+    - npx
+    - git diff
+    - test -f
+    # `node -e "<script>"` is an arbitrary program with a different name on the front, and this
+    # project's planner emits it routinely -- structural assertions over implementation.json and
+    # quality-gates.json are written exactly this way. Declaring it is the honest option: the
+    # escape hatch is real either way, and this is the one place someone looking for it would
+    # look. It does mean this repository's own allowlist admits arbitrary code, which the default
+    # allowlist does not. Narrowing it needs a real assertion mechanism to replace `node -e`,
+    # which is work, not configuration.
+    - node -e
+
 limits:
   max_tasks_per_run: 50
   max_retries_per_task: 1
@@ -207,7 +232,24 @@ git_policy.commit_after_task:
 
 adapters.external_cli.type:
   - external_cli
+
+execution_trust.agent_sandbox:
+  - read-only
+  - workspace-write
+  - danger-full-access
+
+execution_trust.agent_network:
+  - denied
+  - allowed
 ```
+
+`execution_trust.agent_sandbox` applies to the implementer. Every other role -- planner, reviewer,
+diagnosis, classification, inference -- is pinned to `read-only` regardless of what is configured
+here, because none of them have any business writing to the repository and a configuration surface
+that could grant it would be a way to lose that property by accident.
+
+CompassRose cannot itself confine an external CLI; that sandbox is the CLI's own, and how much it
+is worth differs by platform. What this section controls is whether CompassRose **asks** for it.
 
 The runtime contract and feature state contract constrain how `execution.mode`, `review_policy`, `quality_gates`, and `limits` are applied during orchestration.
 
