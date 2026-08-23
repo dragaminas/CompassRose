@@ -449,8 +449,35 @@ const createCommand: SessionCommand = {
  * whose entire value is that a human decided it.
  */
 async function recordProvenanceAndCoverage(context: SessionContext, itemId: string): Promise<void> {
-  context.orchestrator.recordSpecificationProvenance(itemId, context.state.competency, context.state.decisions);
+  // The audit runs before provenance is written, because what it finds belongs in that section.
+  // It is the only thing standing between "the agent surfaced every real decision" as a contract
+  // instruction and as a property anyone can check: a turn that quietly decided for the human
+  // looks exactly like a turn where nothing forked, but a *document* asserting something nobody
+  // ever said does not look like one that was chosen.
+  const unsourced = context.orchestrator.auditSpecificationDecisions(
+    itemId,
+    context.state.transcript,
+    context.state.competency,
+  );
+
+  context.orchestrator.recordSpecificationProvenance(
+    itemId,
+    context.state.competency,
+    context.state.decisions,
+    unsourced,
+  );
   context.state.decisions = [];
+
+  if (unsourced.length > 0) {
+    print(context, [
+      '',
+      `  ${unsourced.length === 1 ? 'One thing' : `${unsourced.length} things`} in this specification I decided without asking you:`,
+      ...unsourced.map((claim) => `    - ${claim.claim} (${claim.axis})`),
+      '',
+      '  Recorded as mine in the provenance section. Say so now if any of them should have been yours.',
+      '',
+    ]);
+  }
 
   const uncovered = context.orchestrator.readDimensions().filter((dimension) => dimension.state === 'uncovered');
   if (uncovered.length === 0) {

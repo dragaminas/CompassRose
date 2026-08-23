@@ -76,6 +76,31 @@ export interface ProposedDimension {
  * was asked and the agent chose the second option" produce the same specification text and are not
  * the same fact about it.
  */
+/**
+ * A claim the drafted specification makes on an axis the human owns, with nothing in the
+ * conversation behind it (024-specification-flow).
+ *
+ * The gap this closes is the one thing in this feature that nothing could enforce: the contract
+ * asks the agent to surface a decision when one exists, the schema permits it, and a turn that
+ * quietly decides for the human is indistinguishable -- at the time -- from a turn where nothing
+ * forked. `decision: null` and a well-written `reply` look identical either way.
+ *
+ * The way out is to stop asking the question at the turn, where there is no artifact of the
+ * omission, and ask it at `/crear`, where there are two: the finished draft and the transcript. An
+ * absence between two artifacts is detectable in a way an absence inside a model's reasoning is not.
+ */
+export interface UnsourcedClaim {
+  /** What the specification asserts. */
+  readonly claim: string;
+  readonly axis: StructuredDecision['axis'];
+  /** Why this was the human's to decide rather than a detail that follows from what they said. */
+  readonly why_it_needed_a_human: string;
+}
+
+export interface SpecificationAudit {
+  readonly unsourced_claims: readonly UnsourcedClaim[];
+}
+
 export interface RecordedDecision {
   readonly question: string;
   readonly axis: StructuredDecision['axis'];

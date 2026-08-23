@@ -25,6 +25,7 @@ export type AgentInvocationKind =
   | "feature_validation_weight"
   | "feature_validation_decision_points"
   | "brainstorm_turn"
+  | "specification_audit"
   | "acceptance_criteria_verification"
   | "project_inference"
   | "recovery_diagnosis";

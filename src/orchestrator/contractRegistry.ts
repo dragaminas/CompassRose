@@ -16,6 +16,7 @@ export type StructuredSchemaId =
   | 'feature_validation_weight'
   | 'feature_validation_decision_points'
   | 'brainstorm_turn'
+  | 'specification_audit'
   | 'acceptance_criteria_verification'
   | 'project_inference'
   | 'recovery_diagnosis';
@@ -39,6 +40,7 @@ const STRUCTURED_SCHEMA_PATHS: Record<StructuredSchemaId, string> = {
   feature_validation_weight: 'src/contracts/validator/feature-validation-weight.schema.json',
   feature_validation_decision_points: 'src/contracts/validator/decision-points-output.schema.json',
   brainstorm_turn: 'src/contracts/brainstormer/brainstorm-turn-output.schema.json',
+  specification_audit: 'src/contracts/brainstormer/specification-audit.schema.json',
   acceptance_criteria_verification: 'src/contracts/runtime/acceptance-criteria-verification.schema.json',
   project_inference: 'src/contracts/project/project-inference.schema.json',
   recovery_diagnosis: 'src/contracts/runtime/recovery-diagnosis.schema.json',

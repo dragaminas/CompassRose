@@ -412,6 +412,28 @@ Feature planning and task planning are distinct activities:
 
 The Implementer Adapter executes the current task.
 
+### What it is launched with (030-execution-trust, ADR-0048)
+
+CompassRose cannot confine an external CLI. That sandbox belongs to the CLI, it is implemented
+differently per platform, and on some it is worth less than on others. What CompassRose owns is the
+argv it builds — whether it asks for the sandbox or waives it.
+
+It was waiving it. Every invocation carried `--dangerously-bypass-approvals-and-sandbox`, whose own
+help reads "Intended solely for running in environments that are externally sandboxed"; CompassRose
+runs in the user's repository on the user's machine, and the flag also overrode whatever that user
+had declared in their own tool configuration. The structured-call path went further, declaring
+`-s read-only` and cancelling it two arguments later.
+
+Now: the implementer runs under `execution_trust.agent_sandbox` with the network passed explicitly,
+and **every structured call — planning, review, diagnosis, classification, inference — is pinned to
+`read-only` regardless of what is configured**. None of those have any business writing to the
+repository, and a configuration surface that could grant it would be a way to lose that property by
+accident.
+
+The argv is built by a pure function (`codexSandboxArguments`) so it can be asserted without
+spawning anything, which matters because what flags a process is launched with is not something a
+type checker can prove.
+
 Input:
 
 - Task definition
@@ -571,6 +593,28 @@ Examples:
 Commands are project-specific and configurable.
 
 CompassRose should not hardcode npm, dotnet, pytest, cargo, Maven, or any other ecosystem.
+
+### Execution trust (030-execution-trust, ADR-0048)
+
+Quality-gate commands are the exception to "commands are configurable", because they are not
+configured — the planner writes them, and they reach a shell in the repository root. That makes them
+the one place in this system where a model's output becomes a command on the user's machine with
+nothing in between.
+
+`execution_trust.gate_command_allowlist` declares what such a command may start with, and it is
+checked twice: at planning time, where refusing produces a legible error and nothing has been
+written, and again before execution, because a task document is a file on disk that can be
+hand-edited and because tasks planned before the check existed are still in the repository.
+
+The check is a small parser rather than a prefix match. A prefix allowlist alone admits
+`npm test && curl … | sh`, `npm test $(…)`, and `npm test > ~/.bashrc`, all of which start with a
+permitted prefix. So chains are split and every segment checked, substitution and redirection are
+refused outright rather than analyzed, and a prefix must end at a word boundary. It is quote-aware,
+so a legitimate `--grep "a|b"` is not refused — a check that cries wolf is a check that gets
+switched off.
+
+Where it errs it errs strict, and the asymmetry is the argument: a wrong refusal costs one line in
+`CONFIG.md` and explains itself; a wrong permission costs whatever the command does.
 
 ---
 

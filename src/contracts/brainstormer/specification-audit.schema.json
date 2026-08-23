@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["unsourced_claims"],
+  "properties": {
+    "unsourced_claims": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim", "axis", "why_it_needed_a_human"],
+        "properties": {
+          "claim": { "type": "string", "maxLength": 240 },
+          "axis": {
+            "type": "string",
+            "enum": ["product", "architecture", "implementation"]
+          },
+          "why_it_needed_a_human": { "type": "string", "maxLength": 240 }
+        }
+      }
+    }
+  }
+}

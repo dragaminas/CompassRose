@@ -13,14 +13,16 @@ In progress
 - The specification round of 2026-08-22 re-cut the original twenty-two component requests into seven product features, `023` through `029`. See `features/README.md` for the full mapping and the round's coverage report.
 - Features `001-project-identity-and-foundation`, `002-configuration-model`, and `003-doctor-command` are complete.
 - Feature `023-terminal-session` is implemented and usable: `compassrose` with no arguments opens the interactive session, and the old no-argument behavior moved to `compassrose run`. `/run` executes the loop in a child process, so the progress frame animates while a step is in flight and `esc` is read: once asks the run to stop at its next checkpoint, twice terminates the process tree.
-- Feature `024-specification-flow`: the loop can no longer author a specification. Unspecified items are reported by name, the session surfaces them first, and the competency profile now changes how the agent converses — a decision on an axis the human owns is surfaced as a choice rather than taken as prose, and who gave each answer is recorded on the specification itself.
+- Feature `024-specification-flow`: the loop can no longer author a specification. Unspecified items are reported by name, the session surfaces them first, and the competency profile now changes how the agent converses — a decision on an axis the human owns is surfaced as a choice rather than taken as prose, and who gave each answer is recorded on the specification itself. `/crear` now also audits the finished draft against the transcript and records, as its own list, every commitment the specification makes that nobody in the conversation ever chose.
 - Feature `025-automated-development-loop`: a blocked work item is set aside instead of ending the run, runs can be targeted at one item, the runtime can close a feature whose acceptance criteria it has verified, and one unit of work is now one commit with the intermediate bookkeeping as its body. The structured run summary remains.
 - Feature `026-conversational-doctor-recovery`: automatic repair is no longer attempted at all; a blocker is diagnosed and handed to a human through `/desbloquear`. The pipeline that used to attempt it is deleted, not merely unreachable — with the `unblock_pending` lifecycle state, four Operational Status fields, two config limits, and five contract documents that existed only to serve it. Recorded as ADR-0047, which supersedes ADR-0040. The `open_fix` exit and two turn bounds remain.
 - Feature `027-bounded-work-item-context`: every agent call the loop makes is driven by a declared, measured manifest, checked against the budget at planning time. The implementer reports what it read beyond its manifest, capped, and it reaches that task's next attempt. No task is handed a history of prior tasks any more; what must cross that boundary crosses it as a written hand-off.
 - Feature `028-project-understanding`: CompassRose reads a repository it has never seen, records every fact with its provenance, and infers what no file states — what the project is for, which scripts are gates — as a visibly-marked guess. `/proyecto confirmar` is the only thing that turns a guess into a fact, and a confirmed fact is never overwritten by a later detection.
 - Feature `029-runnable-application-gate`: a feature cannot close unless the application starts. Start-command proposal remains, and belongs to `028`.
+- Feature `030-execution-trust`: what a run is allowed to *do* to a repository is declared and bounded. Every codex call used to carry `--dangerously-bypass-approvals-and-sandbox`; none do now, structured calls are pinned read-only, and quality-gate commands are checked against a declared allowlist at planning time and again before running. Recorded as ADR-0048.
 - Requests `021-vscode-integration` and `022-ecosystem-and-metrics` remain pending specification, deliberately.
-- Two dimensions are recorded as uncovered, not out of scope: distribution/installation, and execution trust.
+- One dimension remains recorded as uncovered, not out of scope: distribution and installation. Execution trust was the other, and `030` covers it.
+- `compassrose/DIMENSIONS.md` exists for the first time. It had never been written, so the coverage checklist the brainstormer is shown every turn reported everything uncovered.
 - Nothing is blocked.
 
 ## Implemented
@@ -56,8 +58,16 @@ documented success shape `CompassRose Doctor` / `Status: OK` — was satisfied.
 
 ## Next Planning Hint
 
-Every feature from the specification round has working implementation; what remains is listed under
-each one's Remaining Deliverables. The three items called out after the specification round —
-deleting the doctor-recovery pipeline, commit batching, and in-step interruption — are all done. What
-is left is smaller and independent: `026`'s `open_fix` exit and turn bounds, `027`'s planner and
-reviewer manifests, `024`'s structured decisions, and `028`'s gap inference.
+Every feature has working implementation; what remains is listed under each one's Remaining
+Deliverables, and the items called out after the specification round are all done.
+
+The next thing that changes what this system is worth, rather than what it documents, is
+**distribution**. `bin` points at `./dist/cli/main.js`, nothing publishes it, there is no README, and
+every real invocation runs through `npm run` inside this repository. Closely behind it: the whole
+loop has only ever been run end-to-end against *this* repository — the e2e harness clones `HEAD` —
+so nobody has evidence of what breaks when it is pointed somewhere else. The self-hosting leaks
+already recorded under `027` and `030` are what that absence looks like from the inside.
+
+Within `030`, the one item that changes the feature's worth is replacing `node -e` quality gates
+with a declarative assertion mechanism; until then this repository's own gate allowlist admits
+arbitrary code, which the default allowlist does not.

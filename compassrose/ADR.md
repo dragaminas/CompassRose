@@ -902,3 +902,29 @@ The evidence for this is direct. The replaced pipeline planned a bounded "doctor
 The consequence for the bounded-retry machinery is narrow: ADR-0032 and ADR-0033 still hold, and still govern state correction, which remains a genuine deterministic repair. What is withdrawn is the assumption that an *agent* is the right recipient of a blocker no deterministic check could classify.
 
 This is an instance of ADR-0034 read one level up: bounding an operation's scope is not enough if the operation should not run at all.
+
+## ADR-0048
+
+### Title
+
+CompassRose Asks For The Sandbox It Was Waiving, And A Model's Output Is Not A Command Until Something Says It May Be
+
+### Status
+
+Accepted
+
+### Decision
+
+CompassRose shall not disable an external CLI's own sandbox. Structured calls -- planning, review, diagnosis, classification, inference -- shall run read-only regardless of configuration. The implementer shall run under the sandbox and network declared in `execution_trust`, defaulting to `workspace-write` with the network denied.
+
+Quality-gate commands shall be checked against a declared allowlist before a task is written and again before the command runs.
+
+The evidence is in the code rather than absent from it. Every codex invocation carried `--dangerously-bypass-approvals-and-sandbox`, whose own help reads "Intended solely for running in environments that are externally sandboxed"; CompassRose runs in the user's repository on the user's machine, and the flag also overrode whatever that user had declared in their own tool configuration. The planner path went further and wrote the correct bound before cancelling it: `-s read-only`, then the bypass, two arguments later.
+
+Absence of a declaration resolves to the bounded default rather than the permissive one. This inverts how `limits` treats absence, deliberately. A missing limit means a project has not thought about pacing, and running unpaced is how it already worked. A missing trust declaration means a project has not thought about what it is letting loose, and how it already worked is the thing being fixed.
+
+The gate check is over-strict, and the asymmetry is the argument: a gate refused wrongly costs one line in `CONFIG.md` and says exactly why, while a gate permitted wrongly costs whatever the command does. It is quote-aware so that it is not over-strict about the wrong things.
+
+This ADR does not claim CompassRose confines anything. That sandbox belongs to the external CLI and is worth different amounts on different platforms. What CompassRose controls is whether it asks, and it was waiving.
+
+The scope this leaves open is recorded rather than closed: `CONFIG.md`'s "External tool isolation" rule -- that CompassRose must not silently modify global user configuration -- now has a detector in `doctor` and test-suite isolation behind it, and no way to prevent a tool writing to its own configuration during a real run. A rule with a detector is not a rule with a mechanism, and the difference is stated here so it is not mistaken for one later.

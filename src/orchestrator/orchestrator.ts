@@ -99,11 +99,19 @@ import { readProjectConfiguration } from '../config/configReader.js';
 import { describeExecutionTrust, resolveExecutionTrust, type ExecutionTrustPolicy } from '../config/executionTrust.js';
 import { assertGateCommandsAllowed, findGateCommandRejections } from '../task/gateCommandPolicy.js';
 import type { ValidationDecisionPointsOutput, ValidationRoundRecord, ValidationWeight } from '../contracts/validator/validatorContracts.js';
-import type { BrainstormTurnOutput, BrainstormTurnRecord, RecordedDecision } from '../contracts/brainstormer/brainstormerContracts.js';
+import type {
+  BrainstormTurnOutput,
+  BrainstormTurnRecord,
+  RecordedDecision,
+  SpecificationAudit,
+  UnsourcedClaim,
+} from '../contracts/brainstormer/brainstormerContracts.js';
 import {
   COMPETENCY_AXES,
+  COMPETENCY_AXIS_LABELS,
   DEFAULT_COMPETENCY_PROFILE,
   describeProfileForPrompt,
+  ownsAxis,
   type SessionCompetencyProfile,
 } from '../contracts/brainstormer/competency.js';
 import { renderBlockerCard, scanBlockedWorkItems, type BlockerCardInput } from './blockerCard.js';
@@ -268,6 +276,15 @@ import {
 // (e.g. this orchestrator building/correcting its own runtime, per the project's
 // self-application goal). Keep in sync with the actual module set under src/orchestrator/
 // and src/agents/ that this class depends on.
+/**
+ * How many unchosen commitments one specification audit may report (024-specification-flow).
+ *
+ * Ten, and not because of size. A provenance section listing forty things the human did not decide
+ * is a section nobody reads, and a draft that genuinely has forty of them does not need a longer
+ * list -- it needs a conversation that was never had.
+ */
+const MAX_UNSOURCED_CLAIMS = 10;
+
 const ORCHESTRATOR_RUNTIME_CRITICAL_PATHS: readonly string[] = [
   'src/orchestrator/orchestrator.ts',
   'src/orchestrator/contractRegistry.ts',
@@ -760,10 +777,111 @@ export class CompassRoseOrchestrator {
     this.commitDirtyWorktreeIfConfigured(`proto: add dimension "${trimmed}"`);
   }
 
+  /**
+   * Audits a drafted specification against the conversation that produced it
+   * (024-specification-flow).
+   *
+   * This closes the one gap in this feature nothing could enforce. The contract asks the agent to
+   * surface a decision when a real choice arises on an axis the human owns; nothing made it. And a
+   * turn that quietly decided instead is, at the time, indistinguishable from a turn where nothing
+   * forked -- both produce `decision: null` and a well-written reply.
+   *
+   * The way out is to stop asking at the turn, where the omission leaves no artifact, and ask at
+   * `/crear`, where two artifacts exist: the finished draft and the transcript. "This document
+   * asserts X, and nobody in the conversation ever said X" is a detectable absence. "The model
+   * should have asked and didn't" is not.
+   *
+   * It reports; it never rewrites the specification. What it finds lands in the provenance section
+   * as decisions taken without asking, which is the honest record of what happened.
+   */
+  auditSpecificationDecisions(
+    id: string,
+    transcript: readonly BrainstormTurnRecord[],
+    profile: SessionCompetencyProfile,
+  ): readonly UnsourcedClaim[] {
+    const ownedAxes = COMPETENCY_AXES.filter((axis) => ownsAxis(profile, axis));
+    if (ownedAxes.length === 0) {
+      // Nothing to audit: the human owns no axis, so every claim being the agent's is what they
+      // asked for rather than something that slipped past them. Skipping saves the call too.
+      return [];
+    }
+
+    const owner = this.resolveWorkItemContext(id);
+    if (!statSafeIsFile(owner.definitionPath)) {
+      return [];
+    }
+
+    const definitionRelativePath = relativePath(this.repositoryRoot, owner.definitionPath);
+    const label = `specification-audit:${id}`;
+    const spokenByHuman = transcript
+      .filter((turn) => turn.role === 'human')
+      .map((turn) => `- ${turn.text.replace(/\s+/g, ' ').trim()}`);
+
+    const prompt = [
+      'Act as the CompassRose Specification Auditor.',
+      '',
+      'A specification has just been drafted from a conversation. Your only job is to find the',
+      'places where it commits the project to something the human never actually chose.',
+      '',
+      'Read only:',
+      `- \`${definitionRelativePath}\``,
+      '',
+      'Everything the human said, in order:',
+      ...(spokenByHuman.length > 0 ? spokenByHuman : ['- nothing; the conversation has no human turns']),
+      '',
+      'Axes the human owns in this session (only these are in scope):',
+      ...ownedAxes.map((axis) => `- ${COMPETENCY_AXIS_LABELS[axis]}`),
+      '',
+      'Rules:',
+      '- Report a claim only when the specification takes a real position on one of those axes and nothing above supports it. A position is real when a competent person could have chosen differently and the project would now be different.',
+      '- Do not report a detail that follows necessarily from something the human did say. Restating their words in specification language is not a decision.',
+      '- Do not report anything on an axis not listed above; those are yours to decide and were decided correctly.',
+      '- Do not report the absence of a section, only the presence of an unchosen commitment.',
+      '- An empty list is the expected result of a conversation where everything that forked was asked about. Return one rather than finding something.',
+      '- Do not modify files.',
+      '',
+      'Return JSON only, matching the specification-audit schema.',
+    ].join('\n');
+
+    this.recordAgentInvocationContext(this.buildAgentInvocationContext({
+      role: 'diagnostic',
+      kind: 'specification_audit',
+      label,
+      feature_id: id,
+      task_id: null,
+      source_paths: [definitionRelativePath],
+      prompt,
+      tool: {
+        name: 'codex',
+        command: this.codexCommand,
+        model: resolveCodexPlannerModel(),
+        output_schema_id: 'specification_audit',
+      },
+    }));
+
+    const audit = this.codex.runStructured<SpecificationAudit>(
+      prompt,
+      this.contracts.schema('specification_audit'),
+      [],
+      label,
+    );
+
+    // Filtered again here rather than trusted from the schema: the enum permits all three axes, and
+    // a claim reported on an axis the agent owns would accuse it of exactly what it was told to do.
+    const claims = audit.unsourced_claims
+      .filter((claim) => ownedAxes.includes(claim.axis))
+      .slice(0, MAX_UNSOURCED_CLAIMS);
+
+    this.artifacts.writeJson(join('specifications', `${id}-audit.json`), { unsourced_claims: claims });
+
+    return claims;
+  }
+
   recordSpecificationProvenance(
     id: string,
     profile: SessionCompetencyProfile,
     decisions: readonly RecordedDecision[],
+    unsourcedClaims: readonly UnsourcedClaim[] = [],
   ): void {
     const owner = this.resolveWorkItemContext(id);
     if (!statSafeIsFile(owner.definitionPath)) {
@@ -786,6 +904,17 @@ export class CompassRoseOrchestrator {
             ),
           ]
         : ['No decision was raised while specifying it: nothing in the conversation forked.']),
+      // Kept as its own list rather than merged into the one above. Both are things the agent
+      // decided, but "you were asked and declined" and "you were never asked" are different facts
+      // about a document, and the second is the one worth being able to find later.
+      ...(unsourcedClaims.length > 0
+        ? [
+            '',
+            'Decided without asking, found by auditing this draft against the conversation:',
+            '',
+            ...unsourcedClaims.map((claim) => `- ${claim.claim} (${claim.axis}) — ${claim.why_it_needed_a_human}`),
+          ]
+        : []),
       '',
     ];
 

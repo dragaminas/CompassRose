@@ -25,6 +25,7 @@ The numeric prefix defines the recommended implementation order.
 | `027-bounded-work-item-context` | in progress | declared, budgeted context manifests per task |
 | `028-project-understanding` | in progress | knowing what repository CompassRose is pointed at |
 | `029-runnable-application-gate` | in progress | checking the application actually starts before closing a feature |
+| `030-execution-trust` | in progress | what a run is allowed to do to the repository it is pointed at |
 | `021-vscode-integration` | request only | a future visualization layer over the documents |
 | `022-ecosystem-and-metrics` | request only | future CI, metrics, cost tracking, team workflows |
 
@@ -35,13 +36,21 @@ Nine were covered. Three were not, and one of them — nothing verified that the
 runs, despite that being the stated goal of the whole loop — was specified immediately as
 `029-runnable-application-gate`.
 
-Two remain **uncovered**, deliberately recorded as uncovered rather than out of scope, because no
-reason was given for excluding them. They return in the next round:
+Two were left **uncovered**, deliberately recorded as uncovered rather than out of scope, because no
+reason was given for excluding them:
 
-| Dimension | Why it matters |
-|---|---|
-| distribution and installation | `bin` exists in `package.json` but is never published; all real use runs through `npm run` inside this repository. If the interface is the terminal, installing it is part of the product. |
-| execution trust | CompassRose runs shell commands and external CLIs inside the user's repository with full permissions and no declared limit on what they may touch. Nothing specifies this, neither to permit it explicitly nor to bound it. |
+| Dimension | Why it matters | State |
+|---|---|---|
+| distribution and installation | `bin` exists in `package.json` but is never published; all real use runs through `npm run` inside this repository. If the interface is the terminal, installing it is part of the product. | still uncovered |
+| execution trust | CompassRose ran shell commands and external CLIs inside the user's repository with full permissions and no declared limit on what they may touch. | covered by `030-execution-trust` |
+
+Reading the code to specify execution trust turned up that it had not been unspecified so much as
+decided the other way: every agent call disabled the CLI's own sandbox, overriding what the user had
+declared in their own tool configuration. An uncovered dimension is not always an absence.
+
+That coverage report lived only in this file until 2026-08-23, when `compassrose/DIMENSIONS.md` was
+finally written. The nine dimensions the round covered are not reconstructed there — the report
+names none of them, and guessing the mapping would put an invention into the project's history.
 
 ## The specification round of 2026-08-22
 

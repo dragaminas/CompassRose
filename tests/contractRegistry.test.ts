@@ -27,6 +27,7 @@ function seedSchemas(root: string): void {
     'src/contracts/brainstormer/brainstorm-turn-output.schema.json': '{"type":"object","title":"brainstorm_turn"}',
     'src/contracts/runtime/acceptance-criteria-verification.schema.json': '{"type":"object","title":"acceptance_criteria_verification"}',
     'src/contracts/project/project-inference.schema.json': '{"type":"object","title":"project_inference"}',
+    'src/contracts/brainstormer/specification-audit.schema.json': '{"type":"object","title":"specification_audit"}',
     'src/contracts/runtime/recovery-diagnosis.schema.json': '{"type":"object","title":"recovery_diagnosis"}',
   };
 
