@@ -77,7 +77,7 @@ Recorded as ADR-0049.
 ## What The First Real Agent Runs Found
 
 Pointing a built, linked installation at `taskr` -- a small Node CLI, not this repository -- and
-holding a real specification conversation turned up seven defects, in the order they stopped a run.
+holding a real specification conversation turned up ten defects, in the order they stopped a run.
 Each is fixed; each was invisible from inside this repository for the same reason the contracts were.
 
 - **`src/agents/heartbeatRunner.mjs` did not exist in `dist/`.** `tsc` emits `.ts` and nothing else,
@@ -126,12 +126,36 @@ Each is fixed; each was invisible from inside this repository for the same reaso
   message claimed they had been written into CompassRose's own tree. A display bug, and the first
   one only reachable once `--cwd` existed.
 
-The runs that followed produced, in `taskr`, a confirmed feature and a completed task: the
-brainstormer raised a product-axis decision and the human answered it, the audit found seven
-commitments the draft made that nobody had chosen, the validation-weight ensemble agreed unanimously
-on `architectural` citing that audit, and the implementer wrote `src/task-store/store.js` and its
-tests test-first, red before green, through gates that passed and a reviewer that approved. None of
-that had ever run outside this repository.
+- **A bootstrapped repository could never complete its first feature.** The last step of the first
+  feature ever built in one: three tasks planned, implemented and approved, every quality gate
+  passed, ten of ten acceptance criteria met, the application starting under its own smoke check --
+  and then `Run failed: Section "## Implemented" was not found.` The document `setup` seeded had no
+  such section; this repository's own has one, hand-written long before `setup` existed. The seeded
+  document was one line short, the shape it was short of was declared nowhere, and the validator
+  checked `## Status` and nothing else -- so `doctor` passed the repository as ready. The sections
+  the runtime writes into are now declared once in `PROJECT_STATE_REQUIRED_SECTIONS`, and a missing
+  one is a `FAIL project-state` line before any agent is called.
+- **The completion wrote before it finished rendering.** `writeText(featureState)` landed,
+  `writeText(projectState)` threw, the commit never ran. Completion is the one transition with no
+  way back -- a feature reading `completed` is skipped by every future run -- so `taskr` ended with
+  its feature marked complete on disk, absent from the project state, uncommitted, and unreachable
+  by anything that would have noticed. Both documents now come from one `renderCompletionDocuments`
+  call, which makes the ordering a property of the shape rather than of the line order.
+- **An empty markdown section swallowed the one below it.** Found cleaning up after the two above:
+  seeding `## Implemented` empty -- what a project that has implemented nothing honestly has --
+  wrote the first completion into `## Pending`. The header pattern `^## Heading\n+` consumed the
+  blank line and the newline opening the next heading, so an empty section measured as containing
+  its neighbour's body, and `replaceSection` overwrote it. Silently, and while producing a
+  well-formed document. Latent for every hand-edited state document, not only seeded ones.
+
+The runs that followed produced, in `taskr`, a working program: a task CLI with `add`, `list`,
+`done` and `rm` over a JSON store, 65 tests passing, three features' worth of layers -- store,
+operations, terminal boundary -- none of them designed by a human. Each task was planned,
+implemented test-first, gated and reviewed, and the feature closed on its own acceptance criteria
+and its own smoke check. The brainstormer had raised a product-axis decision and the human answered
+it; the audit found seven commitments the draft made that nobody had chosen; the validation-weight
+ensemble agreed unanimously on `architectural` citing that audit. None of that had ever run outside
+this repository.
 
 ## Remaining Deliverables
 
@@ -147,6 +171,14 @@ that had ever run outside this repository.
   path in a normally-placed repository, crossed the 260-character limit. Node wrote the file and git
   could not then delete it. Worked around in the target with `core.longpaths`, but the defect is
   CompassRose's: nothing bounds the slug it derives from a title.
+- **about twenty other sites write two documents in sequence** the way completion used to.
+  Completion is the one with no recovery path, which is why it was the one fixed; sweeping the
+  rest is a decision worth taking deliberately rather than inside a bug fix.
+- **the acceptance-criteria verifier runs `-s read-only` and tried to run the test suite.** Every
+  `mkdtemp` failed with `EPERM`, and it fell back to judging from the code and the test names --
+  reporting honestly that it had. The gates had already run the suite at each task, so the
+  verdict was backed; it was not backed by the verifier. Whether that step should be able to
+  execute what it judges is an open question, not a defect in ADR-0048.
 - `tests/testUtils.ts`'s `copyContractsIntoWorkspace` is called by about thirty tests and is no
   longer needed by the registry it existed for. It still runs, still copies CompassRose's contracts
   into every fixture workspace, and removing the calls is a mechanical change with enough surface
