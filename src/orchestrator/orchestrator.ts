@@ -183,6 +183,7 @@ import { OpenCodeCli } from '../agents/openCodeCli.js';
 import type { CommandExecution, TaskImplementer } from '../agents/taskImplementer.js';
 import { ContractRegistry } from './contractRegistry.js';
 import { getInstallationRoot, isSelfHosted } from '../config/installationPaths.js';
+import { coreRuntimeSmokeGateCommands } from './coreRuntimeSmokeGate.js';
 import type { StructuredSchemaId } from './contractRegistry.js';
 import {
   bulletList,
@@ -5635,40 +5636,9 @@ export class CompassRoseOrchestrator {
     });
   }
 
-  /**
-   * Standard gate injected deterministically -- never something the task itself declares --
-   * whenever the diff touches core runtime code (src/orchestrator/, src/cli/, src/task/). vitest
-   * tolerates CommonJS-style `require()` inside an ESM module through its own CJS interop; a
-   * real ESM loader does not (see scripts/runtimeSmokeTest.mjs, which imports src/cli/main.ts --
-   * and therefore its whole transitive module graph -- under tsx's real loader). That gap let a
-   * `require('node:fs')` regression pass every vitest-based gate this session and crash
-   * correctState() under the real CLI; this closes it without relying on any task author (LLM or
-   * human) to remember to ask for it.
-   *
-   * Invoked through `npx`, not a direct `node_modules/.bin/tsx` path: runShellCommand() runs this
-   * with `shell: true`, which on Windows means cmd.exe -- and cmd.exe (unlike a POSIX shell) will
-   * not execute an extension-less relative path directly, so the bin shim path only ever worked
-   * on POSIX. `npx` resolves the locally-installed `tsx` through the same platform-specific shim
-   * (`tsx.cmd` on Windows, the plain script elsewhere) that PATH-based lookup already relies on
-   * everywhere else in this codebase, so this gate now runs identically on both platforms. This
-   * blocked every task touching core runtime code on Windows until caught by hand while
-   * dogfooding via `npm run dev`.
-   */
+  /** See src/orchestrator/coreRuntimeSmokeGate.ts, which holds the decision and the reasoning. */
   private coreRuntimeSmokeGateCommands(): readonly string[] {
-    // Only when CompassRose is pointed at itself. The prefixes below and the script this runs are
-    // this repository's own layout, injected into logic that executes against whatever repository
-    // a run is aimed at -- so a target with its own `src/cli/` used to get a gate invoking a script
-    // it does not have, through a `tsx` it has not installed. Recorded as a self-hosting leak under
-    // 030-execution-trust and closed here rather than deleted: the gate is worth exactly what it
-    // was worth, in the one repository it means anything for (ADR-0049).
-    if (!isSelfHosted(this.repositoryRoot)) {
-      return [];
-    }
-
-    const coreRuntimePrefixes = ['src/orchestrator/', 'src/cli/', 'src/task/'];
-    const changedFiles = this.git.diffNameOnly();
-    const touchesCoreRuntime = changedFiles.some((path) => isPathAllowedByPrefix(path, coreRuntimePrefixes));
-    return touchesCoreRuntime ? ['npx tsx scripts/runtimeSmokeTest.mjs src/cli/main.ts'] : [];
+    return coreRuntimeSmokeGateCommands(this.git.diffNameOnly(), isSelfHosted(this.repositoryRoot));
   }
 
   /**

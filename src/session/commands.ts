@@ -23,6 +23,7 @@ import {
 } from '../contracts/runtime/recoveryDiagnosis.js';
 import type { CompassRoseOrchestrator } from '../orchestrator/orchestrator.js';
 import type { TerminalWriter } from './terminalWriter.js';
+import { recordProvenanceAndCoverage as recordProvenanceAndCoverageFor } from '../cli/specificationTurn.js';
 import type { BrainstormTurnRecord } from '../contracts/brainstormer/brainstormerContracts.js';
 import type { SessionCompetencyProfile } from '../contracts/brainstormer/competency.js';
 import type { RecordedDecision } from '../contracts/brainstormer/brainstormerContracts.js';
@@ -438,76 +439,18 @@ const createCommand: SessionCommand = {
 };
 
 /**
- * The two things a freshly drafted specification owes the project (024-specification-flow).
- *
- * Provenance is written unconditionally: a specification with no recorded decisions is a real and
- * legitimate outcome, and saying so is different from saying nothing.
- *
- * Coverage is asked rather than inferred. A drafted feature obviously addresses *something*, but
- * which dimension it closes is a judgment about scope, and the checklist exists precisely because
- * that judgment was being skipped. Guessing here would put the agent's opinion into a document
- * whose entire value is that a human decided it.
+ * The session's transport, wrapped around the shared implementation in
+ * `src/cli/specificationTurn.ts` -- which `compassrose brainstorm` uses too, so both entry points
+ * into the specification flow write provenance and run the audit rather than only this one.
  */
-async function recordProvenanceAndCoverage(context: SessionContext, itemId: string): Promise<void> {
-  // The audit runs before provenance is written, because what it finds belongs in that section.
-  // It is the only thing standing between "the agent surfaced every real decision" as a contract
-  // instruction and as a property anyone can check: a turn that quietly decided for the human
-  // looks exactly like a turn where nothing forked, but a *document* asserting something nobody
-  // ever said does not look like one that was chosen.
-  const unsourced = context.orchestrator.auditSpecificationDecisions(
+function recordProvenanceAndCoverage(context: SessionContext, itemId: string): Promise<void> {
+  return recordProvenanceAndCoverageFor(
+    context.orchestrator,
+    context.state,
     itemId,
-    context.state.transcript,
-    context.state.competency,
+    context.ask,
+    (lines) => print(context, lines),
   );
-
-  context.orchestrator.recordSpecificationProvenance(
-    itemId,
-    context.state.competency,
-    context.state.decisions,
-    unsourced,
-  );
-  context.state.decisions = [];
-
-  if (unsourced.length > 0) {
-    print(context, [
-      '',
-      `  ${unsourced.length === 1 ? 'One thing' : `${unsourced.length} things`} in this specification I decided without asking you:`,
-      ...unsourced.map((claim) => `    - ${claim.claim} (${claim.axis})`),
-      '',
-      '  Recorded as mine in the provenance section. Say so now if any of them should have been yours.',
-      '',
-    ]);
-  }
-
-  const uncovered = context.orchestrator.readDimensions().filter((dimension) => dimension.state === 'uncovered');
-  if (uncovered.length === 0) {
-    return;
-  }
-
-  print(context, [
-    '',
-    `  Does ${itemId} cover any of these?`,
-    ...uncovered.map((dimension, index) => `    ${index + 1}. ${dimension.name}`),
-    '',
-  ]);
-
-  const answer = (await context.ask('  Numbers, comma-separated, or anything else for none: ')).trim();
-  const chosen = answer
-    .split(',')
-    .map((part) => Number.parseInt(part.trim(), 10) - 1)
-    .filter((index) => Number.isInteger(index) && index >= 0 && index < uncovered.length)
-    .map((index) => uncovered[index]!.name);
-
-  if (chosen.length === 0) {
-    print(context, ['  Nothing marked covered.', '']);
-    return;
-  }
-
-  for (const name of chosen) {
-    context.orchestrator.markDimensionCovered(name, itemId, context.state.author);
-  }
-
-  print(context, [`  Marked covered by ${itemId}: ${chosen.join(', ')}.`, '']);
 }
 
 const readyCommand: SessionCommand = {

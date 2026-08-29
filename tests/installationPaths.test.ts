@@ -8,12 +8,13 @@ import {
   installationAssetPath,
   isContractPath,
   isSelfHosted,
-  localizeContractReferences,
+  localizePromptPaths,
   resolveContractOrRepositoryPath,
 } from '../src/config/installationPaths.js';
 import { HEARTBEAT_RUNNER_PATH } from '../src/agents/heartbeatRunner.js';
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
+const forwardSlashes = (value: string): string => value.split('\\').join('/').replace(/\/+$/, '');
 
 /**
  * ADR-0049. The whole point of this module is a distinction that is invisible from inside this
@@ -53,27 +54,55 @@ describe('installation paths', () => {
   test('the installation actually holds the contracts it is asked for', () => {
     // The check `doctor` performs, asserted here so a packaging change that stops shipping
     // src/contracts fails a test rather than a user's first run.
-    expect(resolveContractOrRepositoryPath(repositoryRoot, `${CONTRACTS_DIRECTORY}/planner/input.md`)).toBe(
-      join(repositoryRoot, 'src/contracts/planner/input.md'),
-    );
+    expect(existsSync(resolveContractOrRepositoryPath(repositoryRoot, `${CONTRACTS_DIRECTORY}/planner/input.md`))).toBe(true);
   });
 
   test('prompt text is left byte-identical when self-hosted', () => {
-    const prompt = 'Read only:\n- `src/contracts/planner/input.md`\n- `compassrose/CONFIG.md`\n';
-    expect(localizeContractReferences(prompt, repositoryRoot)).toBe(prompt);
+    const prompt = ['Read only:', '- `src/contracts/planner/input.md`', '- `compassrose/CONFIG.md`', ''].join('\n');
+    expect(localizePromptPaths(prompt, repositoryRoot)).toBe(prompt);
   });
 
-  test('prompt text names the installed contract when pointed elsewhere', () => {
+  /**
+   * The defect this exists to prevent, found on the first real run against another repository: a
+   * prompt naming the contract absolutely and the target's own documents relatively had the relative
+   * ones resolved against the installation, and the agent read CompassRose's decision records,
+   * roadmap and architecture document instead of the project's.
+   */
+  test('every path in a prompt shares one base when pointed elsewhere', () => {
     const foreign = join(repositoryRoot, '..', 'widget');
-    const localized = localizeContractReferences(
-      'Read only:\n- `src/contracts/planner/input.md`\n- `src/widget.ts`\n',
+    const localized = localizePromptPaths(
+      [
+        'Read only:',
+        '- `src/contracts/brainstormer/brainstorm-turn-prompt.md`',
+        '- `compassrose/ADR.md`',
+        '- `src/widget.ts`',
+        '',
+      ].join('\n'),
       foreign,
     );
 
-    const installed = getInstallationRoot().split('\\').join('/');
-    expect(localized).toContain(`\`${installed}/src/contracts/planner/input.md\``);
-    // The target's own paths stay relative: the agent's working directory is the target.
-    expect(localized).toContain('`src/widget.ts`');
+    const installed = forwardSlashes(getInstallationRoot());
+    const target = forwardSlashes(resolve(foreign));
+
+    expect(localized).toContain(`\`${installed}/src/contracts/brainstormer/brainstorm-turn-prompt.md\``);
+    expect(localized).toContain(`\`${target}/compassrose/ADR.md\``);
+    expect(localized).toContain(`\`${target}/src/widget.ts\``);
+    // Nothing relative is left for an agent to resolve against the wrong root.
+    expect(localized).not.toContain('`compassrose/ADR.md`');
+    expect(localized).not.toContain('`src/widget.ts`');
+  });
+
+  test('leaves alone what is not a repository-relative path', () => {
+    const foreign = join(repositoryRoot, '..', 'widget');
+    const prompt = [
+      'Run `npm run build`.',
+      'Follow `implementation_first`.',
+      'See `https://example.com/docs/x.md`.',
+      'Read `C:/already/absolute/file.md`.',
+      'The template is `feature.md`.',
+    ].join('\n');
+
+    expect(localizePromptPaths(prompt, foreign)).toBe(prompt);
   });
 });
 
@@ -86,6 +115,6 @@ describe('shipped assets that are not TypeScript', () => {
   test('the heartbeat runner is addressed from the installation source tree', () => {
     expect(HEARTBEAT_RUNNER_PATH).toBe(installationAssetPath('src/agents/heartbeatRunner.mjs'));
     expect(existsSync(HEARTBEAT_RUNNER_PATH)).toBe(true);
-    expect(HEARTBEAT_RUNNER_PATH.split('\\').join('/')).toContain('/src/agents/');
+    expect(forwardSlashes(HEARTBEAT_RUNNER_PATH)).toContain('/src/agents/');
   });
 });

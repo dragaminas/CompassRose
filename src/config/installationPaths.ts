@@ -84,22 +84,64 @@ export function resolveContractOrRepositoryPath(repositoryRoot: string, path: st
 }
 
 /**
- * Rewrites every contract reference in assembled prompt text so an agent whose working directory is
- * `repositoryRoot` can actually open what it was told to read.
+ * Gives an assembled prompt a single base, so nothing in it can be resolved against the wrong root.
  *
  * Applied at the adapter boundary -- the one place every prompt passes through -- rather than at the
- * hundred-odd sites that name a contract. Those literals stay as they are on purpose: `src/contracts/
- * planner/input.md` is the contract's *name*, stable across installations and the thing every
- * comment, artifact and feature document already refers to. Only the moment it becomes an
- * instruction to open a file needs to know where the file actually is.
+ * hundred-odd sites that name a file. Those literals stay as they are on purpose:
+ * `src/contracts/planner/input.md` is the contract's *name*, stable across installations and the
+ * thing every comment, artifact and feature document already refers to. Only the moment it becomes
+ * an instruction to open a file needs to know where the file actually is.
  *
- * A no-op when self-hosted, so this repository's own prompts are byte-identical to what they were.
+ * Why every path and not only the contracts: naming *some* paths absolutely and leaving the rest
+ * relative is worse than either alone. Observed on the first real run against another repository --
+ * a brainstorm turn about that project was handed
+ * `C:/.../CompassRose/src/contracts/brainstormer/brainstorm-turn-prompt.md` alongside a relative
+ * `compassrose/ADR.md`, and resolved the second against the base it had just learned from the
+ * first. It read CompassRose's own decision records, roadmap and architecture document, and
+ * reasoned about the target project with them. Nothing in the prompt was wrong; the two bases were.
+ *
+ * This does not confine anything. A read-only agent can read the filesystem whether or not a prompt
+ * names a path, and that belongs to the external CLI's sandbox (ADR-0048). What this removes is the
+ * ambiguity that made reading the wrong project the *correct* interpretation of its instructions.
+ *
+ * A no-op when self-hosted, where every path already shares one base, so this repository's own
+ * prompts are byte-identical to what they were.
  */
-export function localizeContractReferences(prompt: string, repositoryRoot: string): string {
+export function localizePromptPaths(prompt: string, repositoryRoot: string): string {
   if (isSelfHosted(repositoryRoot)) {
     return prompt;
   }
 
-  const installedPrefix = `${getInstallationRoot().split('\\').join('/')}/${CONTRACTS_PREFIX}`;
-  return prompt.split(CONTRACTS_PREFIX).join(installedPrefix);
+  const installation = forwardSlashes(getInstallationRoot());
+  const target = forwardSlashes(repositoryRoot);
+
+  // Only inside backticks: that is how every path this codebase renders into a prompt is written,
+  // and it keeps the rewrite away from prose that merely happens to contain a slash.
+  return prompt.replace(/`([^`\n]+)`/g, (whole, token: string) => {
+    if (!isRewritablePath(token)) {
+      return whole;
+    }
+
+    return `\`${isContractPath(token) ? installation : target}/${forwardSlashes(token)}\``;
+  });
+}
+
+function forwardSlashes(value: string): string {
+  return value.split('\\').join('/').replace(/\/+$/, '');
+}
+
+/**
+ * A repository-relative path, as opposed to a command, an identifier, or something already absolute.
+ *
+ * Requires a directory separator deliberately: a bare `feature.md` in prose is a reference to a kind
+ * of document, not an instruction to open one, and every path this codebase actually asks an agent
+ * to read carries a directory.
+ */
+function isRewritablePath(token: string): boolean {
+  if (/\s/.test(token) || !token.includes('/')) {
+    return false;
+  }
+
+  // Already absolute, a UNC path, or a URL.
+  return !/^([A-Za-z]:[\\/]|[\\/]|[A-Za-z][A-Za-z0-9+.-]*:\/\/)/.test(token);
 }

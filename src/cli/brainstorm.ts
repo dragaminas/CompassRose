@@ -8,7 +8,14 @@ import { parseRunArguments } from './runOptions.js';
 import type { CliEnvironment } from './main.js';
 import { runSetupCli } from './setup.js';
 import { runValidationLoopForItem } from './validationLoop.js';
-import type { BrainstormTurnRecord } from '../contracts/brainstormer/brainstormerContracts.js';
+import type { BrainstormTurnRecord, RecordedDecision } from '../contracts/brainstormer/brainstormerContracts.js';
+import type { SessionCompetencyProfile } from '../contracts/brainstormer/competency.js';
+import {
+  considerDimension,
+  recordProvenanceAndCoverage,
+  takeDecision,
+  type SpecificationConversationState,
+} from './specificationTurn.js';
 
 // Bounded per ADR-0033/34, mirroring validationLoop.ts's MAX_ROUNDS_PER_ITEM: every bounded loop
 // in this codebase declares its own ceiling rather than running unbounded.
@@ -24,6 +31,22 @@ const END_KEYWORD = 'terminado';
 
 function isAffirmative(answer: string): boolean {
   return /^s(i|í)$/i.test(answer.trim());
+}
+
+/**
+ * The profile the stance question above was always describing.
+ *
+ * It was asked, written into the transcript as prose, and then never passed to
+ * `runBrainstormTurn`, so every CLI session ran on the default profile regardless of the answer.
+ * Product stays with the human either way: this question is only about architecture, and nothing in
+ * the CLI asks about the other two axes.
+ */
+function competencyFromStance(wantsArchitectureInput: boolean): SessionCompetencyProfile {
+  return {
+    product: 'human',
+    architecture: wantsArchitectureInput ? 'human' : 'agent',
+    implementation: 'agent',
+  };
 }
 
 function buildArchitectureStanceTurn(wantsArchitectureInput: boolean): BrainstormTurnRecord {
@@ -128,10 +151,24 @@ export async function runBrainstormCli(
     // The declaration is never reset -- it belongs to the whole session and must be carried into
     // every feature this session drafts, unlike segmentMessages below, which resets per feature.
     const preamble: BrainstormTurnRecord[] = [declarationTurn];
-    let sessionTranscript: BrainstormTurnRecord[] = [...preamble];
-    let segmentMessages: BrainstormTurnRecord[] = [];
     let lastProposedTitle: string | null = null;
     let featuresDrafted = 0;
+
+    // The conversation's mutable state, in the shape `src/cli/specificationTurn.ts` operates on --
+    // the same shape the interactive session keeps, so a decision answered here reaches the next
+    // turn and the drafted specification exactly as it does there.
+    const conversation: SpecificationConversationState = {
+      transcript: [...preamble],
+      segment: [],
+      decisions: [] as RecordedDecision[],
+      competency: competencyFromStance(wantsArchitectureInput),
+      author: 'human',
+    };
+    const print = (lines: readonly string[]): void => {
+      for (const line of lines) {
+        stdout(line);
+      }
+    };
 
     outer:
     while (featuresDrafted < MAX_FEATURES_PER_SESSION) {
@@ -143,16 +180,24 @@ export async function runBrainstormCli(
       }
 
       if (trimmed.toLowerCase() === CREATE_KEYWORD) {
-        if (segmentMessages.length === 0) {
+        if (conversation.segment.length === 0) {
           stdout(`Contame la idea antes de escribir "${CREATE_KEYWORD}".`);
           continue outer;
         }
 
-        const proposedTitle = lastProposedTitle ?? segmentMessages[0]!.text.slice(0, 80);
-        const { featureId } = orchestrator.draftBrainstormedFeature([...preamble, ...segmentMessages], proposedTitle);
+        const proposedTitle = lastProposedTitle ?? conversation.segment[0]!.text.slice(0, 80);
+        const { featureId } = orchestrator.draftBrainstormedFeature(
+          [...preamble, ...conversation.segment],
+          proposedTitle,
+        );
         featuresDrafted += 1;
         stdout('');
         stdout(`Feature ${featureId} formalizada. Pasemos a validarla.`);
+
+        // What the draft owes the project before anyone validates it: a provenance section saying
+        // who decided what, and the audit of the draft against this very conversation. Both ran
+        // only in the interactive session until ADR-0049.
+        await recordProvenanceAndCoverage(orchestrator, conversation, featureId, ask, print);
 
         const { confirmed, transcript } = await runValidationLoopForItem(orchestrator, featureId, ask, stdout);
         if (confirmed) {
@@ -163,7 +208,7 @@ export async function runBrainstormCli(
           stdout(`${featureId} quedó pendiente de validación; podés confirmarla más tarde con "npm run feature-validation".`);
         }
 
-        segmentMessages = [];
+        conversation.segment = [];
         lastProposedTitle = null;
         stdout('');
         stdout(`¿Otra idea? Seguí describiendo, o escribí "${END_KEYWORD}" para terminar la sesión.`);
@@ -171,22 +216,33 @@ export async function runBrainstormCli(
       }
 
       const humanTurn: BrainstormTurnRecord = { role: 'human', text: trimmed, recorded_at: new Date().toISOString() };
-      sessionTranscript = [...sessionTranscript, humanTurn];
-      segmentMessages = [...segmentMessages, humanTurn];
+      conversation.transcript = [...conversation.transcript, humanTurn];
+      conversation.segment = [...conversation.segment, humanTurn];
 
-      if (segmentMessages.length > MAX_TURNS_PER_FEATURE_IDEA) {
+      if (conversation.segment.length > MAX_TURNS_PER_FEATURE_IDEA) {
         stdout('');
         stdout(`Se alcanzó el límite de ${MAX_TURNS_PER_FEATURE_IDEA} rondas para esta idea. Escribí "${CREATE_KEYWORD}" con lo que tengas hasta ahora.`);
         continue outer;
       }
 
-      const turnResult = orchestrator.runBrainstormTurn(sessionTranscript, trimmed);
-      sessionTranscript = [
-        ...sessionTranscript,
+      const turnResult = orchestrator.runBrainstormTurn(conversation.transcript, trimmed, conversation.competency);
+      conversation.transcript = [
+        ...conversation.transcript,
         { role: 'assistant', text: turnResult.reply, recorded_at: new Date().toISOString() },
       ];
       stdout('');
       stdout(turnResult.reply);
+
+      // A decision the agent surfaced instead of taking, and a dimension it noticed. Printing only
+      // `reply` dropped both: the profile above declared who owns which axis, and nothing acted on
+      // it.
+      if (turnResult.decision) {
+        await takeDecision(conversation, turnResult.decision, ask, print);
+      }
+
+      if (turnResult.proposed_dimension) {
+        await considerDimension(orchestrator, conversation, turnResult.proposed_dimension, ask, print);
+      }
 
       if (turnResult.ready_to_draft) {
         lastProposedTitle = turnResult.proposed_title ?? lastProposedTitle;

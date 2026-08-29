@@ -2,6 +2,10 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
+import {
+  CORE_RUNTIME_SMOKE_GATE_COMMAND,
+  coreRuntimeSmokeGateCommands,
+} from '../src/orchestrator/coreRuntimeSmokeGate.js';
 import type { ParsedTaskDocument } from '../src/contracts/task/taskContracts.js';
 import type { QualityGateResult } from '../src/contracts/runtime/attempts.js';
 import { CompassRoseOrchestrator } from '../src/orchestrator/orchestrator.js';
@@ -182,7 +186,13 @@ describe('core-runtime smoke gate', () => {
     expect(results[0]?.command).toBe('echo unused');
   });
 
-  test('is added, as an extra gate, when the diff touches src/orchestrator', () => {
+  // ADR-0049. This used to expect two gates. The prefixes and the script are *this* repository's
+  // layout, and the workspace below is not this repository -- a target with its own
+  // `src/orchestrator/` was being handed a gate invoking a script it does not have, through a `tsx`
+  // it has not installed. The gate itself is unchanged and still fires where it means something;
+  // see the pure-function cases below, which are how that half is asserted now that a wiring test
+  // cannot reach it.
+  test('is not added to a repository that is not this installation, even when the diff touches src/orchestrator', () => {
     workspace = createWorkspace('fixture-feature', 'F001-T01');
     writeFileSync(join(workspace.root, 'src', 'orchestrator', 'fixtureModule.ts'), 'export const fixture = true;\n', 'utf8');
 
@@ -192,8 +202,24 @@ describe('core-runtime smoke gate', () => {
 
     const results = access.runQualityGates(task);
 
-    expect(results).toHaveLength(2);
+    expect(results).toHaveLength(1);
     expect(results[0]?.command).toBe('echo unused');
-    expect(results[1]?.command).toBe('npx tsx scripts/runtimeSmokeTest.mjs src/cli/main.ts');
+  });
+});
+
+describe('the core-runtime smoke gate decision', () => {
+  test('fires when this repository\'s own runtime changed', () => {
+    expect(coreRuntimeSmokeGateCommands(['src/orchestrator/orchestrator.ts'], true)).toEqual([
+      CORE_RUNTIME_SMOKE_GATE_COMMAND,
+    ]);
+    expect(coreRuntimeSmokeGateCommands(['src/cli/main.ts'], true)).toEqual([CORE_RUNTIME_SMOKE_GATE_COMMAND]);
+    expect(coreRuntimeSmokeGateCommands(['src/task/taskDocument.ts'], true)).toEqual([CORE_RUNTIME_SMOKE_GATE_COMMAND]);
+  });
+
+  test('stays out of the way otherwise', () => {
+    expect(coreRuntimeSmokeGateCommands(['compassrose/CONFIG.md'], true)).toEqual([]);
+    // The same diff, in someone else's repository: the script and the prefixes mean nothing there.
+    expect(coreRuntimeSmokeGateCommands(['src/orchestrator/orchestrator.ts'], false)).toEqual([]);
+    expect(coreRuntimeSmokeGateCommands(['src/cli/main.ts'], false)).toEqual([]);
   });
 });

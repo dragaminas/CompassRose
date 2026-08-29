@@ -9,7 +9,7 @@ import { logAgentEnd, logAgentStart, logAgentStream } from './agentLogging.js';
 import { codexSandboxArguments } from './sandboxArguments.js';
 import { DEFAULT_EXECUTION_TRUST, type ExecutionTrustPolicy } from '../config/executionTrust.js';
 import type { CommandExecution, TaskImplementer } from './taskImplementer.js';
-import { localizeContractReferences } from '../config/installationPaths.js';
+import { localizePromptPaths } from '../config/installationPaths.js';
 
 export class CodexCli implements TaskImplementer {
   constructor(
@@ -31,10 +31,12 @@ export class CodexCli implements TaskImplementer {
     const stdoutPath = join(tempDir, 'stdout.log');
     const stderrPath = join(tempDir, 'stderr.log');
     writeFileSync(schemaPath, `${JSON.stringify(schema, null, 2)}\n`, 'utf8');
-    // ADR-0049: the prompt names CompassRose's contracts by their logical path. This is the one
-    // boundary where that name has to become a file the agent can actually open, and outside this
-    // repository that file lives in the installation, not here. A no-op when self-hosted.
-    writeFileSync(promptPath, localizeContractReferences(prompt, this.repositoryRoot), 'utf8');
+    // ADR-0049: the prompt names files by their logical path -- CompassRose's contracts relative to
+    // the installation, everything else relative to the target. This is the one boundary where those
+    // names have to become paths an agent can open, and where they must all share one base: a prompt
+    // mixing the two got its relative paths resolved against the installation, and an agent read the
+    // wrong project's documents. A no-op when self-hosted.
+    writeFileSync(promptPath, localizePromptPaths(prompt, this.repositoryRoot), 'utf8');
 
     const args = [
       'exec',
@@ -100,10 +102,12 @@ export class CodexCli implements TaskImplementer {
     const promptPath = join(tempDir, 'prompt.txt');
     const stdoutPath = join(tempDir, 'stdout.log');
     const stderrPath = join(tempDir, 'stderr.log');
-    // ADR-0049: the prompt names CompassRose's contracts by their logical path. This is the one
-    // boundary where that name has to become a file the agent can actually open, and outside this
-    // repository that file lives in the installation, not here. A no-op when self-hosted.
-    writeFileSync(promptPath, localizeContractReferences(prompt, this.repositoryRoot), 'utf8');
+    // ADR-0049: the prompt names files by their logical path -- CompassRose's contracts relative to
+    // the installation, everything else relative to the target. This is the one boundary where those
+    // names have to become paths an agent can open, and where they must all share one base: a prompt
+    // mixing the two got its relative paths resolved against the installation, and an agent read the
+    // wrong project's documents. A no-op when self-hosted.
+    writeFileSync(promptPath, localizePromptPaths(prompt, this.repositoryRoot), 'utf8');
 
     const args = [
       'exec',
