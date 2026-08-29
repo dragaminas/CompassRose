@@ -92,13 +92,23 @@ export function resolveContractOrRepositoryPath(repositoryRoot: string, path: st
  * thing every comment, artifact and feature document already refers to. Only the moment it becomes
  * an instruction to open a file needs to know where the file actually is.
  *
- * Why every path and not only the contracts: naming *some* paths absolutely and leaving the rest
- * relative is worse than either alone. Observed on the first real run against another repository --
- * a brainstorm turn about that project was handed
+ * The failure it fixes: a brainstorm turn about another project was handed
  * `C:/.../CompassRose/src/contracts/brainstormer/brainstorm-turn-prompt.md` alongside a relative
- * `compassrose/ADR.md`, and resolved the second against the base it had just learned from the
- * first. It read CompassRose's own decision records, roadmap and architecture document, and
- * reasoned about the target project with them. Nothing in the prompt was wrong; the two bases were.
+ * `compassrose/ADR.md`, and resolved the second against the base it had just learned from the first.
+ * It read CompassRose's own decision records, roadmap and architecture document and reasoned about
+ * the target project with them. Nothing in the prompt was wrong; the two bases were.
+ *
+ * **Only the contracts become absolute.** Making the target's paths absolute too removes the same
+ * ambiguity and introduces a worse problem, which took a second run against a real project to see:
+ * a model writes paths in the style it was shown. The planner, handed absolute paths throughout,
+ * wrote absolute `allowed_paths` into the feature specification and then into a task document --
+ * where `isPathAllowedByPrefix` compares them against repository-relative diff paths and can never
+ * match. The implementer wrote correct, passing code and the run refused it as out of scope.
+ *
+ * So the target keeps relative paths, exactly as the model must give them back, and the ambiguity is
+ * closed by saying where they resolve from instead. That is an instruction rather than a mechanism,
+ * and it is the right trade here: the ambiguity was created by showing one absolute path with no
+ * base stated, not by relative paths as such.
  *
  * This does not confine anything. A read-only agent can read the filesystem whether or not a prompt
  * names a path, and that belongs to the external CLI's sandbox (ADR-0048). What this removes is the
@@ -113,17 +123,28 @@ export function localizePromptPaths(prompt: string, repositoryRoot: string): str
   }
 
   const installation = forwardSlashes(getInstallationRoot());
-  const target = forwardSlashes(repositoryRoot);
+  const localized = prompt.replace(/`([^`\n]+)`/g, (whole, token: string) => (
+    isRewritablePath(token) && isContractPath(token)
+      ? `\`${installation}/${forwardSlashes(token)}\``
+      : whole
+  ));
 
-  // Only inside backticks: that is how every path this codebase renders into a prompt is written,
-  // and it keeps the rewrite away from prose that merely happens to contain a slash.
-  return prompt.replace(/`([^`\n]+)`/g, (whole, token: string) => {
-    if (!isRewritablePath(token)) {
-      return whole;
-    }
+  return `${workingDirectoryPreamble(forwardSlashes(repositoryRoot))}\n\n${localized}`;
+}
 
-    return `\`${isContractPath(token) ? installation : target}/${forwardSlashes(token)}\``;
-  });
+/**
+ * States the base the relative paths below resolve from, and asks for output in the same style.
+ *
+ * The last sentence is not decoration. A model writes paths the way it was shown them, and the
+ * paths it writes into `allowed_paths` are compared against repository-relative diff paths.
+ */
+function workingDirectoryPreamble(target: string): string {
+  return [
+    `Your working directory is \`${target}\`.`,
+    'Every path below that is not absolute is relative to it. The absolute ones are CompassRose\'s own',
+    'contracts, which live with the tool and outside this repository.',
+    'Write every path in your own output repository-relative, exactly as the relative ones appear here.',
+  ].join('\n');
 }
 
 function forwardSlashes(value: string): string {
@@ -135,10 +156,12 @@ function forwardSlashes(value: string): string {
  *
  * Requires a directory separator deliberately: a bare `feature.md` in prose is a reference to a kind
  * of document, not an instruction to open one, and every path this codebase actually asks an agent
- * to read carries a directory.
+ * to read carries a directory. Either separator counts -- `path.relative` returns backslashes on
+ * Windows, and those four `compassrose\...\feature.md` entries were exactly the ones a first attempt
+ * skipped and the planner then resolved against the installation.
  */
 function isRewritablePath(token: string): boolean {
-  if (/\s/.test(token) || !token.includes('/')) {
+  if (/\s/.test(token) || !/[\\/]/.test(token)) {
     return false;
   }
 

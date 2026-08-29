@@ -74,12 +74,79 @@ Recorded as ADR-0049.
 - the generated `CONFIG.md` reads `name: widget`, `typecheck: "npm run typecheck"`,
   `tests: "npm run test"`, `build: "npm run build"`.
 
+## What The First Real Agent Runs Found
+
+Pointing a built, linked installation at `taskr` -- a small Node CLI, not this repository -- and
+holding a real specification conversation turned up seven defects, in the order they stopped a run.
+Each is fixed; each was invisible from inside this repository for the same reason the contracts were.
+
+- **`src/agents/heartbeatRunner.mjs` did not exist in `dist/`.** `tsc` emits `.ts` and nothing else,
+  and the sidecar every agent call spawns resolved next to its own module -- `src/agents/` under
+  tsx, `dist/agents/` after a build. Every agent call from a built installation died with
+  `MODULE_NOT_FOUND`. Nobody had ever run from `dist`. Now addressed through
+  `installationAssetPath`, the same rule as the contracts, with `tests/package-metadata.test.js`
+  failing if `files` stops shipping `src`.
+- **The core-runtime smoke gate leaked into the target.** `npx tsx scripts/runtimeSmokeTest.mjs
+  src/cli/main.ts`, injected whenever a diff touched `src/orchestrator/`, `src/cli/` or `src/task/`
+  -- this repository's layout, in logic that runs against whatever repository it is aimed at. A
+  target with its own `src/cli/` would have been handed a gate invoking a script it does not have.
+  Recorded under `030`'s Remaining Deliverables and closed here, not deleted: bounded to a
+  self-hosted run, and the decision extracted into a pure function so both halves are assertable.
+- **A prompt had two bases, and the agent resolved the wrong one.** Contracts absolute against the
+  installation, everything else relative against the target. Codex resolved the relative paths
+  against the base it had just learned from the absolute one and read CompassRose's own `ADR.md`,
+  `SAD.md`, `ROADMAP.md` and `DMS.md` while reasoning about `taskr`. Nothing in the prompt was
+  wrong; the two bases were, and reading the wrong project was the correct interpretation of what it
+  had been handed.
+- **Making every path absolute fixed that and cost more than it saved.** The correction to the
+  correction, and it took a second full run to see it: a model writes paths in the style it was
+  shown. The planner, handed absolute paths throughout, wrote absolute `allowed_paths` into the
+  feature specification and then into a task document -- where `isPathAllowedByPrefix` compares them
+  against repository-relative diff paths and can never match. The implementer produced correct code
+  with eleven passing tests and the run refused it as out of scope. Only the contracts are absolute
+  now; a contract is always an instruction to read and never a value the model gives back, while a
+  target path is usually both. The remaining ambiguity is closed by a preamble that states the
+  working directory and asks for output in the same style the relative paths were shown in.
+- **The default gate allowlist did not admit Node's own test runner.** It carried `pytest`,
+  `go test`, `cargo`, `mvn` and `dotnet`, and the first foreign project it was ever pointed at was a
+  zero-dependency Node CLI -- the natural shape for a small tool -- whose planner proposed
+  `node --test tests/task-store/` and was refused. Added as `node --test`, never a bare `node`: a
+  prefix ends at a word boundary, so this admits the runner and still refuses `node -e "<anything>"`.
+- **`compassrose brainstorm` implemented none of `024`.** It printed the agent's `reply` and dropped
+  the decision it surfaced instead of taking, the dimension it proposed, the provenance section and
+  the audit of the draft against its own transcript -- all four reachable only from the interactive
+  session, while `brainstorm` is the other documented entry point into the same flow. Its
+  architecture question was written into the transcript as prose and never reached the competency
+  profile, so answering it changed nothing. The three mechanisms now live in
+  `src/cli/specificationTurn.ts`, shared by both front ends the way `runValidationLoopForItem`
+  already is.
+- **The agent-context log line printed a walk back into the installation.** `relativePath()` against
+  an absolute repository root resolved its second argument through `process.cwd()`, which is the
+  repository root only when nobody passed `--cwd`. The artifacts landed where they belong; the
+  message claimed they had been written into CompassRose's own tree. A display bug, and the first
+  one only reachable once `--cwd` existed.
+
+The runs that followed produced, in `taskr`, a confirmed feature and a completed task: the
+brainstormer raised a product-axis decision and the human answered it, the audit found seven
+commitments the draft made that nobody had chosen, the validation-weight ensemble agreed unanimously
+on `architectural` citing that audit, and the implementer wrote `src/task-store/store.js` and its
+tests test-first, red before green, through gates that passed and a reviewer that approved. None of
+that had ever run outside this repository.
+
 ## Remaining Deliverables
 
-- **no agent has been called against a foreign repository.** Everything verified above is
-  deterministic: bootstrap, readiness, the scheduler's decision to stop. A real specification
-  conversation and a full plan → implement → gate → review cycle are what the validation program is
-  for, and none of it has run yet.
+- **the prompt localizer removes an ambiguity, not a capability.** A read-only agent can read the
+  filesystem whether or not a prompt names a path; that boundary belongs to the external CLI's
+  sandbox (ADR-0048), and nothing here confines it. What is fixed is that reading the wrong
+  project is no longer the reasonable interpretation of the instructions given.
+- the rewrite keys on backticks, which is how every path this codebase renders into a prompt is
+  written. A path written any other way stays relative -- correct for the target, wrong for a
+  contract. Nothing currently does that.
+- **task and feature slugs are unbounded, and Windows is not.** A feature titled in a sentence
+  produced a 105-character task filename which, under a nested `compassrose/features/<slug>/tasks/`
+  path in a normally-placed repository, crossed the 260-character limit. Node wrote the file and git
+  could not then delete it. Worked around in the target with `core.longpaths`, but the defect is
+  CompassRose's: nothing bounds the slug it derives from a title.
 - `tests/testUtils.ts`'s `copyContractsIntoWorkspace` is called by about thirty tests and is no
   longer needed by the registry it existed for. It still runs, still copies CompassRose's contracts
   into every fixture workspace, and removing the calls is a mechanical change with enough surface

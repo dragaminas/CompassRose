@@ -33,6 +33,14 @@ export const DEFAULT_GATE_COMMAND_ALLOWLIST: readonly string[] = [
   'yarn test',
   'bun run',
   'bun test',
+  // Node's own test runner, on the same footing as `pytest`, `go test` and `cargo`. Missing until a
+  // real run against a zero-dependency Node project -- the natural shape for a small tool, and the
+  // first foreign project this was ever pointed at -- had its planner refused for proposing it.
+  //
+  // `node --test`, never a bare `node`. A prefix must end at a word boundary, so this admits
+  // `node --test tests/` and does not admit `node -e "<any program at all>"`, which is the entry
+  // this repository's own CONFIG.md declares for itself and pays for in the bound it gives up.
+  'node --test',
   'git diff',
   'git status',
   'cargo',

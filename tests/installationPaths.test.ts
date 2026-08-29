@@ -68,31 +68,53 @@ describe('installation paths', () => {
    * ones resolved against the installation, and the agent read CompassRose's decision records,
    * roadmap and architecture document instead of the project's.
    */
-  test('every path in a prompt shares one base when pointed elsewhere', () => {
+  test('a contract is named absolutely, wherever it appears', () => {
     const foreign = join(repositoryRoot, '..', 'widget');
     const localized = localizePromptPaths(
       [
         'Read only:',
         '- `src/contracts/brainstormer/brainstorm-turn-prompt.md`',
-        '- `compassrose/ADR.md`',
-        '- `src/widget.ts`',
         '',
+        'Follow `src/contracts/planner/feature-scope-guard.md` when filling scope_justification.',
       ].join('\n'),
       foreign,
     );
 
     const installed = forwardSlashes(getInstallationRoot());
-    const target = forwardSlashes(resolve(foreign));
-
     expect(localized).toContain(`\`${installed}/src/contracts/brainstormer/brainstorm-turn-prompt.md\``);
-    expect(localized).toContain(`\`${target}/compassrose/ADR.md\``);
-    expect(localized).toContain(`\`${target}/src/widget.ts\``);
-    // Nothing relative is left for an agent to resolve against the wrong root.
-    expect(localized).not.toContain('`compassrose/ADR.md`');
-    expect(localized).not.toContain('`src/widget.ts`');
+    expect(localized).toContain(`\`${installed}/src/contracts/planner/feature-scope-guard.md\``);
+    expect(localized).not.toContain('`src/contracts/planner/feature-scope-guard.md`');
   });
 
-  test('leaves alone what is not a repository-relative path', () => {
+  /**
+   * Learned by breaking it. Making the target's paths absolute closes the same ambiguity and costs
+   * more than it saves: a model writes paths in the style it was shown, so the planner wrote
+   * absolute `allowed_paths` into a task document, where `isPathAllowedByPrefix` compares them
+   * against repository-relative diff paths and can never match. The implementer wrote correct,
+   * passing code and the run refused it as out of scope.
+   */
+  test("the target's own paths stay relative, and the prompt says what they are relative to", () => {
+    const foreign = join(repositoryRoot, '..', 'widget');
+    const localized = localizePromptPaths(
+      [
+        'Read only:',
+        '- `compassrose/ADR.md`',
+        '- `compassrose\\features\\001-widget\\feature.md`',
+        '',
+        'Allowed:',
+        '- `src/domain`',
+      ].join('\n'),
+      foreign,
+    );
+
+    expect(localized).toContain('- `compassrose/ADR.md`');
+    expect(localized).toContain('- `compassrose\\features\\001-widget\\feature.md`');
+    expect(localized).toContain('- `src/domain`');
+    expect(localized).toContain(`Your working directory is \`${forwardSlashes(resolve(foreign))}\`.`);
+    expect(localized).toContain('Write every path in your own output repository-relative');
+  });
+
+  test('leaves alone what is not a contract path', () => {
     const foreign = join(repositoryRoot, '..', 'widget');
     const prompt = [
       'Run `npm run build`.',
@@ -102,7 +124,8 @@ describe('installation paths', () => {
       'The template is `feature.md`.',
     ].join('\n');
 
-    expect(localizePromptPaths(prompt, foreign)).toBe(prompt);
+    // The prompt itself is untouched; only the working-directory preamble is added in front of it.
+    expect(localizePromptPaths(prompt, foreign).endsWith(prompt)).toBe(true);
   });
 });
 

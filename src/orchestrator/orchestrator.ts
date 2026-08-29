@@ -499,8 +499,13 @@ export class CompassRoseOrchestrator {
     const root = join('logs', 'agent-contexts', this.runId);
     this.artifacts.writeJson(join(root, `${baseName}.json`), context);
     this.artifacts.writeRawText(join(root, `${baseName}.prompt.txt`), context.prompt);
+    // `root` is already relative to the artifact store, so it is printed as it is. Passing it to
+    // path.relative() against an absolute repository root made Node resolve it against
+    // `process.cwd()` instead -- which is the repository root only when nobody used `--cwd`. Pointed
+    // elsewhere it printed a walk back into the installation, claiming a run's artifacts had been
+    // written into CompassRose's own tree. They had not; only the message was wrong.
     console.log(
-      `[${context.role}:${context.kind}] agent context saved at ${relativePath(this.repositoryRoot, join(root, `${baseName}.json`))}`,
+      `[${context.role}:${context.kind}] agent context saved at ${join(root, `${baseName}.json`)}`,
     );
   }
 

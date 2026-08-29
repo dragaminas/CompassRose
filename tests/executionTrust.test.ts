@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { readProjectConfiguration } from '../src/config/configReader.js';
 import {
   DEFAULT_EXECUTION_TRUST,
+  DEFAULT_GATE_COMMAND_ALLOWLIST,
   describeExecutionTrust,
   resolveExecutionTrust,
 } from '../src/config/executionTrust.js';
@@ -28,6 +29,24 @@ describe('what a planned quality gate is allowed to be', () => {
     const real = ['npx vitest run tests/doctor/doctorDiagnostics.test.ts', 'npm run typecheck', 'git diff --check'];
 
     expect(findGateCommandRejections(real, ALLOWLIST)).toEqual([]);
+  });
+
+  /**
+   * Calibration the only way it can be established: a real run against a project that is not this
+   * one. The first was a zero-dependency Node CLI, and its planner proposed `node --test tests/...`
+   * -- the natural gate for that shape of project, and the one runner the default list had left out
+   * while carrying `pytest`, `go test`, `cargo`, `mvn` and `dotnet`. The run stopped at the guard,
+   * legibly, which is the design working and the list being wrong.
+   */
+  test("permits Node's own test runner, and still refuses node as a way to run anything", () => {
+    expect(findGateCommandRejections(['node --test tests/task-store/'], DEFAULT_GATE_COMMAND_ALLOWLIST)).toEqual([]);
+    expect(findGateCommandRejections(['node --test'], DEFAULT_GATE_COMMAND_ALLOWLIST)).toEqual([]);
+
+    // A prefix has to end at a word boundary, which is what keeps `node --test` from becoming
+    // `node <anything>`.
+    expect(findGateCommandRejections(['node -e "require(\'fs\').rmSync(\'.\', {recursive: true})"'], DEFAULT_GATE_COMMAND_ALLOWLIST)).toHaveLength(1);
+    expect(findGateCommandRejections(['node build.js'], DEFAULT_GATE_COMMAND_ALLOWLIST)).toHaveLength(1);
+    expect(findGateCommandRejections(['node --testify x'], DEFAULT_GATE_COMMAND_ALLOWLIST)).toHaveLength(1);
   });
 
   test('refuses a command no prefix covers', () => {
