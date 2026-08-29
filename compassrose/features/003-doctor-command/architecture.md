@@ -78,7 +78,7 @@ This feature must not affect:
 ## Design Notes
 
 - The canonical config path is checked before parsing. If it is missing or cannot be parsed, later config-dependent checks should be represented as unavailable or failed with an explanatory reason rather than causing an opaque crash.
-- The required documentation checks cover the paths named by `project.documentation_root`, `documentation.roadmap`, `documentation.project_state`, `documentation.config`, and `documentation.contracts_root`.
+- The required documentation checks cover the paths named by `project.documentation_root`, `documentation.roadmap`, `documentation.project_state`, `documentation.config`, and `documentation.contracts_root`. (ADR-0049 removed the last of these and replaced it with a `contracts` check over the installation.)
 - `adapters.external_cli.type` must equal `external_cli` for the MVP; Doctor does not validate or invoke the configured adapter command.
 - The four required command keys are valid when present with an empty string or a non-empty shell command string. Doctor does not infer whether a command is executable.
 - The current directory may be nested inside the repository; all repository-relative path checks should use the detected repository root.

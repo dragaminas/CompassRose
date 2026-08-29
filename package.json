@@ -24,7 +24,8 @@
     "proto:typecheck": "tsc -p proto/tsconfig.json",
     "proto:e2e": "tsx proto/protoCompassRose.e2e.ts",
     "proto:e2e:codex": "cross-env PROTO_E2E_IMPLEMENTER=codex tsx proto/protoCompassRose.e2e.ts",
-    "proto:smoke": "tsx proto/protoCompassRose.smoke.e2e.ts"
+    "proto:smoke": "tsx proto/protoCompassRose.smoke.e2e.ts",
+    "prepare": "npm run build"
   },
   "repository": {
     "type": "git",
@@ -47,5 +48,12 @@
   },
   "bin": {
     "compassrose": "./dist/cli/main.js"
-  }
+  },
+  "files": [
+    "dist",
+    "src",
+    "compassrose/templates",
+    "compassrose/features/README.md",
+    "compassrose/fixes/README.md"
+  ]
 }

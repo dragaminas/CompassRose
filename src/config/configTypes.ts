@@ -177,7 +177,6 @@ export interface DocumentationSection {
   readonly roadmap: string;
   readonly project_state: string;
   readonly config: string;
-  readonly contracts_root: string;
   /**
    * Optional; defaults to 'compassrose' (src/config/compassRosePaths.ts's
    * DEFAULT_COMPASSROSE_ROOT) when omitted. Documents where CompassRose's own operational

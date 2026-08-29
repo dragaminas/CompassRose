@@ -14,8 +14,8 @@
  * the dimensions checklist in 024-specification-flow.
  */
 import { existsSync, statSync } from 'node:fs';
-import { join } from 'node:path';
 import { readUtf8 } from '../filesystem/textNormalization.js';
+import { resolveContractOrRepositoryPath } from '../config/installationPaths.js';
 
 export type ManifestEntryKind = 'specification' | 'architecture' | 'state' | 'contract' | 'code' | 'task';
 
@@ -69,7 +69,10 @@ export function manifestEntry(
  * crash three layers down.
  */
 export function readEntry(repositoryRoot: string, entry: ManifestEntry): string {
-  const absolutePath = join(repositoryRoot, entry.path);
+  // A `src/contracts/...` entry names one of CompassRose's own contracts, which lives with the
+  // installation rather than with the target repository (ADR-0049). Everything else is the
+  // target's, and resolves against its root exactly as before.
+  const absolutePath = resolveContractOrRepositoryPath(repositoryRoot, entry.path);
   if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
     return '';
   }

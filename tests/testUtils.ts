@@ -36,9 +36,14 @@ export function readFixtureConfigMarkdown(): string {
 }
 
 /**
- * Copies this repository's real src/contracts tree into a test workspace so a full
- * CompassRoseOrchestrator (via ContractRegistry) can construct against it, the same way
- * proto's e2e harness syncs contracts into its cloned scenario workspaces.
+ * Copies this repository's real src/contracts tree into a test workspace.
+ *
+ * It existed because `ContractRegistry` resolved every schema against the *target* root, so an
+ * orchestrator could not be constructed over a workspace without CompassRose's contracts inside it.
+ * ADR-0049 moved that resolution to the installation, so the registry no longer needs this, and
+ * neither does the manifest budget check. It stays for now because about thirty tests call it and
+ * unwinding them is a mechanical pass of its own -- recorded under `031-installation-boundary`'s
+ * Remaining Deliverables rather than ridden along with the change that made it unnecessary.
  */
 export function copyContractsIntoWorkspace(root: string): void {
   const contractsSource = fileURLToPath(new URL('../src/contracts', import.meta.url));

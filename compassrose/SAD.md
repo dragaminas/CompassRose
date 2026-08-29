@@ -188,6 +188,12 @@ Responsibilities:
 
 The CLI must be usable without an IDE.
 
+**Every command takes `--cwd`** (`031-installation-boundary`). Until ADR-0049 only `run` did;
+`setup`, `doctor` and the session took none, and the two that advertised it parsed it and then
+resolved the git root from the process's own directory instead. The consequence was that the only
+way to point CompassRose at another repository was to stand inside it, which required it to already
+be installed there.
+
 **The interactive session is the primary interface** (`023-terminal-session`): `compassrose` with no
 arguments opens it, and every subcommand survives for non-interactive callers. `src/session/` holds
 it, split so that only one module may emit an escape sequence (`terminalWriter.ts`) and everything
@@ -729,6 +735,18 @@ docs/
 ```
 
 This structure may evolve, but the MVP should keep all CompassRose state visible and versionable.
+
+**Two roots, not one** (`031-installation-boundary`, ADR-0049). What the sketch above describes is
+the *target* repository: `compassrose/` for CompassRose's operational documents (ADR-0046), `docs/`
+and the source tree for the project's own. CompassRose's **installation** is a separate root,
+resolved in `src/config/installationPaths.ts`, and it owns `src/contracts/` — the role prompts, the
+JSON schemas, the documents describing the loop. Those are the tool's program data: versioned with
+the tool, identical for every project, read from the installation and never copied into a target.
+
+The distinction was invisible until CompassRose was pointed somewhere else, because here the two
+roots are the same directory. `src/contracts/planner/input.md` remains a contract's *name* at every
+site that refers to one, and becomes a path at exactly three: `ContractRegistry`, `readEntry`, and
+the adapter line that writes an assembled prompt for an agent whose working directory is the target.
 
 ---
 

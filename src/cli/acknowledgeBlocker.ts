@@ -24,24 +24,27 @@ export async function runAcknowledgeBlockerCli(
   const stderr = environment.stderr ?? ((message: string) => process.stderr.write(`${message}\n`));
   const cwd = environment.cwd ?? process.cwd();
 
-  const gitRoot = findGitRepositoryRoot(cwd);
+  // Arguments before the git-root lookup, so `--cwd` can actually point somewhere else. It was
+  // accepted and then discarded here until ADR-0049: the root was resolved from the process's own
+  // directory and passed to the orchestrator as `cwd: gitRoot`, overwriting whatever was parsed.
+  let options;
+  try {
+    options = parseRunArguments(argv, cwd);
+  } catch (error) {
+    stderr(error instanceof Error ? error.message : String(error));
+    stderr('Usage: compassrose acknowledge-blocker [--no-commit] [--cwd <path>]');
+    return 1;
+  }
+
+  const gitRoot = findGitRepositoryRoot(options.cwd);
   if (gitRoot === null) {
-    stderr('runtime preflight: git repository: current directory is not inside a git repository');
+    stderr(`runtime preflight: git repository: ${options.cwd} is not inside a git repository`);
     return 1;
   }
 
   const configPath = getBootstrapConfigPath(gitRoot);
   if (!existsSync(configPath)) {
-    stderr(`runtime preflight: configuration: ${configPath} is absent. Run "npm run setup" first.`);
-    return 1;
-  }
-
-  let options;
-  try {
-    options = parseRunArguments(argv, gitRoot);
-  } catch (error) {
-    stderr(error instanceof Error ? error.message : String(error));
-    stderr('Usage: compassrose acknowledge-blocker [--no-commit] [--cwd <path>]');
+    stderr(`runtime preflight: configuration: ${configPath} is absent. Run "compassrose setup" first.`);
     return 1;
   }
 

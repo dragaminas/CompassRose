@@ -27,6 +27,8 @@ export interface ProjectFact<T> {
 }
 
 export interface ProjectFacts {
+  /** What the project calls itself. A manifest that declares it is a statement; a directory name is a habit. */
+  readonly name: ProjectFact<string> | null;
   readonly languages: ProjectFact<readonly string[]> | null;
   readonly packageManager: ProjectFact<string> | null;
   readonly buildSystem: ProjectFact<string> | null;
@@ -40,6 +42,7 @@ export interface ProjectFacts {
 }
 
 export const EMPTY_PROJECT_FACTS: ProjectFacts = {
+  name: null,
   languages: null,
   packageManager: null,
   buildSystem: null,
@@ -155,6 +158,7 @@ function describeValue(value: unknown): string {
 }
 
 const FACT_LABELS: Readonly<Record<keyof ProjectFacts, string>> = {
+  name: 'Name',
   languages: 'Languages',
   packageManager: 'Package manager',
   buildSystem: 'Build system',

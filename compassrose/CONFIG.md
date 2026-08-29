@@ -191,7 +191,10 @@ documentation:
     review: src/contracts/reviewer/review-prompt.md
     correction_task: src/contracts/reviewer/correction-task-prompt.md
   templates_root: compassrose/templates
-  contracts_root: src/contracts
+  # contracts_root was removed by ADR-0049: CompassRose reads its own contracts from where it is
+  # installed, so a project has nothing to declare and Doctor has nothing to look for here. The
+  # src/contracts/... paths above and below are the contracts' stable *names*, resolved against
+  # the installation at the moment a prompt is handed to an agent.
   state_contract: src/contracts/state/feature-state.md
   runtime_operation: src/contracts/runtime/operation-loop.md
 ```
@@ -309,7 +312,6 @@ Required fields inside that MVP contract:
 - documentation.roadmap
 - documentation.project_state
 - documentation.config
-- documentation.contracts_root
 ```
 
 MVP-specific interpretation rules:
@@ -320,7 +322,7 @@ MVP-specific interpretation rules:
 - Future-facing sections outside the required subset may stay documented here, but Doctor must not require them for the first implementation.
 - `adapters.external_cli.type` must be `external_cli`.
 - `project.supported_platforms` must list the current platform.
-- The paths named by `project.documentation_root`, `documentation.roadmap`, `documentation.project_state`, `documentation.config`, and `documentation.contracts_root` must exist inside the repository.
+- The paths named by `project.documentation_root`, `documentation.roadmap`, `documentation.project_state`, and `documentation.config` must exist inside the repository. CompassRose's own contracts are not among them: they are read from the installation (ADR-0049), and Doctor's `contracts` check covers that instead.
 ```
 
 ### Command presence semantics

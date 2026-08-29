@@ -36,7 +36,11 @@ interface YamlParseState {
 
 const REQUIRED_TOP_LEVEL_SECTIONS = ['project', 'adapters', 'commands', 'documentation'] as const;
 const REQUIRED_COMMAND_KEYS = ['typecheck', 'tests', 'lint', 'build'] as const;
-const REQUIRED_DOCUMENTATION_KEYS = ['roadmap', 'project_state', 'config', 'contracts_root'] as const;
+// `contracts_root` was required here until ADR-0049. It named a directory inside the *target*
+// repository, which only ever resolved because the only target was this one -- CompassRose's
+// contracts belong to the installation and are found there now, so a project has nothing to
+// declare. An existing CONFIG.md that still lists it keeps parsing; the key is simply ignored.
+const REQUIRED_DOCUMENTATION_KEYS = ['roadmap', 'project_state', 'config'] as const;
 const REQUIRED_SUPPORTED_PLATFORMS = new Set<SupportedPlatform>(['linux', 'windows']);
 
 export function readProjectConfiguration(configPath: string): ProjectConfigurationLoadResult {
@@ -450,12 +454,6 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
       issues
     ),
     config: requireNonEmptyString(documentationSection, 'config', 'documentation.config', issues),
-    contracts_root: requireNonEmptyString(
-      documentationSection,
-      'contracts_root',
-      'documentation.contracts_root',
-      issues
-    ),
   } as const;
 
   if (issues.length > 0) {
@@ -799,7 +797,6 @@ function validateProjectConfiguration(parsedConfiguration: Record<string, unknow
       roadmap: documentationSection.roadmap,
       project_state: documentationSection.project_state,
       config: documentationSection.config,
-      contracts_root: documentationSection.contracts_root,
     },
     git_policy: optionalPolicySections['git_policy'] as GitPolicySection,
     ...optionalPolicySections,

@@ -2,28 +2,44 @@ import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync, readFileSy
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
+import { GitClient } from '../git/gitClient.js';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
 import { DEFAULT_COMPASSROSE_ROOT, getBootstrapConfigPath } from '../config/compassRosePaths.js';
 import { renderDimensionsDocument, STARTER_DIMENSIONS } from '../state/dimensions.js';
-import { detectProjectFacts } from '../project/detectProject.js';
+import { deriveGateCandidates, detectProjectFacts } from '../project/detectProject.js';
 import { renderProjectFactsDocument } from '../project/projectFacts.js';
+import type { ProjectFacts } from '../project/projectFacts.js';
+import { parseWorkspaceArguments } from './runOptions.js';
 import type { CliEnvironment } from './main.js';
 
 /**
  * Flow 0 ("npm run setup"): bootstrap-only. Creates CompassRose's own isolated compassrose/
- * root (see ADR-0046) when absent -- deterministic file generation, no AI call, no
- * interpretation of an existing project's languages/frameworks/docs (that deeper analysis is
- * feature 028-project-understanding). If the root already exists, this only reports readiness via
- * the existing Doctor checks.
+ * root (see ADR-0046) when absent -- deterministic file generation, no AI call, no network. If the
+ * root already exists, this only reports readiness via the existing Doctor checks.
+ *
+ * It does read the repository, though. Detection (028-project-understanding) already ran here to
+ * write PROJECT_FACTS.md, and until ADR-0049 the generated CONFIG.md ignored every word of it:
+ * `name: my-project` over a repository whose package.json says otherwise, four empty command slots
+ * over a project that declares its scripts. What is unambiguous is filled in; what is a judgment is
+ * left empty with the candidates named, because which of `test`, `test:unit`, `test:ci` is *the*
+ * gate is not something detection can settle.
  */
-export function runSetupCli(environment: CliEnvironment = {}): number {
+export function runSetupCli(argv: readonly string[] = [], environment: CliEnvironment = {}): number {
   const stdout = environment.stdout ?? ((message: string) => process.stdout.write(`${message}\n`));
   const stderr = environment.stderr ?? ((message: string) => process.stderr.write(`${message}\n`));
-  const cwd = environment.cwd ?? process.cwd();
 
-  const gitRoot = findGitRepositoryRoot(cwd);
+  let options;
+  try {
+    options = parseWorkspaceArguments(argv, environment.cwd ?? process.cwd());
+  } catch (error) {
+    stderr(error instanceof Error ? error.message : String(error));
+    stderr('Usage: compassrose setup [--no-commit] [--cwd <path>]');
+    return 1;
+  }
+
+  const gitRoot = findGitRepositoryRoot(options.cwd);
   if (gitRoot === null) {
-    stderr('runtime preflight: git repository: current directory is not inside a git repository');
+    stderr(`runtime preflight: git repository: ${options.cwd} is not inside a git repository`);
     return 1;
   }
 
@@ -46,9 +62,56 @@ export function runSetupCli(environment: CliEnvironment = {}): number {
     stdout(`  - ${path}`);
   }
   stdout('');
+
+  if (!commitSkeleton(gitRoot, created, options.commit, stdout, stderr)) {
+    return 1;
+  }
+
   stdout('Next: run `compassrose` and talk your first feature through. Specification is a');
   stdout('conversation now, so the automated loop will not touch anything you have not settled.');
   return 0;
+}
+
+/**
+ * Commits exactly what this command just created, and nothing else.
+ *
+ * The step `setup` prints next used to fail immediately: every run of CompassRose refuses to start
+ * on a dirty worktree (`git_policy.require_clean_worktree_before_task`), and setup left fifteen
+ * untracked files behind. The first instruction the product gave you did not work.
+ *
+ * Committing the *created paths* specifically, rather than everything staged, is the part that
+ * matters -- a repository being set up may well have the user's own work in progress sitting in it,
+ * and sweeping that into a commit nobody asked for would be a far worse first impression than the
+ * dirty tree was.
+ */
+function commitSkeleton(
+  gitRoot: string,
+  created: readonly string[],
+  commit: boolean,
+  stdout: (message: string) => void,
+  stderr: (message: string) => void,
+): boolean {
+  if (!commit) {
+    stdout('Not committed (--no-commit). CompassRose refuses to start on a dirty worktree, so');
+    stdout('commit these before the next command.');
+    stdout('');
+    return true;
+  }
+
+  try {
+    new GitClient(gitRoot).commit(
+      created.map((path) => path.split('\\').join('/')),
+      'compassrose: set up project documentation root',
+    );
+  } catch (error) {
+    stderr(`The files were created but could not be committed: ${error instanceof Error ? error.message : String(error)}`);
+    stderr('Commit them yourself before running anything else -- CompassRose refuses to start on a dirty worktree.');
+    return false;
+  }
+
+  stdout('Committed, so the worktree is clean and the next command will run.');
+  stdout('');
+  return true;
 }
 
 /**
@@ -57,14 +120,14 @@ export function runSetupCli(environment: CliEnvironment = {}): number {
  * Deterministic: no AI call, no network. This is what stops first contact with the tool from
  * being an exercise in filling out a form about your own repository.
  */
-function writeProjectFacts(gitRoot: string, write: (relativePath: string, contents: string) => void): void {
-  const { facts } = detectProjectFacts(gitRoot);
+function writeProjectFacts(facts: ProjectFacts, write: (relativePath: string, contents: string) => void): void {
   write('PROJECT_FACTS.md', renderProjectFactsDocument(facts));
 }
 
 function createCompassRoseSkeleton(gitRoot: string): string[] {
   const root = join(gitRoot, DEFAULT_COMPASSROSE_ROOT);
   const created: string[] = [];
+  const { facts } = detectProjectFacts(gitRoot);
 
   const write = (relativePath: string, contents: string): void => {
     const absolutePath = join(root, relativePath);
@@ -73,7 +136,8 @@ function createCompassRoseSkeleton(gitRoot: string): string[] {
     created.push(join(DEFAULT_COMPASSROSE_ROOT, relativePath));
   };
 
-  write('CONFIG.md', STARTER_CONFIG_MD);
+  const documentationRoot = facts.documentationRoots?.value[0] ?? 'docs';
+  write('CONFIG.md', renderStarterConfig(facts, documentationRoot));
   write('PROJECT_STATE.md', STARTER_PROJECT_STATE_MD);
   // The coverage floor a specification session walks from day one (024-specification-flow).
   // Deliberately generic: the agent's proposals are how it becomes specific to this project, and
@@ -84,7 +148,7 @@ function createCompassRoseSkeleton(gitRoot: string): string[] {
       STARTER_DIMENSIONS.map((name) => ({ name, state: 'uncovered' as const, coveredBy: [], decisions: [] })),
     ),
   );
-  writeProjectFacts(gitRoot, write);
+  writeProjectFacts(facts, write);
   write('ADR.md', STARTER_ADR_MD);
   write('SAD.md', STARTER_SAD_MD);
   write('ROADMAP.md', STARTER_ROADMAP_MD);
@@ -93,10 +157,10 @@ function createCompassRoseSkeleton(gitRoot: string): string[] {
   mkdirSync(join(root, 'features'), { recursive: true });
   mkdirSync(join(root, 'fixes'), { recursive: true });
 
-  // The starter CONFIG.md declares project.documentation_root: docs -- Doctor validates that
-  // path exists, so create it as an (initially empty) placeholder for this project's own
-  // documentation, exactly like this installation's own docs/.gitkeep (see ADR-0046).
-  const docsRoot = join(gitRoot, 'docs');
+  // Doctor validates that project.documentation_root exists. When the repository already has a
+  // documentation directory the generated config names that one, and there is nothing to create;
+  // only a project with none gets the placeholder (see ADR-0046).
+  const docsRoot = join(gitRoot, documentationRoot);
   if (!existsSync(docsRoot)) {
     mkdirSync(docsRoot, { recursive: true });
     writeFileSync(join(docsRoot, '.gitkeep'), '', 'utf8');
@@ -142,21 +206,91 @@ function copyFileIfPresent(sourcePath: string, targetPath: string, gitRoot: stri
   created.push(relative(gitRoot, targetPath));
 }
 
-const STARTER_CONFIG_MD = `# CompassRose Project Configuration
+/**
+ * How this project's package manager spells "run the script called X".
+ */
+function scriptCommand(packageManager: string | null, script: string): string {
+  if (packageManager === 'yarn') {
+    return `yarn ${script}`;
+  }
+  if (packageManager === 'pnpm') {
+    return `pnpm run ${script}`;
+  }
+  return `npm run ${script}`;
+}
 
-This file defines the project-local configuration used by CompassRose. Edit the values below to
-match this project, then run \`npm run doctor\` to validate.
+/**
+ * One `commands.*` entry, rendered with the reason it looks the way it does.
+ *
+ * Exactly one candidate is a fact and gets written. More than one is a judgment: the candidates go
+ * in as a comment and the value stays empty, because a machine choosing between `test`, `test:unit`
+ * and `test:ci` on the project's behalf is the failure this whole codebase is arranged against. A
+ * project with no scripts at all falls back to the build/test system detection already made for
+ * PROJECT_FACTS.md, which for Go, Rust, Maven and Gradle is a literal command.
+ */
+function renderCommand(
+  key: string,
+  candidates: readonly string[],
+  packageManager: string | null,
+  fallback: string | null,
+): string[] {
+  if (candidates.length === 1) {
+    return [`  ${key}: "${scriptCommand(packageManager, candidates[0]!)}"`];
+  }
+
+  if (candidates.length === 0) {
+    return fallback
+      ? [`  ${key}: "${fallback}"`]
+      : [`  ${key}: ""`];
+  }
+
+  return [
+    `  # Several scripts could be this gate: ${candidates.join(', ')}. Pick one.`,
+    `  ${key}: ""`,
+  ];
+}
+
+/**
+ * A fallback only when the detected system is already a runnable command.
+ *
+ * `go test` and `cargo build` are commands; `vitest` and `jest` are the names of runners that a
+ * Node project invokes through its own scripts, and writing one as a gate would assume a global
+ * install this has no evidence for.
+ */
+function commandLikeFallback(system: string | null): string | null {
+  return system !== null && system.includes(' ') ? system : null;
+}
+
+function renderStarterConfig(facts: ProjectFacts, documentationRoot: string): string {
+  const gates = deriveGateCandidates(facts);
+  const packageManager = facts.packageManager?.value ?? null;
+  const name = facts.name?.value ?? 'my-project';
+  const sourceRoot = facts.sourceRoots?.value[0] ?? 'src';
+
+  const commands = [
+    ...renderCommand('typecheck', gates.typecheck ?? [], packageManager, null),
+    ...renderCommand('tests', gates.tests ?? [], packageManager, commandLikeFallback(facts.testSystem?.value ?? null)),
+    ...renderCommand('lint', gates.lint ?? [], packageManager, null),
+    ...renderCommand('build', gates.build ?? [], packageManager, commandLikeFallback(facts.buildSystem?.value ?? null)),
+  ];
+
+  return `# CompassRose Project Configuration
+
+This file defines the project-local configuration used by CompassRose. \`npm run setup\` filled in
+what this repository states about itself and left the rest empty -- see \`PROJECT_FACTS.md\` for
+where each detected value came from. Edit the values below, then run \`compassrose doctor\` to
+validate.
 
 ## Configuration
 
 \`\`\`yaml
 project:
-  name: my-project
+  name: ${name}
   supported_platforms:
     - linux
     - windows
-  documentation_root: docs
-  source_root: src
+  documentation_root: ${documentationRoot}
+  source_root: ${sourceRoot}
 
 adapters:
   external_cli:
@@ -168,10 +302,7 @@ adapters:
     output_file: ""
 
 commands:
-  typecheck: ""
-  tests: ""
-  lint: ""
-  build: ""
+${commands.join('\n')}
 
 git_policy:
   require_clean_worktree_before_task: true
@@ -214,6 +345,10 @@ limits:
   stop_on_quality_gate_failure: true
   stop_on_review_failure: true
 
+# execution_trust declares what a run may do to this repository (ADR-0048). Absent, the bounded
+# defaults apply: agents get a workspace-write sandbox with no network, and a quality-gate command
+# has to match one of the default allowlist prefixes before it will run.
+
 documentation:
   compassrose_root: compassrose
   roadmap: compassrose/ROADMAP.md
@@ -222,9 +357,9 @@ documentation:
   features_root: compassrose/features
   fixes_root: compassrose/fixes
   templates_root: compassrose/templates
-  contracts_root: src/contracts
 \`\`\`
 `;
+}
 
 const STARTER_PROJECT_STATE_MD = `# State: Project Identity and Foundation
 
@@ -238,12 +373,12 @@ Not started
 
 ## Current Reality
 
-- This project was just bootstrapped by \`npm run setup\`. No feature has been formalized yet.
+- This project was just bootstrapped by \`compassrose setup\`. No feature has been formalized yet.
 
 ## Pending
 
 - Write a feature request under \`compassrose/features/<id>/request.md\`.
-- Run \`npm run feature-validation\` once a request exists, before \`npm run app\`.
+- Run \`compassrose feature-validation\` once a request exists, before \`compassrose run\`.
 
 ## Blocked
 
@@ -265,8 +400,7 @@ Write the first feature request.
 const STARTER_ADR_MD = `# Architecture Decision Records
 
 This document records the significant, hard-to-reverse decisions made for this project. See
-\`compassrose/templates/\` and the CompassRose contracts under \`src/contracts/\` for the process
-that produces new entries.
+\`compassrose/templates/\` for the shape each new entry takes.
 `;
 
 const STARTER_SAD_MD = `# Software Architecture Document
@@ -283,7 +417,8 @@ this to ground new feature requests in the project's own stated direction.
 
 const STARTER_DMS_MD = `# Document Management System
 
-This document describes how this project's own documents relate to each other and where each
-kind of fact should be recorded. See \`src/contracts/runtime/work-item-taxonomy.md\` for the
-feature/fix/task distinction CompassRose itself relies on.
+This document describes how this project's own documents relate to each other and where each kind
+of fact should be recorded. CompassRose distinguishes features from fixes from tasks; that
+distinction comes from its own contracts, which ship with the tool rather than living here
+(ADR-0049).
 `;

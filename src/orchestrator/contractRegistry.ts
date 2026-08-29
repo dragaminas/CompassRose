@@ -50,7 +50,10 @@ const STRUCTURED_SCHEMA_PATHS: Record<StructuredSchemaId, string> = {
 // behavior may have changed underneath it — so a running loop should restart instead of
 // continuing to execute stale in-memory logic. CompassRoseOrchestrator always passes its
 // own explicit module list (see ORCHESTRATOR_RUNTIME_CRITICAL_PATHS in orchestrator.ts);
-// this default only applies to a caller that doesn't specify one.
+// this default only applies to a caller that doesn't specify one. Like the schemas, these are
+// CompassRose's own modules and resolve against the installation root, not the target
+// repository — watching a target repository for `src/orchestrator/orchestrator.ts` only ever
+// made sense while the two were the same directory (ADR-0049).
 const DEFAULT_RUNTIME_CRITICAL_PATHS: readonly string[] = ['src/orchestrator/orchestrator.ts'];
 
 function readJsonFile(path: string): unknown {
@@ -89,14 +92,20 @@ export class ContractRegistry {
   private readonly schemas = new Map<StructuredSchemaId, unknown>();
   private readonly fingerprints = new Map<string, FileFingerprint>();
 
+  /**
+   * `installationRoot` is where CompassRose itself lives, not the repository it is pointed at.
+   * The parameter used to be called `repositoryRoot`, and the name was the defect: schemas and
+   * runtime modules belong to the tool, and reading them out of a target repository only worked
+   * because the only target this ever had was this one (ADR-0049).
+   */
   constructor(
-    private readonly repositoryRoot: string,
+    private readonly installationRoot: string,
     runtimeCriticalPaths: readonly string[] = DEFAULT_RUNTIME_CRITICAL_PATHS,
   ) {
     this.schemaPaths = Object.fromEntries(
-      Object.entries(STRUCTURED_SCHEMA_PATHS).map(([key, value]) => [key, join(repositoryRoot, value)]),
+      Object.entries(STRUCTURED_SCHEMA_PATHS).map(([key, value]) => [key, join(installationRoot, value)]),
     ) as Record<StructuredSchemaId, string>;
-    this.runtimeCriticalPaths = runtimeCriticalPaths.map((value) => join(repositoryRoot, value));
+    this.runtimeCriticalPaths = runtimeCriticalPaths.map((value) => join(installationRoot, value));
     this.initialize();
   }
 
@@ -118,7 +127,7 @@ export class ContractRegistry {
       if (!sameFingerprint(previous, current)) {
         this.schemas.set(schemaId, readJsonFile(schemaPath));
         this.fingerprints.set(schemaPath, current);
-        reloadedSchemas.push(relativePath(this.repositoryRoot, schemaPath));
+        reloadedSchemas.push(relativePath(this.installationRoot, schemaPath));
       }
     }
 
@@ -127,7 +136,7 @@ export class ContractRegistry {
       const previous = this.fingerprints.get(runtimePath);
       if (!sameFingerprint(previous, current)) {
         this.fingerprints.set(runtimePath, current);
-        restartReasons.push(relativePath(this.repositoryRoot, runtimePath));
+        restartReasons.push(relativePath(this.installationRoot, runtimePath));
       }
     }
 

@@ -332,6 +332,10 @@ describe('runDoctor integration with the diagnostic boundary (correction F003-T0
       // rule has been broken, never `fail` -- an external tool's own config is not this
       // repository's readiness.
       'execution-trust',
+      // ADR-0049 replaced the `documentation.contracts_root` path check -- which asked the target
+      // repository to contain CompassRose's own contracts -- with one that asks the only question
+      // behind it: is the installation those contracts are actually read from intact?
+      'contracts',
     ]);
   });
 

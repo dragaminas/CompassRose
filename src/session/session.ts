@@ -138,7 +138,7 @@ export async function runSessionCli(options: SessionOptions = {}): Promise<numbe
   try {
     if (!existsSync(getBootstrapConfigPath(gitRoot))) {
       writer.append(['', 'CompassRose is not initialized here yet. Initializing...', '']);
-      const setupExitCode = runSetupCli({
+      const setupExitCode = runSetupCli([], {
         cwd: gitRoot,
         stdout: (message) => writer.append([message]),
         stderr,

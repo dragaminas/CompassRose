@@ -30,11 +30,52 @@ const minimalMvpConfig = [
   '  roadmap: compassrose/ROADMAP.md',
   '  project_state: compassrose/PROJECT_STATE.md',
   '  config: compassrose/CONFIG.md',
-  '  contracts_root: src/contracts',
   '```',
 ].join('\n');
 
 describe('project configuration loader', () => {
+  // ADR-0049 removed `documentation.contracts_root` from the required keys: CompassRose reads its
+  // own contracts from where it is installed, so a project has nothing to declare. Two things have
+  // to hold at once -- a CONFIG.md written before that still loads, and one that never had the key
+  // is complete without it.
+  test('still loads a configuration written before contracts_root was removed', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'compassrose/CONFIG.md': minimalMvpConfig.replace(
+          '  config: compassrose/CONFIG.md',
+          '  config: compassrose/CONFIG.md\n  contracts_root: src/contracts',
+        ),
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
+      expect(result.ok).toBe(true);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
+  test('no longer requires contracts_root', () => {
+    const workspace = createTempWorkspace({
+      files: {
+        'compassrose/CONFIG.md': minimalMvpConfig,
+      },
+    });
+
+    try {
+      const result = readProjectConfiguration(join(workspace.root, 'compassrose/CONFIG.md'));
+      expect(result.ok).toBe(true);
+      if (!result.ok) {
+        return;
+      }
+
+      expect('contracts_root' in result.value.documentation).toBe(false);
+    } finally {
+      workspace.dispose();
+    }
+  });
+
   test('accepts a minimal MVP configuration with only required fields', () => {
     const workspace = createTempWorkspace({
       files: {
@@ -61,7 +102,6 @@ describe('project configuration loader', () => {
       expect(result.value.documentation.roadmap).toBe('compassrose/ROADMAP.md');
       expect(result.value.documentation.project_state).toBe('compassrose/PROJECT_STATE.md');
       expect(result.value.documentation.config).toBe('compassrose/CONFIG.md');
-      expect(result.value.documentation.contracts_root).toBe('src/contracts');
       expect(result.value.git_policy.require_clean_worktree_before_task).toBe(true);
       expect(result.value.git_policy.review_target).toBe('git_diff');
       expect(result.value.git_policy.allow_dirty_worktree).toBe(false);

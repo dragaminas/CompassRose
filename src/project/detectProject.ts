@@ -9,11 +9,12 @@
  * by reading is established here, so inference is left the narrow set of things no file states.
  */
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import type { ProjectFact, ProjectFacts } from './projectFacts.js';
 
 interface DetectedSignal {
+  readonly name?: string | undefined;
   readonly languages?: readonly string[] | undefined;
   readonly packageManager?: string | undefined;
   readonly buildSystem?: string | undefined;
@@ -52,6 +53,14 @@ function detectTestSystem(scripts: Record<string, unknown>): string | undefined 
   return typeof scripts.test === 'string' ? 'npm test' : undefined;
 }
 
+/**
+ * The `name = "..."` a TOML manifest declares. Deliberately not a TOML parser: one field is wanted,
+ * and this project adds no runtime dependency for it.
+ */
+function readTomlName(contents: string): string | undefined {
+  return contents.match(/^\s*name\s*=\s*"([^"]+)"/m)?.[1];
+}
+
 const SIGNAL_ROWS: readonly SignalRow[] = [
   {
     file: 'package.json',
@@ -63,6 +72,7 @@ const SIGNAL_ROWS: readonly SignalRow[] = [
 
       const scripts = (parsed.scripts && typeof parsed.scripts === 'object' ? parsed.scripts : {}) as Record<string, unknown>;
       return {
+        name: typeof parsed.name === 'string' && parsed.name.trim().length > 0 ? parsed.name.trim() : undefined,
         languages: ['JavaScript'],
         buildSystem: typeof scripts.build === 'string' ? 'npm run build' : undefined,
         testSystem: detectTestSystem(scripts),
@@ -82,11 +92,11 @@ const SIGNAL_ROWS: readonly SignalRow[] = [
       return { languages: ['TypeScript'], sourceRoots: rootDir ? [rootDir] : undefined };
     },
   },
-  { file: 'pyproject.toml', read: () => ({ languages: ['Python'], packageManager: 'pip' }) },
+  { file: 'pyproject.toml', read: (contents) => ({ name: readTomlName(contents), languages: ['Python'], packageManager: 'pip' }) },
   { file: 'requirements.txt', read: () => ({ languages: ['Python'], packageManager: 'pip' }) },
   { file: 'setup.py', read: () => ({ languages: ['Python'], packageManager: 'pip' }) },
   { file: 'go.mod', read: () => ({ languages: ['Go'], packageManager: 'go modules', buildSystem: 'go build', testSystem: 'go test' }) },
-  { file: 'Cargo.toml', read: () => ({ languages: ['Rust'], packageManager: 'cargo', buildSystem: 'cargo build', testSystem: 'cargo test' }) },
+  { file: 'Cargo.toml', read: (contents) => ({ name: readTomlName(contents), languages: ['Rust'], packageManager: 'cargo', buildSystem: 'cargo build', testSystem: 'cargo test' }) },
   { file: 'pom.xml', read: () => ({ languages: ['Java'], packageManager: 'maven', buildSystem: 'mvn package', testSystem: 'mvn test' }) },
   { file: 'build.gradle', read: () => ({ languages: ['Java'], packageManager: 'gradle', buildSystem: 'gradle build', testSystem: 'gradle test' }) },
   { file: 'Gemfile', read: () => ({ languages: ['Ruby'], packageManager: 'bundler' }) },
@@ -127,6 +137,7 @@ export function detectProjectFacts(repositoryRoot: string): {
   const sourceRoots = new Set<string>();
   const fingerprints: SignalFingerprint[] = [];
 
+  let name: ProjectFact<string> | null = null;
   let packageManager: ProjectFact<string> | null = null;
   let buildSystem: ProjectFact<string> | null = null;
   let testSystem: ProjectFact<string> | null = null;
@@ -157,6 +168,9 @@ export function detectProjectFacts(repositoryRoot: string): {
       sourceRootSignal = row.file;
     }
 
+    if (signal.name && !name) {
+      name = detectedFact(signal.name, row.file);
+    }
     if (signal.packageManager && !packageManager) {
       packageManager = detectedFact(signal.packageManager, row.file);
     }
@@ -176,6 +190,9 @@ export function detectProjectFacts(repositoryRoot: string): {
 
   return {
     facts: {
+      // Falls back to the directory the repository sits in, marked as such: no manifest declaring a
+      // name is a fact about the project too, and "my-project" in a generated CONFIG.md is not.
+      name: name ?? detectedFact(basename(resolve(repositoryRoot)), 'repository directory name'),
       languages: languages.size > 0 ? detectedFact([...languages], languageSignal) : null,
       packageManager,
       buildSystem,

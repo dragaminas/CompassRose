@@ -26,6 +26,7 @@ The numeric prefix defines the recommended implementation order.
 | `028-project-understanding` | in progress | knowing what repository CompassRose is pointed at |
 | `029-runnable-application-gate` | in progress | checking the application actually starts before closing a feature |
 | `030-execution-trust` | in progress | what a run is allowed to do to the repository it is pointed at |
+| `031-installation-boundary` | in progress | telling where CompassRose is installed apart from the repository it is pointed at |
 | `021-vscode-integration` | request only | a future visualization layer over the documents |
 | `022-ecosystem-and-metrics` | request only | future CI, metrics, cost tracking, team workflows |
 
@@ -41,7 +42,7 @@ reason was given for excluding them:
 
 | Dimension | Why it matters | State |
 |---|---|---|
-| distribution and installation | `bin` exists in `package.json` but is never published; all real use runs through `npm run` inside this repository. If the interface is the terminal, installing it is part of the product. | still uncovered |
+| distribution and installation | `bin` exists in `package.json` but is never published; all real use runs through `npm run` inside this repository. If the interface is the terminal, installing it is part of the product. | still uncovered — `031` made it linkable and every command targetable, which is what a validation run needs; publishing is a separate decision |
 | execution trust | CompassRose ran shell commands and external CLIs inside the user's repository with full permissions and no declared limit on what they may touch. | covered by `030-execution-trust` |
 
 Reading the code to specify execution trust turned up that it had not been unspecified so much as

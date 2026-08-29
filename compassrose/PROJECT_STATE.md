@@ -20,8 +20,9 @@ In progress
 - Feature `028-project-understanding`: CompassRose reads a repository it has never seen, records every fact with its provenance, and infers what no file states — what the project is for, which scripts are gates — as a visibly-marked guess. `/proyecto confirmar` is the only thing that turns a guess into a fact, and a confirmed fact is never overwritten by a later detection.
 - Feature `029-runnable-application-gate`: a feature cannot close unless the application starts. Start-command proposal remains, and belongs to `028`.
 - Feature `030-execution-trust`: what a run is allowed to *do* to a repository is declared and bounded. Every codex call used to carry `--dangerously-bypass-approvals-and-sandbox`; none do now, structured calls are pinned read-only, and quality-gate commands are checked against a declared allowlist at planning time and again before running. Recorded as ADR-0048.
+- Feature `031-installation-boundary`: CompassRose can be pointed at a repository that is not this one. Its contracts are read from where it is installed instead of from the target and are never copied in, `documentation.contracts_root` is gone, every command takes `--cwd`, `setup` commits what it creates and seeds `CONFIG.md` from what it read, and the package is linkable. Verified end to end against a foreign repository, deterministically — no agent call has crossed that boundary yet. Recorded as ADR-0049.
 - Requests `021-vscode-integration` and `022-ecosystem-and-metrics` remain pending specification, deliberately.
-- One dimension remains recorded as uncovered, not out of scope: distribution and installation. Execution trust was the other, and `030` covers it.
+- One dimension remains recorded as uncovered, not out of scope: distribution and installation. `031` made the package linkable and every command targetable, which is what a validation run needs; publishing it is still nobody's decision. Execution trust was the other, and `030` covers it.
 - `compassrose/DIMENSIONS.md` exists for the first time. It had never been written, so the coverage checklist the brainstormer is shown every turn reported everything uncovered.
 - Nothing is blocked.
 
@@ -53,20 +54,24 @@ documented success shape `CompassRose Doctor` / `Status: OK` — was satisfied.
 - `git_policy.commit_after_task` is validated by the config reader and read by nothing, which now matters because `025` implements exactly what it names. Recorded under that feature's Remaining Deliverables.
 - Nothing asserts that planner-output sanitization (`sanitizeAllowedPaths`, `validateQualityGateRefs`) is actually wired into the planners that call it. The only wiring test proved it through `planDoctorRecoveryTask` and went with that function; the helpers themselves stay covered. Recorded under `026`'s Remaining Deliverables.
 - `tests/smokeGate.test.ts` fails intermittently under full-suite parallel load — always in teardown (`ENOTEMPTY`/timeout on removing the scratch directory), never in isolation, and on a different test each time. A killed process tree on Windows does not always release its working directory before `rmSync` runs, even with `maxRetries`.
+- `tests/featurePlanningOutline.test.ts` belongs to the same family: it clones the repository and spawns `tsx`, takes about 9 seconds alone, and has exceeded the 30-second timeout under full-suite parallel load. Green on a re-run with nothing changed.
 - The provider-specific adapters in `src/agents/` (`codexCli.ts`, `openCodeCli.ts`) contradict absorbed request `010-generic-external-cli-adapter`, which explicitly excluded them. Feature `025-automated-development-loop` owns the reconciliation.
 - This repository's own e2e suite clones the current `HEAD`, so a feature or fix sitting in a non-terminal lifecycle state can make unrelated tests fail. The standing cause of that — feature `003` recorded as blocked, plus `tests/stateCorrectionLimit.test.ts` mutating the live repository on every run — is fixed; the harness's dependence on `HEAD` remains.
 
 ## Next Planning Hint
 
 Every feature has working implementation; what remains is listed under each one's Remaining
-Deliverables, and the items called out after the specification round are all done.
+Deliverables.
 
-The next thing that changes what this system is worth, rather than what it documents, is
-**distribution**. `bin` points at `./dist/cli/main.js`, nothing publishes it, there is no README, and
-every real invocation runs through `npm run` inside this repository. Closely behind it: the whole
-loop has only ever been run end-to-end against *this* repository — the e2e harness clones `HEAD` —
-so nobody has evidence of what breaks when it is pointed somewhere else. The self-hosting leaks
-already recorded under `027` and `030` are what that absence looks like from the inside.
+The next thing that changes what this system is worth, rather than what it documents, is **a real
+run against a repository that is not this one**. `031` removed everything that stopped one from
+starting: bootstrap, readiness and the deterministic loop have all been walked end to end against a
+foreign repository from outside both. What has not happened is a single agent call across that
+boundary — no specification conversation, no plan → implement → gate → review cycle. Until one has
+run, what is known is that CompassRose *starts* correctly somewhere else.
+
+Behind it: the self-hosting leaks recorded under `027` and `030` are the same family as the one
+`031` closed and are still open, and `proto/`'s e2e harness still clones `HEAD`.
 
 Within `030`, the one item that changes the feature's worth is replacing `node -e` quality gates
 with a declarative assertion mechanism; until then this repository's own gate allowlist admits

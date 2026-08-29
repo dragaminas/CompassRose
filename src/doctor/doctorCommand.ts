@@ -14,6 +14,7 @@ import { readRecordString } from '../orchestrator/runtimeHelpers.js';
 import type { ProjectConfiguration } from '../config/configTypes.js';
 import { describeExecutionTrust, resolveExecutionTrust } from '../config/executionTrust.js';
 import { inspectAgentHomeIsolation } from './agentHomeIsolation.js';
+import { CONTRACTS_DIRECTORY, getInstallationRoot } from '../config/installationPaths.js';
 
 export function runDoctor(options: DoctorOptions = {}): DoctorReport {
   const workingDirectory = options.cwd ?? process.cwd();
@@ -145,6 +146,7 @@ export function runDoctor(options: DoctorOptions = {}): DoctorReport {
 
   checks.push(buildBlockedWorkCheck(repositoryRoot, configurationResult.value));
   checks.push(buildExecutionTrustCheck(configurationResult.value));
+  checks.push(buildContractsCheck());
 
   return buildDiagnosticReport(context);
 }
@@ -179,6 +181,36 @@ function buildExecutionTrustCheck(configuration: ProjectConfiguration): DoctorCh
   );
 
   return { name: 'execution-trust', status: 'info', details };
+}
+
+/**
+ * That the *installation* is intact, which is a different question from whether this repository is.
+ *
+ * Replaces the `documentation.contracts_root` path check ADR-0049 removed. That check asked the
+ * target repository to contain CompassRose's contracts, which is how first contact with any other
+ * repository used to fail; this asks the only question that was ever behind it -- can the contracts
+ * this run will hand its agents actually be read? A partial install (a published package missing
+ * `src/contracts`, a half-finished `npm link`) is a real failure mode, and it is a `fail`, because
+ * every structured call in the loop reads a schema from here.
+ */
+function buildContractsCheck(): DoctorCheck {
+  const contractsRoot = join(getInstallationRoot(), CONTRACTS_DIRECTORY);
+  if (!pathExists(contractsRoot) || !isDirectory(contractsRoot)) {
+    return {
+      name: 'contracts',
+      status: 'fail',
+      details: [
+        `${contractsRoot} does not exist.`,
+        'CompassRose reads its own contracts from where it is installed, not from this repository. This installation is incomplete.',
+      ],
+    };
+  }
+
+  return {
+    name: 'contracts',
+    status: 'pass',
+    details: [`Read from the installation at ${contractsRoot}.`],
+  };
 }
 
 /**
@@ -249,7 +281,7 @@ export function formatDoctorReport(report: DoctorReport): string {
   return lines.join('\n');
 }
 
-function validateRepositoryPaths(repositoryRoot: string, configuration: { project: { documentation_root: string }; documentation: { roadmap: string; project_state: string; config: string; contracts_root: string } }): DoctorCheck[] {
+function validateRepositoryPaths(repositoryRoot: string, configuration: { project: { documentation_root: string }; documentation: { roadmap: string; project_state: string; config: string } }): DoctorCheck[] {
   const checks: DoctorCheck[] = [];
   const requiredPaths = [
     {
@@ -271,11 +303,6 @@ function validateRepositoryPaths(repositoryRoot: string, configuration: { projec
       name: 'documentation.config',
       configuredPath: configuration.documentation.config,
       expectedDirectory: false,
-    },
-    {
-      name: 'documentation.contracts_root',
-      configuredPath: configuration.documentation.contracts_root,
-      expectedDirectory: true,
     },
   ];
 

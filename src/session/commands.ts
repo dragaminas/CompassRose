@@ -568,6 +568,7 @@ const projectCommand: SessionCommand = {
     };
 
     lines.push('  What I can read from this repository:');
+    describe('name', facts.name);
     describe('languages', facts.languages);
     describe('packages', facts.packageManager);
     describe('build', facts.buildSystem);

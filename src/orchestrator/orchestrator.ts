@@ -182,6 +182,7 @@ import { CodexCli } from '../agents/codexCli.js';
 import { OpenCodeCli } from '../agents/openCodeCli.js';
 import type { CommandExecution, TaskImplementer } from '../agents/taskImplementer.js';
 import { ContractRegistry } from './contractRegistry.js';
+import { getInstallationRoot } from '../config/installationPaths.js';
 import type { StructuredSchemaId } from './contractRegistry.js';
 import {
   bulletList,
@@ -386,7 +387,9 @@ export class CompassRoseOrchestrator {
     this.repositoryRoot = repositoryRoot;
     this.git = new GitClient(repositoryRoot);
     this.artifacts = new ArtifactStore(repositoryRoot);
-    this.contracts = new ContractRegistry(repositoryRoot, ORCHESTRATOR_RUNTIME_CRITICAL_PATHS);
+    // ADR-0049: the schemas and the modules below are CompassRose's own, so they resolve against
+    // the installation, not against whatever repository this run is pointed at.
+    this.contracts = new ContractRegistry(getInstallationRoot(), ORCHESTRATOR_RUNTIME_CRITICAL_PATHS);
     const configurationPath = getBootstrapConfigPath(repositoryRoot);
     const configuration = readProjectConfiguration(configurationPath);
     if (!configuration.ok) {

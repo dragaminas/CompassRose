@@ -51,6 +51,7 @@ State: uncovered
 
 State: uncovered
 - uncovered — recorded uncovered by the specification round of 2026-08-22: bin exists in package.json but is never published, and all real use runs through npm run inside this repository (CompassRose, 2026-08-22)
+- uncovered — 031-installation-boundary made the package linkable and every command targetable, which is what a validation run needs; publishing it under a name, a license and a release process is still nobody's decision yet (CompassRose, 2026-08-29)
 
 ## execution trust
 

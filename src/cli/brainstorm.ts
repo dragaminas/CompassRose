@@ -74,7 +74,7 @@ export async function runBrainstormCli(
     if (!existsSync(configPath)) {
       stdout('');
       stdout('CompassRose no está inicializado en este proyecto todavía. Inicializando...');
-      const setupExitCode = runSetupCli({ cwd: gitRoot, stdout, stderr });
+      const setupExitCode = runSetupCli([], { cwd: gitRoot, stdout, stderr });
       if (setupExitCode !== 0) {
         return setupExitCode;
       }

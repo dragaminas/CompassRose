@@ -1,12 +1,13 @@
+#!/usr/bin/env node
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { findGitRepositoryRoot } from '../git/gitStatus.js';
 import { formatDoctorReport, runDoctor } from '../doctor/doctorCommand.js';
 import { readProjectConfiguration, validateRuntimePreconditions } from '../config/configReader.js';
 import { getCurrentSupportedPlatform } from '../platform/platformInfo.js';
 import { CompassRoseOrchestrator } from '../orchestrator/orchestrator.js';
-import { parseRunArguments } from './runOptions.js';
+import { parseRunArguments, parseWorkspaceArguments } from './runOptions.js';
 import { getBootstrapConfigPath } from '../config/compassRosePaths.js';
 import { runSetupCli } from './setup.js';
 import { runFeatureValidationCli } from './featureValidation.js';
@@ -26,8 +27,17 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
   const stderr = environment.stderr ?? ((message: string) => process.stderr.write(`${message}\n`));
   const cwd = environment.cwd ?? process.cwd();
 
-  if (argv.length === 1 && argv[0] === 'doctor') {
-    const report = runDoctor({ cwd });
+  if (argv.length >= 1 && argv[0] === 'doctor') {
+    let options;
+    try {
+      options = parseWorkspaceArguments(argv.slice(1), cwd);
+    } catch (error) {
+      stderr(error instanceof Error ? error.message : String(error));
+      stderr('Usage: compassrose doctor [--cwd <path>]');
+      return 1;
+    }
+
+    const report = runDoctor({ cwd: options.cwd });
     const output = formatDoctorReport(report);
     if (report.success) {
       stdout(output);
@@ -38,8 +48,8 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     return report.exitCode;
   }
 
-  if (argv.length === 1 && argv[0] === 'setup') {
-    return runSetupCli({ cwd, stdout, stderr });
+  if (argv.length >= 1 && argv[0] === 'setup') {
+    return runSetupCli(argv.slice(1), { cwd, stdout, stderr });
   }
 
   if (argv.length >= 1 && argv[0] === 'feature-validation') {
@@ -58,8 +68,19 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
   // The previous no-argument behavior -- run the orchestrator once and exit -- moved to
   // `compassrose run`, which every non-interactive caller (CI, scripts, this repository's own
   // package scripts) uses instead.
-  if (argv.length === 0) {
-    return runSessionCli({ cwd, stderr });
+  if (argv.length === 0 || argv[0] === '--cwd') {
+    let sessionCwd = cwd;
+    if (argv.length > 0) {
+      try {
+        sessionCwd = parseWorkspaceArguments(argv, cwd).cwd;
+      } catch (error) {
+        stderr(error instanceof Error ? error.message : String(error));
+        stderr('Usage: compassrose [--cwd <path>]');
+        return 1;
+      }
+    }
+
+    return runSessionCli({ cwd: sessionCwd, stderr });
   }
 
   const runArgv = argv[0] === 'run' ? argv.slice(1) : argv;
@@ -69,10 +90,10 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
     options = parseRunArguments(runArgv, cwd);
   } catch (error) {
     stderr(error instanceof Error ? error.message : String(error));
-    stderr('Usage: compassrose                    open the interactive session');
+    stderr('Usage: compassrose [--cwd <path>]     open the interactive session');
     stderr('Usage: compassrose run [--loop] [--target <id>] [--implementer codex|opencode] [--no-commit] [--cwd <path>]');
-    stderr('Usage: compassrose doctor');
-    stderr('Usage: compassrose setup');
+    stderr('Usage: compassrose doctor [--cwd <path>]');
+    stderr('Usage: compassrose setup [--no-commit] [--cwd <path>]');
     stderr('Usage: compassrose feature-validation [--no-commit] [--cwd <path>]');
     stderr('Usage: compassrose brainstorm [--no-commit]');
     stderr('Usage: compassrose acknowledge-blocker [--no-commit] [--cwd <path>]');
@@ -184,7 +205,32 @@ export function main(argv: string[] = process.argv.slice(2), environment: CliEnv
   return orchestrator.run();
 }
 
-if (fileURLToPath(import.meta.url) === resolve(process.argv[1] ?? '')) {
+/**
+ * True when this module is the program being run, not an import.
+ *
+ * Through `realpathSync`, because `npm link` puts a symlink (POSIX) or a junction (Windows) between
+ * the two: Node resolves symlinks when it loads a module, so `import.meta.url` is the real file
+ * while `process.argv[1]` is the link the shell followed. Comparing them directly made a linked
+ * installation start up and silently exit 0 without running anything.
+ */
+function invokedDirectly(): boolean {
+  const entryPoint = process.argv[1];
+  if (!entryPoint) {
+    return false;
+  }
+
+  const canonical = (path: string): string => {
+    try {
+      return realpathSync(path);
+    } catch {
+      return resolve(path);
+    }
+  };
+
+  return canonical(fileURLToPath(import.meta.url)) === canonical(entryPoint);
+}
+
+if (invokedDirectly()) {
   const result = main();
   if (result instanceof Promise) {
     result.then((exitCode) => {

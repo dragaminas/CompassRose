@@ -50,6 +50,14 @@ A user can run one safe command before planning or execution and immediately see
 - Doctor validates the required MVP top-level sections: `project`, `adapters`, `commands`, and `documentation`.
 - Doctor validates the required MVP fields: `project.name`, `project.supported_platforms`, `project.documentation_root`, `adapters.external_cli.type`, `commands.typecheck`, `commands.tests`, `commands.lint`, `commands.build`, `documentation.roadmap`, `documentation.project_state`, `documentation.config`, and `documentation.contracts_root`.
 - Doctor verifies that `project.documentation_root`, `documentation.roadmap`, `documentation.project_state`, `documentation.config`, and `documentation.contracts_root` resolve to existing paths inside the repository.
+
+> **Amended by ADR-0049 (2026-08-29).** `documentation.contracts_root` was removed from the
+> configuration model: CompassRose reads its own contracts from where it is installed, so a project
+> has nothing to declare and Doctor has nothing to verify inside the repository. The two criteria
+> above stand for the remaining fields. The question behind the removed check — are the contracts
+> this run will use actually readable? — is now Doctor's `contracts` check, over the installation.
+> The criteria are left as written rather than edited: they were satisfied when this feature closed,
+> and rewriting them would erase why the check existed.
 - Doctor reports whether the normalized current platform is listed in `project.supported_platforms`.
 - Doctor reports whether the current directory is inside a Git repository.
 - Doctor treats each required command key as valid when its value is either an empty string or a non-empty shell command string, and invalid when the key is missing or the value has an invalid type.

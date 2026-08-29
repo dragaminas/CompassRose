@@ -928,3 +928,29 @@ The gate check is over-strict, and the asymmetry is the argument: a gate refused
 This ADR does not claim CompassRose confines anything. That sandbox belongs to the external CLI and is worth different amounts on different platforms. What CompassRose controls is whether it asks, and it was waiving.
 
 The scope this leaves open is recorded rather than closed: `CONFIG.md`'s "External tool isolation" rule -- that CompassRose must not silently modify global user configuration -- now has a detector in `doctor` and test-suite isolation behind it, and no way to prevent a tool writing to its own configuration during a real run. A rule with a detector is not a rule with a mechanism, and the difference is stated here so it is not mistaken for one later.
+
+## ADR-0049
+
+### Title
+
+CompassRose's Contracts Belong To The Installation, And Every Command Can Be Pointed Somewhere Else
+
+### Status
+
+Accepted
+
+### Decision
+
+CompassRose's contracts -- the role prompts, the JSON schemas, the documents describing the loop -- are the tool's own program data. They shall be read from where CompassRose is installed, never from the repository it is pointed at, and never copied into it. `documentation.contracts_root` is withdrawn from the configuration model: a project has nothing to declare about the internals of the tool acting on it.
+
+Every command shall accept `--cwd`, and `setup` shall leave a repository the next command can actually run in.
+
+The evidence came from pointing CompassRose at a small repository that was not this one and walking first contact. `doctor` failed on its second check with `src/contracts does not exist` and exit code 1, because `ContractRegistry` resolved every schema against the target root and the starter `CONFIG.md` declared `contracts_root: src/contracts` for `doctor` to verify. Copying the contracts in to get past it was worse than the failure: `028-project-understanding` then read them back as the target's own code, and the inventory `/proyecto` printed was eight groups of `src/contracts/*` with the project's single real source file nowhere in it. `setup` then left fifteen untracked files, and the next step it printed refused to start on a dirty worktree. `setup` and `doctor` took no `--cwd` at all, and the two commands that advertised it parsed it and then overwrote it with the process's own directory.
+
+Pointed at this repository all three agreed, because here the installation root and the target root are the same directory. That is what kept the leak invisible, and it is why the fix is a distinction rather than a copy: `src/contracts/planner/input.md` stays the contract's *name* at every one of the hundred-odd sites that refer to it, and becomes a path only at the two boundaries where something has to open a file -- the registry and manifest reads, and the adapter that hands a prompt to an agent. In this repository that rewrite is a no-op and the prompts are byte-identical.
+
+What `doctor` lost, it gains back differently. The removed check asked the target to contain CompassRose's contracts; the `contracts` check asks whether the installation those contracts are read from is intact, which is the only question that was ever behind it, and a real failure mode now that the package ships.
+
+`setup` commits exactly the paths it created, not everything staged. A repository being set up may have the user's own work in progress sitting in it, and sweeping that into a commit nobody asked for would be a worse first impression than the dirty tree was.
+
+What `setup` writes into `CONFIG.md` follows the rule detection already stated for itself: a project's declared name is a fact and is written; which of `test`, `test:unit` and `test:ci` is *the* gate is a judgment, so the candidates are named in a comment and the value is left empty. Generating `name: my-project` over a repository whose `package.json` says otherwise was not neutrality, it was discarding something already read.
