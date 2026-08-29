@@ -1,10 +1,13 @@
-import { writeFileSync } from 'node:fs';
+import { realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { createTempWorkspace, type TempWorkspace } from './testUtils.js';
 import { OpenCodeCli } from '../src/agents/openCodeCli.js';
 
 let workspace: TempWorkspace | undefined;
+// The localizer writes forward slashes so one prompt reads the same on either platform.
+const forwardSlashes = (value: string): string => realpathSync(value).split('\\').join('/');
+
 
 afterEach(() => {
   workspace?.dispose();
@@ -29,7 +32,10 @@ describe('OpenCodeCli.run', () => {
 
     expect(result.ok).toBe(true);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe('saw:implement the task');
+    // See the same assertion in tests/codexCli.test.ts: the prompt is localized on its way to
+    // the CLI, so the body arrives intact behind a working-directory preamble (ADR-0049).
+    expect(result.stdout.endsWith('implement the task')).toBe(true);
+    expect(result.stdout).toContain(`Your working directory is \`${forwardSlashes(workspace.root)}\`.`);
     expect(result.commandInvoked).toContain('--auto');
   });
 

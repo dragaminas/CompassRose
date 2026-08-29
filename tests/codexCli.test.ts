@@ -1,10 +1,13 @@
-import { writeFileSync } from 'node:fs';
+import { realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 import { createTempWorkspace, type TempWorkspace } from './testUtils.js';
 import { CodexCli } from '../src/agents/codexCli.js';
 
 let workspace: TempWorkspace | undefined;
+// The localizer writes forward slashes so one prompt reads the same on either platform.
+const forwardSlashes = (value: string): string => realpathSync(value).split('\\').join('/');
+
 
 afterEach(() => {
   workspace?.dispose();
@@ -29,7 +32,13 @@ describe('CodexCli.run', () => {
 
     expect(result.ok).toBe(true);
     expect(result.exitCode).toBe(0);
-    expect(result.stdout).toBe('saw:do the thing');
+    // Ends with, not equals: every prompt on its way to an agent goes through
+    // localizePromptPaths, and a workspace that is not the installation gets a
+    // working-directory preamble in front of it (ADR-0049). Asserted here rather than only on
+    // the localizer because this is the boundary the localization was missing from -- and the
+    // body still has to arrive untouched.
+    expect(result.stdout.endsWith('do the thing')).toBe(true);
+    expect(result.stdout).toContain(`Your working directory is \`${forwardSlashes(workspace.root)}\`.`);
     expect(result.commandInvoked).toContain(command);
     // 030-execution-trust: this assertion used to require the opposite -- that every implementer
     // call carried `--dangerously-bypass-approvals-and-sandbox`, whose own help reads "Intended
