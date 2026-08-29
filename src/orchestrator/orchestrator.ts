@@ -182,7 +182,7 @@ import { CodexCli } from '../agents/codexCli.js';
 import { OpenCodeCli } from '../agents/openCodeCli.js';
 import type { CommandExecution, TaskImplementer } from '../agents/taskImplementer.js';
 import { ContractRegistry } from './contractRegistry.js';
-import { getInstallationRoot } from '../config/installationPaths.js';
+import { getInstallationRoot, isSelfHosted } from '../config/installationPaths.js';
 import type { StructuredSchemaId } from './contractRegistry.js';
 import {
   bulletList,
@@ -5655,6 +5655,16 @@ export class CompassRoseOrchestrator {
    * dogfooding via `npm run dev`.
    */
   private coreRuntimeSmokeGateCommands(): readonly string[] {
+    // Only when CompassRose is pointed at itself. The prefixes below and the script this runs are
+    // this repository's own layout, injected into logic that executes against whatever repository
+    // a run is aimed at -- so a target with its own `src/cli/` used to get a gate invoking a script
+    // it does not have, through a `tsx` it has not installed. Recorded as a self-hosting leak under
+    // 030-execution-trust and closed here rather than deleted: the gate is worth exactly what it
+    // was worth, in the one repository it means anything for (ADR-0049).
+    if (!isSelfHosted(this.repositoryRoot)) {
+      return [];
+    }
+
     const coreRuntimePrefixes = ['src/orchestrator/', 'src/cli/', 'src/task/'];
     const changedFiles = this.git.diffNameOnly();
     const touchesCoreRuntime = changedFiles.some((path) => isPathAllowedByPrefix(path, coreRuntimePrefixes));

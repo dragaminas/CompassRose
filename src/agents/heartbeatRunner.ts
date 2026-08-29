@@ -1,10 +1,13 @@
-import { dirname, join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import type { AgentToolName } from '../contracts/runtime/agentContext.js';
+import { installationAssetPath } from '../config/installationPaths.js';
 
 export const DEFAULT_AGENT_HEARTBEAT_MS = 15_000;
-export const HEARTBEAT_RUNNER_PATH = join(dirname(fileURLToPath(import.meta.url)), 'heartbeatRunner.mjs');
+// Addressed from the installation's `src/`, not from next to this module: `tsc` emits no `.mjs`,
+// so the sibling this used to resolve to does not exist in `dist/`. Every agent call went through
+// it, so from a built installation every agent call failed with MODULE_NOT_FOUND -- found the
+// first time CompassRose was run from `dist` against another repository (ADR-0049).
+export const HEARTBEAT_RUNNER_PATH = installationAssetPath('src/agents/heartbeatRunner.mjs');
 
 export interface HeartbeatRunConfig {
   readonly agent: AgentToolName;

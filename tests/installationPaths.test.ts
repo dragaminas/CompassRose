@@ -1,14 +1,17 @@
 import { describe, expect, test } from 'vitest';
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   CONTRACTS_DIRECTORY,
   getInstallationRoot,
+  installationAssetPath,
   isContractPath,
   isSelfHosted,
   localizeContractReferences,
   resolveContractOrRepositoryPath,
 } from '../src/config/installationPaths.js';
+import { HEARTBEAT_RUNNER_PATH } from '../src/agents/heartbeatRunner.js';
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
 
@@ -71,5 +74,18 @@ describe('installation paths', () => {
     expect(localized).toContain(`\`${installed}/src/contracts/planner/input.md\``);
     // The target's own paths stay relative: the agent's working directory is the target.
     expect(localized).toContain('`src/widget.ts`');
+  });
+});
+
+/**
+ * The regression that made every agent call fail from a built installation: `tsc` emits no `.mjs`,
+ * so `heartbeatRunner.mjs` resolved next to a module in `dist/` that has no such sibling. Under tsx
+ * the two resolutions coincide, which is why nothing caught it until CompassRose ran from `dist`.
+ */
+describe('shipped assets that are not TypeScript', () => {
+  test('the heartbeat runner is addressed from the installation source tree', () => {
+    expect(HEARTBEAT_RUNNER_PATH).toBe(installationAssetPath('src/agents/heartbeatRunner.mjs'));
+    expect(existsSync(HEARTBEAT_RUNNER_PATH)).toBe(true);
+    expect(HEARTBEAT_RUNNER_PATH.split('\\').join('/')).toContain('/src/agents/');
   });
 });

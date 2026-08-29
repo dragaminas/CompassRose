@@ -29,6 +29,18 @@ import { fileURLToPath } from 'node:url';
  */
 export const CONTRACTS_DIRECTORY = 'src/contracts';
 
+/**
+ * A file CompassRose ships that is not TypeScript, addressed from the installation root.
+ *
+ * `tsc` emits `.ts` and nothing else, so every one of these -- the contracts, and
+ * `src/agents/heartbeatRunner.mjs` -- is absent from `dist/`. Resolving one relative to the calling
+ * module works under tsx and silently does not exist after a build, which is invisible until
+ * something actually runs from `dist`. Nothing did until the package became installable.
+ */
+export function installationAssetPath(repositoryRelativePath: string): string {
+  return join(getInstallationRoot(), repositoryRelativePath);
+}
+
 const CONTRACTS_PREFIX = `${CONTRACTS_DIRECTORY}/`;
 
 /**
