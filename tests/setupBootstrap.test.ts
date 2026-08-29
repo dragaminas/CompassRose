@@ -5,6 +5,10 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { createTempWorkspace, type TempWorkspace } from './testUtils.js';
 import { runSetupCli } from '../src/cli/setup.js';
 import { runDoctor } from '../src/doctor/doctorCommand.js';
+import {
+  PROJECT_STATE_REQUIRED_SECTIONS,
+  validateProjectState,
+} from '../src/contracts/state/projectState.js';
 
 /**
  * First contact with a repository that is not this one (ADR-0049).
@@ -128,5 +132,26 @@ describe('setup against a repository that is not this one', () => {
     // repository has none -- and is ready anyway.
     expect(existsSync(join(workspace.root, 'src', 'contracts'))).toBe(false);
     expect(report.checks.find((check) => check.name === 'contracts')?.status).toBe('pass');
+  });
+
+  /**
+   * The document setup seeds has to be one the runtime can actually finish a feature into.
+   *
+   * It was not. `## Implemented` was missing, `updateProjectStateAfterCompletion` calls
+   * `requireSection` on it, and the first feature ever completed in a bootstrapped repository ran
+   * every task, passed every gate, satisfied all ten of its acceptance criteria and then died on
+   * the write that records the completion. Invisible here because this repository's own
+   * `PROJECT_STATE.md` has the section, hand-written long before `setup` existed.
+   */
+  test('seeds a project state the runtime can complete a feature into', () => {
+    workspace = foreignRepository({ name: 'widget' });
+    expect(runSetupCli([], { cwd: workspace.root, ...silently() })).toBe(0);
+
+    const seeded = readFileSync(join(workspace.root, 'compassrose', 'PROJECT_STATE.md'), 'utf8');
+
+    expect(validateProjectState(seeded).ok).toBe(true);
+    for (const section of PROJECT_STATE_REQUIRED_SECTIONS) {
+      expect(seeded).toContain(`## ${section}`);
+    }
   });
 });

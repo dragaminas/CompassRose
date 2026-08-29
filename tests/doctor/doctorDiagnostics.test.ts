@@ -9,7 +9,7 @@ import {
 import { runDoctor } from '../../src/doctor/doctorCommand.js';
 import type { ProjectConfiguration } from '../../src/config/configTypes.js';
 import type { DoctorCheck } from '../../src/contracts/doctor/doctorContracts.js';
-import { createTempWorkspace, readFixtureConfigMarkdown, type TempWorkspace } from '../testUtils.js';
+import { createTempWorkspace, readFixtureConfigMarkdown, validProjectStateMarkdown, type TempWorkspace } from '../testUtils.js';
 
 function makeMockConfig(overrides?: Partial<ProjectConfiguration>): ProjectConfiguration {
   return {
@@ -308,7 +308,7 @@ describe('runDoctor integration with the diagnostic boundary (correction F003-T0
       directories: ['.git', 'src/contracts', 'docs'],
       files: {
         'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/PROJECT_STATE.md': validProjectStateMarkdown(),
         'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });
@@ -345,7 +345,7 @@ describe('runDoctor integration with the diagnostic boundary (correction F003-T0
       files: {
         // No compassrose/ROADMAP.md -> the 'paths' check fails.
         'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/PROJECT_STATE.md': validProjectStateMarkdown(),
       },
     });
 
@@ -365,7 +365,7 @@ describe('runDoctor integration with the diagnostic boundary (correction F003-T0
       directories: ['.git', 'src/contracts'],
       files: {
         'compassrose/CONFIG.md': configText,
-        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/PROJECT_STATE.md': validProjectStateMarkdown(),
         'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });

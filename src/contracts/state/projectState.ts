@@ -21,6 +21,32 @@ export type ProjectStateValidationResult = Result<
   ProjectStateValidationIssue
 >;
 
+/**
+ * The sections the runtime writes into, and therefore the ones the document must already have.
+ *
+ * Until a real run against another repository, this list existed only as string literals scattered
+ * through `upsertBulletInSection` and `replaceSection` calls, and the document `compassrose setup`
+ * seeds was missing `Implemented`. Nothing noticed: this repository's own `PROJECT_STATE.md` has
+ * the section, written by hand long before setup existed. The first feature ever completed in a
+ * bootstrapped repository passed all ten of its acceptance criteria and then crashed on
+ * `requireSection`, at the last step, with the work already done and committed.
+ *
+ * So the shape is declared once, here, and checked by `doctor` -- where a missing section is a line
+ * of diagnostic output before any agent is called, rather than a stack trace after the whole
+ * feature is built.
+ */
+export const PROJECT_STATE_REQUIRED_SECTIONS: readonly string[] = [
+  'Status',
+  'Active Feature',
+  'Current Reality',
+  'Implemented',
+  'Pending',
+  'Blocked',
+  'Last Approved Change',
+  'Known Gaps',
+  'Next Planning Hint',
+];
+
 export function validateProjectState(
   content: string,
 ): ProjectStateValidationResult {
@@ -42,17 +68,23 @@ export function validateProjectState(
     });
   }
 
-  const statusLineIndex = content.search(/^##\s+Status\s*\n/m);
-  if (statusLineIndex === -1) {
+  const missing = PROJECT_STATE_REQUIRED_SECTIONS.filter(
+    (section) => content.search(new RegExp(`^##\\s+${section}\\s*$`, 'm')) === -1,
+  );
+  if (missing.length > 0) {
     return err({
       field,
-      message: 'Project state document is missing the required "## Status" section.',
+      message:
+        `Project state document is missing the required ${missing.map((section) => `"## ${section}"`).join(', ')} `
+        + `section${missing.length > 1 ? 's' : ''}. The runtime writes into every section listed in `
+        + 'PROJECT_STATE_REQUIRED_SECTIONS, and a missing one fails when a feature completes.',
     });
   }
 
-  // Extract body after the Status header line.
-  const headerEnd = statusLineIndex + content.slice(statusLineIndex).search(/\n/) + 1;
-  const afterStatus = content.slice(headerEnd);
+  // The header is known to exist -- the check above just proved it -- but it may be the last line
+  // of the file, in which case there is no body after it and the status is empty.
+  const statusHeader = /^##\s+Status\s*$/m.exec(content) as RegExpExecArray;
+  const afterStatus = content.slice(statusHeader.index + statusHeader[0].length);
   // Find the next ## header or end of content.
   const nextHeaderIdx = afterStatus.search(/^##/m);
   const statusValue =

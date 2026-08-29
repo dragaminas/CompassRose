@@ -1,3 +1,4 @@
+import { PROJECT_STATE_REQUIRED_SECTIONS } from '../src/contracts/state/projectState.js';
 import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,4 +49,25 @@ export function readFixtureConfigMarkdown(): string {
 export function copyContractsIntoWorkspace(root: string): void {
   const contractsSource = fileURLToPath(new URL('../src/contracts', import.meta.url));
   cpSync(contractsSource, join(root, 'src', 'contracts'), { recursive: true });
+}
+
+/**
+ * A `PROJECT_STATE.md` with every section the runtime writes into.
+ *
+ * Fixtures used to carry `# State: Test\n\n## Status\n\nIn progress\n`, which was everything the
+ * validator asked for and not everything the runtime needs. The gap was only visible from outside
+ * this repository: the document `compassrose setup` seeded had the same shape, and the first
+ * feature ever completed in a bootstrapped repository died writing its own completion.
+ */
+export function validProjectStateMarkdown(status = 'In progress'): string {
+  return [
+    '# State: Test',
+    '',
+    ...PROJECT_STATE_REQUIRED_SECTIONS.flatMap((section) => [
+      `## ${section}`,
+      '',
+      section === 'Status' ? status : 'None.',
+      '',
+    ]),
+  ].join('\n');
 }

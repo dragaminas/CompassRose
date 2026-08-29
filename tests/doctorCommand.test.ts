@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { formatDoctorReport, runDoctor } from '../src/doctor/doctorCommand.js';
-import { createTempWorkspace, readFixtureConfigMarkdown } from './testUtils.js';
+import { createTempWorkspace, readFixtureConfigMarkdown, validProjectStateMarkdown } from './testUtils.js';
 
 const minimalMvpConfig = [
   '# CompassRose Project Configuration',
@@ -42,7 +42,7 @@ describe('doctor command', () => {
       directories: ['.git', 'src/contracts', 'docs'],
       files: {
         'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/PROJECT_STATE.md': validProjectStateMarkdown(),
         'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });
@@ -67,7 +67,7 @@ describe('doctor command', () => {
       directories: ['.git', 'src/contracts', 'docs'],
       files: {
         'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/PROJECT_STATE.md': validProjectStateMarkdown(),
       },
     });
 
@@ -91,7 +91,7 @@ describe('doctor command', () => {
       directories: ['.git', 'src/contracts', 'docs'],
       files: {
         'compassrose/CONFIG.md': minimalMvpConfig,
-        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/PROJECT_STATE.md': validProjectStateMarkdown(),
         'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });
@@ -118,7 +118,7 @@ describe('doctor command — project state', () => {
       files: {
         'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
         'compassrose/PROJECT_STATE.md':
-          '# State: Test\n\n## Status\n\nIn progress\n',
+          validProjectStateMarkdown(),
         'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });
@@ -200,7 +200,7 @@ describe('doctor command — blocked-work', () => {
       directories: ['.git', 'src/contracts', 'docs'],
       files: {
         'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/PROJECT_STATE.md': validProjectStateMarkdown(),
         'compassrose/ROADMAP.md': '# roadmap\n',
       },
     });
@@ -241,7 +241,7 @@ describe('doctor command — blocked-work', () => {
       directories: ['.git', 'src/contracts', 'docs'],
       files: {
         'compassrose/CONFIG.md': readFixtureConfigMarkdown(),
-        'compassrose/PROJECT_STATE.md': '# State: Test\n\n## Status\n\nIn progress\n',
+        'compassrose/PROJECT_STATE.md': validProjectStateMarkdown(),
         'compassrose/ROADMAP.md': '# roadmap\n',
         'compassrose/features/001-widgets/state.md': stateMd,
       },

@@ -375,6 +375,10 @@ Not started
 
 - This project was just bootstrapped by \`compassrose setup\`. No feature has been formalized yet.
 
+## Implemented
+
+- None yet.
+
 ## Pending
 
 - Write a feature request under \`compassrose/features/<id>/request.md\`.

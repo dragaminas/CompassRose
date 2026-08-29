@@ -2969,8 +2969,9 @@ export class CompassRoseOrchestrator {
       return { kind: 'blocked', exitCode: 2, continueLoop: false, summary: reason };
     }
 
-    writeText(owner.statePath, this.updateFeatureStateAfterCompletion(owner.statePath, verification, smoke));
-    writeText(this.projectStatePath, this.updateProjectStateAfterCompletion(featureId, verification));
+    const completion = this.renderCompletionDocuments(owner.statePath, featureId, verification, smoke);
+    writeText(owner.statePath, completion.featureState);
+    writeText(this.projectStatePath, completion.projectState);
     this.commitDirtyWorktreeIfConfigured(`proto: complete feature ${featureId}`);
 
     const summary = `Feature ${featureId} is complete: every task request is done, all ${verification.verdicts.length} acceptance criteria are met, and the application ${smoke.outcome === 'skipped' ? 'declares no start check' : 'starts'}.`;
@@ -3077,6 +3078,38 @@ export class CompassRoseOrchestrator {
       `Feature \`${verification.feature_id}\` is complete; select the next feature by the deterministic priority order.`,
     );
     return markdown;
+  }
+
+  /**
+   * Both documents a completion writes, rendered together so neither can reach disk while the other
+   * is still able to throw.
+   *
+   * Completion is the one transition with no way back. A feature whose state reads `completed` is
+   * skipped by every future run, so a half-applied completion is permanent and silent -- there is
+   * no later step that would notice the project state never learned.
+   *
+   * It happened, on the first feature ever built in a repository bootstrapped by `compassrose
+   * setup`. `updateProjectStateAfterCompletion` calls `requireSection('Implemented')`, and the
+   * document setup seeded had no such section. The feature state had already been written. Ten of
+   * ten acceptance criteria met, three tasks approved, the application starting -- marked complete
+   * on disk, absent from the project state, and never committed.
+   *
+   * A comment saying "render both first" would have been enough to fix that instance and nothing
+   * else. Returning both from one call is what makes the ordering a property of the shape: the
+   * writes cannot be reached until every renderer has returned. It does not make the two writes
+   * atomic against a failing disk, which is a different and much rarer failure than a document
+   * whose shape a renderer rejects.
+   */
+  private renderCompletionDocuments(
+    statePath: string,
+    featureId: string,
+    verification: AcceptanceCriteriaVerification,
+    smoke: SmokeResult,
+  ): { readonly featureState: string; readonly projectState: string } {
+    return {
+      featureState: this.updateFeatureStateAfterCompletion(statePath, verification, smoke),
+      projectState: this.updateProjectStateAfterCompletion(featureId, verification),
+    };
   }
 
   private updateProjectStateAfterCompletion(
