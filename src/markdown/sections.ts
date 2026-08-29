@@ -23,18 +23,55 @@ export function ensureTrailingNewline(text: string): string {
   return text.endsWith('\n') ? text : `${text}\n`;
 }
 
-export function optionalSection(rawMarkdown: string, heading: string): string | null {
-  const markdown = rawMarkdown.replace(/\r\n/g, '\n');
-  const pattern = new RegExp(`^## ${escapeRegExp(heading)}\\n+`, 'm');
-  const match = markdown.match(pattern);
+interface SectionBounds {
+  /** Index of the `#` that opens the heading. */
+  readonly start: number;
+  /** Index of the newline that ends the heading line, where the body begins. */
+  readonly bodyStart: number;
+  /** Index of the newline that opens the next `## ` heading, or the end of the document. */
+  readonly end: number;
+}
+
+/**
+ * Where a section starts, where its body starts, and where it ends.
+ *
+ * The header pattern used to be `^## Heading\n+`, and the greedy `\n+` was a document-corruption
+ * bug waiting for an empty section. Given `## Implemented\n\n## Pending\n- b`, it consumed the
+ * blank line *and* the newline that opens `## Pending`, so `bodyStart` landed inside the next
+ * heading and `indexOf('\n## ')` skipped straight past it. `## Implemented` then measured as
+ * containing all of `## Pending`'s bullets -- and `replaceSection` overwrote them.
+ *
+ * Silently, and while producing a perfectly well-formed document with one section's content filed
+ * under another's heading. Found by seeding an empty `## Implemented`, which is what an
+ * implemented-nothing-yet project honestly has.
+ *
+ * The match now stops at the end of the heading line, leaving `bodyStart` on the newline itself, so
+ * a section immediately followed by another measures as empty -- which is what it is.
+ */
+function locateSection(markdown: string, heading: string): SectionBounds | null {
+  const match = new RegExp(`^## ${escapeRegExp(heading)}[ \\t]*$`, 'm').exec(markdown);
   if (!match || match.index === undefined) {
     return null;
   }
 
   const bodyStart = match.index + match[0].length;
   const nextHeadingIndex = markdown.indexOf('\n## ', bodyStart);
-  const sectionEnd = nextHeadingIndex === -1 ? markdown.length : nextHeadingIndex;
-  return markdown.slice(bodyStart, sectionEnd).trimEnd();
+  return {
+    start: match.index,
+    bodyStart,
+    end: nextHeadingIndex === -1 ? markdown.length : nextHeadingIndex,
+  };
+}
+
+export function optionalSection(rawMarkdown: string, heading: string): string | null {
+  const markdown = rawMarkdown.replace(/\r\n/g, '\n');
+  const bounds = locateSection(markdown, heading);
+  if (!bounds) {
+    return null;
+  }
+
+  // The blank line between a heading and its body belongs to the heading, not the body.
+  return markdown.slice(bounds.bodyStart, bounds.end).replace(/^\n+/, '').trimEnd();
 }
 
 export function requireSection(markdown: string, heading: string): string {
@@ -48,36 +85,29 @@ export function requireSection(markdown: string, heading: string): string {
 
 export function replaceSection(rawMarkdown: string, heading: string, newBody: string): string {
   const markdown = rawMarkdown.replace(/\r\n/g, '\n');
-  const sectionHeaderPattern = new RegExp(`^## ${escapeRegExp(heading)}\\n+`, 'm');
-  const sectionMatch = markdown.match(sectionHeaderPattern);
-  if (!sectionMatch || sectionMatch.index === undefined) {
+  const bounds = locateSection(markdown, heading);
+  if (!bounds) {
     throw new Error(`Section "## ${heading}" was not found.`);
   }
 
-  const sectionStart = sectionMatch.index;
-  const bodyStart = sectionStart + sectionMatch[0].length;
-  const nextHeadingIndex = markdown.indexOf('\n## ', bodyStart);
-  const sectionEnd = nextHeadingIndex === -1 ? markdown.length : nextHeadingIndex;
-  const replacement = `## ${heading}\n\n${ensureTrailingNewline(newBody).trimEnd()}\n`;
-  return `${markdown.slice(0, sectionStart)}${replacement}${markdown.slice(sectionEnd)}`;
+  const body = ensureTrailingNewline(newBody).trimEnd();
+  // An empty body leaves the heading alone rather than trailing blank lines behind it.
+  const replacement = body.length > 0 ? `## ${heading}\n\n${body}\n` : `## ${heading}\n`;
+  return `${markdown.slice(0, bounds.start)}${replacement}${markdown.slice(bounds.end)}`;
 }
 
 export function setOrInsertSection(rawMarkdown: string, heading: string, newBody: string): string {
   const markdown = rawMarkdown.replace(/\r\n/g, '\n');
-  const sectionHeaderPattern = new RegExp(`^## ${escapeRegExp(heading)}\\n+`, 'm');
-  if (sectionHeaderPattern.test(markdown)) {
+  if (locateSection(markdown, heading)) {
     return replaceSection(markdown, heading, newBody);
   }
 
-  const statusHeaderPattern = /^## Status\n+/m;
-  const statusMatch = markdown.match(statusHeaderPattern);
-  if (!statusMatch || statusMatch.index === undefined) {
+  const status = locateSection(markdown, 'Status');
+  if (!status) {
     throw new Error(`Unable to insert section "## ${heading}" because "## Status" was not found.`);
   }
 
-  const statusBodyStart = statusMatch.index + statusMatch[0].length;
-  const nextHeadingIndex = markdown.indexOf('\n## ', statusBodyStart);
-  const insertAt = nextHeadingIndex === -1 ? markdown.length : nextHeadingIndex;
+  const insertAt = status.end;
   const insertion = `\n\n## ${heading}\n\n${ensureTrailingNewline(newBody).trimEnd()}`;
   return `${markdown.slice(0, insertAt)}${insertion}${markdown.slice(insertAt)}`;
 }

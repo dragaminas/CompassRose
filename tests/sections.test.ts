@@ -133,3 +133,61 @@ describe('markdown sections', () => {
     expect(pattern.test('axbyc')).toBe(false);
   });
 });
+
+/**
+ * An empty section used to swallow the one below it.
+ *
+ * The header pattern was `^## Heading\n+`, and the greedy `\n+` ran past the blank line into the
+ * newline that opens the next heading. `bodyStart` landed inside that heading, `indexOf('\n## ')`
+ * skipped it, and the empty section measured as containing the next section's whole body -- which
+ * `replaceSection` then overwrote. The document stayed well-formed the entire time, with one
+ * section's content filed under another's heading.
+ *
+ * Found by seeding `compassrose setup`'s `## Implemented` empty, which is what a project that has
+ * implemented nothing yet honestly has.
+ */
+describe('empty sections', () => {
+  const document = [
+    '# State: X',
+    '',
+    '## Current Reality',
+    '',
+    '- a',
+    '',
+    '## Implemented',
+    '',
+    '## Pending',
+    '',
+    '- b',
+    '',
+  ].join('\n');
+
+  test('an empty section reads as empty, not as the next section', () => {
+    expect(optionalSection(document, 'Implemented')).toBe('');
+    expect(optionalSection(document, 'Pending')).toBe('- b');
+  });
+
+  test('an empty section at the end of the document reads as empty', () => {
+    expect(optionalSection('# X\n\n## Only\n', 'Only')).toBe('');
+  });
+
+  test('writing into an empty section leaves its neighbours alone', () => {
+    const updated = upsertBulletInSection(document, 'Implemented', '- Feature `001`', '- Feature `001` is complete.');
+
+    expect(optionalSection(updated, 'Implemented')).toBe('- Feature `001` is complete.');
+    expect(optionalSection(updated, 'Pending')).toBe('- b');
+    expect(optionalSection(updated, 'Current Reality')).toBe('- a');
+  });
+
+  test('emptying a section does not merge it into the next one', () => {
+    const emptied = replaceSection(document, 'Pending', '');
+
+    expect(optionalSection(emptied, 'Pending')).toBe('');
+    expect(emptied).toContain('## Pending');
+    expect(optionalSection(emptied, 'Implemented')).toBe('');
+  });
+
+  test('a heading with trailing whitespace is still the same heading', () => {
+    expect(optionalSection('# X\n\n## Implemented   \n\n- a\n', 'Implemented')).toBe('- a');
+  });
+});
