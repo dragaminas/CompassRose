@@ -35,7 +35,7 @@ unlike `ADR.md`, it is expected to change as items complete or get re-scoped.
 | 12 | Reviewer quality-gate relay check requires `skipped` specifically for zero gates, false-positive-blocking a truthful `passed` | **Done** | ADR-0045 |
 | 13 | ~~Remove dead, unwired `src/doctor/doctorDiagnostics.ts` scaffolding~~ | **Reverted -- was wrong** | -- |
 | 14 | Deduplicate the ensemble-voting loop and the doctor-recovery counter readers | **Done** | -- |
-| 15 | `proto:smoke` fails even at the last committed HEAD (pre-existing, unrelated to items 9-14) -- config gets pinned after the review-scope-relevant `git add -A`, so the pinned `docs/compassrose/CONFIG.md` reads as an out-of-scope changed file and the review step never even calls codex | Not started (discovered, not fixed) | -- |
+| 15 | `proto:smoke` fails even at the last committed HEAD (pre-existing, unrelated to items 9-14) -- the harness leaves its own scenario setup in the live diff, so the deterministic review-scope check blocks the control task and the review step never even calls codex | **Done** | -- |
 | 16 | Implement the real F003-T01 correction (`F003-T01-C01`): wire `doctorCommand.ts` to the diagnostic boundary | **Implemented and verified in isolation; not yet landed live** | -- |
 
 ---
@@ -142,9 +142,27 @@ Items 9-15 below came from a 12-agent code review of everything in items 1-8, fo
 
 Four independent review agents flagged each: `classifySystemicBlockerNextStepByEnsemble` and `classifyReviewBlockerKindByEnsemble` repeated an identical ~35-line "fire N independent votes, record invocation context, validate the raw response" loop with only the prompt/schema/vote-shape differing; `readDoctorRecoveryAttempts` and `readDoctorRecoveryLifetimeCount` were byte-for-byte identical except one status-key string. Extracted `runClassifierEnsemble<T>()` (generic over the vote type, taking a prompt/schema/label-prefix/`extractVote` callback) and `readOperationalStatusCounter(statePath, key)` respectively; both original methods are now thin, named wrappers.
 
-## 15. `proto:smoke` fails even at the last committed HEAD — discovered, not fixed
+## 15. `proto:smoke` fails even at the last committed HEAD — Done
 
 While testing the fix against real project state, running `npm run proto:smoke` failed with exit code 2 and no visible error (the review step never even invoked codex). Traced to: `protoCompassRose.smoke.e2e.ts`'s `main()` runs `git add -A` (to resync the index after `isolateFeatureDirectories`) *before* `pinScenarioConfigLimits` rewrites `docs/compassrose/CONFIG.md` on disk -- so the pinned config is left dirty relative to `HEAD`, `CONFIG.md` is not in the reviewer's excluded-paths list or in the seeded task's `allowed_paths`, and the deterministic pre-reviewer scope check (`blockOnDeterministicScopeViolation`) silently blocks the review before any AI call. Confirmed via a disposable clone of the last commit (`fd257282`, before any of this session's work) that this reproduces identically -- it is not a regression from items 1-14, and `npm run proto:e2e`/`npm run proto:smoke`'s sibling scripts were unaffected. Left unfixed pending a decision on whether to reorder the harness's own setup steps or add `CONFIG.md` to its excluded paths; `npm run proto:e2e` remains the passing, relied-upon real-e2e signal for this plan's own items.
+
+**What the original diagnosis missed.** `CONFIG.md` was one of the out-of-scope paths, not all of
+them. The blocked run's own refinement artifact names sixty-eight: every
+`compassrose/features/*` file `isolateFeatureDirectories` had deleted, plus the pinned `CONFIG.md`.
+Which also rules out the first of the two options left open above -- reordering the setup steps
+cannot fix this. `GitClient.diffNameOnly` reads `git diff`, `git diff --cached` *and* untracked
+files, so `git add -A` does not hide the harness's setup from the review-scope check wherever it
+runs; it only moves it from one of those three reads to another.
+
+**What shipped.** The harness now commits its scenario baseline instead of merely staging it, which
+is what `protoCompassRose.e2e.ts` has always done for this exact reason (its own comment predicted
+this failure: "including the runtime's own review-time scope check"). `git add -A` moved to after
+the setup steps it is meant to capture -- isolation, the `src/` sync, the pinned config, the seeded
+feature state doc -- and a `commitScenarioBaseline()` helper commits them as `smoke scenario
+baseline` with `--allow-empty`, reporting a failure to stage or commit rather than silently
+regressing to the blocked run. Verified: `npm run proto:smoke` passes twice in a row
+(`opencode:implementer -> codex:reviewer`), `npm run proto:typecheck` and `npm run proto:e2e` still
+pass.
 
 ## 16. Implemented the real F003-T01 correction (`F003-T01-C01`) — verified in isolation, not yet landed live
 

@@ -56,15 +56,15 @@ function main(): number {
   // fixed in protoCompassRose.e2e.ts (commit c90b090d).
   isolateFeatureDirectories(cloneRoot, SCENARIO_FEATURE_IDS);
 
-  // See protoCompassRose.e2e.ts: a fresh local clone can leave the index stat-cache out
-  // of sync with the checked-out files, making `git status` report every file as modified
-  // even though content matches HEAD byte for byte. Re-add now so later checks reflect
-  // only what this run itself changes.
-  spawnSync('git', ['add', '-A'], { cwd: cloneRoot, encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 });
-
   syncPrototypeRuntime(repoRoot, cloneRoot);
   pinScenarioConfigLimits(cloneRoot);
   seedSmokeFeatureStateDocs(cloneRoot);
+
+  const baselineError = commitScenarioBaseline(cloneRoot);
+  if (baselineError !== null) {
+    process.stderr.write(`${baselineError}\n`);
+    return 1;
+  }
 
   const codexMock = join(tempRoot, 'codex-mock.cjs');
   const opencodeMock = join(tempRoot, 'opencode-mock.cjs');
@@ -134,6 +134,45 @@ function main(): number {
   process.stderr.write(`sequence observed: ${sequence.join(' -> ')}\n`);
   process.stderr.write(`temp workspace preserved at ${tempRoot}\n`);
   return 1;
+}
+
+// Everything the harness did to the clone above -- isolating the scenario's features, mirroring
+// repoRoot's live `src/`, pinning CONFIG.md, seeding the feature state doc -- is the scenario's
+// intended starting point, not work the run performed. It has to reach HEAD, because the runtime
+// reads its own live diff (`git diff` + `git diff --cached` + untracked, see
+// GitClient.diffNameOnly) at review time to check that the task's changes stayed inside its
+// declared allowed_paths. Left merely staged, the isolation's deletions and the pinned CONFIG.md
+// are read as part of the submitted diff: the deterministic scope check fires, the control task is
+// set aside before the reviewer is ever invoked, and the run ends at `implementer` with no
+// `reviewer` call. `--allow-empty` covers the case where none of the steps changed anything.
+// protoCompassRose.e2e.ts commits the same baseline for the same reason.
+//
+// The `git add -A` this replaces was also there to resync the index stat-cache, which a fresh
+// local clone (and the rewrite-with-identical-content steps above) can leave reporting files as
+// modified even when they match HEAD byte for byte; staging is still what fixes that, so it
+// happens here rather than earlier -- after every setup step, instead of before three of them.
+function commitScenarioBaseline(cloneRoot: string): string | null {
+  const addResult = spawnSync('git', ['add', '-A'], {
+    cwd: cloneRoot,
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
+
+  if (addResult.status !== 0) {
+    return `Unable to stage the scenario baseline:\n${addResult.stderr || addResult.stdout}`;
+  }
+
+  const commitResult = spawnSync('git', ['commit', '--quiet', '--allow-empty', '-m', 'smoke scenario baseline'], {
+    cwd: cloneRoot,
+    encoding: 'utf8',
+    maxBuffer: 10 * 1024 * 1024,
+  });
+
+  if (commitResult.status !== 0) {
+    return `Unable to commit the scenario baseline:\n${commitResult.stderr || commitResult.stdout}`;
+  }
+
+  return null;
 }
 
 function syncPrototypeRuntime(repoRoot: string, cloneRoot: string): void {
